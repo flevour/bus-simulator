@@ -23,7 +23,7 @@ export class TrafficLights {
         ap.phase = d < Math.PI / 4 || d > (Math.PI * 3) / 4 ? 0 : 1;
       }
       if (!appr.some((a) => a.phase === 1)) appr[appr.length - 1].phase = 1;
-      const sig = { node: n, appr, offset: rnd() * 50, cycle: [22, 3, 2, 17, 3, 2] };
+      const sig = { node: n, appr, offset: rnd() * 50, cycle: [13, 3, 1, 10, 3, 1] };
       sig.total = sig.cycle.reduce((a, b) => a + b, 0);
       n.signal = sig;
       this.signals.push(sig);
@@ -134,6 +134,7 @@ export class Traffic {
     this.mesh = new THREE.InstancedMesh(carGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true }), max);
     this.mesh.castShadow = true;
     this.mesh.count = 0;
+    this.mesh.frustumCulled = false; // le istanze si muovono: il bounding sphere iniziale non vale più
     // luci (anteriori bianche e posteriori rosse)
     const lg = mergeGeometries([
       ...[-0.6, 0.6].map((x) => { const g = new THREE.PlaneGeometry(0.35, 0.15).translate(x, 0.75, 2.11); return colorize(g, 0xfff4d0); }),
@@ -142,6 +143,7 @@ export class Traffic {
     this.lightMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x555555 });
     this.lightMesh = new THREE.InstancedMesh(lg, this.lightMat, max);
     this.lightMesh.count = 0;
+    this.lightMesh.frustumCulled = false;
     scene.add(this.mesh, this.lightMesh);
     this.M = new THREE.Matrix4();
     this.Q = new THREE.Quaternion();
@@ -180,7 +182,7 @@ export class Traffic {
       if (cars.some((c) => Math.hypot(c.x - x, c.z - z) < 12)) continue;
       car.x = x; car.z = z; car.h = Math.atan2(g.dx, g.dz);
       const zone = zoneOf(x, z);
-      car.vmax = (zone === 0 ? 8.5 : 13) * (0.85 + this.rnd() * 0.25);
+      car.vmax = (zone === 0 ? 10 : 14) * (0.9 + this.rnd() * 0.2);
       car.v = car.vmax * 0.7;
       car.color = new THREE.Color(CAR_COLORS[Math.floor(this.rnd() * CAR_COLORS.length)]);
       car.blocked = 0; car.pass = 0; car.passT = 0; car.honkCd = 0; car.latOff = 0;
@@ -290,7 +292,7 @@ export class Traffic {
         c.blocked += dt;
         c.honkCd -= dt;
         if (c.blocked > 6 && c.honkCd <= 0 && !ctx.busAtStop) { this.honks.push(c); c.honkCd = 5 + this.rnd() * 5; }
-        if (c.blocked > (ctx.busAtStop ? 3 : 8)) { c.passT = 9; c.blocked = 0; }
+        if (c.blocked > (ctx.busAtStop ? 1.5 : 5)) { c.passT = 9; c.blocked = 0; }
       } else c.blocked = Math.max(0, c.blocked - dt);
       if (c.passT > 0) c.passT -= dt;
       const latTarget = c.passT > 1.5 ? 1 : 0;
@@ -312,7 +314,7 @@ export class Traffic {
           c.s = c.turn.s0 + (c.turn.t - 1) * c.turn.len;
           c.turn = null;
           const zone = zoneOf(c.x, c.z);
-          c.vmax = (zone === 0 ? 8.5 : 13) * (0.85 + this.rnd() * 0.25);
+          c.vmax = (zone === 0 ? 10 : 14) * (0.9 + this.rnd() * 0.2);
         }
       }
       // posizione
@@ -393,6 +395,7 @@ export class Walkers {
     this.mesh = new THREE.InstancedMesh(personGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true }), 400);
     this.mesh.count = 0;
     this.mesh.castShadow = true;
+    this.mesh.frustumCulled = false;
     scene.add(this.mesh);
     this.M = new THREE.Matrix4();
     this.Q = new THREE.Quaternion();

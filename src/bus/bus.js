@@ -364,6 +364,7 @@ export class Bus {
     ]);
     this.paxMesh = new THREE.InstancedMesh(pg, new THREE.MeshLambertMaterial({ color: 0xffffff }), 110);
     this.paxMesh.count = 0;
+    this.paxMesh.frustumCulled = false;
     B.add(this.paxMesh);
     this.paxColors = [];
     this.standSpots = [];

@@ -47,6 +47,7 @@ button.primary:hover { filter: brightness(1.08); }
 #panel-line .row { display: flex; align-items: center; gap: 10px; font-weight: 700; }
 #line-badge { padding: 3px 10px; border-radius: 7px; font-weight: 800; font-size: 20px; }
 #line-dest { font-size: 15px; }
+#panel-line .clock.ff::after { content: '  ⏩ ×12'; font-size: 15px; color: #4fc3f7; }
 #panel-line .clock { font-family: 'Courier New', monospace; font-size: 26px; font-weight: 700; color: #ffcc80; margin: 6px 0; }
 .next .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #90a4ae; display: flex; justify-content: space-between; }
 #next-stop { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }

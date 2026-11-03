@@ -14,22 +14,19 @@ npm run build:single  # un unico file HTML autosufficiente in dist-single/index.
 
 ## Linee disponibili
 
-| Linea | Percorso | Feriale | Festivo |
-|-------|----------|---------|---------|
-| **SIR1** | Pontevigodarzere – Stazione – Prato della Valle – Guizza | ogni 8' | ogni 15' |
-| **3** | Ponte di Brenta – Stanga – Stazione – Centro – Voltabarozzo | ogni 12' | ogni 30', limitata a Prato della Valle |
-| **10** | Stazione – Codalunga – Corso Milano – Chiesanuova | ogni 15' | ogni 30', variante 10/16 per Brusegana |
-| **12** | Torre – Arcella – Stazione – Montà | ogni 15' | ogni 40', limitata Torre – Stazione |
-| **15** | Stazione – Ponti Romani – Ospedale – Terranegra | ogni 10' | ogni 30', deviata via Santo |
-| **22** | Sacra Famiglia – Prato – Ospedale – Stanga | ogni 12' | ogni 30', limitata all'Ospedale |
-| **24** | Mandria – Bassanello – Prato – Centro – Stazione | ogni 15' | ogni 30' |
+| Linea | Capolinea | Percorso | Feriale | Festivo |
+|-------|-----------|----------|---------|---------|
+| **SIR1** | Pontevigodarzere – Guizza | Arcella, Stazione FS, Corso del Popolo, Corso Garibaldi, Riviere, Santo, Prato della Valle, Bassanello | ogni 8' | ogni 15' |
+| **22** | Torre – Mandria | Via Madonna della Salute, Via Bajardi, Via Machiavelli, Via Aspetti, Cavalcavia Borgomagno, Viale Codalunga, Via Giotto, Largo Europa, Riviere Ponti Romani / Tito Livio / Businello, Prato della Valle, Corso Vittorio Emanuele II, Bassanello, Strada dell'Armistizio | ogni 15' | ogni 30' |
+| **24** | Largo Debussy – Mandriola | Via del Plebiscito, Via Callegari, Via Benedetti, Via Zanchi, Via Aspetti, Stazione FS, Piazzale Boschetti, Ospedale Civile, Via Gattamelata, Via Cavazzana, Prato della Valle, Bassanello, Strada Battaglia, Sant'Agostino | ogni 20' | ogni 40', limitata Stazione FS – Mandriola |
+| **12** | Stazione FS – Tencarola | Corso del Popolo, Corso Garibaldi, Riviere, Businello, Prato della Valle, Via Sorio, Aeroporto, Brusegana | ogni 20' | ogni 40' |
 
-Ogni linea si percorre in **andata** o **ritorno**. Le corse sono generate dagli orari di inizio/fine servizio e dalla frequenza:
+Ogni linea si percorre in **andata** o **ritorno**. Le corse sono generate da orario di inizio/fine servizio e frequenza:
 l'ora scelta determina luce (alba, giorno, tramonto, notte), traffico (ore di punta) e numero di passeggeri.
 
-> I percorsi sono **ispirati** alla rete urbana di Padova e semplificati per il gioco: strade e fermate sono posizionate
-> sulle coordinate reali approssimate dei luoghi (Stazione FS, Corso del Popolo, Ponti Romani, Prato della Valle, Santo,
-> Ospedale, Arcella, Stanga…), ma non sono un tracciato ufficiale.
+> I percorsi seguono le descrizioni strada per strada delle linee urbane Busitalia di Padova; la geometria delle strade è
+> semplificata (tratti rettilinei tra i punti principali, coordinate approssimate) e le frequenze sono indicative.
+> Dove non ho trovato differenze tra feriale e festivo, il festivo usa lo stesso percorso con frequenza ridotta.
 
 ## Comandi (tastiera)
 
@@ -46,6 +43,7 @@ l'ora scelta determina luce (alba, giorno, tramonto, notte), traffico (ore di pu
 | **L** | fari · **H** clacson · **K** inginocchiamento |
 | **C** | cambia visuale (cabina, esterna, passeggeri, dall'alto) |
 | **Z / X** | guarda a sinistra / destra |
+| **T** | salta l'attesa in fermata (in anticipo l'attesa scorre comunque ×12) |
 | **M** | mappa grande · **I** aiuto · **U** audio on/off · **P / Esc** pausa |
 
 ## Come si gioca

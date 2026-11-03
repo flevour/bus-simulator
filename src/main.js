@@ -171,6 +171,7 @@ function onKeyPress(code) {
       break;
     case 'KeyC': camMode = (camMode + 1) % 4; hud.toast('Visuale: ' + CAM_NAMES[camMode], 'info'); break;
     case 'KeyM': hud.setBigMap(!hud.big); break;
+    case 'KeyT': mission.skipWait(); break;
     case 'KeyU': audio.muted = !audio.muted; audio.setMuted(audio.muted); hud.toast(audio.muted ? 'Audio disattivato' : 'Audio attivo', 'info'); break;
     case 'KeyI': showHelp = !showHelp; $('help').style.display = showHelp ? 'block' : 'none'; break;
   }
@@ -247,7 +248,7 @@ function refreshStops(r) {
 }
 
 function buildMenu() {
-  $('line-list').innerHTML = LINES.map((L) => `<div class="line-card" data-id="${L.id}"><div class="badge" style="background:${L.color}">${L.id}</div><div><div class="nm">${L.name}</div><div class="nt">${L.note}</div></div></div>`).join('');
+  $('line-list').innerHTML = LINES.map((L) => `<div class="line-card" data-id="${L.id}"><div class="badge" style="background:${L.color}">${L.id}</div><div><div class="nm">${L.name}</div><div class="nt">via ${L.via}</div></div></div>`).join('');
   document.querySelectorAll('.line-card').forEach((el) => el.addEventListener('click', () => { settings.line = LINES.find((l) => l.id === el.dataset.id); refreshMenu(); }));
   const seg = (id, attr, fn) => document.querySelectorAll(`#${id} button`).forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll(`#${id} button`).forEach((x) => x.classList.remove('sel'));
@@ -306,7 +307,7 @@ function startMission() {
   lights.time = settings.departure;
   const hour = (settings.departure / 3600) % 24;
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
-  const count = Math.round(110 * busy * (settings.variant === 'festivo' ? 0.5 : 1));
+  const count = Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1));
   traffic = new Traffic(scene, net, city, lights, { count, seed: Math.floor(settings.departure) });
   walkers = new Walkers(scene, net, Math.round(140 * (settings.variant === 'festivo' ? 1.2 : 1) * (hour > 21 || hour < 6.5 ? 0.3 : 1)));
   for (let i = 0; i < count; i++) traffic.spawn(bus, 60, 1400);

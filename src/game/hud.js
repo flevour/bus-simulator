@@ -32,6 +32,7 @@ export class HUD {
 
   update(bus, m, ctx) {
     $('clock').textContent = fmtHM(m.clock, true);
+    $('clock').classList.toggle('ff', !!m.fastForward);
     const st = m.stops[m.nextStop];
     if (st) {
       $('next-stop').textContent = st.name + (st.terminal && st.idx > 0 ? ' (capolinea)' : '');

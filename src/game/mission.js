@@ -12,6 +12,7 @@ class Crowd {
     this.mesh = new THREE.InstancedMesh(personGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true }), 160);
     this.mesh.count = 0;
     this.mesh.castShadow = true;
+    this.mesh.frustumCulled = false;
     scene.add(this.mesh);
     this.people = [];
     this.M = new THREE.Matrix4(); this.Q = new THREE.Quaternion(); this.Y = new THREE.Vector3(0, 1, 0); this.S = new THREE.Vector3(1, 1, 1); this.P = new THREE.Vector3();
@@ -53,7 +54,7 @@ export class Mission {
     this.stops = this.route.stops;
     this.dest = this.stops[this.stops.length - 1].name;
     this.departure = departure;
-    this.clock = departure - 75; // un minuto e mezzo prima della partenza
+    this.clock = departure - 25; // poco prima della partenza
     this.rnd = mulberry32(Math.floor(departure) + line.id.length * 31);
     this.crowd = new Crowd(scene);
     this.onboard = []; // indici fermata di destinazione
@@ -141,6 +142,10 @@ export class Mission {
   // ------------------------------------------------------------------
   update(dt, bus, ctx) {
     this.clock += dt;
+    // attesa accelerata: a bordo tutti e in anticipo sull'orario -> il tempo scorre x12
+    const cur = this.stops[this.nextStop];
+    this.fastForward = !!(cur && this.atStop && cur.doneMsg && cur.idx < this.stops.length - 1 && cur.sched - this.clock > 2);
+    if (this.fastForward) this.clock = Math.min(cur.sched, this.clock + dt * 11);
     if (this.finished) { this.crowd.update(dt); return; }
     const front = bus.toWorld(0, 6);
     const proj = projectOnRoute(this.route, bus.x, bus.z, this.s);
@@ -264,7 +269,7 @@ export class Mission {
     if (leaving >= 0 && this.alightT <= 0) {
       this.onboard.splice(leaving, 1);
       this.stats.alighted++;
-      this.alightT = 0.7 + this.rnd() * 0.5;
+      this.alightT = 0.45 + this.rnd() * 0.35;
       const door = this.rnd() < 0.5 ? BUS.doors[1] : BUS.doors[2];
       const dp = bus.toWorld(-1.6, (door.z0 + door.z1) / 2);
       const away = { x: dp.x + st.rx * 4 + st.dx * (this.rnd() * 8 - 4), z: dp.z + st.rz * 4 + st.dz * (this.rnd() * 8 - 4) };
@@ -295,7 +300,7 @@ export class Mission {
           this.audio.tone(1500, 0.08, { gain: 0.05 }); // validatrice
           if (q.runner) this.addScore(40, 'Hai aspettato il ritardatario: che gentile! 😊');
         };
-        this.boardT = 0.9 + this.rnd() * 0.8;
+        this.boardT = 0.5 + this.rnd() * 0.5;
       }
     }
     const done = !st.waiting.length && !this.onboard.some((d) => d <= st.idx);
@@ -304,11 +309,15 @@ export class Mission {
       if (st.idx === this.stops.length - 1) this.finish();
       else {
         const wait = st.sched - this.clock;
-        if (st.idx === 0 || wait > 20) this.hud.toast(`Partenza alle ${fmtHM(st.sched, true)} – chiudi le porte (F) all'orario`, 'info');
+        if (st.idx === 0 || wait > 20) this.hud.toast(`⏩ Attesa accelerata fino alle ${fmtHM(st.sched, true)}, poi chiudi le porte (F)`, 'info');
         else this.hud.toast('Salita completata: chiudi le porte (F) e riparti', 'info');
       }
     }
     if (!done && bus.doorTarget === 0) st.doneMsg = false;
+  }
+  skipWait() {
+    const cur = this.stops[this.nextStop];
+    if (cur && this.atStop && cur.doneMsg && cur.sched > this.clock) { this.clock = cur.sched; this.hud.toast('Orario di partenza raggiunto: chiudi le porte (F)', 'info'); }
   }
   // evento: un ritardatario corre verso il bus mentre si chiudono le porte
   onDoorsClosing(bus) {
@@ -332,7 +341,7 @@ export class Mission {
     if (st.left) return;
     st.left = true;
     const early = st.sched - this.clock;
-    if (early > 30) this.addScore(-60, `Partenza anticipata di ${fmtDelay(Math.round(early))}!`);
+    if (early > 45) this.addScore(-60, `Partenza anticipata di ${fmtDelay(Math.round(early))}!`);
     // chi stava camminando verso la porta resta a terra
     for (const p of st.waiting) if (p.boarding) { p.boarding = false; p.target = null; p.onArrive = null; }
     const left = st.waiting.filter((p) => !p.runner).length;
@@ -433,6 +442,6 @@ export function isPeak(hour) {
 // orario teorico di passaggio alle fermate
 export function scheduleFor(route, departure, variant) {
   const hour = (departure / 3600) % 24;
-  const vSched = variant === 'festivo' ? 7.0 : isPeak(hour) ? 5.4 : 6.2;
-  return route.stops.map((st, i) => departure + (st.s - route.stops[0].s) / vSched + i * 18);
+  const vSched = variant === 'festivo' ? 8.0 : isPeak(hour) ? 6.6 : 7.3;
+  return route.stops.map((st, i) => departure + (st.s - route.stops[0].s) / vSched + i * 12);
 }
