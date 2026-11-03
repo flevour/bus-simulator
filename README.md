@@ -16,7 +16,6 @@ npm run build:single  # un unico file HTML autosufficiente in dist-single/index.
 
 | Linea | Capolinea | Percorso | Feriale | Festivo |
 |-------|-----------|----------|---------|---------|
-| **SIR1** | Pontevigodarzere – Guizza | Arcella, Stazione FS, Corso del Popolo, Corso Garibaldi, Riviere, Santo, Prato della Valle, Bassanello | ogni 8' | ogni 15' |
 | **22** | Torre – Mandria | Via Madonna della Salute, Via Bajardi, Via Machiavelli, Via Aspetti, Cavalcavia Borgomagno, Viale Codalunga, Via Giotto, Largo Europa, Riviere Ponti Romani / Tito Livio / Businello, Prato della Valle, Corso Vittorio Emanuele II, Bassanello, Strada dell'Armistizio | ogni 15' | ogni 30' |
 | **24** | Largo Debussy – Mandriola | Via del Plebiscito, Via Callegari, Via Benedetti, Via Zanchi, Via Aspetti, Stazione FS, Piazzale Boschetti, Ospedale Civile, Via Gattamelata, Via Cavazzana, Prato della Valle, Bassanello, Strada Battaglia, Sant'Agostino | ogni 20' | ogni 40', limitata Stazione FS – Mandriola |
 | **12** | Stazione FS – Tencarola | Corso del Popolo, Corso Garibaldi, Riviere, Businello, Prato della Valle, Via Sorio, Aeroporto, Brusegana | ogni 20' | ogni 40' |
@@ -27,6 +26,9 @@ l'ora scelta determina luce (alba, giorno, tramonto, notte), traffico (ore di pu
 > I percorsi seguono le descrizioni strada per strada delle linee urbane Busitalia di Padova; la geometria delle strade è
 > semplificata (tratti rettilinei tra i punti principali, coordinate approssimate) e le frequenze sono indicative.
 > Dove non ho trovato differenze tra feriale e festivo, il festivo usa lo stesso percorso con frequenza ridotta.
+
+> Il **SIR1** è una linea tranviaria: l'asse Pontevigodarzere – Stazione – Prato – Guizza è presente come strada,
+> ma la linea verrà gestita a parte come tram.
 
 ## Modalità
 

@@ -173,7 +173,8 @@ const EDGE_DATA = [
 
 // Linee: percorsi ricostruiti dalle descrizioni strada per strada di Busitalia Veneto.
 // Ogni variante è una sequenza di nodi (andata); il ritorno è l'inverso.
-const N_SIR1 = ['pvig', 'dazio', 'saetta', 'sancarlo', 'arcella', 'aspetti', 'borgomagno', 'cavalcavia', 'stazione', 'trieste', 'eremitani', 'garibaldi', 'pontiromani', 'titolivio', 'santo', 'prato', 'pratosud', 'cavallotti', 'bassanello', 'cuoco', 'guizza'];
+// asse del tram SIR1 (da gestire a parte come linea tranviaria)
+export const N_SIR1 = ['pvig', 'dazio', 'saetta', 'sancarlo', 'arcella', 'aspetti', 'borgomagno', 'cavalcavia', 'stazione', 'trieste', 'eremitani', 'garibaldi', 'pontiromani', 'titolivio', 'santo', 'prato', 'pratosud', 'cavallotti', 'bassanello', 'cuoco', 'guizza'];
 const N_22 = ['torre', 'salute', 'bajardi', 'machiavelli', 'aspetti', 'borgomagno', 'cavalcavia', 'stazione', 'codalunga', 'giotto', 'largoeuropa', 'pontiromani', 'titolivio', 'businello', 'prato', 'pratosud', 'cavallotti', 'bassanello', 'armistizio', 'mandria'];
 const N_24 = ['debussy', 'plebiscito', 'callegari', 'zanchi', 'arcella', 'aspetti', 'borgomagno', 'cavalcavia', 'stazione', 'trieste', 'boschetti', 'ospedale', 'gattamelata', 'cavazzana', 'pratosud', 'cavallotti', 'bassanello', 'battaglia', 'santagostino', 'mandriola'];
 const N_12 = ['stazione', 'trieste', 'eremitani', 'garibaldi', 'pontiromani', 'titolivio', 'businello', 'pratoovest', 'sorio', 'aeroporto', 'brusegana', 'tencarola'];
@@ -187,15 +188,6 @@ export const LINES = [
     note: 'Festivo: limitata Stazione FS – Mandriola',
     feriale: { headway: 20, first: '06:00', last: '21:00', nodes: N_24 },
     festivo: { headway: 40, first: '07:30', last: '20:30', nodes: N_24.slice(N_24.indexOf('stazione')) },
-  },
-  {
-    id: 'SIR1',
-    color: '#d6202a',
-    name: 'Pontevigodarzere – Guizza',
-    via: 'Arcella, Stazione, Corso del Popolo, Riviere, Santo, Prato della Valle, Bassanello',
-    note: 'Bus sostitutivo del tram sull’asse nord-sud',
-    feriale: { headway: 8, first: '05:40', last: '23:20', nodes: N_SIR1 },
-    festivo: { headway: 15, first: '07:00', last: '22:30', nodes: N_SIR1 },
   },
   {
     id: '22',
