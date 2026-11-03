@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { buildNetwork, LINES, parseHM, fmtHM } from './data/padova.js';
+import { buildNetwork, LINES, fmtHM } from './data/padova.js';
 import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers } from './world/traffic.js';
 import { Bus } from './bus/bus.js';
 import { Mission, scheduleFor } from './game/mission.js';
-import { buildRoute, pointAt } from './game/routes.js';
+import { pointAt } from './game/routes.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
 
@@ -146,7 +146,8 @@ let running = false, paused = false;
 let camMode = 0; // 0 cabina, 1 esterna, 2 passeggeri, 3 dall'alto
 const CAM_NAMES = ['Cabina di guida', 'Esterna', 'Passeggeri', 'Dall\'alto'];
 let lookYaw = 0;
-const settings = { line: LINES.find((l) => l.id === '24') || LINES[0], variant: 'feriale', direction: 1, departure: 0, weather: 'clear', mode: 'service' };
+const L24 = LINES.find((l) => l.id === '24') || LINES[0];
+const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'clear', mode: 'service' };
 let indAccum = 0, lastBlinkOn = false, wasMoving = false;
 let showHelp = false;
 
@@ -215,14 +216,14 @@ function togglePause(force) {
 // ------------------------------------------------------------------
 // Salvataggio della corsa (localStorage, solo in questo browser)
 // ------------------------------------------------------------------
-const SAVE_KEY = 'padova-bus-sim-save-v1';
+const SAVE_KEY = 'padova-bus-sim-save-v2';
 function saveGame() {
   if (!running || !mission || !bus || mission.finished) return false;
   const m = mission;
   const data = {
-    v: 1,
+    v: 2,
     savedAt: Date.now(),
-    settings: { line: settings.line.id, variant: settings.variant, direction: settings.direction, departure: settings.departure, weather: settings.weather, mode: settings.mode },
+    settings: { line: settings.line.id, variant: settings.variant, vIdx: settings.vIdx, departure: settings.departure, depDur: settings.depDur, weather: settings.weather, mode: settings.mode },
     mission: {
       clock: m.clock, nextStop: m.nextStop, s: m.s, score: m.score, stats: m.stats, comfort: m.comfort,
       onboard: m.onboard, log: m.log.slice(-40),
@@ -236,7 +237,7 @@ function saveGame() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function loadSave() {
-  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return d && d.v === 1 ? d : null; } catch (e) { return null; }
+  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return d && d.v === 2 ? d : null; } catch (e) { return null; }
 }
 function clearSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignorato */ }
@@ -285,60 +286,78 @@ function applySave(d) {
 // ------------------------------------------------------------------
 // Menu
 // ------------------------------------------------------------------
-function departuresFor(line, variant) {
-  const v = line[variant];
-  const out = [];
-  for (let t = parseHM(v.first); t <= parseHM(v.last); t += v.headway * 60) out.push(t);
-  return out;
+function curVariant() {
+  const L = settings.line;
+  return L.variants[Math.min(settings.vIdx || 0, L.variants.length - 1)];
+}
+function hourTag(t) {
+  const h = (t / 3600) % 24;
+  return h < 7 ? ' 🌅 alba' : h < 9.3 ? ' 🚸 ora di punta' : h < 17 ? ' ☀️' : h < 19.5 ? ' 🚦 punta serale' : h < 20.5 ? ' 🌇 tramonto' : ' 🌙 notte';
 }
 
 function refreshMenu() {
   const L = settings.line;
   document.querySelectorAll('.line-card').forEach((el) => el.classList.toggle('sel', el.dataset.id === L.id));
-  $('variant-note').textContent = `${settings.variant === 'feriale' ? 'Lun–Sab' : 'Domenica e festivi'} · ogni ${L[settings.variant].headway} min · ${L.note}`;
-  const seq = settings.direction === 1 ? L[settings.variant].nodes : [...L[settings.variant].nodes].reverse();
-  const r = buildRoute(net, seq);
-  $('dir-note').textContent = `${r.stops[0].name} → ${r.stops[r.stops.length - 1].name} · ${(r.length / 1000).toFixed(1)} km`;
-  // corse
+  // direzioni principali (andata / ritorno) e tutte le varianti di percorso
+  const [ia, ib] = L.pair;
+  const dirBtns = document.querySelectorAll('#direction button');
+  dirBtns[0].textContent = '→ ' + L.variants[ia].headsign;
+  dirBtns[1].textContent = '← ' + L.variants[ib].headsign;
+  dirBtns[1].disabled = ia === ib;
+  dirBtns.forEach((b, k) => b.classList.toggle('sel', settings.vIdx === (k ? ib : ia)));
+  const rv = $('route-variant');
+  rv.innerHTML = L.variants.map((v, i) => `<option value="${i}">${v.headsign} · ${v.feriale.length} fer. / ${v.festivo.length} fest.</option>`).join('');
+  rv.value = String(settings.vIdx);
+  const v = curVariant();
+  const deps = v[settings.variant];
+  const first = v.stops[0], last = v.stops[v.stops.length - 1];
+  $('dir-note').textContent = `${first.name} → ${last.name} · ${v.stops.length} fermate`;
+  $('variant-note').textContent = `${settings.variant === 'feriale' ? 'Orario feriale (mercoledì tipo)' : 'Orario festivo (domenica)'} · ${deps.length} corse su questo percorso`;
+  // corse reali del giorno scelto
   const sel = $('departure');
-  const deps = departuresFor(L, settings.variant);
   const prev = settings.departure;
   sel.innerHTML = '';
   let best = 0, bestD = Infinity;
-  deps.forEach((t, i) => {
+  deps.forEach((dp, i) => {
     const o = document.createElement('option');
-    o.value = t;
-    const h = t / 3600;
-    const tag = h < 7 ? ' 🌅 alba' : h < 9.3 ? ' 🚸 ora di punta' : h < 17 ? ' ☀️' : h < 19.5 ? ' 🚦 punta serale' : h < 20.5 ? ' 🌇 tramonto' : ' 🌙 notte';
-    o.textContent = fmtHM(t) + tag;
+    o.value = i;
+    o.textContent = `${fmtHM(dp.t)} → ${fmtHM(dp.t + dp.d)}${hourTag(dp.t)}`;
     sel.appendChild(o);
-    const d = Math.abs(t - (prev || 8.25 * 3600));
+    const d = Math.abs(dp.t - (prev || 8.25 * 3600));
     if (d < bestD) { bestD = d; best = i; }
   });
+  $('start').disabled = !deps.length;
+  if (!deps.length) {
+    sel.innerHTML = '<option>Nessuna corsa in questo giorno: scegli un altro percorso</option>';
+    $('stop-list').innerHTML = v.stops.map((s) => `<li><span>${s.name}</span><span class="t">--:--</span></li>`).join('');
+    return;
+  }
   sel.selectedIndex = best;
-  settings.departure = deps[best];
-  refreshStops(r);
+  settings.departure = deps[best].t;
+  settings.depDur = deps[best].d;
+  refreshStops();
 }
-function refreshStops(r) {
-  const seq = settings.direction === 1 ? settings.line[settings.variant].nodes : [...settings.line[settings.variant].nodes].reverse();
-  r = r || buildRoute(net, seq);
-  const times = scheduleFor(r, settings.departure, settings.variant);
-  $('stop-list').innerHTML = r.stops.map((s, i) => `<li class="${s.terminal ? 'term' : ''}"><span>${s.name}</span><span class="t">${fmtHM(times[i])}</span></li>`).join('');
+function refreshStops() {
+  const v = curVariant();
+  const times = scheduleFor(v, settings.departure, settings.depDur);
+  $('stop-list').innerHTML = v.stops.map((s, i) => `<li class="${i === 0 || i === v.stops.length - 1 ? 'term' : ''}"><span>${s.name}</span><span class="t">${fmtHM(times[i])}</span></li>`).join('');
 }
 
 function buildMenu() {
-  $('line-list').innerHTML = LINES.map((L) => `<div class="line-card" data-id="${L.id}"><div class="badge" style="background:${L.color}">${L.id}</div><div><div class="nm">${L.name}</div><div class="nt">via ${L.via}</div></div></div>`).join('');
-  document.querySelectorAll('.line-card').forEach((el) => el.addEventListener('click', () => { settings.line = LINES.find((l) => l.id === el.dataset.id); refreshMenu(); }));
+  $('line-list').innerHTML = LINES.map((L) => `<div class="line-card" data-id="${L.id}" tabindex="0"><div class="badge" style="background:${L.color}">${L.id}</div><div><div class="nm">${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive</div></div></div>`).join('');
+  const pick = (el) => { settings.line = LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0]; refreshMenu(); };
+  document.querySelectorAll('.line-card').forEach((el) => { el.addEventListener('click', () => pick(el)); el.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(el); }); });
   const seg = (id, attr, fn) => document.querySelectorAll(`#${id} button`).forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll(`#${id} button`).forEach((x) => x.classList.remove('sel'));
     b.classList.add('sel');
     fn(b.dataset[attr]);
   }));
   seg('variant', 'v', (v) => { settings.variant = v; refreshMenu(); });
-  seg('direction', 'd', (d) => { settings.direction = Number(d); refreshMenu(); });
+  seg('direction', 'd', (d) => { settings.vIdx = settings.line.pair[d === '1' ? 0 : 1]; refreshMenu(); });
+  $('route-variant').addEventListener('change', (e) => { settings.vIdx = Number(e.target.value); refreshMenu(); });
   seg('weather', 'w', (w) => { settings.weather = w; });
   seg('mode', 'm', (m) => { settings.mode = m; });
-  $('departure').addEventListener('change', (e) => { settings.departure = Number(e.target.value); refreshStops(); });
+  $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
   $('start').addEventListener('click', () => startMission());
   $('resume').addEventListener('click', () => togglePause(false));
   $('pause-btn').addEventListener('click', () => togglePause(true));
@@ -380,11 +399,11 @@ function startMission(resume = null) {
   audio.setMuted(!!audio.muted);
   disposeMission();
   const L = settings.line;
-  const seq = settings.direction === 1 ? L[settings.variant].nodes : [...L[settings.variant].nodes].reverse();
-  const destName = net.nodes[seq[seq.length - 1]].name.replace(' Capolinea', '');
+  const V = curVariant();
+  const destName = V.stops[V.stops.length - 1].name;
   bus = new Bus(scene, { id: L.id, color: L.color, dest: destName });
   bus.onShift = () => audio.shift();
-  mission = new Mission({ scene, net, line: L, variant: settings.variant, direction: settings.direction, departure: settings.departure, hud, audio, lights, city, free: settings.mode === 'free' });
+  mission = new Mission({ scene, net, line: L, route: V, day: settings.variant, departure: settings.departure, depDur: settings.depDur, hud, audio, lights, city, free: settings.mode === 'free' });
   mission.dest = destName;
   const st0 = mission.stops[0];
   const p = pointAt(mission.route, st0.s - 6.5);

@@ -116,9 +116,8 @@ export function makeBuildingMaterial(uniforms) {
 // quota della carreggiata lungo un arco sopraelevato (0 vicino ai nodi)
 export function edgeHeight(e, s) {
   if (!e.elev) return 0;
-  const r = Math.min(170, e.len / 2.6);
-  const u = Math.max(0, Math.min(1, (Math.min(s, e.len - s) - 40) / r));
-  return e.elev * u * u * (3 - 2 * u);
+  const t = Math.max(0, Math.min(1, s / e.len));
+  return e.ha + (e.hb - e.ha) * t;
 }
 
 const CENTRO = { x: -150, z: 120 };
@@ -177,7 +176,15 @@ export class City {
       this.addSeg(A.x, A.z, B.x, B.z, e.width / 2, 'road', e);
     }
     for (const n of Object.values(nodes)) {
-      n.radius = Math.max(...n.edges.map((e) => e.width)) * 0.72 + (n.edges.length === 1 ? 4 : 0);
+      const wmax = Math.max(...n.edges.map((e) => e.width));
+      // i vertici intermedi di una via (due soli archi) non sono incroci
+      n.joint = n.edges.length === 2;
+      n.radius = n.joint ? wmax / 2 : wmax * 0.72 + (n.edges.length === 1 ? 4 : 0);
+      if (n.joint) {
+        const [e1, e2] = n.edges;
+        const d1 = e1.a === n.id ? [e1.dx, e1.dz] : [-e1.dx, -e1.dz], d2 = e2.a === n.id ? [e2.dx, e2.dz] : [-e2.dx, -e2.dz];
+        n.bend = 1 + (d1[0] * d2[0] + d1[1] * d2[1]); // 0 = rettilineo, 2 = inversione
+      }
       this.addSeg(n.x, n.z, n.x + 0.01, n.z, n.radius, 'road', null);
     }
     for (const w of water) for (let i = 0; i < w.pts.length - 1; i++) this.addSeg(w.pts[i].x, w.pts[i].z, w.pts[i + 1].x, w.pts[i + 1].z, w.width / 2 + 6, 'water', w);
@@ -197,6 +204,20 @@ export class City {
       if (dx * dx + dz * dz < 1) return -1;
     }
     return best;
+  }
+  // punto della carreggiata più vicino, con direzione della via
+  snapToRoad(x, z, r = 40) {
+    const arr = this.segGrid.query(x, z, r, this._qs || (this._qs = []));
+    let best = null, bd = Infinity;
+    for (const it of arr) {
+      if (it.kind !== 'road' || !it.ref) continue;
+      const q = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
+      if (q.d < bd) { bd = q.d; best = { it, t: q.t }; }
+    }
+    if (!best) return null;
+    const { it, t } = best;
+    const e = it.ref;
+    return { cx: it.ax + (it.bx - it.ax) * t, cz: it.az + (it.bz - it.az) * t, dx: e.dx, dz: e.dz, hw: e.width / 2, edge: e, d: bd };
   }
   // informazioni sulla strada più vicina
   roadInfo(x, z) {
@@ -231,23 +252,15 @@ export class City {
     const marks = new GeoBuilder();
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
-      const ra = A.radius * 0.6, rb = B.radius * 0.6;
+      const ra = A.joint ? 0 : A.radius * 0.6, rb = B.joint ? 0 : B.radius * 0.6;
       const ax = A.x + e.dx * ra, az = A.z + e.dz * ra, bx = B.x - e.dx * rb, bz = B.z - e.dz * rb;
       const hFn = e.elev ? (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz) : null;
       road.ribbon(ax, az, bx, bz, e.width, Y_ROAD, 12, 0, hFn);
       walk.ribbon(A.x, A.z, B.x, B.z, e.width + (e.elev ? 2 : SIDEWALK * 2), Y_SIDEWALK, 6, 0, hFn);
       if (e.elev) { this.buildOverpass(e, A, curb); continue; }
-      // cordoli
-      for (const side of [-1, 1]) {
-        const nx = -e.dz * side * (e.width / 2 + 0.12), nz = e.dx * side * (e.width / 2 + 0.12);
-        const g = new THREE.BoxGeometry(0.25, 0.2, e.len - A.radius - B.radius);
-        g.rotateY(Math.atan2(e.dx, e.dz));
-        g.translate((A.x + B.x) / 2 + nx, Y_SIDEWALK + 0.04, (A.z + B.z) / 2 + nz);
-        curb.push(g);
-      }
       // strisce pedonali vicino agli incroci
       for (const [N, dirSign] of [[A, 1], [B, -1]]) {
-        if (N.edges.length < 3 || N.edges.filter((x) => x.main).length < 2) continue;
+        if (N.edges.length < 3 || N.edges.filter((x) => x.main).length < 3) continue;
         const base = N.radius + 1.2;
         for (let k = -e.width / 2 + 0.6; k < e.width / 2 - 0.4; k += 1.0) {
           const cx = N.x + e.dx * dirSign * (base + 2) + -e.dz * k, cz = N.z + e.dz * dirSign * (base + 2) + e.dx * k;
@@ -256,9 +269,13 @@ export class City {
         }
       }
     }
+    const joints = [];
     for (const n of Object.values(nodes)) {
-      inter.push(disc(n.x, n.z, n.radius, Y_ROAD + 0.01, 32, 20));
-      walkDisc.push(disc(n.x, n.z, n.radius + SIDEWALK + 2, Y_SIDEWALK - 0.005, 32, 6));
+      if (n.joint && n.bend < 0.02) continue;
+      const seg = n.joint ? 12 : 28;
+      // nelle curve il disco sta sotto l'asfalto e riempie solo lo spicchio tra i due tratti
+      (n.joint ? joints : inter).push(disc(n.x, n.z, n.radius, Y_ROAD + (n.joint ? -0.005 : 0.01) + (n.h || 0), seg, 20));
+      walkDisc.push(disc(n.x, n.z, n.radius + SIDEWALK + (n.joint ? 0 : 2), Y_SIDEWALK - 0.005 + (n.h || 0), seg, 6));
     }
     const roadTex = TX.roadTexture();
     const roadMat = layer(new THREE.MeshLambertMaterial({ map: roadTex }), 2);
@@ -266,12 +283,17 @@ export class City {
     const rm = new THREE.Mesh(road.build(), roadMat);
     rm.receiveShadow = true;
     const im = new THREE.Mesh(mergeGeometries(inter), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3));
+    if (joints.length) {
+      const jm = new THREE.Mesh(mergeGeometries(joints), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture(), color: 0xf4f4f4 }), 1.5));
+      jm.receiveShadow = true;
+      this.group.add(jm);
+    }
     im.receiveShadow = true;
     const swTex = TX.sidewalkTexture();
     const swMat = layer(new THREE.MeshLambertMaterial({ map: swTex }), 1);
     const wm = new THREE.Mesh(mergeGeometries([walk.build().toNonIndexed(), ...walkDisc.map((g) => g.toNonIndexed())]), swMat);
     wm.receiveShadow = true;
-    const cm = new THREE.Mesh(mergeGeometries(curb), new THREE.MeshLambertMaterial({ color: 0xbdb8ae }));
+    const cm = new THREE.Mesh(curb.length ? mergeGeometries(curb) : new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ color: 0xbdb8ae }));
     const mk = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4));
     this.group.add(rm, im, wm, cm, mk);
   }
@@ -288,6 +310,7 @@ export class City {
       const slope = Math.atan2(h1 - h0, 10);
       for (const side of [-1, 1]) {
         const off = e.width / 2 + 0.9;
+        if (this.clearance(cx - e.dz * side * off, cz + e.dx * side * off, ['road'], 20) < 0.2) continue;
         const g = new THREE.BoxGeometry(0.35, 1.1, 10.2);
         g.rotateX(-slope);
         g.rotateY(ang);
@@ -351,14 +374,21 @@ export class City {
         for (let i = 0; i < w.pts.length - 1; i++) {
           const t = segIntersect(A, B, w.pts[i], w.pts[i + 1]);
           if (t == null) continue;
-          const cx = A.x + (B.x - A.x) * t, cz = A.z + (B.z - A.z) * t;
           const wdx = w.pts[i + 1].x - w.pts[i].x, wdz = w.pts[i + 1].z - w.pts[i].z;
           const sinA = Math.abs(e.dx * wdz - e.dz * wdx) / Math.hypot(wdx, wdz);
-          const span = w.width / Math.max(0.3, sinA) + 10;
+          if (sinA < 0.5) continue; // incrocio troppo obliquo: il tracciato del fiume è approssimato
+          // parapetto limitato al tratto di strada (la via reale può curvare subito dopo)
+          const half = (w.width / sinA + 10) / 2;
+          const s0 = Math.max(0, t * e.len - half), s1 = Math.min(e.len, t * e.len + half);
+          if (s1 - s0 < 4) continue;
+          const span = s1 - s0, sm = (s0 + s1) / 2;
+          const cx = A.x + e.dx * sm, cz = A.z + e.dz * sm;
           for (const side of [-1, 1]) {
+            const ox = -e.dz * side * (e.width / 2 + 0.6), oz = e.dx * side * (e.width / 2 + 0.6);
+            // non mettere il parapetto sopra un'altra carreggiata (doppie carreggiate, svincoli)
+            if ([-0.45, 0, 0.45].some((f) => this.clearance(cx + ox + e.dx * span * f, cz + oz + e.dz * span * f, ['road'], 20) < 0.2)) continue;
             const g = new THREE.BoxGeometry(0.45, 1.1, span);
             g.rotateY(Math.atan2(e.dx, e.dz));
-            const ox = -e.dz * side * (e.width / 2 + 0.6), oz = e.dx * side * (e.width / 2 + 0.6);
             g.translate(cx + ox, Y_ROAD + 0.55, cz + oz);
             par.push(g);
             const hl = span / 2;
@@ -394,6 +424,34 @@ export class City {
   // ---- monumenti ----
   buildLandmarks() {
     const L = this.net.landmarks;
+    // allinea i monumenti alla rete stradale reale: cerca il punto libero più vicino
+    const free = (cx, cz, hx, hz, ell, step) => {
+      for (let x = -hx; x <= hx + 0.1; x += step)
+        for (let z = -hz; z <= hz + 0.1; z += step) {
+          if (ell && (x / hx) ** 2 + (z / hz) ** 2 > 1) continue;
+          if (this.clearance(cx + x, cz + z, ['road'], 30) < 2.5) return false;
+        }
+      return true;
+    };
+    const fit = (k, hx, hz, { ell = false, maxShift = 180, scales = [1] } = {}) => {
+      const c = L[k];
+      for (const sc of scales) {
+        const step = Math.max(6, Math.min(hx, hz) * sc / 3);
+        for (let r = 0; r <= maxShift; r += 10)
+          for (let a = 0; a < (r ? 16 : 1); a++) {
+            const x = c.x + Math.cos((a / 16) * Math.PI * 2) * r, z = c.z + Math.sin((a / 16) * Math.PI * 2) * r;
+            if (free(x, z, hx * sc, hz * sc, ell, step)) { L[k] = { x, z, scale: sc }; return true; }
+          }
+      }
+      L[k] = { ...c, scale: 0 };
+      return false;
+    };
+    fit('prato', 120, 160, { ell: true, maxShift: 80, scales: [1, 0.92, 0.85, 0.75] });
+    fit('santo', 56, 24); fit('ragione', 42, 16); fit('orologio', 12, 7); fit('duomo', 36, 18);
+    fit('specola', 9, 9); fit('scrovegni', 8, 16); fit('ospedale', 62, 52); fit('fiera', 66, 46);
+    this.stationLen = 0;
+    for (const len of [200, 160, 120, 90]) if (fit('stazione', len / 2 + 2, 11, { maxShift: 140 })) { this.stationLen = len; break; }
+    this.landmarkFit = Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.scale]));
     const add = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; this.group.add(mesh); return mesh; };
     const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
     const box = (w, h, d, mat, x, y, z, ry = 0) => {
@@ -405,9 +463,10 @@ export class City {
     const brick = lam(0xa45a3c), stone = lam(0xe6dccb), lead = lam(0x7d8a86), marble = lam(0xf2eee6);
 
     // Prato della Valle
-    {
+    if (L.prato.scale) {
       const c = L.prato;
-      this.zones.push({ x: c.x, z: c.z, rx: 118, rz: 158 });
+      const S = c.scale || 0.75;
+      this.zones.push({ x: c.x, z: c.z, rx: 118 * S, rz: 158 * S });
       const ell = (rx, rz, y, mat, seg = 64) => {
         const g = new THREE.CircleGeometry(1, seg);
         g.rotateX(-Math.PI / 2);
@@ -417,14 +476,14 @@ export class City {
       };
       const pav = TX.sidewalkTexture();
       pav.repeat.set(30, 40);
-      ell(122, 162, 0.09, layer(new THREE.MeshLambertMaterial({ map: pav }), 1));
-      ell(82, 122, 0.1, layer(new THREE.MeshLambertMaterial({ map: this.waterTex || TX.waterTexture(), color: 0x9fc6c9 }), 2));
+      ell(122 * S, 162 * S, 0.09, layer(new THREE.MeshLambertMaterial({ map: pav }), 1));
+      ell(82 * S, 122 * S, 0.1, layer(new THREE.MeshLambertMaterial({ map: this.waterTex || TX.waterTexture(), color: 0x9fc6c9 }), 2));
       const gt = TX.grassTexture();
       gt.repeat.set(8, 12);
-      ell(72, 112, 0.12, layer(new THREE.MeshLambertMaterial({ map: gt }), 3));
+      ell(72 * S, 112 * S, 0.12, layer(new THREE.MeshLambertMaterial({ map: gt }), 3));
       // viali a croce
-      box(6, 0.05, 224, stone, c.x, 0.16, c.z);
-      box(144, 0.05, 6, stone, c.x, 0.16, c.z);
+      box(6, 0.05, 224 * S, stone, c.x, 0.16, c.z);
+      box(144 * S, 0.05, 6, stone, c.x, 0.16, c.z);
       // fontana centrale
       const f = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.6, 32), stone);
       f.position.set(c.x, 0.4, c.z);
@@ -446,7 +505,7 @@ export class City {
       for (let i = 0; i < N; i++) {
         const ring = i % 2;
         const a = (Math.floor(i / 2) / (N / 2)) * Math.PI * 2 + ring * 0.04;
-        const rx = ring ? 86 : 69, rz = ring ? 126 : 109;
+        const rx = (ring ? 86 : 69) * S, rz = (ring ? 126 : 109) * S;
         const x = c.x + Math.cos(a) * rx, z = c.z + Math.sin(a) * rz;
         // lascia spazio ai 4 ponti
         if (Math.abs(Math.cos(a)) > 0.995 || Math.abs(Math.sin(a)) > 0.997) { M.makeScale(0, 0, 0); inst.setMatrixAt(i, M); continue; }
@@ -457,19 +516,18 @@ export class City {
       inst.castShadow = true;
       add(inst);
       // ponti
-      for (const [dx, dz, ry] of [[0, -117, 0], [0, 117, 0], [77, 0, Math.PI / 2], [-77, 0, Math.PI / 2]]) box(7, 0.6, 14, stone, c.x + dx, 0.4, c.z + dz, ry);
+      for (const [dx, dz, ry] of [[0, -117, 0], [0, 117, 0], [77, 0, Math.PI / 2], [-77, 0, Math.PI / 2]]) box(7, 0.6, 14, stone, c.x + dx * S, 0.4, c.z + dz * S, ry);
       // alberi sull'isola
       this.pratoTrees = [];
       for (let i = 0; i < 40; i++) {
         const a = (i / 40) * Math.PI * 2;
-        this.pratoTrees.push({ x: c.x + Math.cos(a) * 58, z: c.z + Math.sin(a) * 96 });
+        this.pratoTrees.push({ x: c.x + Math.cos(a) * 58 * S, z: c.z + Math.sin(a) * 96 * S });
       }
       // Loggia Amulea (a ovest)
-      box(30, 12, 12, lam(0xc85b3c), c.x - 150, 6, c.z - 20);
     }
 
     // Basilica del Santo
-    {
+    if (L.santo.scale) {
       const c = L.santo;
       this.zones.push({ x: c.x, z: c.z, rx: 70, rz: 40 });
       box(100, 24, 42, brick, c.x, 12, c.z);
@@ -499,7 +557,7 @@ export class City {
     }
 
     // Palazzo della Ragione (tetto a carena di nave)
-    {
+    if (L.ragione.scale) {
       const c = L.ragione;
       this.zones.push({ x: c.x, z: c.z, rx: 55, rz: 30 });
       box(80, 14, 27, lam(0xe2c9a2), c.x, 7, c.z);
@@ -516,7 +574,7 @@ export class City {
     }
 
     // Torre dell'Orologio
-    {
+    if (L.orologio.scale) {
       const c = L.orologio;
       this.zones.push({ x: c.x, z: c.z, rx: 18, rz: 18 });
       box(22, 14, 12, lam(0xead9b8), c.x, 7, c.z);
@@ -531,7 +589,7 @@ export class City {
     }
 
     // Duomo
-    {
+    if (L.duomo.scale) {
       const c = L.duomo;
       this.zones.push({ x: c.x, z: c.z, rx: 45, rz: 30 });
       box(70, 22, 34, lam(0xd8c4a4), c.x, 11, c.z, 0.1);
@@ -542,7 +600,7 @@ export class City {
     }
 
     // Specola
-    {
+    if (L.specola.scale) {
       const c = L.specola;
       this.zones.push({ x: c.x, z: c.z, rx: 20, rz: 20 });
       box(15, 42, 15, brick, c.x, 21, c.z);
@@ -551,7 +609,7 @@ export class City {
     }
 
     // Cappella degli Scrovegni ed Eremitani
-    {
+    if (L.scrovegni.scale) {
       const c = L.scrovegni;
       this.zones.push({ x: c.x, z: c.z, rx: 30, rz: 40 });
       box(10, 11, 30, brick, c.x, 5.5, c.z);
@@ -570,19 +628,19 @@ export class City {
       this.addObstacle(c.x, c.z, 5, 15, 0, 'landmark');
     }
 
-    // Stazione FS con piazzale, corsie dei bus, fermata del tram, taxi e fascio binari
-    {
-      const c = L.stazione;
-      this.zones.push({ x: c.x, z: c.z - 30, rx: 160, rz: 75 }, { x: c.x, z: c.z + 72, rx: 128, rz: 58 });
+    // Stazione FS: fabbricato davanti al piazzale reale (corsie e tram vengono dal GTFS) e fascio binari
+    if (this.stationLen) {
+      const c = L.stazione, LEN = this.stationLen;
+      this.zones.push({ x: c.x, z: c.z - 30, rx: LEN / 2 + 40, rz: 60 });
       const trav = lam(0xe6dfcf), glassD = lam(0x2b3a46), steel = lam(0x5d646b), plat = lam(0xbdb6a8);
-      // fabbricato viaggiatori: corpo lungo con fascia vetrata e atrio centrale più alto
-      box(200, 12, 18, trav, c.x, 6, c.z);
-      box(200.4, 2.6, 18.4, glassD, c.x, 8.4, c.z);
-      box(56, 17, 22, lam(0xdcd4c2), c.x, 8.5, c.z);
-      const hall = new THREE.Mesh(new THREE.PlaneGeometry(48, 10.5), new THREE.MeshLambertMaterial({ color: 0x3b5870 }));
+      box(LEN, 12, 18, trav, c.x, 6, c.z);
+      box(LEN + 0.4, 2.6, 18.4, glassD, c.x, 8.4, c.z);
+      box(Math.min(56, LEN * 0.4), 17, 22, lam(0xdcd4c2), c.x, 8.5, c.z);
+      const hw = Math.min(48, LEN * 0.34);
+      const hall = new THREE.Mesh(new THREE.PlaneGeometry(hw, 10.5), new THREE.MeshLambertMaterial({ color: 0x3b5870 }));
       hall.position.set(c.x, 6.2, c.z + 11.06);
       this.group.add(hall);
-      for (let i = -4; i <= 4; i++) box(0.35, 10.5, 0.3, steel, c.x + i * 6, 6.2, c.z + 11.1).castShadow = false;
+      for (let x = -hw / 2; x <= hw / 2 + 0.1; x += hw / 8) box(0.35, 10.5, 0.3, steel, c.x + x, 6.2, c.z + 11.1).castShadow = false;
       const clock = new THREE.Mesh(new THREE.CircleGeometry(1.9, 32), lam(0xfafafa));
       clock.position.set(c.x, 13.4, c.z + 11.07);
       this.group.add(clock);
@@ -596,78 +654,31 @@ export class City {
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(22, 2.4), new THREE.MeshBasicMaterial({ map: TX.labelTexture('PADOVA', { bg: '#dcd4c2', fg: '#1d3f8f', font: 'bold 92px Arial' }) }));
       sign.position.set(c.x, 15.6, c.z + 11.07);
       this.group.add(sign);
-      // pensilina lungo la facciata
-      box(200, 0.35, 7, steel, c.x, 5.2, c.z + 12.5);
-      for (let x = -95; x <= 95; x += 19) box(0.3, 5, 0.3, steel, c.x + x, 2.6, c.z + 15.6);
-      this.addObstacle(c.x, c.z, 100, 9.5, 0, 'landmark');
-      // piazzale lastricato
-      const pav = TX.sidewalkTexture();
-      pav.repeat.set(40, 20);
-      const pz = new THREE.Mesh(new THREE.PlaneGeometry(250, 128), layer(new THREE.MeshLambertMaterial({ map: pav }), 1));
-      pz.rotation.x = -Math.PI / 2;
-      pz.position.set(c.x, 0.095, c.z + 75);
-      pz.receiveShadow = true;
-      this.group.add(pz);
-      // corsie dei bus urbani con pensiline numerate
-      const lane = new THREE.Mesh(new THREE.PlaneGeometry(150, 8), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
-      lane.rotation.x = -Math.PI / 2;
-      lane.position.set(c.x - 40, Y_ROAD, c.z + 56);
-      this.group.add(lane);
-      const glassM = new THREE.MeshLambertMaterial({ color: 0x9fc4d6, transparent: true, opacity: 0.35 });
-      for (let k = 0; k < 6; k++) {
-        const x = c.x - 105 + k * 24;
-        box(8, 0.15, 2.2, steel, x, 2.6, c.z + 50.5);
-        const g = new THREE.Mesh(new THREE.BoxGeometry(8, 2.2, 0.06), glassM);
-        g.position.set(x, 1.3, c.z + 49.5);
-        this.group.add(g);
-        for (const dx of [-3.8, 3.8]) box(0.1, 2.6, 0.1, steel, x + dx, 1.3, c.z + 50.5);
-        const cs = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.6), new THREE.MeshBasicMaterial({ map: TX.labelTexture('Corsia ' + (k + 1), { w: 256, h: 80, bg: '#f2c200', fg: '#1a1a1a', font: 'bold 44px Arial' }), side: THREE.DoubleSide }));
-        cs.position.set(x + 3.2, 3.2, c.z + 51.6);
-        this.group.add(cs);
-        this.addObstacle(x, c.z + 50, 4, 1, 0, 'shelter');
-      }
-      // fermata del tram SIR1 in mezzo al piazzale
-      box(44, 0.3, 3.4, plat, c.x - 55, 0.15, c.z + 98);
-      box(40, 0.2, 3.8, steel, c.x - 55, 3.3, c.z + 98);
-      for (const dx of [-18, -6, 6, 18]) box(0.15, 3.2, 0.15, steel, c.x - 55 + dx, 1.7, c.z + 98);
-      const ts = new THREE.Mesh(new THREE.PlaneGeometry(6, 0.8), new THREE.MeshBasicMaterial({ map: TX.labelTexture('TRAM · Stazione FS', { w: 512, h: 80, bg: '#d6202a', font: 'bold 44px Arial' }), side: THREE.DoubleSide }));
-      ts.position.set(c.x - 55, 3.9, c.z + 98);
-      this.group.add(ts);
-      this.addObstacle(c.x - 55, c.z + 98, 22, 1.7, 0, 'shelter');
-      // posteggio taxi
-      for (let k = 0; k < 5; k++) {
-        const x = c.x + 62 + k * 6;
-        box(1.8, 1.25, 4.3, lam(0xf4f4f0), x, 0.75, c.z + 62);
-        box(1.6, 0.55, 2.2, lam(0x2a3038), x, 1.6, c.z + 61.7);
-        box(0.6, 0.2, 0.25, lam(0xf2c200), x, 2.0, c.z + 61.7);
-        this.addObstacle(x, c.z + 62, 0.95, 2.2, 0, 'car');
-      }
-      this.stationTrees = [];
-      for (let x = -110; x <= 110; x += 22) this.stationTrees.push({ x: c.x + x, z: c.z + 132 });
-      for (let x = -112; x <= 112; x += 16) if (Math.abs(x + 55) > 26) this.stationTrees.push({ x: c.x + x, z: c.z + 118 });
-      for (let x = 0; x <= 50; x += 12) this.stationTrees.push({ x: c.x + x, z: c.z + 84 });
-      // fascio binari con marciapiedi, pensiline e un treno regionale in sosta
+      box(LEN, 0.35, 6, steel, c.x, 5.2, c.z + 12);
+      for (let x = -LEN / 2 + 5; x <= LEN / 2 - 5; x += 19) box(0.3, 5, 0.3, steel, c.x + x, 2.6, c.z + 14.6);
+      this.addObstacle(c.x, c.z, LEN / 2, 9.5, 0, 'landmark');
+      // binari dietro al fabbricato, con marciapiedi coperti e un treno regionale
       const rt = TX.railTexture();
-      rt.repeat.set(3, 1);
-      const yard = polyRibbon([{ x: c.x - 170, z: c.z - 52 }, { x: c.x + 170, z: c.z - 52 }], 72, 0.07, 14);
+      rt.repeat.set(2, 1);
+      const yard = polyRibbon([{ x: c.x - LEN / 2 - 60, z: c.z - 40 }, { x: c.x + LEN / 2 + 60, z: c.z - 40 }], 44, 0.07, 14);
       this.group.add(new THREE.Mesh(yard, layer(new THREE.MeshLambertMaterial({ map: rt }), 1)));
-      for (const dz of [-30, -56]) {
-        box(220, 0.9, 5, plat, c.x, 0.45, c.z + dz);
-        box(190, 0.25, 6, steel, c.x, 4.4, c.z + dz);
-        for (let x = -90; x <= 90; x += 15) box(0.25, 3.6, 0.25, steel, c.x + x, 2.6, c.z + dz);
+      for (const dz of [-24, -44]) {
+        box(LEN, 0.9, 5, plat, c.x, 0.45, c.z + dz);
+        box(LEN - 20, 0.25, 6, steel, c.x, 4.4, c.z + dz);
+        for (let x = -LEN / 2 + 15; x <= LEN / 2 - 15; x += 15) box(0.25, 3.6, 0.25, steel, c.x + x, 2.6, c.z + dz);
       }
       const coach = lam(0xf2f2ee), band = lam(0x223040), blue = lam(0x1f6fb2), roofM = lam(0x9aa0a6);
-      for (let k = 0; k < 4; k++) {
-        const x = c.x - 45 + k * 26;
-        box(25, 3.2, 2.9, coach, x, 2.2, c.z - 43);
-        box(25.05, 0.95, 2.95, band, x, 2.6, c.z - 43);
-        box(25.05, 0.35, 2.95, blue, x, 1.3, c.z - 43);
-        box(24.6, 0.3, 2.6, roofM, x, 3.9, c.z - 43);
+      for (let k = 0; k < Math.min(4, Math.floor(LEN / 27)); k++) {
+        const x = c.x - LEN / 2 + 20 + k * 26;
+        box(25, 3.2, 2.9, coach, x, 2.2, c.z - 34);
+        box(25.05, 0.95, 2.95, band, x, 2.6, c.z - 34);
+        box(25.05, 0.35, 2.95, blue, x, 1.3, c.z - 34);
+        box(24.6, 0.3, 2.6, roofM, x, 3.9, c.z - 34);
       }
     }
 
     // Ospedale
-    {
+    if (L.ospedale.scale) {
       const c = L.ospedale;
       this.zones.push({ x: c.x, z: c.z, rx: 90, rz: 70 });
       box(110, 28, 26, lam(0xeeeeea), c.x, 14, c.z - 25, 0.4);
@@ -681,7 +692,7 @@ export class City {
     }
 
     // Fiera
-    {
+    if (L.fiera.scale) {
       const c = L.fiera;
       this.zones.push({ x: c.x, z: c.z, rx: 80, rz: 55 });
       box(60, 12, 90, lam(0xb9bcc0), c.x - 35, 6, c.z);
@@ -693,14 +704,14 @@ export class City {
 
   // ---- fermate (scenografia per tutte le linee) ----
   buildStops() {
-    this.stopPlacements = allStopPlacements(this.net);
+    this.stopPlacements = allStopPlacements(this.net, (x, z) => this.snapToRoad(x, z));
     const glass = new THREE.MeshLambertMaterial({ color: 0x9fc4d6, transparent: true, opacity: 0.35 });
     const frame = new THREE.MeshLambertMaterial({ color: 0x2b3a4a });
     const yellow = new THREE.MeshLambertMaterial({ color: 0xf2c200 });
     const poleG = new THREE.CylinderGeometry(0.05, 0.05, 3, 8);
     const marks = new GeoBuilder();
     const frames = [], glasses = [], benches = [], signs = [], yellows = [];
-    const ATLAS_COLS = 8;
+    const ATLAS_COLS = 16;
     const atlas = document.createElement('canvas');
     atlas.width = 256 * ATLAS_COLS;
     atlas.height = 128 * Math.ceil(this.stopPlacements.length / ATLAS_COLS);
@@ -735,7 +746,7 @@ export class City {
       bg.translate(st.x, Y_SIDEWALK + 3.2, st.z);
       yellows.push(bg);
       // obstacle pensilina
-      this.addObstacle(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, 2.6, 1.0, Math.atan2(-st.dz, st.dx), 'shelter');
+      if (this.clearance(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, ['road'], 20) > 0.8) this.addObstacle(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, 2.6, 1.0, Math.atan2(-st.dz, st.dx), 'shelter');
       // segnaletica gialla "BUS" sulla corsia
       const lx = st.cx + st.rx * (st.hw - 1.6), lz = st.cz + st.rz * (st.hw - 1.6);
       const y = Y_ROAD + 0.025;
@@ -772,11 +783,13 @@ export class City {
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
       if (e.elev) continue;
+      const mA = A.joint ? 1 : A.radius + 6, mB = B.joint ? 1 : B.radius + 6;
       for (const side of [-1, 1]) {
-        let s = A.radius + 6;
-        while (s < e.len - B.radius - 6) {
+        let s = mA;
+        while (s < e.len - mB) {
           const mx = A.x + e.dx * s, mz = A.z + e.dz * s;
           const zone = zoneOf(mx, mz);
+          if (zone === 2 && (Math.hypot(mx - CENTRO.x, mz - CENTRO.z) > 5500 || rnd() < 0.45)) { s += 40; continue; }
           const w = zone === 0 ? 9 + rnd() * 10 : 12 + rnd() * 16;
           const gap = zone === 0 ? rnd() * 0.5 : 2 + rnd() * 10;
           if (zone === 2 && rnd() < 0.3) { s += w + gap + 10; continue; }
@@ -803,36 +816,58 @@ export class City {
         }
       }
     }
-    // riempimento degli isolati tra le strade
+    // riempimento degli isolati: griglia delle distanze dalle strade (BFS) e palazzi orientati
+    // come la strada più vicina, fino a una certa distanza a seconda della zona
     this.fillerTrees = [];
     {
+      const C = 24;
       const xs = Object.values(nodes).map((n) => n.x), zs = Object.values(nodes).map((n) => n.z);
-      const minX = Math.min(...xs) - 300, maxX = Math.max(...xs) + 300, minZ = Math.min(...zs) - 300, maxZ = Math.max(...zs) + 300;
-      const STEP = 23;
-      const q = [];
-      for (let gx = minX; gx < maxX; gx += STEP)
-        for (let gz = minZ; gz < maxZ; gz += STEP) {
-          const x = gx + (rnd() - 0.5) * 6, z = gz + (rnd() - 0.5) * 6;
+      const minX = Math.max(-7000, Math.min(...xs) - 300), maxX = Math.min(7000, Math.max(...xs) + 300);
+      const minZ = Math.max(-7000, Math.min(...zs) - 300), maxZ = Math.min(7000, Math.max(...zs) + 300);
+      const W = Math.ceil((maxX - minX) / C), H = Math.ceil((maxZ - minZ) / C);
+      const dist = new Int16Array(W * H).fill(-1);
+      const src = new Int32Array(W * H).fill(-1);
+      const queue = new Int32Array(W * H);
+      let qh = 0, qt = 0;
+      for (const e of edges) {
+        const A = nodes[e.a];
+        for (let t = 0; t <= e.len; t += C / 2) {
+          const gx = Math.floor((A.x + e.dx * t - minX) / C), gz = Math.floor((A.z + e.dz * t - minZ) / C);
+          if (gx < 0 || gz < 0 || gx >= W || gz >= H) continue;
+          const k = gz * W + gx;
+          if (dist[k] === -1) { dist[k] = 0; src[k] = e.id; queue[qt++] = k; }
+        }
+      }
+      while (qh < qt) {
+        const k = queue[qh++];
+        const gx = k % W, gz = (k / W) | 0, d = dist[k];
+        if (d >= 18) continue;
+        for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = gx + ox, nz = gz + oz;
+          if (nx < 0 || nz < 0 || nx >= W || nz >= H) continue;
+          const nk = nz * W + nx;
+          if (dist[nk] !== -1) continue;
+          dist[nk] = d + 1; src[nk] = src[k]; queue[qt++] = nk;
+        }
+      }
+      for (let gz = 0; gz < H; gz++)
+        for (let gx = 0; gx < W; gx++) {
+          const k = gz * W + gx, d = dist[k];
+          if (d < 1) continue;
+          const x = minX + (gx + 0.5) * C + (rnd() - 0.5) * 5, z = minZ + (gz + 0.5) * C + (rnd() - 0.5) * 5;
           const zone = zoneOf(x, z);
-          const maxD = zone === 0 ? 450 : zone === 1 ? 320 : 170;
-          const prob = zone === 0 ? 0.92 : zone === 1 ? 0.55 : 0.28;
-          if (rnd() > prob) continue;
-          // strada più vicina
-          const near = this.segGrid.query(x, z, maxD, q);
-          let best = Infinity, be = null;
-          for (const it of near) {
-            if (it.kind !== 'road' || !it.ref) continue;
-            const d = distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d - it.hw;
-            if (d < best) { best = d; be = it.ref; }
-          }
-          if (!be || best > maxD || best < 14) continue;
+          const maxD = zone === 0 ? 18 : zone === 1 ? 9 : 3;
+          const prob = zone === 0 ? 0.9 : zone === 1 ? 0.5 : 0.18;
+          if (zone === 2 && Math.hypot(x - CENTRO.x, z - CENTRO.z) > 5500) continue;
+          if (d > maxD || rnd() > prob) continue;
+          const be = edges[src[k]];
           if (zone === 2 && rnd() < 0.35) { this.fillerTrees.push({ x, z, big: true }); continue; }
           const w = zone === 0 ? 12 + rnd() * 9 : 12 + rnd() * 12;
-          const d = zone === 0 ? 11 + rnd() * 8 : 10 + rnd() * 12;
-          if (!tryPlace(x, z, be.dx, be.dz, w, d)) continue;
+          const dd = zone === 0 ? 11 + rnd() * 8 : 10 + rnd() * 12;
+          if (!tryPlace(x, z, be.dx, be.dz, w, dd)) continue;
           const obs = this.obstacles.query(x, z, 18, this._oq || (this._oq = []));
           let overlap = false;
-          for (const b of obs) if (b.kind === 'building' && circleVsOBB(x, z, Math.min(w, d) * 0.45, b)) { overlap = true; break; }
+          for (const b of obs) if (b.kind === 'building' && circleVsOBB(x, z, Math.min(w, dd) * 0.45, b)) { overlap = true; break; }
           if (overlap) continue;
           let h;
           if (zone === 0) h = 9 + Math.floor(rnd() * 4) * 3.1 + rnd();
@@ -842,9 +877,9 @@ export class City {
           const col = new THREE.Color(pal[Math.floor(rnd() * pal.length)]);
           col.offsetHSL(0, 0, (rnd() - 0.5) * 0.06);
           const ang = Math.atan2(-be.dz, be.dx);
-          list.push({ x, z, w, d, h, ang, col });
-          this.addObstacle(x, z, w / 2, d / 2, ang);
-          if (zone === 0 || (zone === 2 && h < 12 && rnd() < 0.7) || (zone === 1 && h < 20 && rnd() < 0.4)) roofs.push({ x, z, w, d, h, ang });
+          list.push({ x, z, w, d: dd, h, ang, col });
+          this.addObstacle(x, z, w / 2, dd / 2, ang);
+          if (zone === 0 || (zone === 2 && h < 12 && rnd() < 0.7) || (zone === 1 && h < 20 && rnd() < 0.4)) roofs.push({ x, z, w, d: dd, h, ang });
         }
     }
     const geo = new THREE.BoxGeometry(1, 1, 1);
@@ -881,14 +916,18 @@ export class City {
   buildTreesAndLamps() {
     const { nodes, edges } = this.net;
     const rnd = this.rnd;
-    const trees = [...(this.pratoTrees || []), ...(this.fillerTrees || []), ...(this.stationTrees || [])];
+    const trees = [...(this.pratoTrees || []), ...(this.fillerTrees || [])];
     const lamps = [];
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
       if (e.elev) continue;
       // lampioni
-      let k = 0;
-      for (let s = A.radius + 8; s < e.len - B.radius - 4; s += 32, k++) {
+      let k = e.id;
+      const zoneE = zoneOf(A.x, A.z);
+      const lampStep = zoneE === 2 ? 75 : 40;
+      if (zoneE === 2 && !e.main && rnd() < 0.6) continue;
+      const mA = A.joint ? 2 : A.radius + 8, mB = B.joint ? 2 : B.radius + 4;
+      for (let s = mA + ((e.id * 17) % lampStep); s < e.len - mB; s += lampStep, k++) {
         const side = k % 2 ? 1 : -1;
         const off = e.width / 2 + 1.9;
         const x = A.x + e.dx * s + -e.dz * side * off, z = A.z + e.dz * s + e.dx * side * off;
@@ -897,7 +936,7 @@ export class City {
         this.addObstacle(x, z, 0.18, 0.18, 0, 'pole');
       }
       // alberi (viali fuori dal centro)
-      for (let s = A.radius + 10; s < e.len - B.radius - 6; s += 11 + rnd() * 8) {
+      for (let s = mA + 4; s < e.len - mB - 2; s += 13 + rnd() * 9) {
         const mx = A.x + e.dx * s, mz = A.z + e.dz * s;
         const zone = zoneOf(mx, mz);
         if (zone === 0 && rnd() < 0.85) continue;

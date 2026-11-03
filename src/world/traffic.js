@@ -11,9 +11,14 @@ export class TrafficLights {
     this.net = net;
     this.signals = [];
     const rnd = mulberry32(99);
-    for (const n of Object.values(net.nodes)) {
-      // semafori solo dove si incrociano almeno tre bracci di vie principali
-      if (n.edges.length < 3 || n.edges.filter((e) => e.main).length < 3) continue;
+    // semafori agli incroci tra vie molto percorse (almeno tre bracci con 4+ linee), a non meno di 90 m l'uno dall'altro
+    const weight = (n) => n.edges.reduce((s, e) => s + e.routes, 0);
+    const cand = Object.values(net.nodes)
+      .filter((n) => n.edges.length >= 3 && n.edges.filter((e) => e.routes >= 4).length >= 3 && Math.hypot(n.x + 150, n.z - 120) < 4800)
+      .sort((a, b) => weight(b) - weight(a));
+    const chosen = [];
+    for (const n of cand) if (!chosen.some((k) => Math.hypot(k.x - n.x, k.z - n.z) < 90)) chosen.push(n);
+    for (const n of chosen) {
       const appr = n.edges.map((e) => {
         const out = e.a === n.id ? { x: e.dx, z: e.dz } : { x: -e.dx, z: -e.dz };
         return { edge: e, out, ang: Math.atan2(out.z, out.x) };

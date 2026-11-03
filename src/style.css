@@ -116,3 +116,10 @@ button.primary:hover { filter: brightness(1.08); }
 button.secondary { flex: 1; padding: 10px; border-radius: 10px; border: 0; background: #4fc3f7; color: #0d1117; font-weight: 800; }
 button.link { background: none; border: 0; color: #90a4ae; text-decoration: underline; padding: 6px; }
 .pause-info { font-size: 13px; opacity: .75; max-width: 320px; margin: 0 auto 6px; line-height: 1.4; }
+
+.seg.col { flex-direction: column; }
+.seg.col button { text-align: left; font-size: 13px; }
+.seg button:disabled { opacity: .35; cursor: default; }
+#route-variant { margin-top: 6px; font-size: 13px; }
+#line-list { max-height: 440px; overflow: auto; padding-right: 4px; }
+button.primary:disabled { filter: grayscale(1); opacity: .5; cursor: default; }

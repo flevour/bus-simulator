@@ -12,35 +12,29 @@ npm run build      # build di produzione in dist/
 npm run build:single  # un unico file HTML autosufficiente in dist-single/index.html
 ```
 
-## Linee disponibili
+## Dati reali: GTFS Busitalia Veneto
 
-| Linea | Capolinea | Percorso | Feriale | Festivo |
-|-------|-----------|----------|---------|---------|
-| **22** | Torre – Mandria | Via Madonna della Salute, Via Bajardi, Via Machiavelli, Via Aspetti, Cavalcavia Borgomagno, Viale Codalunga, Via Giotto, Largo Europa, Riviere Ponti Romani / Tito Livio / Businello, Prato della Valle, Corso Vittorio Emanuele II, Bassanello, Strada dell'Armistizio | ogni 15' | ogni 30' |
-| **24** | Largo Debussy – Mandriola | Via del Plebiscito, Via Callegari, Via Benedetti, Via Zanchi, Via Aspetti, Stazione FS, Piazzale Boschetti, Ospedale Civile, Via Gattamelata, Via Cavazzana, Prato della Valle, Bassanello, Strada Battaglia, Sant'Agostino | ogni 20' | ogni 40', limitata Stazione FS – Mandriola |
-| **12** | Stazione FS – Tencarola | Corso del Popolo, Corso Garibaldi, Riviere, Businello, Prato della Valle, Via Sorio, Aeroporto, Brusegana | ogni 20' | ogni 40' |
+Rete stradale, linee, percorsi, fermate e orari vengono dal **GTFS ufficiale di Busitalia Veneto** (feed BusOne,
+`https://proxy.busone.app/biv/gtfs.zip`). I tracciati di tutte le linee sono costruiti su un unico grafo stradale:
+le vie percorse da più linee condividono gli stessi vertici, quindi dall'unione dei tracciati si ottiene la **rete reale
+delle strade percorse dai mezzi pubblici di Padova** (circa 16.000 tratti), con le fermate nella posizione vera.
 
-Ogni linea si percorre in **andata** o **ritorno**. Le corse sono generate da orario di inizio/fine servizio e frequenza:
-l'ora scelta determina luce (alba, giorno, tramonto, notte), traffico (ore di punta) e numero di passeggeri.
+* **Linee**: tutte le linee urbane (3, 4, 5, 6, 7, 9, 10, 11, 11B, 12, 13, 14, 15B, 16, 19, 21, 22, 24, 25, 42, 88).
+  Per ogni linea si sceglie direzione e variante di percorso (con il numero di corse feriali e festive).
+* **Orari**: le corse sono quelle del GTFS per un mercoledì (feriale) e una domenica (festivo); gli orari di
+  passaggio alle fermate sono quelli reali della corsa.
+* **Monumenti**: Prato della Valle, Santo, Palazzo della Ragione, Stazione FS ecc. sono modelli semplificati,
+  allineati automaticamente alla rete reale. Fiumi e ferrovia sono ancora tracciati approssimati.
+* Il **tram SIR1** compare come strada (binari condivisi) ma non è tra le linee guidabili.
 
-> I percorsi seguono le descrizioni strada per strada delle linee urbane Busitalia di Padova; la geometria delle strade è
-> semplificata (tratti rettilinei tra i punti principali, coordinate approssimate) e le frequenze sono indicative.
-> Dove non ho trovato differenze tra feriale e festivo, il festivo usa lo stesso percorso con frequenza ridotta.
+Per aggiornare i dati:
 
-> Il **SIR1** è una linea tranviaria: l'asse Pontevigodarzere – Stazione – Prato – Guizza è presente come strada,
-> ma la linea verrà gestita a parte come tram.
+```bash
+curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
+python3 scripts/build_gtfs.py /tmp/biv src/data/gtfs-padova.json
+```
 
-## Modalità
-
-* **Servizio di linea**: corsa con orario, fermate, passeggeri e punteggio.
-* **Giro libero**: niente orari né fermate, giri dove vuoi per tutta la città (valgono comunque semafori, limiti e marciapiedi).
-
-## La città
-
-Le vie percorse dalle linee sono quelle reali (coordinate approssimate). Tutte le altre strade, le traverse che formano
-gli isolati, sono **generate proceduralmente** a partire dalle vie principali: si fermano su fiumi, ferrovia e monumenti
-e sono tutte percorribili. Il **Cavalcavia Borgomagno** è sopraelevato sopra la ferrovia (in salita il bus rallenta).
-La **Stazione FS** ha il piazzale con le corsie dei bus, la fermata del tram, il posteggio taxi e il fascio dei binari.
+Le vie senza autobus (strade residenziali) non sono nel GTFS: per averle servono i dati OpenStreetMap.
 
 ## Comandi (tastiera)
 
@@ -92,7 +86,8 @@ La **Stazione FS** ha il piazzale con le corsie dei bus, la fermata del tram, il
 
 ```
 src/
-  data/padova.js     rete stradale, linee, fiumi, monumenti
+  data/padova.js     rete stradale e linee (dal GTFS), fiumi, monumenti
+  data/gtfs-padova.json  dati generati da scripts/build_gtfs.py
   world/city.js      generazione della città
   world/traffic.js   semafori, auto, pedoni
   bus/bus.js         modello 3D e fisica del bus

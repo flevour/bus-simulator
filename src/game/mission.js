@@ -47,11 +47,12 @@ class Crowd {
 }
 
 export class Mission {
-  constructor({ scene, net, line, variant, direction, departure, hud, audio, lights, city, free = false }) {
+  // route: variante GTFS (nodi, fermate, tempi); day: 'feriale' | 'festivo'; departure: secondi; depDur: durata reale della corsa
+  constructor({ scene, net, line, route, day, departure, depDur, hud, audio, lights, city, free = false }) {
     this.free = free;
-    this.net = net; this.line = line; this.variant = variant; this.hud = hud; this.audio = audio; this.lights = lights; this.city = city;
-    const seq = direction === 1 ? line[variant].nodes : [...line[variant].nodes].reverse();
-    this.route = buildRoute(net, seq);
+    const variant = day;
+    this.net = net; this.line = line; this.variant = day; this.routeData = route; this.hud = hud; this.audio = audio; this.lights = lights; this.city = city;
+    this.route = buildRoute(net, route);
     this.stops = this.route.stops;
     this.dest = this.stops[this.stops.length - 1].name;
     this.departure = departure;
@@ -77,7 +78,7 @@ export class Mission {
     // orari
     const hour = (departure / 3600) % 24;
     const peak = isPeak(hour);
-    const times = scheduleFor(this.route, departure, variant);
+    const times = scheduleFor(route, departure, depDur);
     this.stops.forEach((st, i) => {
       st.sched = times[i];
       st.served = false;
@@ -93,7 +94,7 @@ export class Mission {
   // numero di persone in attesa a una fermata
   rollWaiting(st) {
     if (st.idx === this.stops.length - 1) return 0;
-    const base = [0, 1.2, 3, 6][st.importance] || 1;
+    const base = [0, 0.8, 2.2, 4.5][st.importance] || 1;
     let n = Math.round((base + this.rnd() * 3) * this.demand + (st.idx === 0 ? 3 : 0));
     if (this.rnd() < 0.18) n = 0;
     return Math.max(0, Math.min(18, n));
@@ -398,8 +399,8 @@ export class Mission {
   }
 
   checkRedLights(bus, front) {
-    for (const n of Object.values(this.net.nodes)) {
-      if (!n.signal) continue;
+    for (const sig of this.lights.signals) {
+      const n = sig.node;
       const dx = front.x - n.x, dz = front.z - n.z;
       const d = Math.hypot(dx, dz);
       if (d > 45) { this.lastSigDist.delete(n.id); continue; }
@@ -475,8 +476,8 @@ export function isPeak(hour) {
   return (hour > 7 && hour < 9.3) || (hour > 12.5 && hour < 14.5) || (hour > 17 && hour < 19.5);
 }
 // orario teorico di passaggio alle fermate
-export function scheduleFor(route, departure, variant) {
-  const hour = (departure / 3600) % 24;
-  const vSched = variant === 'festivo' ? 8.0 : isPeak(hour) ? 6.6 : 7.3;
-  return route.stops.map((st, i) => departure + (st.s - route.stops[0].s) / vSched + i * 12);
+// orari reali dal GTFS: tempi della corsa di riferimento scalati sulla durata della corsa scelta
+export function scheduleFor(variant, departure, dur) {
+  const k = (dur || variant.duration) / variant.duration;
+  return variant.offsets.map((o) => departure + o * k);
 }

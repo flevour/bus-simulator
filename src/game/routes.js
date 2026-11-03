@@ -1,49 +1,42 @@
 import { LINES } from '../data/padova.js';
 
-// Costruisce un percorso (polilinea + fermate) da una sequenza di nodi
-export function buildRoute(net, seq) {
-  seq = net.expandSeq(seq);
+// Costruisce un percorso da una variante GTFS: polilinea sui vertici della rete + fermate reali
+export function buildRoute(net, variant) {
+  const seq = net.expandSeq(variant.nodes);
   const pts = seq.map((id) => ({ x: net.nodes[id].x, z: net.nodes[id].z }));
   const cum = [0];
   const segs = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const e = net.edgeBetween(seq[i], seq[i + 1]);
     const dx = pts[i + 1].x - pts[i].x, dz = pts[i + 1].z - pts[i].z;
-    const len = Math.hypot(dx, dz);
-    segs.push({ i, edge: e, len, dx: dx / len, dz: dz / len, hw: e.width / 2 });
+    const len = Math.hypot(dx, dz) || 0.01;
+    segs.push({ i, edge: e || { width: 9, name: '' }, len, dx: dx / len, dz: dz / len, hw: (e ? e.width : 9) / 2 });
     cum.push(cum[i] + len);
   }
   const length = cum[cum.length - 1];
   const route = { seq, pts, cum, segs, length };
 
+  // fermate: proiezione delle coordinate reali sul percorso, in ordine
   const stops = [];
-  let lastS = -1e9;
-  for (let i = 0; i < seq.length; i++) {
-    const node = net.nodes[seq[i]];
-    if (!node.name) continue; // nodo di passaggio senza fermata
-    let s;
-    if (i === 0) s = Math.min(28, segs[0].len * 0.3);
-    else if (i === seq.length - 1) s = length - 20;
-    else s = cum[i] - (node.edges.length >= 3 ? 34 : 16);
-    if (s < lastS + 60) continue;
-    lastS = s;
+  let sPrev = 0;
+  variant.stops.forEach((g, k) => {
+    const last = k === variant.stops.length - 1;
+    const pr = projectOnRoute(route, g.x, g.z, sPrev, 20, last ? 1e9 : 2500);
+    let s = Math.max(pr.s, sPrev + (k ? 25 : 0));
+    if (k === 0) s = Math.max(s, Math.min(28, length * 0.1));
+    if (last) s = Math.min(Math.max(s, sPrev + 25), length - 15);
+    s = Math.min(s, length - 15);
+    sPrev = s;
     const p = pointAt(route, s);
     const hw = p.seg.hw;
     const rx = -p.dz, rz = p.dx; // normale destra
     stops.push({
-      idx: stops.length,
-      s,
-      nodeId: seq[i],
-      name: node.name,
-      importance: node.importance,
-      terminal: i === 0 || i === seq.length - 1,
-      x: p.x + rx * (hw + 1.6),
-      z: p.z + rz * (hw + 1.6),
-      cx: p.x, cz: p.z,
-      dx: p.dx, dz: p.dz,
-      rx, rz, hw,
+      idx: k, s, gtfs: g, name: g.name, importance: g.importance || 1,
+      terminal: k === 0 || last,
+      x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6),
+      cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw,
     });
-  }
+  });
   route.stops = stops;
   return route;
 }
@@ -77,19 +70,27 @@ export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400) {
   return best;
 }
 
-// Tutte le fermate di tutte le linee (entrambe le direzioni) per la scenografia
-export function allStopPlacements(net) {
+// Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia
+export function allStopPlacements(net, snap) {
+  const served = new Map();
+  for (const L of LINES) for (const v of L.variants) for (const st of v.stops) {
+    const set = served.get(st.id) || served.set(st.id, new Set()).get(st.id);
+    set.add(L.id);
+  }
   const out = [];
-  for (const L of LINES)
-    for (const v of ['feriale', 'festivo'])
-      for (const dir of [1, -1]) {
-        const seq = dir === 1 ? L[v].nodes : [...L[v].nodes].reverse();
-        const r = buildRoute(net, seq);
-        for (const st of r.stops) {
-          const dup = out.find((o) => Math.hypot(o.x - st.x, o.z - st.z) < 18);
-          if (dup) { if (!dup.lines.includes(L.id)) dup.lines.push(L.id); continue; }
-          out.push({ ...st, lines: [L.id] });
-        }
-      }
+  for (const st of net.stops) {
+    if (!served.has(st.id)) continue;
+    const r = snap(st.x, st.z);
+    if (!r || r.d > 35 || r.edge.elev) continue;
+    let { dx, dz } = r;
+    // la palina sta sul lato destro della direzione di marcia
+    if ((st.x - r.cx) * -dz + (st.z - r.cz) * dx < 0) { dx = -dx; dz = -dz; }
+    const rx = -dz, rz = dx;
+    if (out.some((o) => Math.hypot(o.cx - r.cx, o.cz - r.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) continue;
+    out.push({
+      name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
+      x: r.cx + rx * (r.hw + 1.6), z: r.cz + rz * (r.hw + 1.6), cx: r.cx, cz: r.cz, dx, dz, rx, rz, hw: r.hw,
+    });
+  }
   return out;
 }
