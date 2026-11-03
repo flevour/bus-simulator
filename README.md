@@ -19,7 +19,7 @@ Rete stradale, linee, percorsi, fermate e orari vengono dal **GTFS ufficiale di 
 le vie percorse da più linee condividono gli stessi vertici, quindi dall'unione dei tracciati si ottiene la **rete reale
 delle strade percorse dai mezzi pubblici di Padova** (circa 16.000 tratti), con le fermate nella posizione vera.
 
-* **Linee**: tutte le linee urbane (3, 4, 5, 6, 7, 9, 10, 11, 11B, 12, 13, 14, 15B, 16, 19, 21, 22, 24, 25, 42, 88).
+* **Linee**: tutte le 22 linee urbane del feed (2, 3, 4, 5, 6, 7, 9, 10, 11, 11B, 12, 13, 14, 15B, 16, 19, 21, 22, 24, 25, 42, 88); sono esclusi i percorsi che escono oltre 9 km dal centro.
   Per ogni linea si sceglie direzione e variante di percorso (con il numero di corse feriali e festive).
 * **Orari**: le corse sono quelle del GTFS per un mercoledì (feriale) e una domenica (festivo); gli orari di
   passaggio alle fermate sono quelli reali della corsa.
