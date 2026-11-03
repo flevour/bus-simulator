@@ -146,7 +146,7 @@ let running = false, paused = false;
 let camMode = 0; // 0 cabina, 1 esterna, 2 passeggeri, 3 dall'alto
 const CAM_NAMES = ['Cabina di guida', 'Esterna', 'Passeggeri', 'Dall\'alto'];
 let lookYaw = 0;
-const settings = { line: LINES[1], variant: 'feriale', direction: 1, departure: 0, weather: 'clear' };
+const settings = { line: LINES.find((l) => l.id === '24') || LINES[0], variant: 'feriale', direction: 1, departure: 0, weather: 'clear', mode: 'service' };
 let indAccum = 0, lastBlinkOn = false, wasMoving = false;
 let showHelp = false;
 
@@ -189,7 +189,7 @@ function toggleDoors() {
     bus.doorTarget = 1;
     audio.doorOpen();
     const si = mission.stopInfo;
-    if (!(si && si.inZone) && !mission.finished) mission.addScore(-30, 'Porte aperte fuori fermata!');
+    if (!mission.free && !(si && si.inZone) && !mission.finished) mission.addScore(-30, 'Porte aperte fuori fermata!');
   } else {
     if (mission.walkingIn() > 0) mission.addScore(-20, 'Hai chiuso le porte in faccia a un passeggero!');
     bus.doorTarget = 0;
@@ -258,6 +258,7 @@ function buildMenu() {
   seg('variant', 'v', (v) => { settings.variant = v; refreshMenu(); });
   seg('direction', 'd', (d) => { settings.direction = Number(d); refreshMenu(); });
   seg('weather', 'w', (w) => { settings.weather = w; });
+  seg('mode', 'm', (m) => { settings.mode = m; });
   $('departure').addEventListener('change', (e) => { settings.departure = Number(e.target.value); refreshStops(); });
   $('start').addEventListener('click', startMission);
   $('resume').addEventListener('click', () => togglePause(false));
@@ -297,7 +298,7 @@ function startMission() {
   const destName = net.nodes[seq[seq.length - 1]].name.replace(' Capolinea', '');
   bus = new Bus(scene, { id: L.id, color: L.color, dest: destName });
   bus.onShift = () => audio.shift();
-  mission = new Mission({ scene, net, line: L, variant: settings.variant, direction: settings.direction, departure: settings.departure, hud, audio, lights, city });
+  mission = new Mission({ scene, net, line: L, variant: settings.variant, direction: settings.direction, departure: settings.departure, hud, audio, lights, city, free: settings.mode === 'free' });
   mission.dest = destName;
   const st0 = mission.stops[0];
   const p = pointAt(mission.route, st0.s - 6.5);
@@ -309,7 +310,7 @@ function startMission() {
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
   const count = Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1));
   traffic = new Traffic(scene, net, city, lights, { count, seed: Math.floor(settings.departure) });
-  walkers = new Walkers(scene, net, Math.round(140 * (settings.variant === 'festivo' ? 1.2 : 1) * (hour > 21 || hour < 6.5 ? 0.3 : 1)));
+  walkers = new Walkers(scene, net, Math.round(140 * (settings.variant === 'festivo' ? 1.2 : 1) * (hour > 21 || hour < 6.5 ? 0.3 : 1)), city);
   for (let i = 0; i < count; i++) traffic.spawn(bus, 60, 1400);
   for (let i = 0; i < walkers.target; i++) walkers.spawn(bus);
   mission.onFinish = () => setTimeout(showResults, 3500);
@@ -324,8 +325,13 @@ function startMission() {
   setupWeatherAndTime(true);
   const night = mission._night || 0;
   bus.lights = night > 0.3 || settings.weather !== 'clear';
-  hud.toast(`Linea ${L.id} per ${destName} – partenza ${fmtHM(settings.departure)}`, 'info');
-  setTimeout(() => running && hud.toast('Apri le porte (F) per far salire i passeggeri', 'info'), 1800);
+  if (mission.free) {
+    hud.setLine({ id: L.id, color: L.color }, 'Giro libero');
+    hud.toast('Giro libero: esplora Padova, rispetta semafori e limiti', 'info');
+  } else {
+    hud.toast(`Linea ${L.id} per ${destName} – partenza ${fmtHM(settings.departure)}`, 'info');
+    setTimeout(() => running && hud.toast('Apri le porte (F) per far salire i passeggeri', 'info'), 1800);
+  }
   setTimeout(() => running && hud.toast('Premi I per l\'elenco dei comandi', 'info'), 4500);
 }
 
@@ -426,11 +432,11 @@ function updateCamera(dt) {
     chase.init = false;
   } else if (camMode === 1) {
     const f = V2.set(bus.fx, 0, bus.fz);
-    const target = V.set(bus.x, 0, bus.z).addScaledVector(f, -17).add(new THREE.Vector3(0, 6.5, 0));
+    const target = V.set(bus.x, bus.elev || 0, bus.z).addScaledVector(f, -17).add(new THREE.Vector3(0, 6.5, 0));
     if (!chase.init) { chase.pos.copy(target); chase.init = true; }
     chase.pos.lerp(target, Math.min(1, dt * 3));
     camera.position.copy(chase.pos);
-    camera.lookAt(bus.x + bus.fx * 5, 2.2, bus.z + bus.fz * 5);
+    camera.lookAt(bus.x + bus.fx * 5, 2.2 + (bus.elev || 0), bus.z + bus.fz * 5);
     camera.fov = 60;
   } else {
     camera.position.set(bus.x - bus.fx * 25, 75, bus.z - bus.fz * 25);
@@ -451,8 +457,8 @@ function updateMirrors() {
     const p = bus.toWorld(s * 1.6, 6.1);
     const t = bus.toWorld(s * 2.6, -25);
     const cam = mirrorCams[i];
-    cam.position.set(p.x, 2.45, p.z);
-    cam.lookAt(t.x, 0.9, t.z);
+    cam.position.set(p.x, 2.45 + (bus.elev || 0), p.z);
+    cam.lookAt(t.x, 0.9 + (bus.elev || 0), t.z);
     renderer.setRenderTarget(mirrorRT[i]);
     renderer.render(scene, cam);
   }
@@ -464,11 +470,11 @@ function updateMirrors() {
 // Loop principale
 // ------------------------------------------------------------------
 const world = {
-  wet: false, offRoad: false,
+  wet: false, offRoad: false, slope: 0,
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
   carsNear: (x, z, r) => (traffic ? traffic.near(x, z, r) : []),
 };
-let envTimer = 0, frame = 0;
+let envTimer = 0, frame = 0, hudStreet = '';
 let lastT = performance.now();
 
 function step(dt) {
@@ -483,6 +489,10 @@ function step(dt) {
     const ri = city.roadInfo(p.x, p.z);
     if (ri.off > 0.35 && ri.off < 6) onSidewalk = true;
   }
+  const pf = bus.toWorld(0, 3.3), pr = bus.toWorld(0, -2.6);
+  const hF = city.heightAt(pf.x, pf.z), hR = city.heightAt(pr.x, pr.z);
+  world.slope = (hF - hR) / 5.9;
+  bus.elev = (hF + hR) / 2 + (hF - hR) * (0.3 / 5.9);
   const hit = bus.update(dt, { ...input, wipers: settings.weather === 'rain' }, world);
   if (hit && hit.impact > 1.2 && !bus._crashCd) {
     audio.crash(hit.impact / 4);
@@ -513,7 +523,9 @@ function step(dt) {
   envTimer -= dt;
   if (envTimer <= 0) { setupWeatherAndTime(); envTimer = 2; }
   audio.update(dt, bus, { interior: camMode === 0 || camMode === 2, rain: settings.weather === 'rain' });
-  hud.update(bus, mission, { speedLimit, net, traffic, lights });
+  const ri = frame % 6 === 0 ? city.roadInfo(bus.x, bus.z) : null;
+  if (ri && ri.edge) hudStreet = ri.edge.name;
+  hud.update(bus, mission, { speedLimit, net, traffic, lights, street: hudStreet });
   if (frame % 10 === 0) bus.drawDash({ doors: bus.doorsAnyOpen, request: mission.request });
 }
 

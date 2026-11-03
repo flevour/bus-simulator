@@ -47,7 +47,8 @@ class Crowd {
 }
 
 export class Mission {
-  constructor({ scene, net, line, variant, direction, departure, hud, audio, lights, city }) {
+  constructor({ scene, net, line, variant, direction, departure, hud, audio, lights, city, free = false }) {
+    this.free = free;
     this.net = net; this.line = line; this.variant = variant; this.hud = hud; this.audio = audio; this.lights = lights; this.city = city;
     const seq = direction === 1 ? line[variant].nodes : [...line[variant].nodes].reverse();
     this.route = buildRoute(net, seq);
@@ -111,6 +112,7 @@ export class Mission {
         col: new THREE.Color().setHSL(this.rnd(), 0.45, 0.25 + this.rnd() * 0.4),
         dest: this.pickDest(st.idx),
       });
+      if (this.rnd() < 0.14) { p.elderly = true; p.speed = 0.7; p.sc = 0.82; p.col = new THREE.Color(0x8a8a8a); }
       st.waiting.push(p);
     }
   }
@@ -148,6 +150,7 @@ export class Mission {
     if (this.fastForward) this.clock = Math.min(cur.sched, this.clock + dt * 11);
     if (this.finished) { this.crowd.update(dt); return; }
     const front = bus.toWorld(0, 6);
+    if (this.free) { this.updateFree(dt, bus, ctx, front); return; }
     const proj = projectOnRoute(this.route, bus.x, bus.z, this.s);
     if (proj.d < 60) this.s = proj.s;
     this.proj = proj;
@@ -251,6 +254,26 @@ export class Mission {
     this.crowd.update(dt);
   }
 
+  // giro libero: solo regole della strada e comfort
+  updateFree(dt, bus, ctx, front) {
+    this.atStop = false;
+    this.stopInfo = null;
+    const aL = Math.abs(bus.aLong), aT = Math.abs(bus.aLat);
+    let disc = 0;
+    if (aL > 1.7) disc += (aL - 1.7) * 14;
+    if (aT > 1.9) disc += (aT - 1.9) * 12;
+    this.comfort = Math.max(0, Math.min(100, this.comfort - disc * dt * 0.3 + dt * 1.2));
+    const limit = ctx.speedLimit;
+    if (bus.speedKmh > limit + 6) {
+      this.speedT = (this.speedT || 0) + dt;
+      if (this.speedT > 2.5 && this.cooldown('speed', 20)) { this.audio.camera(); this.stats.speeding++; this.addScore(-40, `📸 Autovelox! ${Math.round(bus.speedKmh)} km/h (limite ${limit})`); }
+    } else this.speedT = 0;
+    this.checkRedLights(bus, front);
+    if (ctx.onSidewalk && Math.abs(bus.v) > 1 && this.cooldown('walk', 8)) { this.stats.sidewalk++; this.addScore(-20, 'Sul marciapiede!'); }
+    if (ctx.night && !bus.lights && Math.abs(bus.v) > 2 && this.cooldown('lights', 25)) this.addScore(-10, 'Accendi i fari! (L)');
+    this.crowd.update(dt);
+  }
+
   judgeArrival(st, delay, lat) {
     const d = Math.round(delay);
     let msg;
@@ -289,7 +312,12 @@ export class Mission {
         const door = BUS.doors[0];
         const dp = bus.toWorld(-1.7, (door.z0 + door.z1) / 2);
         p.target = dp;
-        p.speed = 1.6;
+        p.speed = p.elderly ? 0.7 : p.runner ? 3 : 1.6;
+        if (p.elderly && !st.elderlyMsg) {
+          st.elderlyMsg = true;
+          if (bus.kneelTarget > 0) this.addScore(15, 'Bus inginocchiato per la signora anziana 👵');
+          else this.hud.toast('👵 Sale una persona anziana: premi K per abbassare il bus', 'info');
+        }
         p.onArrive = (q) => {
           q.dead = true;
           st.waiting.splice(st.waiting.indexOf(q), 1);
@@ -300,7 +328,7 @@ export class Mission {
           this.audio.tone(1500, 0.08, { gain: 0.05 }); // validatrice
           if (q.runner) this.addScore(40, 'Hai aspettato il ritardatario: che gentile! 😊');
         };
-        this.boardT = 0.5 + this.rnd() * 0.5;
+        this.boardT = p.elderly ? 2.4 : 0.5 + this.rnd() * 0.5;
       }
     }
     const done = !st.waiting.length && !this.onboard.some((d) => d <= st.idx);
@@ -324,15 +352,22 @@ export class Mission {
     const st = this.stops[this.nextStop];
     if (!st || !this.atStop || st.idx === this.stops.length - 1 || st.runnerDone) return;
     st.runnerDone = true;
-    if (this.rnd() > 0.3) return;
+    if (this.rnd() > 0.45) return;
+    // parte da dietro il bus, ben visibile nello specchietto destro
+    const back = bus.toWorld(-2.6, -14);
     const p = this.crowd.add({
-      x: st.x - st.dx * 35 + st.rx * 1.2, z: st.z - st.dz * 35 + st.rz * 1.2, h: 0, ph: 0, speed: 3.6, sc: 0.95,
-      col: new THREE.Color().setHSL(this.rnd(), 0.7, 0.5), dest: this.pickDest(st.idx), runner: true,
+      x: back.x, z: back.z, h: bus.h, ph: 0, speed: 4.6, sc: 1.0,
+      col: new THREE.Color(0xff3d00), dest: this.pickDest(st.idx), runner: true,
     });
-    p.target = { x: st.x - st.dx * 2, z: st.z - st.dz * 2 };
-    p.onArrive = (q) => { q.speed = 1.6; };
+    const door = bus.toWorld(-1.8, (BUS.doors[0].z0 + BUS.doors[0].z1) / 2);
+    p.target = { x: door.x, z: door.z };
+    p.onArrive = () => {
+      if (bus.doorTarget === 0 && !st.left) { this.hud.toast('✊ Bussa alla porta: "Aspetti! Aspetti!"', 'info'); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5 }); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5, delay: 0.25 }); }
+    };
     st.waiting.push(p);
-    this.hud.toast('🏃 Un passeggero corre verso il bus! Riapri le porte (F)?', 'info');
+    this.audio.tone(880, 0.15, { type: 'square', gain: 0.05 });
+    this.audio.tone(880, 0.15, { type: 'square', gain: 0.05, delay: 0.2 });
+    this.hud.toast('🏃 "Aspettiii!" Un ritardatario corre verso la porta: riapri (F)?', 'info');
     this.runner = { p, st };
   }
   walkingIn() { return this.crowd.people.filter((p) => p.boarding && !p.dead).length; }

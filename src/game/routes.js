@@ -2,6 +2,7 @@ import { LINES } from '../data/padova.js';
 
 // Costruisce un percorso (polilinea + fermate) da una sequenza di nodi
 export function buildRoute(net, seq) {
+  seq = net.expandSeq(seq);
   const pts = seq.map((id) => ({ x: net.nodes[id].x, z: net.nodes[id].z }));
   const cum = [0];
   const segs = [];
@@ -19,6 +20,7 @@ export function buildRoute(net, seq) {
   let lastS = -1e9;
   for (let i = 0; i < seq.length; i++) {
     const node = net.nodes[seq[i]];
+    if (!node.name) continue; // nodo di passaggio senza fermata
     let s;
     if (i === 0) s = Math.min(28, segs[0].len * 0.3);
     else if (i === seq.length - 1) s = length - 20;

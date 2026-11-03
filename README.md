@@ -28,6 +28,18 @@ l'ora scelta determina luce (alba, giorno, tramonto, notte), traffico (ore di pu
 > semplificata (tratti rettilinei tra i punti principali, coordinate approssimate) e le frequenze sono indicative.
 > Dove non ho trovato differenze tra feriale e festivo, il festivo usa lo stesso percorso con frequenza ridotta.
 
+## Modalità
+
+* **Servizio di linea**: corsa con orario, fermate, passeggeri e punteggio.
+* **Giro libero**: niente orari né fermate, giri dove vuoi per tutta la città (valgono comunque semafori, limiti e marciapiedi).
+
+## La città
+
+Le vie percorse dalle linee sono quelle reali (coordinate approssimate). Tutte le altre strade, le traverse che formano
+gli isolati, sono **generate proceduralmente** a partire dalle vie principali: si fermano su fiumi, ferrovia e monumenti
+e sono tutte percorribili. Il **Cavalcavia Borgomagno** è sopraelevato sopra la ferrovia (in salita il bus rallenta).
+La **Stazione FS** ha il piazzale con le corsie dei bus, la fermata del tram, il posteggio taxi e il fascio dei binari.
+
 ## Comandi (tastiera)
 
 | Tasto | Azione |

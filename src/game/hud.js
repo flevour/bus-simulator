@@ -33,7 +33,12 @@ export class HUD {
   update(bus, m, ctx) {
     $('clock').textContent = fmtHM(m.clock, true);
     $('clock').classList.toggle('ff', !!m.fastForward);
-    const st = m.stops[m.nextStop];
+    $('panel-line').classList.toggle('free', !!m.free);
+    if (m.free) {
+      $('next-stop').textContent = ctx.street || '—';
+      $('stops-progress').textContent = 'Giro libero';
+    }
+    const st = m.free ? null : m.stops[m.nextStop];
     if (st) {
       $('next-stop').textContent = st.name + (st.terminal && st.idx > 0 ? ' (capolinea)' : '');
       $('next-sched').textContent = fmtHM(st.sched);
@@ -50,7 +55,7 @@ export class HUD {
       }
       $('next-dist').textContent = Math.max(0, Math.round(st.s - m.s)) + ' m';
     }
-    $('stops-progress').textContent = `Fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length}`;
+    if (!m.free) $('stops-progress').textContent = `Fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length}`;
     $('request').classList.toggle('on', m.request);
     $('pax').textContent = m.onboard.length;
     $('score').textContent = m.score;
@@ -61,13 +66,14 @@ export class HUD {
     $('limit-sign').classList.toggle('over', bus.speedKmh > ctx.speedLimit + 3);
 
     // navigazione
-    const nav = m.navInfo();
+    $('nav').style.display = m.free ? 'none' : '';
+    const nav = m.free ? { dist: 0, dir: 'straight', street: '' } : m.navInfo();
     const arrows = { left: '⬅', right: '➡', straight: '⬆' };
     $('nav-arrow').textContent = nav.sharp ? (nav.dir === 'left' ? '↰' : '↱') : arrows[nav.dir];
     $('nav-dist').textContent = nav.dir === 'straight' ? (nav.dist > 1500 ? 'Prosegui dritto' : `Prosegui per ${Math.round(nav.dist / 10) * 10} m`) : nav.dist > 1200 ? `Prosegui, poi a ${nav.dir === 'left' ? 'sinistra' : 'destra'} tra ${(nav.dist / 1000).toFixed(1)} km` : `Tra ${Math.round(nav.dist / 10) * 10} m svolta a ${nav.dir === 'left' ? 'sinistra' : 'destra'}`;
     $('nav-street').textContent = nav.street;
     $('nav').classList.toggle('warn', m.proj && m.proj.d > 40);
-    $('offroute').style.display = m.proj && m.proj.d > 40 ? 'block' : 'none';
+    $('offroute').style.display = !m.free && m.proj && m.proj.d > 40 ? 'block' : 'none';
 
     // stato bus
     const ind = $('ind');
@@ -156,17 +162,24 @@ export class HUD {
       c.beginPath(); w.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.z) : c.moveTo(p.x, p.z))); c.stroke();
     }
     // strade
-    c.strokeStyle = '#8c8f93';
-    for (const e of ctx.net.edges) {
-      const A = ctx.net.nodes[e.a], B = ctx.net.nodes[e.b];
-      c.lineWidth = e.width * (big ? 2.5 : 1.3);
-      c.beginPath(); c.moveTo(A.x, A.z); c.lineTo(B.x, B.z); c.stroke();
+    for (const pass of [0, 1]) {
+      c.strokeStyle = pass ? '#c9ccd0' : '#7b8086';
+      for (const e of ctx.net.edges) {
+        if (!!e.main !== !!pass) continue;
+        const A = ctx.net.nodes[e.a], B = ctx.net.nodes[e.b];
+        if (!big && Math.abs(A.x - bus.x) > 800 && Math.abs(B.x - bus.x) > 800) continue;
+        if (!big && Math.abs(A.z - bus.z) > 800 && Math.abs(B.z - bus.z) > 800) continue;
+        c.lineWidth = e.width * (big ? (pass ? 3 : 2) : (pass ? 1.6 : 1.1));
+        c.beginPath(); c.moveTo(A.x, A.z); c.lineTo(B.x, B.z); c.stroke();
+      }
     }
     // percorso
-    c.strokeStyle = m.line.color; c.lineWidth = big ? 30 : 8;
-    c.beginPath(); m.route.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.z) : c.moveTo(p.x, p.z))); c.stroke();
+    if (!m.free) {
+      c.strokeStyle = m.line.color; c.lineWidth = big ? 30 : 8;
+      c.beginPath(); m.route.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.z) : c.moveTo(p.x, p.z))); c.stroke();
+    }
     // fermate
-    for (const st of m.stops) {
+    for (const st of m.free ? [] : m.stops) {
       c.fillStyle = st.idx === m.nextStop ? '#ffeb3b' : st.left || st.arrived ? '#607d8b' : '#ffffff';
       c.beginPath(); c.arc(st.x, st.z, (big ? 40 : 9) * (st.idx === m.nextStop ? 1.5 : 1), 0, 7); c.fill();
     }
@@ -181,14 +194,20 @@ export class HUD {
         c.beginPath(); c.arc(ap.pos.x, ap.pos.z, 3, 0, 7); c.fill();
       }
     }
-    // bus
-    c.save();
-    c.translate(bus.x, bus.z);
-    c.rotate(-bus.h);
-    const k = big ? 4 : 1;
-    c.fillStyle = '#ff5722'; c.strokeStyle = '#fff'; c.lineWidth = 1.5 * k;
-    c.beginPath(); c.moveTo(0, 9 * k); c.lineTo(5 * k, -6 * k); c.lineTo(-5 * k, -6 * k); c.closePath(); c.fill(); c.stroke();
     c.restore();
+    // bus: freccia a dimensione fissa con alone pulsante
+    const bx = big ? W / 2 + (bus.x - cxw) * scale : W / 2, by = big ? H / 2 + (bus.z - czw) * scale : H / 2;
+    const ang = big ? Math.PI - bus.h : 0;
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 250);
+    c.save();
+    c.translate(bx, by);
+    c.fillStyle = `rgba(255,109,0,${0.18 + pulse * 0.22})`;
+    c.beginPath(); c.arc(0, 0, 15 + pulse * 5, 0, Math.PI * 2); c.fill();
+    c.rotate(ang);
+    c.shadowColor = 'rgba(0,0,0,0.7)'; c.shadowBlur = 6;
+    c.fillStyle = '#ff6d00'; c.strokeStyle = '#ffffff'; c.lineWidth = 3; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(0, -14); c.lineTo(10, 11); c.lineTo(0, 5); c.lineTo(-10, 11); c.closePath();
+    c.stroke(); c.fill();
     c.restore();
     if (!big) {
       c.fillStyle = '#fff'; c.font = 'bold 12px Arial'; c.textAlign = 'center';

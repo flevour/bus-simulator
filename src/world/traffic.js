@@ -12,7 +12,8 @@ export class TrafficLights {
     this.signals = [];
     const rnd = mulberry32(99);
     for (const n of Object.values(net.nodes)) {
-      if (n.edges.length < 3) continue;
+      // semafori solo dove si incrociano almeno tre bracci di vie principali
+      if (n.edges.length < 3 || n.edges.filter((e) => e.main).length < 3) continue;
       const appr = n.edges.map((e) => {
         const out = e.a === n.id ? { x: e.dx, z: e.dz } : { x: -e.dx, z: -e.dz };
         return { edge: e, out, ang: Math.atan2(out.z, out.x) };
@@ -182,7 +183,7 @@ export class Traffic {
       if (cars.some((c) => Math.hypot(c.x - x, c.z - z) < 12)) continue;
       car.x = x; car.z = z; car.h = Math.atan2(g.dx, g.dz);
       const zone = zoneOf(x, z);
-      car.vmax = (zone === 0 ? 10 : 14) * (0.9 + this.rnd() * 0.2);
+      car.vmax = (zone === 0 || !e.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
       car.v = car.vmax * 0.7;
       car.color = new THREE.Color(CAR_COLORS[Math.floor(this.rnd() * CAR_COLORS.length)]);
       car.blocked = 0; car.pass = 0; car.passT = 0; car.honkCd = 0; car.latOff = 0;
@@ -196,7 +197,11 @@ export class Traffic {
     const to = car.fwd ? this.net.nodes[car.edge.b] : this.net.nodes[car.edge.a];
     let opts = to.edges.filter((e) => e !== car.edge);
     if (!opts.length) opts = [car.edge];
-    const e = opts[Math.floor(this.rnd() * opts.length)];
+    // le vie principali attirano più traffico delle traverse
+    const w = opts.map((e) => (e.main ? 3 : 1) * (to.edges.length > 1 && e.b !== e.a ? 1 : 0.2));
+    let r = this.rnd() * w.reduce((a, b) => a + b, 0), k = 0;
+    while (k < opts.length - 1 && (r -= w[k]) > 0) k++;
+    const e = opts[k];
     return { edge: e, fwd: e.a === to.id, node: to };
   }
 
@@ -314,7 +319,7 @@ export class Traffic {
           c.s = c.turn.s0 + (c.turn.t - 1) * c.turn.len;
           c.turn = null;
           const zone = zoneOf(c.x, c.z);
-          c.vmax = (zone === 0 ? 10 : 14) * (0.9 + this.rnd() * 0.2);
+          c.vmax = (zone === 0 || !c.edge.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
         }
       }
       // posizione
@@ -346,7 +351,7 @@ export class Traffic {
     const { M, Q, Y, S, P } = this;
     this.cars.forEach((c, i) => {
       Q.setFromAxisAngle(Y, c.h);
-      M.compose(P.set(c.x, Y_ROAD, c.z), Q, S);
+      M.compose(P.set(c.x, Y_ROAD + this.city.heightAt(c.x, c.z), c.z), Q, S);
       this.mesh.setMatrixAt(i, M);
       this.mesh.setColorAt(i, c.color);
       this.lightMesh.setMatrixAt(i, M);
@@ -387,7 +392,8 @@ export function personGeometry() {
 }
 
 export class Walkers {
-  constructor(scene, net, count) {
+  constructor(scene, net, count, city) {
+    this.city = city;
     this.net = net;
     this.rnd = mulberry32(77);
     this.target = count;
@@ -437,7 +443,7 @@ export class Walkers {
     const { M, Q, Y, S, P } = this;
     this.list.forEach((p, i) => {
       Q.setFromAxisAngle(Y, Math.atan2(p.e.dx * p.dir, p.e.dz * p.dir));
-      M.compose(P.set(p.x, 0.1 + Math.abs(Math.sin(p.ph)) * 0.05, p.z), Q, S.set(p.sc, p.sc, p.sc));
+      M.compose(P.set(p.x, 0.1 + (p.e.elev && this.city ? this.city.heightAt(p.x, p.z) : 0) + Math.abs(Math.sin(p.ph)) * 0.05, p.z), Q, S.set(p.sc, p.sc, p.sc));
       this.mesh.setMatrixAt(i, M);
       this.mesh.setColorAt(i, p.col);
     });

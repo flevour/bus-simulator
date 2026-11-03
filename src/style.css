@@ -53,6 +53,7 @@ button.primary:hover { filter: brightness(1.08); }
 #next-stop { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .next .row2 { display: flex; justify-content: space-between; font-size: 14px; font-variant-numeric: tabular-nums; }
 #next-delay.ok { color: #69f0ae; } #next-delay.late { color: #ff5252; } #next-delay.early { color: #ffd740; }
+#panel-line.free .row2, #panel-line.free #request { display: none; }
 #request { margin-top: 8px; text-align: center; padding: 6px; border-radius: 8px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.25); font-weight: 800; font-size: 13px; }
 #request.on { background: #d50000; color: #fff; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { filter: brightness(1.4); } }

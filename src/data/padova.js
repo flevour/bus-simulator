@@ -1,3 +1,5 @@
+import { growStreets } from './streets.js';
+
 // Rete stradale semplificata di Padova e linee urbane.
 // Le coordinate sono latitudine/longitudine approssimate dei luoghi reali,
 // convertite in metri attorno a Piazza Garibaldi. I percorsi sono ispirati
@@ -20,9 +22,10 @@ const NODE_DATA = {
   sancarlo: [45.4322, 11.8818, 'San Carlo', 2],
   arcella: [45.4280, 11.8830, 'Arcella', 3],
   aspetti: [45.4252, 11.8826, 'Tiziano Aspetti', 2],
-  borgomagno: [45.4222, 11.8820, 'Borgomagno', 1],
-  stazione: [45.4180, 11.8805, 'Stazione FS', 3],
-  trieste: [45.4143, 11.8795, 'Trieste', 2],
+  borgomagno: [45.4224, 11.8836, 'Borgomagno', 1],
+  cavalcavia: [45.4171, 11.8846, null, 0], // piede sud del Cavalcavia Borgomagno (nessuna fermata)
+  stazione: [45.4166, 11.8802, 'Stazione FS', 3],
+  trieste: [45.4140, 11.8795, 'Trieste', 2],
   eremitani: [45.4108, 11.8792, 'Eremitani', 2],
   garibaldi: [45.4082, 11.8785, 'Piazza Garibaldi', 3],
   pontiromani: [45.4062, 11.8790, 'Ponti Romani', 2],
@@ -71,6 +74,10 @@ const NODE_DATA = {
   brusegana: [45.4004, 11.8432, 'Brusegana', 2],
   tencarola: [45.3992, 11.8190, 'Tencarola', 2],
 
+  // centro storico (vie senza fermate in gioco)
+  bo: [45.4068, 11.8768, null, 0],
+  viaroma: [45.4040, 11.8764, null, 0],
+  altinate: [45.4074, 11.8842, null, 0],
   // altre strade della città (senza linee in gioco)
   fiera: [45.4160, 11.8885, 'Fiera', 2],
   stanga: [45.4128, 11.8995, 'Stanga', 2],
@@ -94,7 +101,8 @@ const EDGE_DATA = [
   ['sancarlo', 'arcella', 'Via Tiziano Aspetti', 10],
   ['arcella', 'aspetti', 'Via Tiziano Aspetti', 10],
   ['aspetti', 'borgomagno', 'Via Tiziano Aspetti', 10],
-  ['borgomagno', 'stazione', 'Cavalcavia Borgomagno', 11],
+  ['borgomagno', 'cavalcavia', 'Cavalcavia Borgomagno', 11, { elev: 7 }],
+  ['cavalcavia', 'stazione', 'Piazzale della Stazione', 12],
   ['stazione', 'trieste', 'Corso del Popolo', 12],
   ['trieste', 'eremitani', 'Corso Garibaldi', 10],
   ['eremitani', 'garibaldi', 'Corso Garibaldi', 10],
@@ -141,7 +149,7 @@ const EDGE_DATA = [
   ['aeroporto', 'brusegana', 'Via dei Colli', 9],
   ['brusegana', 'tencarola', 'Via dei Colli', 9],
 
-  ['stazione', 'fiera', 'Via Niccolò Tommaseo', 11],
+  ['cavalcavia', 'fiera', 'Via Niccolò Tommaseo', 11],
   ['fiera', 'stanga', 'Via Niccolò Tommaseo', 11],
   ['stanga', 'sanlazzaro', 'Via Venezia', 12],
   ['sanlazzaro', 'pontebrenta', 'Via Venezia', 11],
@@ -156,16 +164,30 @@ const EDGE_DATA = [
   ['bassanello', 'bembo', 'Via Pietro Bembo', 10],
   ['bembo', 'sacrafam', 'Via Pietro Bembo', 9],
   ['santo', 'ospedale', 'Via Cesarotti', 9],
+  ['garibaldi', 'bo', 'Via VIII Febbraio', 8],
+  ['bo', 'viaroma', 'Via Roma', 8],
+  ['viaroma', 'businello', 'Via Umberto I', 8],
+  ['garibaldi', 'altinate', 'Via Altinate', 8],
+  ['altinate', 'ospedale', 'Via San Massimo', 8],
 ];
 
 // Linee: percorsi ricostruiti dalle descrizioni strada per strada di Busitalia Veneto.
 // Ogni variante è una sequenza di nodi (andata); il ritorno è l'inverso.
-const N_SIR1 = ['pvig', 'dazio', 'saetta', 'sancarlo', 'arcella', 'aspetti', 'borgomagno', 'stazione', 'trieste', 'eremitani', 'garibaldi', 'pontiromani', 'titolivio', 'santo', 'prato', 'pratosud', 'cavallotti', 'bassanello', 'cuoco', 'guizza'];
-const N_22 = ['torre', 'salute', 'bajardi', 'machiavelli', 'aspetti', 'borgomagno', 'stazione', 'codalunga', 'giotto', 'largoeuropa', 'pontiromani', 'titolivio', 'businello', 'prato', 'pratosud', 'cavallotti', 'bassanello', 'armistizio', 'mandria'];
-const N_24 = ['debussy', 'plebiscito', 'callegari', 'zanchi', 'arcella', 'aspetti', 'borgomagno', 'stazione', 'trieste', 'boschetti', 'ospedale', 'gattamelata', 'cavazzana', 'pratosud', 'cavallotti', 'bassanello', 'battaglia', 'santagostino', 'mandriola'];
+const N_SIR1 = ['pvig', 'dazio', 'saetta', 'sancarlo', 'arcella', 'aspetti', 'borgomagno', 'cavalcavia', 'stazione', 'trieste', 'eremitani', 'garibaldi', 'pontiromani', 'titolivio', 'santo', 'prato', 'pratosud', 'cavallotti', 'bassanello', 'cuoco', 'guizza'];
+const N_22 = ['torre', 'salute', 'bajardi', 'machiavelli', 'aspetti', 'borgomagno', 'cavalcavia', 'stazione', 'codalunga', 'giotto', 'largoeuropa', 'pontiromani', 'titolivio', 'businello', 'prato', 'pratosud', 'cavallotti', 'bassanello', 'armistizio', 'mandria'];
+const N_24 = ['debussy', 'plebiscito', 'callegari', 'zanchi', 'arcella', 'aspetti', 'borgomagno', 'cavalcavia', 'stazione', 'trieste', 'boschetti', 'ospedale', 'gattamelata', 'cavazzana', 'pratosud', 'cavallotti', 'bassanello', 'battaglia', 'santagostino', 'mandriola'];
 const N_12 = ['stazione', 'trieste', 'eremitani', 'garibaldi', 'pontiromani', 'titolivio', 'businello', 'pratoovest', 'sorio', 'aeroporto', 'brusegana', 'tencarola'];
 
 export const LINES = [
+  {
+    id: '24',
+    color: '#00897b',
+    name: 'Largo Debussy – Mandriola',
+    via: 'Plebiscito, Via Aspetti, Stazione, Piazzale Boschetti, Ospedale, Via Gattamelata, Prato della Valle, Strada Battaglia',
+    note: 'Festivo: limitata Stazione FS – Mandriola',
+    feriale: { headway: 20, first: '06:00', last: '21:00', nodes: N_24 },
+    festivo: { headway: 40, first: '07:30', last: '20:30', nodes: N_24.slice(N_24.indexOf('stazione')) },
+  },
   {
     id: 'SIR1',
     color: '#d6202a',
@@ -183,15 +205,6 @@ export const LINES = [
     note: 'Festivo: stesso percorso, frequenza ridotta',
     feriale: { headway: 15, first: '06:10', last: '21:40', nodes: N_22 },
     festivo: { headway: 30, first: '07:40', last: '20:40', nodes: N_22 },
-  },
-  {
-    id: '24',
-    color: '#00897b',
-    name: 'Largo Debussy – Mandriola',
-    via: 'Plebiscito, Via Aspetti, Stazione, Piazzale Boschetti, Ospedale, Via Gattamelata, Prato della Valle, Strada Battaglia',
-    note: 'Festivo: limitata Stazione FS – Mandriola',
-    feriale: { headway: 20, first: '06:00', last: '21:00', nodes: N_24 },
-    festivo: { headway: 40, first: '07:30', last: '20:30', nodes: N_24.slice(N_24.indexOf('stazione')) },
   },
   {
     id: '12',
@@ -212,14 +225,14 @@ export const WATER = [
   { name: 'Tronco Maestro', width: 22, pts: [[45.4180, 11.8650], [45.4130, 11.8700], [45.4070, 11.8718], [45.4025, 11.8722], [45.3990, 11.8700], [45.3940, 11.8650], [45.3925, 11.8450]] },
 ];
 
-export const RAILWAY = [[45.4215, 11.8300], [45.4200, 11.8550], [45.4190, 11.8700], [45.4189, 11.8805], [45.4178, 11.8950], [45.4205, 11.9150], [45.4250, 11.9350], [45.4290, 11.9600]];
+export const RAILWAY = [[45.4215, 11.8300], [45.4200, 11.8550], [45.4192, 11.8700], [45.4192, 11.8805], [45.4186, 11.8900], [45.4180, 11.8960], [45.4205, 11.9150], [45.4250, 11.9350], [45.4290, 11.9600]];
 
 // Landmark (posizioni approssimate)
 export const LANDMARKS = {
   prato: [45.3984, 11.8775],
   santo: [45.4013, 11.8812],
   ragione: [45.4074, 11.8758],
-  stazione: [45.4186, 11.8792],
+  stazione: [45.4179, 11.8800],
   specola: [45.4022, 11.8700],
   duomo: [45.4072, 11.8728],
   scrovegni: [45.4115, 11.8805],
@@ -228,32 +241,65 @@ export const LANDMARKS = {
   orologio: [45.4078, 11.8742],
 };
 
+// raggio di rispetto dei monumenti per le strade generate
+const LANDMARK_R = { prato: 175, santo: 75, ragione: 50, stazione: 100, specola: 22, duomo: 42, scrovegni: 45, ospedale: 100, fiera: 90, orologio: 22 };
+
 export function buildNetwork() {
   const nodes = {};
   for (const [id, [lat, lon, name, imp]] of Object.entries(NODE_DATA)) {
     const p = toXZ(lat, lon);
     nodes[id] = { id, name, importance: imp, x: p.x, z: p.z, edges: [] };
   }
-  const edges = EDGE_DATA.map(([a, b, name, width], i) => {
-    const A = nodes[a], B = nodes[b];
-    if (!A || !B) throw new Error('Nodo mancante ' + a + '/' + b);
+  const conv = (arr) => arr.map(([la, lo]) => toXZ(la, lo));
+  const water = WATER.map((w) => ({ ...w, pts: conv(w.pts) }));
+  const railway = conv(RAILWAY);
+  const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
+
+  // vie principali + traverse generate
+  const segs = EDGE_DATA.map(([a, b, name, width, extra], i) => {
+    if (!nodes[a] || !nodes[b]) throw new Error('Nodo mancante ' + a + '/' + b);
+    return { a, b, name, width, main: true, orig: 'm' + i, ...(extra || {}) };
+  });
+  const blockers = [...water.map((w) => ({ pts: w.pts, hw: w.width / 2 + 4 })), { pts: railway, hw: 9 }];
+  const zones = Object.entries(landmarks).map(([k, p]) => ({ x: p.x, z: p.z, r: LANDMARK_R[k] || 30 }));
+  growStreets(nodes, segs, blockers, zones);
+  for (const n of Object.values(nodes)) if (!n.edges) { n.edges = []; }
+  for (const [id, n] of Object.entries(nodes)) { n.id = id; n.edges = []; }
+
+  const edges = segs.map((sg, i) => {
+    const A = nodes[sg.a], B = nodes[sg.b];
     const dx = B.x - A.x, dz = B.z - A.z;
-    const len = Math.hypot(dx, dz);
-    const e = { id: i, a, b, name, width, len, dx: dx / len, dz: dz / len };
+    const len = Math.hypot(dx, dz) || 0.01;
+    const e = { ...sg, id: i, len, dx: dx / len, dz: dz / len };
     A.edges.push(e);
     B.edges.push(e);
     return e;
   });
   const edgeBetween = (a, b) => nodes[a].edges.find((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a));
-  for (const L of LINES) for (const v of ['feriale', 'festivo']) {
-    const seq = L[v].nodes;
-    for (let i = 0; i < seq.length - 1; i++) if (!edgeBetween(seq[i], seq[i + 1])) throw new Error(`Linea ${L.id}: manca ${seq[i]}-${seq[i + 1]}`);
-  }
-  const conv = (arr) => arr.map(([la, lo]) => toXZ(la, lo));
-  const water = WATER.map((w) => ({ ...w, pts: conv(w.pts) }));
-  const railway = conv(RAILWAY);
-  const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
-  return { nodes, edges, edgeBetween, water, railway, landmarks };
+
+  // catena di nodi che compone ogni via principale originale (dopo le divisioni)
+  const chains = {};
+  EDGE_DATA.forEach(([a, b], i) => {
+    const A = nodes[a], B = nodes[b];
+    const L = Math.hypot(B.x - A.x, B.z - A.z);
+    const ids = new Set();
+    for (const e of edges) if (e.orig === 'm' + i) { ids.add(e.a); ids.add(e.b); }
+    const arr = [...ids].sort((p, q) => ((nodes[p].x - A.x) * (B.x - A.x) + (nodes[p].z - A.z) * (B.z - A.z)) / L - ((nodes[q].x - A.x) * (B.x - A.x) + (nodes[q].z - A.z) * (B.z - A.z)) / L);
+    chains[a + '|' + b] = arr;
+    chains[b + '|' + a] = [...arr].reverse();
+  });
+  // espande una sequenza di nodi principali nella sequenza completa di nodi
+  const expandSeq = (seq) => {
+    const out = [seq[0]];
+    for (let i = 0; i < seq.length - 1; i++) {
+      const ch = chains[seq[i] + '|' + seq[i + 1]];
+      if (!ch) throw new Error(`Manca la via ${seq[i]}-${seq[i + 1]}`);
+      out.push(...ch.slice(1));
+    }
+    return out;
+  };
+  for (const L of LINES) for (const v of ['feriale', 'festivo']) expandSeq(L[v].nodes);
+  return { nodes, edges, edgeBetween, expandSeq, water, railway, landmarks };
 }
 
 export function parseHM(s) {

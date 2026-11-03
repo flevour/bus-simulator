@@ -481,7 +481,7 @@ export class Bus {
     // integrazione longitudinale (v con segno = direzione di marcia)
     const vPrev = this.v;
     const sgn = this.v !== 0 ? Math.sign(this.v) : this.dir;
-    let a = (Fdrive * this.dir) / m;
+    let a = (Fdrive * this.dir) / m - 9.81 * (world.slope || 0);
     const resist = (Froll + Fdrag + Fbrake) / m;
     let vNew = this.v + a * dt;
     // le resistenze si oppongono al moto senza invertire il segno
@@ -497,6 +497,7 @@ export class Bus {
     this.aLong += (aLong - this.aLong) * Math.min(1, dt * 8);
 
     // cinematica a bicicletta sull'asse posteriore
+    this._slope = world.slope || 0;
     const yaw = (this.v * Math.tan(this.steer)) / WB;
     this.yawRate = yaw;
     const rx = this.x + Math.sin(this.h) * BUS.rearAxle, rz = this.z + Math.cos(this.h) * BUS.rearAxle;
@@ -572,8 +573,11 @@ export class Bus {
   }
 
   syncTransform(dt = 0, input = {}) {
-    this.group.position.set(this.x, Y_ROAD, this.z);
+    this.group.position.set(this.x, Y_ROAD + (this.elev || 0), this.z);
+    this.group.rotation.order = 'YXZ';
     this.group.rotation.y = this.h;
+    this.slopeVis = (this.slopeVis || 0) + ((this._slope || 0) - (this.slopeVis || 0)) * Math.min(1, dt * 6);
+    this.group.rotation.x = -Math.atan(this.slopeVis);
     // sospensioni: beccheggio e rollio
     const tp = -this.aLong * 0.006, tr = this.aLat * 0.008;
     this.pitch += (tp - this.pitch) * Math.min(1, dt * 3);
