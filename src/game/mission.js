@@ -119,8 +119,9 @@ export class Mission {
   }
   pickDest(fromIdx) {
     const cand = [];
+    // la maggior parte dei viaggi dura qualche fermata; le fermate importanti attirano di più
     for (let j = fromIdx + 1; j < this.stops.length; j++) {
-      const w = j === this.stops.length - 1 ? 2.5 : this.stops[j].importance;
+      const w = (j === this.stops.length - 1 ? 2.5 : this.stops[j].importance) * Math.exp(-(j - fromIdx) / 10);
       cand.push([j, w]);
     }
     const tot = cand.reduce((a, c) => a + c[1], 0);
@@ -332,7 +333,9 @@ export class Mission {
         this.boardT = p.elderly ? 2.4 : 0.5 + this.rnd() * 0.5;
       }
     }
-    const done = !st.waiting.length && !this.onboard.some((d) => d <= st.idx);
+    const full = this.onboard.length + this.walkingIn() >= cap;
+    if (full && st.waiting.some((q) => !q.boarding) && !st.fullMsg) { st.fullMsg = true; this.hud.toast(`🚌 Bus pieno! ${st.waiting.filter((q) => !q.boarding).length} in attesa del prossimo`, 'info'); }
+    const done = (!st.waiting.length || (full && !this.walkingIn())) && !this.onboard.some((d) => d <= st.idx);
     if (done && !st.doneMsg) {
       st.doneMsg = true;
       if (st.idx === this.stops.length - 1) this.finish();
@@ -380,7 +383,7 @@ export class Mission {
     if (early > 45) this.addScore(-60, `Partenza anticipata di ${fmtDelay(Math.round(early))}!`);
     // chi stava camminando verso la porta resta a terra
     for (const p of st.waiting) if (p.boarding) { p.boarding = false; p.target = null; p.onArrive = null; }
-    const left = st.waiting.filter((p) => !p.runner).length;
+    const left = st.fullMsg ? 0 : st.waiting.filter((p) => !p.runner).length;
     if (st.waiting.some((p) => p.runner)) this.hud.toast('Il ritardatario è rimasto a terra… 😢', 'info');
     if (left > 0) this.addScore(-15 * left, `${left} passegger${left > 1 ? 'i' : 'o'} lasciat${left > 1 ? 'i' : 'o'} a terra`);
     this.leaveCheck = { t: 0, ok: bus.indicator === -1, odo: bus.odometer };
