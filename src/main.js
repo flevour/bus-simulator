@@ -201,6 +201,85 @@ function toggleDoors() {
 function togglePause(force) {
   paused = force != null ? force : !paused;
   $('pause').classList.toggle('hidden', !paused);
+  if (paused) {
+    const ok = saveGame();
+    $('pause-info').textContent = ok ? `Progressi salvati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: potrai riprendere da qui anche dopo aver chiuso la pagina.` : 'Salvataggio non disponibile in questo browser.';
+    if ('speechSynthesis' in window) speechSynthesis.pause();
+    audio.setMuted(true);
+  } else if (running) {
+    if ('speechSynthesis' in window) speechSynthesis.resume();
+    audio.setMuted(!!audio.muted);
+  }
+}
+
+// ------------------------------------------------------------------
+// Salvataggio della corsa (localStorage, solo in questo browser)
+// ------------------------------------------------------------------
+const SAVE_KEY = 'padova-bus-sim-save-v1';
+function saveGame() {
+  if (!running || !mission || !bus || mission.finished) return false;
+  const m = mission;
+  const data = {
+    v: 1,
+    savedAt: Date.now(),
+    settings: { line: settings.line.id, variant: settings.variant, direction: settings.direction, departure: settings.departure, weather: settings.weather, mode: settings.mode },
+    mission: {
+      clock: m.clock, nextStop: m.nextStop, s: m.s, score: m.score, stats: m.stats, comfort: m.comfort,
+      onboard: m.onboard, log: m.log.slice(-40),
+      stops: m.stops.map((st) => [st.arrived ? 1 : 0, st.left ? 1 : 0, st.delay ?? null]),
+    },
+    bus: { x: bus.x, z: bus.z, h: bus.h, lights: bus.lights, dir: bus.dir, odo: bus.odometer },
+    cam: camMode,
+    summary: m.free ? `Giro libero · Linea ${settings.line.id}` : `Linea ${settings.line.id} → ${m.dest} · fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length} (${m.stops[Math.min(m.nextStop, m.stops.length - 1)].name})`,
+    clockText: fmtHM(m.clock),
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
+}
+function loadSave() {
+  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return d && d.v === 1 ? d : null; } catch (e) { return null; }
+}
+function clearSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignorato */ }
+  refreshResumeBox();
+}
+function refreshResumeBox() {
+  const d = loadSave();
+  const box = $('resume-box');
+  if (!box) return;
+  box.hidden = !d;
+  if (!d) return;
+  const when = new Date(d.savedAt);
+  $('resume-summary').textContent = `${d.summary} · ore ${d.clockText} · ${d.settings.variant} · salvata il ${when.toLocaleDateString('it-IT')} alle ${when.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+}
+function resumeSaved() {
+  const d = loadSave();
+  if (!d) return;
+  const L = LINES.find((l) => l.id === d.settings.line);
+  if (!L) { clearSave(); return; }
+  Object.assign(settings, d.settings, { line: L });
+  startMission(d);
+}
+function applySave(d) {
+  const m = mission, s = d.mission;
+  m.clock = s.clock; m.nextStop = s.nextStop; m.s = s.s; m.score = s.score; m.comfort = s.comfort;
+  Object.assign(m.stats, s.stats);
+  m.onboard = s.onboard.slice();
+  m.log = s.log.slice();
+  s.stops.forEach(([a, l, delay], i) => {
+    const st = m.stops[i];
+    if (!st) return;
+    st.arrived = !!a; st.left = !!l; st.delay = delay;
+    // le fermate già servite non generano più persone
+    if (st.left || i < m.nextStop) st.spawned = true;
+  });
+  bus.place(d.bus.x, d.bus.z, d.bus.h);
+  bus.lights = d.bus.lights; bus.dir = d.bus.dir || 1; bus.odometer = d.bus.odo || 0;
+  bus.parking = true;
+  bus.passengers = m.onboard.length;
+  bus.setPassengerVisuals(m.onboard.length);
+  const ns = m.stops[m.nextStop];
+  if (ns && !m.free) bus.setInnerDisplay('Prossima: ' + ns.name);
+  camMode = d.cam || 0;
 }
 
 // ------------------------------------------------------------------
@@ -260,15 +339,22 @@ function buildMenu() {
   seg('weather', 'w', (w) => { settings.weather = w; });
   seg('mode', 'm', (m) => { settings.mode = m; });
   $('departure').addEventListener('change', (e) => { settings.departure = Number(e.target.value); refreshStops(); });
-  $('start').addEventListener('click', startMission);
+  $('start').addEventListener('click', () => startMission());
   $('resume').addEventListener('click', () => togglePause(false));
+  $('pause-btn').addEventListener('click', () => togglePause(true));
+  $('resume-save').addEventListener('click', resumeSaved);
+  $('discard-save').addEventListener('click', clearSave);
+  $('restart').addEventListener('click', () => { clearSave(); togglePause(false); startMission(); });
+  refreshResumeBox();
   $('quit').addEventListener('click', backToMenu);
   $('res-menu').addEventListener('click', backToMenu);
   refreshMenu();
 }
 
 function backToMenu() {
+  saveGame();
   togglePause(false);
+  refreshResumeBox();
   $('results').classList.add('hidden');
   $('menu').classList.remove('hidden');
   hud.show(false);
@@ -288,7 +374,7 @@ function disposeMission() {
   if (walkers) kill(walkers.mesh);
 }
 
-function startMission() {
+function startMission(resume = null) {
   audio.init();
   audio.resume();
   audio.setMuted(!!audio.muted);
@@ -305,7 +391,8 @@ function startMission() {
   const lat = st0.hw - 1.7;
   bus.place(p.x + -p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
   bus.setInnerDisplay('Linea ' + L.id + ' – ' + destName);
-  lights.time = settings.departure;
+  if (resume) applySave(resume);
+  lights.time = resume ? resume.mission.clock : settings.departure;
   const hour = (settings.departure / 3600) % 24;
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
   const count = Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1));
@@ -320,23 +407,31 @@ function startMission() {
   $('menu').classList.add('hidden');
   running = true;
   paused = false;
-  camMode = 0;
+  $('pause').classList.add('hidden');
+  if (!resume) camMode = 0;
   rain.visible = settings.weather === 'rain';
   setupWeatherAndTime(true);
   const night = mission._night || 0;
-  bus.lights = night > 0.3 || settings.weather !== 'clear';
-  if (mission.free) {
+  if (!resume) bus.lights = night > 0.3 || settings.weather !== 'clear';
+  saveTimer = 0;
+  if (resume) {
+    hud.setLine(mission.free ? { id: L.id, color: L.color } : L, mission.free ? 'Giro libero' : destName);
+    hud.toast(`Corsa ripresa alle ${fmtHM(mission.clock)}: ${resume.summary}`, 'info');
+    setTimeout(() => running && hud.toast('Freno di stazionamento inserito: premi W per ripartire', 'info'), 1600);
+  } else if (mission.free) {
     hud.setLine({ id: L.id, color: L.color }, 'Giro libero');
     hud.toast('Giro libero: esplora Padova, rispetta semafori e limiti', 'info');
   } else {
     hud.toast(`Linea ${L.id} per ${destName} – partenza ${fmtHM(settings.departure)}`, 'info');
     setTimeout(() => running && hud.toast('Apri le porte (F) per far salire i passeggeri', 'info'), 1800);
   }
-  setTimeout(() => running && hud.toast('Premi I per l\'elenco dei comandi', 'info'), 4500);
+  if (!resume) setTimeout(() => running && hud.toast('Premi I per l\'elenco dei comandi', 'info'), 4500);
+  saveGame();
 }
 
 function showResults() {
   if (!mission) return;
+  clearSave();
   const s = mission.stats;
   const n = mission.stops.length;
   const maxPts = n * 130 + 400;
@@ -474,7 +569,7 @@ const world = {
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
   carsNear: (x, z, r) => (traffic ? traffic.near(x, z, r) : []),
 };
-let envTimer = 0, frame = 0, hudStreet = '';
+let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0;
 let lastT = performance.now();
 
 function step(dt) {
@@ -522,6 +617,8 @@ function step(dt) {
   city.update(dt);
   envTimer -= dt;
   if (envTimer <= 0) { setupWeatherAndTime(); envTimer = 2; }
+  saveTimer += dt;
+  if (saveTimer > 5) { saveTimer = 0; saveGame(); }
   audio.update(dt, bus, { interior: camMode === 0 || camMode === 2, rain: settings.weather === 'rain' });
   const ri = frame % 6 === 0 ? city.roadInfo(bus.x, bus.z) : null;
   if (ri && ri.edge) hudStreet = ri.edge.name;
@@ -592,6 +689,12 @@ function loop() {
     renderMenuBackdrop(dt);
   }
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && running && !paused) togglePause(true);
+});
+window.addEventListener('pagehide', () => saveGame());
+window.addEventListener('beforeunload', () => saveGame());
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;

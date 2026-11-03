@@ -51,6 +51,14 @@
             <button data-w="fog">🌫️ Nebbia</button>
           </div>
           <button id="start" class="primary">▶ Inizia il servizio</button>
+          <div id="resume-box" hidden>
+            <div class="resume-title">Corsa salvata</div>
+            <div id="resume-summary"></div>
+            <div class="resume-actions">
+              <button id="resume-save" class="secondary">⏯ Riprendi da dove eri</button>
+              <button id="discard-save" class="link">Elimina</button>
+            </div>
+          </div>
         </section>
         <section class="stops-col">
           <h3>Fermate e orario</h3>
@@ -79,6 +87,7 @@
     <div id="nav"><div id="nav-arrow">⬆</div><div><div id="nav-dist"></div><div id="nav-street"></div></div></div>
     <div id="offroute">⚠️ FUORI PERCORSO – segui la freccia e la mappa</div>
     <canvas id="minimap" width="220" height="220"></canvas>
+    <button id="pause-btn" title="Pausa (P)">⏸</button>
     <div id="limit-sign"><span id="limit">50</span></div>
     <div id="toasts"></div>
     <div id="bottom">
@@ -122,8 +131,10 @@
   <div id="pause" class="overlay hidden">
     <div class="card center">
       <h2>Pausa</h2>
-      <button id="resume" class="primary">Riprendi</button>
-      <button id="quit">Torna al menu</button>
+      <p id="pause-info" class="pause-info"></p>
+      <button id="resume" class="primary">▶ Riprendi</button>
+      <button id="restart">↺ Ricomincia la corsa</button>
+      <button id="quit">Salva e torna al menu</button>
     </div>
   </div>
 

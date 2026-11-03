@@ -105,3 +105,14 @@ button.primary:hover { filter: brightness(1.08); }
 #res-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 #res-table td { padding: 5px 4px; border-bottom: 1px solid rgba(255,255,255,.06); text-align: left; }
 #res-table td:last-child { text-align: right; font-weight: 700; }
+
+#pause-btn { position: absolute; right: 250px; top: 94px; width: 46px; height: 46px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(8,12,18,.8); color: #fff; font-size: 18px; pointer-events: auto; }
+#pause-btn:hover { background: rgba(40,50,64,.9); }
+#pause-btn:focus-visible, .seg button:focus-visible, button.primary:focus-visible, #resume-box button:focus-visible { outline: 2px solid #ffca28; outline-offset: 2px; }
+#resume-box { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(79,195,247,.08); border: 1px solid rgba(79,195,247,.35); }
+.resume-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #4fc3f7; font-weight: 700; }
+#resume-summary { font-size: 13px; margin: 4px 0 10px; opacity: .85; line-height: 1.4; }
+.resume-actions { display: flex; gap: 8px; align-items: center; }
+button.secondary { flex: 1; padding: 10px; border-radius: 10px; border: 0; background: #4fc3f7; color: #0d1117; font-weight: 800; }
+button.link { background: none; border: 0; color: #90a4ae; text-decoration: underline; padding: 6px; }
+.pause-info { font-size: 13px; opacity: .75; max-width: 320px; margin: 0 auto 6px; line-height: 1.4; }
