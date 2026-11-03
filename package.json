@@ -1,0 +1,20 @@
+{
+  "name": "padova-bus-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Simulatore di autobus urbano in prima persona ambientato a Padova (Three.js)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}
