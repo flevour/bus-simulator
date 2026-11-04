@@ -407,6 +407,11 @@ def main(osm_path, gtfs_dir, out):
                 for gz in range(int(min(az, bz) // WC), int(max(az, bz) // WC) + 1):
                     wgrid[(gx, gz)].append((ax, az, bx, bz))
     narrowed = 0
+    bus_edges = set()
+    for l in lines_out:
+        for v in l['variants']:
+            for a, b in zip(v['nodes'], v['nodes'][1:]):
+                bus_edges.add((min(a, b), max(a, b)))
     for e in edges:
         a, b, cls, wd = e[0], e[1], e[2], e[3]
         (ax, az), (bx, bz) = nodes[a], nodes[b]
@@ -437,9 +442,11 @@ def main(osm_path, gtfs_dir, out):
                             dr = min(dr, d)
                         else:
                             dl = min(dl, d)
-            free = min(free, 2 * min(dl, dr) - 1.0)
+            # la carreggiata può arrivare fino alle facciate (marciapiedi stretti nel centro storico)
+            free = min(free, min(2 * min(dl, dr) + 0.5, dl + dr - 1.0))
+        floor = 6.2 if (min(a, b), max(a, b)) in bus_edges else 4.2
         if free < wd:
-            e[3] = round(max(4.2, free), 1)
+            e[3] = round(max(floor, min(wd, free)), 1)
             narrowed += 1
     print('strade ristrette tra le facciate:', narrowed)
 
