@@ -32,6 +32,9 @@ DRIVE = {
 SKIP_SERVICE = {'parking_aisle', 'driveway', 'drive-through', 'emergency_access'}
 # area di gioco (Centro storico + Arcella), in gradi: ovest, sud, est, nord
 FOCUS = (11.852, 45.390, 11.912, 45.449)
+# fascia sud lungo il tram SIR1, da Bassanello al capolinea della Guizza
+FOCUS_SUD = (11.855, 45.362, 11.885, 45.392)
+FOCUS_BOXES = [FOCUS, FOCUS_SUD]
 WATER_W = {'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
 
 
@@ -85,7 +88,7 @@ def speed_of(tags):
 
 
 def in_focus(lat, lon, m=0.0):
-    return FOCUS[0] - m <= lon <= FOCUS[2] + m and FOCUS[1] - m <= lat <= FOCUS[3] + m
+    return any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES)
 
 
 def main(osm_path, gtfs_dir, out, overture_path=None):
@@ -500,12 +503,17 @@ def main(osm_path, gtfs_dir, out, overture_path=None):
     nodes_flat = []
     for x, z in nodes:
         nodes_flat += [round(x, 1), round(z, 1)]
+    # le fermate del tram valgono solo dove c'è la rete stradale (l'export OSM finisce prima di Guizza)
+    nxs, nzs = nodes_flat[0::2], nodes_flat[1::2]
+    bx0, bx1, bz0, bz1 = min(nxs) + 80, max(nxs) - 80, min(nzs) + 80, max(nzs) - 80
+    tram_keep = lambda x, z: bx0 <= x <= bx1 and bz0 <= z <= bz1
     data = {
         'source': 'OpenStreetMap contributors (ODbL) + GTFS Busitalia Veneto (BusOne)',
         'origin': [ORIGIN_LAT, ORIGIN_LON], 'ferDate': build_gtfs.FER_DATE, 'fesDate': build_gtfs.FES_DATE,
         'nodes': nodes_flat, 'edges': [v for e in edges for v in e], 'names': names,
         'stops': gt['stops'], 'lines': lines_out,
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramStops': tram_stops,
+        'tramLines': [build_gtfs.load_tram(gtfs_dir, keep=tram_keep)],
     }
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))

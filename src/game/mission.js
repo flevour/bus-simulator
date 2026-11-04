@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRoute, pointAt, projectOnRoute } from './routes.js';
+import { buildRoute, buildTramRoute, pointAt, projectOnRoute } from './routes.js';
 import { personGeometry } from '../world/traffic.js';
 import { zoneOf } from '../world/city.js';
 import { fmtHM } from '../data/padova.js';
@@ -52,10 +52,12 @@ export class Mission {
     this.free = free;
     const variant = day;
     this.net = net; this.line = line; this.variant = day; this.routeData = route; this.hud = hud; this.audio = audio; this.lights = lights; this.city = city;
-    this.route = buildRoute(net, route);
+    // il tram segue la sua corsia (route.trackPath); il bus le strade
+    this.tram = !!route.tram;
+    this.route = this.tram ? buildTramRoute(route.trackPath, route) : buildRoute(net, route);
     this.stops = this.route.stops;
     // la palina disegnata può essere spostata di qualche metro (vicino agli incroci): la zona di fermata la segue
-    if (city && city.stopPlacements) this.stops.forEach((st, k) => {
+    if (!this.tram && city && city.stopPlacements) this.stops.forEach((st, k) => {
       const pl = city.stopPlacements.find((p) => p.id === st.gtfs.id);
       if (!pl) return;
       const pr = projectOnRoute(this.route, pl.cx, pl.cz, st.s, 30, 30);
@@ -114,7 +116,7 @@ export class Mission {
     st.spawned = true;
     const n = this.rollWaiting(st);
     for (let i = 0; i < n; i++) {
-      const along = -1 - this.rnd() * 7;
+      const along = this.tram ? -3 - this.rnd() * 20 : -1 - this.rnd() * 7;
       let back = 0.5 + this.rnd() * 1.6;
       // dove la sede del tram corre accanto alla carreggiata si resta in fila sul bordo, mai sui binari
       const onTram = (b) => this.city && this.city.onTramway && this.city.onTramway(st.x + st.dx * along + st.rx * b, st.z + st.dz * along + st.rz * b, 0.3);
@@ -190,8 +192,8 @@ export class Mission {
           st.arrived = true;
           const delay = this.clock - st.sched;
           st.delay = delay;
-          if (st.idx > 0) this.judgeArrival(st, delay, lat);
-          if (st.idx === this.nextStop && bus.indicator === 1) { this.addScore(10, 'Freccia a destra in accostamento'); this.stats.indicatorsOk++; }
+          if (st.idx > 0) this.judgeArrival(st, delay, lat, along);
+          if (!this.tram && st.idx === this.nextStop && bus.indicator === 1) { this.addScore(10, 'Freccia a destra in accostamento'); this.stats.indicatorsOk++; }
           this.request = false;
           this.boardT = 0.8; this.alightT = 0.4;
           if (st.terminal && st.idx === this.stops.length - 1) this.audio.say(`${st.name}. Capolinea. Si prega di scendere.`);
@@ -255,11 +257,11 @@ export class Mission {
       if (this.speedT > 2.5 && this.cooldown('speed', 20)) {
         this.audio.camera();
         this.stats.speeding++;
-        this.addScore(-40, `📸 Autovelox! ${Math.round(bus.speedKmh)} km/h (limite ${limit})`);
+        this.addScore(-40, this.tram ? `⚠️ Troppo veloce: ${Math.round(bus.speedKmh)} km/h (limite ${limit})` : `📸 Autovelox! ${Math.round(bus.speedKmh)} km/h (limite ${limit})`);
       }
     } else this.speedT = 0;
-    this.checkRedLights(bus, front);
-    this.checkStopSigns(bus);
+    if (this.tram) this.checkPantograph(bus, dt);
+    else { this.checkRedLights(bus, front); this.checkStopSigns(bus); }
     if (ctx.onSidewalk && Math.abs(bus.v) > 1 && this.cooldown('walk', 8)) { this.stats.sidewalk++; this.addScore(-20, 'Sul marciapiede!'); }
     if (ctx.night && !bus.lights && Math.abs(bus.v) > 2 && this.cooldown('lights', 25)) this.addScore(-10, 'Accendi i fari! (L)');
     // fuori percorso
@@ -285,8 +287,8 @@ export class Mission {
       this.speedT = (this.speedT || 0) + dt;
       if (this.speedT > 2.5 && this.cooldown('speed', 20)) { this.audio.camera(); this.stats.speeding++; this.addScore(-40, `📸 Autovelox! ${Math.round(bus.speedKmh)} km/h (limite ${limit})`); }
     } else this.speedT = 0;
-    this.checkRedLights(bus, front);
-    this.checkStopSigns(bus);
+    if (this.tram) this.checkPantograph(bus, dt);
+    else { this.checkRedLights(bus, front); this.checkStopSigns(bus); }
     if (ctx.onSidewalk && Math.abs(bus.v) > 1 && this.cooldown('walk', 8)) { this.stats.sidewalk++; this.addScore(-20, 'Sul marciapiede!'); }
     if (ctx.night && !bus.lights && Math.abs(bus.v) > 2 && this.cooldown('lights', 25)) this.addScore(-10, 'Accendi i fari! (L)');
     this.crowd.update(dt);
@@ -315,14 +317,50 @@ export class Mission {
     }
   }
 
-  judgeArrival(st, delay, lat) {
+  // punto davanti all'ultima porta (out: metri fuori dal fianco)
+  rearDoor(bus, out) {
+    if (this.tram) return bus.doorPoint(bus.doorCount - 1, out);
+    const rd = BUS.doors[2];
+    return bus.toWorld(-(1.3 + out), (rd.z0 + rd.z1) / 2);
+  }
+
+  // Tram: a Prato della Valle non c'è la linea aerea. Il pantografo va abbassato prima (O) e rialzato subito dopo.
+  checkPantograph(tram, dt) {
+    const city = this.city;
+    if (!city || !city.catenaryAt) return;
+    const pp = tram.pantoPoint();
+    const wire = city.catenaryAt(pp.x, pp.z);
+    if (!wire && tram.pantoPos > 0.3) {
+      if (this.cooldown('pantoKo', 25)) {
+        this.audio.crash && this.audio.crash(0.4);
+        this.addScore(-150, '⚡ Pantografo alzato dove non c\'è la linea aerea! Strisciante danneggiato');
+      }
+      tram.pantoUp = false;
+      this._pantoOk = true; // niente bonus: l'ha abbassato l'emergenza
+    }
+    // avviso prima del tratto senza filo
+    const fr = tram.path.at(tram.sFront), gap = city.catenaryGapNear && city.catenaryGapNear(fr.x, fr.z, 140);
+    if (gap && wire && tram.pantoUp && tram.v > 1 && this.cooldown('pantoWarn', 30)) this.hud.toast('🔌 Tra poco Prato della Valle: abbassa il pantografo (O)', 'info');
+    if (!wire && !tram.pantoUp && !this._pantoOk) { this._pantoOk = true; this.addScore(20, 'Pantografo abbassato in tempo ✔'); }
+    // dopo il tratto: rialzarlo subito
+    if (wire && tram.pantoPos < 0.05 && tram.v > 1) {
+      this.pantoDown = (this.pantoDown || 0) + tram.v * dt;
+      if (this.pantoDown > 60 && this.cooldown('pantoUp', 25)) this.addScore(this.pantoDown > 200 ? -20 : 0, '🔌 C\'è di nuovo la linea aerea: rialza il pantografo (O)', this.pantoDown > 200 ? 'bad' : 'info');
+    } else if (wire && tram.pantoPos > 0.9) { this.pantoDown = 0; this._pantoOk = false; }
+  }
+
+  judgeArrival(st, delay, lat, along = 0) {
     const d = Math.round(delay);
     let msg;
     if (delay < -60) { msg = `In anticipo di ${fmtDelay(-d)} – attendi l'orario`; this.stats.early++; this.addScore(30, msg, 'info'); }
     else if (delay <= 90) { this.stats.onTime++; this.addScore(100, `Puntuale a ${st.name}!`); }
     else if (delay <= 240) { this.stats.late++; this.addScore(40, `Ritardo ${fmtDelay(d)} a ${st.name}`, 'info'); }
     else { this.stats.late++; this.addScore(0, `Ritardo ${fmtDelay(d)} a ${st.name}`, 'bad'); }
-    if (lat < 0.6) this.addScore(15, 'Accostamento perfetto');
+    if (this.tram) {
+      // il tram è sulla rotaia: conta solo fermarsi col muso a fine banchina
+      if (Math.abs(along) < 2) this.addScore(15, 'Fermata precisa a fine banchina');
+      else if (along < -8) this.addScore(-10, 'Fermato troppo indietro: l\'ultima porta è fuori dalla banchina');
+    } else if (lat < 0.6) this.addScore(15, 'Accostamento perfetto');
     else if (lat > 1.8) this.addScore(-10, 'Troppo lontano dal marciapiede');
   }
 
@@ -333,9 +371,9 @@ export class Mission {
     if (leaving >= 0 && this.alightT <= 0) {
       this.onboard.splice(leaving, 1);
       this.stats.alighted++;
-      this.alightT = 0.45 + this.rnd() * 0.35;
+      this.alightT = (0.45 + this.rnd() * 0.35) / (this.tram ? 3 : 1);
       const door = this.rnd() < 0.5 ? BUS.doors[1] : BUS.doors[2];
-      const dp = bus.toWorld(-1.6, (door.z0 + door.z1) / 2);
+      const dp = this.tram ? bus.doorPoint(Math.floor(this.rnd() * bus.doorCount), 0.3) : bus.toWorld(-1.6, (door.z0 + door.z1) / 2);
       const away = { x: dp.x + st.rx * 4 + st.dx * (this.rnd() * 8 - 4), z: dp.z + st.rz * 4 + st.dz * (this.rnd() * 8 - 4) };
       const p = this.crowd.add({ x: dp.x, z: dp.z, h: 0, ph: 0, speed: 1.3 + this.rnd() * 0.3, sc: 0.85 + this.rnd() * 0.25, col: new THREE.Color().setHSL(this.rnd(), 0.4, 0.3 + this.rnd() * 0.3), life: 9 });
       p.target = away;
@@ -345,7 +383,7 @@ export class Mission {
     }
     // salita (porta anteriore)
     this.boardT -= dt;
-    const cap = 100;
+    const cap = this.tram ? 150 : 100;
     const board = (q) => {
       q.dead = true;
       st.waiting.splice(st.waiting.indexOf(q), 1);
@@ -358,10 +396,10 @@ export class Mission {
     };
     // il ritardatario arriva da dietro: sale dalla porta posteriore, senza fare la fila davanti
     const run = st.waiting.find((q) => q.runner && !q.boarding);
-    const rd = BUS.doors[2], rdp = run && bus.toWorld(-1.8, (rd.z0 + rd.z1) / 2);
-    if (run && bus.doorTarget > 0 && bus.doorOpen[2] > 0.6 && Math.hypot(run.x - rdp.x, run.z - rdp.z) < 2.5 && this.onboard.length + this.walkingIn() < cap) {
+    const rd = BUS.doors[2], rdp = run && this.rearDoor(bus, 0.5);
+    if (run && bus.doorTarget > 0 && bus.doorOpen[this.tram ? bus.doorCount - 1 : 2] > 0.6 && Math.hypot(run.x - rdp.x, run.z - rdp.z) < 2.5 && this.onboard.length + this.walkingIn() < cap) {
       run.boarding = true;
-      run.target = bus.toWorld(-1.45, (rd.z0 + rd.z1) / 2);
+      run.target = this.tram ? this.rearDoor(bus, 0.15) : bus.toWorld(-1.45, (rd.z0 + rd.z1) / 2);
       run.speed = Math.max(run.speed, 3);
       run.onArrive = board;
     }
@@ -370,16 +408,17 @@ export class Mission {
       if (p) {
         p.boarding = true;
         const door = BUS.doors[0];
-        const dp = bus.toWorld(-1.7, (door.z0 + door.z1) / 2);
+        // sul tram si sale dalla porta più vicina, sul bus da quella anteriore
+        const dp = this.tram ? bus.doorPoint(bus.nearestDoor(p.x, p.z), 0.4) : bus.toWorld(-1.7, (door.z0 + door.z1) / 2);
         p.target = dp;
         p.speed = p.elderly ? 0.7 : p.runner ? 3 : 1.6;
-        if (p.elderly && !st.elderlyMsg) {
+        if (p.elderly && !st.elderlyMsg && !this.tram) {
           st.elderlyMsg = true;
           if (bus.kneelTarget > 0) this.addScore(15, 'Bus inginocchiato per la signora anziana 👵');
           else this.hud.toast('👵 Sale una persona anziana: premi K per abbassare il bus', 'info');
         }
         p.onArrive = board;
-        this.boardT = p.elderly ? 2.4 : 0.5 + this.rnd() * 0.5;
+        this.boardT = (p.elderly ? 2.4 : 0.5 + this.rnd() * 0.5) / (this.tram ? 3 : 1);
       }
     }
     const full = this.onboard.length + this.walkingIn() >= cap;
@@ -407,13 +446,12 @@ export class Mission {
     st.runnerDone = true;
     if (this.rnd() > 0.45) return;
     // parte da dietro il bus, ben visibile nello specchietto destro, e punta alla porta posteriore
-    const back = bus.toWorld(-2.6, -17);
+    const back = this.tram ? bus.toWorld(-2.6, -(bus.length - 6) - 12) : bus.toWorld(-2.6, -17);
     const p = this.crowd.add({
       x: back.x, z: back.z, h: bus.h, ph: 0, speed: 4.6, sc: 1.0,
       col: new THREE.Color(0xff3d00), dest: this.pickDest(st.idx), runner: true,
     });
-    const rd = BUS.doors[2];
-    const door = bus.toWorld(-1.8, (rd.z0 + rd.z1) / 2);
+    const door = this.rearDoor(bus, 0.5);
     p.target = { x: door.x, z: door.z };
     p.onArrive = () => {
       if (bus.doorTarget === 0 && !st.left) { this.hud.toast('✊ Bussa alla porta posteriore: "Aspetti! Aspetti!"', 'info'); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5 }); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5, delay: 0.25 }); }
@@ -436,7 +474,7 @@ export class Mission {
     const left = st.fullMsg ? 0 : st.waiting.filter((p) => !p.runner).length;
     if (st.waiting.some((p) => p.runner)) this.hud.toast('Il ritardatario è rimasto a terra… 😢', 'info');
     if (left > 0) this.addScore(-15 * left, `${left} passegger${left > 1 ? 'i' : 'o'} lasciat${left > 1 ? 'i' : 'o'} a terra`);
-    this.leaveCheck = { t: 0, ok: bus.indicator === -1, odo: bus.odometer };
+    this.leaveCheck = this.tram ? null : { t: 0, ok: bus.indicator === -1, odo: bus.odometer };
     this.advanceStop(bus);
   }
 
@@ -478,6 +516,8 @@ export class Mission {
   onCrash(hit) {
     if (hit.impact < 1.2) return;
     if (!this.cooldown('crash', 2.5)) return;
+    // tram: l'auto che taglia la sede di traverso è in torto (il tram ha la precedenza)
+    if (this.tram && hit.crossing) { this.hud.toast('🚗 Un\'auto ha tagliato la strada al tram: frenata d\'emergenza', 'info'); this.comfort = Math.max(0, this.comfort - 15); return; }
     // tamponamento subito: non è colpa dell'autista
     if (hit.kind === 'car' && hit.lz < 0 && hit.car) {
       const rel = (hit.car.x - hit.x) * Math.sin(hit.car.h) + (hit.car.z - hit.z) * Math.cos(hit.car.h);
@@ -494,6 +534,11 @@ export class Mission {
   // navigazione: prossima svolta
   navInfo() {
     const r = this.route;
+    if (this.tram) {
+      // sul tram niente svolte: prossima fermata e avvisi per il pantografo
+      const ns = this.stops[this.nextStop];
+      return { dist: ns ? Math.max(0, ns.s - this.s - 6) : r.length - this.s, dir: 'straight', street: ns ? 'Fermata ' + ns.name : 'Capolinea' };
+    }
     for (let i = 1; i < r.pts.length - 1; i++) {
       if (r.cum[i] < this.s - 5) continue;
       const a = r.segs[i - 1], b = r.segs[i];

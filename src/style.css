@@ -25,6 +25,8 @@ h3 { margin: 14px 0 8px; font-size: 13px; text-transform: uppercase; letter-spac
 .line-card:hover { background: rgba(255,255,255,.08); }
 .line-card.sel { border-color: #ffb300; background: rgba(255,179,0,.08); }
 .line-card .badge { min-width: 50px; text-align: center; font-weight: 800; padding: 6px 8px; border-radius: 8px; color: #fff; font-size: 18px; }
+.line-card .badge.tram { font-size: 13px; min-width: 64px; background: #1f4fae !important; }
+.line-card.tram { border-left: 3px solid #1f4fae; }
 .line-card .nm { font-weight: 600; }
 .line-card .nt { font-size: 12px; opacity: .6; }
 .seg { display: flex; gap: 6px; flex-wrap: wrap; }

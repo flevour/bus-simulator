@@ -41,6 +41,33 @@ export function buildRoute(net, variant) {
   return route;
 }
 
+// Percorso del tram: la corsia (TrackPath) è già nel verso di marcia; le fermate sono proiettate in ordine.
+// Il muso si ferma a fine banchina: la "palina" della missione è 12 m oltre il centro della banchina.
+export const TRAM_STOP_AHEAD = 12;
+export function buildTramRoute(path, variant) {
+  const pts = path.pts, cum = path.cum, segs = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const len = cum[i + 1] - cum[i] || 0.01;
+    segs.push({ i, edge: { width: 3.2, name: '' }, len, dx: (pts[i + 1].x - pts[i].x) / len, dz: (pts[i + 1].z - pts[i].z) / len, hw: 1.6 });
+  }
+  const route = { seq: [], pts, cum, segs, length: path.len, tram: true };
+  const stops = [];
+  let sPrev = 0;
+  variant.stops.forEach((g, k) => {
+    const last = k === variant.stops.length - 1;
+    const pr = projectOnRoute(route, g.x, g.z, sPrev, 40, 6000);
+    const s = Math.min(route.length - 15, Math.max(pr.s + TRAM_STOP_AHEAD, sPrev + (k ? 30 : 0)));
+    sPrev = s;
+    const p = pointAt(route, s), hw = 1.6, rx = -p.dz, rz = p.dx;
+    stops.push({
+      idx: k, s, gtfs: g, name: g.name, importance: g.importance || 2, terminal: k === 0 || last, tram: true,
+      x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw,
+    });
+  });
+  route.stops = stops;
+  return route;
+}
+
 export function pointAt(route, s) {
   s = Math.max(0, Math.min(route.length, s));
   let i = 0;

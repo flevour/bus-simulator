@@ -289,5 +289,85 @@ def load(src):
     return {'lines': lines, 'stops': stops_out}
 
 
+TRAM_NAMES = {'GUIZZA-Cap.SUD': 'Guizza Capolinea Sud', 'PONTEVIGODARZERE': 'Pontevigodarzere'}
+TRAM_STOP_NAMES = {'P.TEVIGODARZERE': 'Pontevigodarzere', 'GUIZZA CAPOL.': 'Guizza Capolinea', 'PRATODELLAVALLE': 'Prato della Valle',
+                   'SAIMP': 'Saimp', 'TITO LIVIO': 'Tito Livio', 'PONTI ROMANI': 'Ponti Romani', 'SAN CARLO': 'San Carlo',
+                   'SAN GREGORIO': 'San Gregorio', 'SANTA CROCE': 'Santa Croce'}
+
+
+def tram_stop_name(name):
+    return TRAM_STOP_NAMES.get(name, name.title() if name.isupper() else name)
+
+
+def load_tram(src, route_id='TPD_SIR1', line='SIR1', modules=3, min_trips=10, keep=None):
+    """Corse del tram (SIR1): varianti per tracciato e destinazione, fermate, tempi e partenze feriali/festive.
+
+    Il GTFS classifica il Translohr come autobus (route_type 3): lo si riconosce dal route_id.
+    `modules` è il numero di moduli del convoglio (3 per il SIR1, 4 per le linee future).
+    `keep(x, z)` dice se una fermata è dentro la mappa: le corse vengono tagliate al confine ("tratto in città")."""
+    rd = lambda f: csv.DictReader(open(f'{src}/{f}', encoding='utf-8-sig'))
+    route = next(r for r in rd('routes.txt') if r['route_id'] == route_id)
+    trips = {t['trip_id']: t for t in rd('trips.txt') if t['route_id'] == route_id}
+    stops = {s['stop_id']: s for s in rd('stops.txt')}
+    cal = defaultdict(set)
+    for r in rd('calendar_dates.txt'):
+        if r['exception_type'] == '1':
+            cal[r['service_id']].add(r['date'])
+    times = defaultdict(list)
+    for r in rd('stop_times.txt'):
+        if r['trip_id'] in trips:
+            times[r['trip_id']].append((int(r['stop_sequence']), secs(r['departure_time'] or r['arrival_time']), r['stop_id']))
+    groups = defaultdict(list)
+    for t in trips.values():
+        if t['trip_id'] in times:
+            groups[(t['shape_id'], t['trip_headsign'])].append(t)
+    variants = []
+    for (shape, head), tt in groups.items():
+        fer = [t for t in tt if FER_DATE in cal[t['service_id']]]
+        fes = [t for t in tt if FES_DATE in cal[t['service_id']]]
+        if len(fer) + len(fes) < min_trips:
+            continue
+        ref = sorted(fer or fes, key=lambda t: times[t['trip_id']][-1][1] - times[t['trip_id']][0][1])[len(fer or fes) // 2]
+        st = sorted(times[ref['trip_id']])
+        t0 = st[0][1]
+
+        def deps(lst):
+            out = []
+            for t in lst:
+                s2 = sorted(times[t['trip_id']])
+                out.append([s2[0][1], s2[-1][1] - s2[0][1]])
+            return sorted(out)
+
+        vstops = []
+        for _, t, sid in st:
+            s = stops[sid]
+            x, z = xz(float(s['stop_lat']), float(s['stop_lon']))
+            vstops.append([round(x, 1), round(z, 1), tram_stop_name(clean_name(s['stop_desc'] or s['stop_name'])), t - t0])
+        # taglio al confine della mappa: si tiene il tratto continuo di fermate dentro l'area
+        inside = [keep is None or keep(v[0], v[1]) for v in vstops]
+        if not any(inside):
+            continue
+        k0 = inside.index(True)
+        k1 = k0
+        while k1 + 1 < len(vstops) and inside[k1 + 1]:
+            k1 += 1
+        if k1 - k0 < 2:
+            continue
+        cut = k0 > 0 or k1 < len(vstops) - 1
+        kept = vstops[k0:k1 + 1]
+        o0 = kept[0][3]
+        dur = max(1, kept[-1][3] - o0)
+        name = TRAM_NAMES.get(head, head.title())
+        variants.append({
+            'headsign': name + (' (tratto in città)' if cut else ''), 'dir': int(ref.get('direction_id') or 0), 'shape': shape,
+            'stops': [v[:3] for v in kept], 'offsets': [v[3] - o0 for v in kept], 'duration': dur,
+            # partenza dalla prima fermata tenuta; durata in proporzione al tratto
+            'fer': [[t + o0, round(d * dur / max(1, st[-1][1] - t0))] for t, d in deps(fer)],
+            'fes': [[t + o0, round(d * dur / max(1, st[-1][1] - t0))] for t, d in deps(fes)],
+        })
+    variants.sort(key=lambda v: (-(len(v['fer']) + len(v['fes']))))
+    return {'id': line, 'color': '#' + (route['route_color'] or '1f4fa8'), 'modules': modules, 'variants': variants}
+
+
 if __name__ == '__main__':
     main(sys.argv[1], sys.argv[2])

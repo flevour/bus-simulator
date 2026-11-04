@@ -45,6 +45,28 @@ export const LINES = MAP.lines.map((l) => {
   for (const [s, c] of cnt) s.importance = c >= 4 ? 3 : c >= 2 ? 2 : 1;
 }
 
+// Linee del tram (SIR1): fermate proprie e orari reali; il percorso segue la sede tranviaria (vedi src/tram/tram.js)
+export const TRAM_LINES = (MAP.tramLines || []).map((l) => {
+  const variants = l.variants.map((v, i) => {
+    const stops = v.stops.map(([x, z, name], k) => ({ id: `${l.id}:${i}:${k}`, x, z, name, street: name, importance: 2 }));
+    const last = stops[stops.length - 1].name;
+    // alcune corse nel GTFS finiscono prima della destinazione indicata (la linea è spezzata a metà)
+    const headsign = v.headsign.startsWith(last) ? v.headsign : `${last} (per ${v.headsign.replace(' (tratto in città)', '')})`;
+    return {
+      idx: i, headsign, tram: true, stops, offsets: v.offsets, duration: v.duration,
+      feriale: v.fer.map(([t, d]) => ({ t, d })), festivo: v.fes.map(([t, d]) => ({ t, d })),
+    };
+  });
+  // direzioni principali: le due corse più lunghe, una per verso
+  const full = variants.slice().sort((a, b) => b.stops.length - a.stops.length || (b.feriale.length - a.feriale.length));
+  const a = full[0];
+  const b = full.find((v) => v !== a && Math.hypot(v.stops[0].x - a.stops[a.stops.length - 1].x, v.stops[0].z - a.stops[a.stops.length - 1].z) < 400) || a;
+  return {
+    id: l.id, color: l.color, tram: true, modules: l.modules || 3, variants, pair: [a.idx, b.idx],
+    headsign: `${a.stops[0].name} ↔ ${a.stops[a.stops.length - 1].name}`, name: 'Tram',
+  };
+});
+
 // Prato della Valle è una piazza-parco: non è un edificio OSM, lo modelliamo noi
 export const LANDMARKS = { prato: [45.39814, 11.8766] };
 
@@ -57,7 +79,11 @@ export function buildNetwork() {
   const rails = MAP.rails.map(([bt, yard, f]) => ({ bridge: bt === 1, tunnel: bt === 2, yard: !!yard, pts: flat(f) })).filter((r) => r.pts.length > 1);
   const buildings = MAP.buildings.map(([h, kind, name, f, holes]) => ({ h, kind, name, pts: flat(f), holes: holes ? holes.map(flat) : null }));
   // tram SIR1: tracciato e fermate (sede tranviaria in mezzo a Via Aspetti, Via Reni, ecc.)
-  const tram = (MAP.tram || []).map(flat).filter((t) => t.length > 1);
+  // binario di coda di 40 m oltre i capolinea: il convoglio sta tutto dietro la banchina
+  const tram = (MAP.tram || []).map(flat).filter((t) => t.length > 1).map((t) => {
+    const ext = (p, q) => { const l = Math.hypot(p.x - q.x, p.z - q.z) || 1; return { x: p.x + ((p.x - q.x) / l) * 40, z: p.z + ((p.z - q.z) / l) * 40 }; };
+    return [ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])];
+  });
   const tramStops = (MAP.tramStops || []).map(([x, z, name]) => ({ x, z, name }));
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
   const edges = [];

@@ -4,6 +4,7 @@ import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
 import { LINES } from '../data/padova.js';
+import { TrackPath, TRAM, catenaryGaps, CATENARY_HEIGHT } from '../tram/tram.js';
 
 export const Y_ROAD = 0.14;
 export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie rosse e rotaia centrale)
@@ -503,6 +504,18 @@ export class City {
     }
   }
 
+  // tram: c'è la linea aerea sopra questo punto della sede? (no nei tratti a batteria, es. Prato della Valle)
+  catenaryAt(x, z) {
+    if (!this.tramCenter || !this.catenaryGaps || !this.catenaryGaps.length) return true;
+    const pr = this.tramCenter.project(x, z);
+    return !(pr.d < 12 && this.catenaryGaps.some(([a, b]) => pr.s > a && pr.s < b));
+  }
+  // un tratto senza linea aerea comincia entro r metri?
+  catenaryGapNear(x, z, r) {
+    for (const g of this.catenaryGaps || []) for (const s of g) { const p = this.tramCenter.at(s); if (Math.hypot(p.x - x, p.z - z) < r) return true; }
+    return false;
+  }
+
   // vero se il punto è in una zona dove le ruote possono uscire un po' dall'asfalto (incroci, curve strette, rotonde)
   kerbAllowance(x, z) {
     const arr = this.kerbGrid.query(x, z, 20, this._qk || (this._qk = []));
@@ -581,11 +594,51 @@ export class City {
       for (let i = 0; i < t.length - 1; i++) {
         const a = t[i], b = t[i + 1];
         red.ribbon(a.x, a.z, b.x, b.z, TRAM_HW * 2, Y_ROAD + 0.03, 8);
-        rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8);
         const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, nx = -(b.z - a.z) / l, nz = (b.x - a.x) / l;
+        // una rotaia di guida al centro di ogni corsia (Translohr: un'unica rotaia per binario)
+        for (const sd of [-1, 1]) rail.ribbon(a.x + nx * sd * TRAM.lane, a.z + nz * sd * TRAM.lane, b.x + nx * sd * TRAM.lane, b.z + nz * sd * TRAM.lane, 0.22, Y_ROAD + 0.05, 8);
         for (const sd of [-1, 1]) kerb.ribbon(a.x + nx * sd * TRAM_HW, a.z + nz * sd * TRAM_HW, b.x + nx * sd * TRAM_HW, b.z + nz * sd * TRAM_HW, 0.3, Y_ROAD + 0.06, 8);
         red.disc(b.x, b.z, TRAM_HW, Y_ROAD + 0.029, 12, 8);
       }
+    }
+    // linea aerea: pali centrali ogni 30 m con la mensola, un filo di contatto per corsia; niente fili a Prato della Valle
+    const center = new TrackPath(tram[0]);
+    this.tramCenter = center;
+    this.catenaryGaps = catenaryGaps(center, this.net.tramStops);
+    const inGap = (s) => this.catenaryGaps.some(([g0, g1]) => s > g0 && s < g1);
+    const poles = [], wires = [];
+    let prev = null;
+    for (let s = 0; s <= center.len; s += 30) {
+      const p = center.at(s);
+      if (inGap(s)) { prev = null; continue; }
+      const ang = Math.atan2(p.dx, p.dz);
+      poles.push(new THREE.CylinderGeometry(0.09, 0.12, CATENARY_HEIGHT + 0.7, 6).translate(p.x, Y_ROAD + (CATENARY_HEIGHT + 0.7) / 2, p.z));
+      poles.push(new THREE.BoxGeometry(TRAM.lane * 2 + 0.8, 0.1, 0.1).rotateY(ang).translate(p.x, Y_ROAD + CATENARY_HEIGHT + 0.35, p.z));
+      if (prev) for (const sd of [-1, 1]) {
+        const ax = prev.x - prev.dz * sd * TRAM.lane, az = prev.z + prev.dx * sd * TRAM.lane, bx = p.x - p.dz * sd * TRAM.lane, bz = p.z + p.dx * sd * TRAM.lane;
+        const wl = Math.hypot(bx - ax, bz - az);
+        wires.push(new THREE.BoxGeometry(0.035, 0.035, wl).rotateY(Math.atan2(bx - ax, bz - az)).translate((ax + bx) / 2, Y_ROAD + CATENARY_HEIGHT, (az + bz) / 2));
+      }
+      prev = p;
+    }
+    if (poles.length) { const pm = new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x6f767c })); pm.castShadow = true; this.group.add(pm); }
+    if (wires.length) this.group.add(new THREE.Mesh(mergeGeometries(wires), new THREE.MeshBasicMaterial({ color: 0x2a2d30 })));
+    // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per i due sensi
+    const pan = [], panTex = TX.pantographSignTexture();
+    for (const [g0, g1] of this.catenaryGaps) {
+      for (const [sAt, dir, up] of [[g0 - 60, 1, 0], [g1 + 8, 1, 1], [g1 + 60, -1, 0], [g0 - 8, -1, 1]]) {
+        const p = center.at(sAt), rx = -p.dz * dir, rz = p.dx * dir, px = p.x + rx * (TRAM_HW + 0.5), pz = p.z + rz * (TRAM_HW + 0.5);
+        const ang = Math.atan2(-p.dx * dir, -p.dz * dir); // il cartello guarda il tram che arriva
+        pan.push({ g: new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6).translate(px, Y_ROAD + 1.3, pz), mat: 'pole' });
+        const pl = new THREE.PlaneGeometry(0.7, 0.7);
+        const uv = pl.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5 + (up ? 0.5 : 0));
+        pan.push({ g: pl.rotateY(ang).translate(px, Y_ROAD + 2.35, pz), mat: 'sign' });
+      }
+    }
+    if (pan.length) {
+      this.group.add(new THREE.Mesh(mergeGeometries(pan.filter((x) => x.mat === 'pole').map((x) => x.g)), new THREE.MeshLambertMaterial({ color: 0x8f9497 })));
+      this.group.add(new THREE.Mesh(mergeGeometries(pan.filter((x) => x.mat === 'sign').map((x) => x.g)), new THREE.MeshLambertMaterial({ map: panTex, side: THREE.DoubleSide })));
     }
     const tex = TX.tramLaneTexture();
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));

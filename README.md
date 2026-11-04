@@ -51,7 +51,8 @@ vere, e produce `src/data/padova-map.json` per il gioco.
 * Prato della Valle (isola Memmia, canale, statue) è modellato a parte e allineato alle strade reali.
 * I ponti stradali sopra la ferrovia diventano cavalcavia in quota, con le rampe.
 * I limiti di velocità vengono dai tag `maxspeed` di OSM quando presenti (altrimenti 30 in centro, 50 fuori).
-* Il **tram SIR1** non è tra le linee guidabili.
+* Il **tram SIR1** è guidabile sulla sua linea, da Guizza Capolinea a Pontevigodarzere (vedi sotto).
+* **Area di gioco** allargata a sud lungo il tram, fino al capolinea della Guizza.
 
 Per rigenerare i dati:
 
@@ -88,6 +89,26 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 | **T** | salta l'attesa in fermata (in anticipo l'attesa scorre comunque ×12) |
 | **J** | teletrasporto: prossima fermata, fermata successiva o luoghi principali (tasti 1–9) |
 | **M** | mappa grande (clic su una strada per teletrasportarti) · **I** aiuto · **U** audio on/off · **P / Esc** pausa |
+
+## Tram SIR1
+
+Nel menu c'è la linea **🚋 SIR1**: un Translohr da 3 moduli (~25 m) che corre sulla sua rotaia, con corse e fermate
+reali del GTFS (anche le corse limitate a Cavalletto e al Santo). Il numero di moduli è un dato della linea: le linee
+future potranno averne 4.
+
+| Tasto | Azione |
+|-------|--------|
+| **W / S** | manipolatore: trazione / frenatura (Shift per la tacca piena) |
+| **F** | porte (da fermo; si sale e si scende da tutte le porte) |
+| **H** | campanello |
+| **O** | abbassa / alza il pantografo |
+| **B** | cambio cabina al capolinea |
+| **Spazio** | freno di stazionamento |
+
+* Ci si ferma con il muso a fine banchina; nelle curve strette il limite scende (fino a 15 km/h).
+* A **Prato della Valle** non c'è la linea aerea: il pantografo va abbassato prima, in entrambi i sensi, e rialzato
+  subito dopo. Nel tratto il tram va a batteria. Pantografo alzato senza filo: −150 punti.
+* Il tram non ha la retromarcia; le auto che tagliano la sede di traverso fanno frenare il tram senza colpa.
 
 ## Come si gioca
 

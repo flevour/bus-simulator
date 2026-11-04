@@ -155,7 +155,10 @@ export class Audio {
     this.roadF.frequency.setTargetAtTime(200 + sp * 40, t, 0.1);
     this.roadG.gain.setTargetAtTime(Math.min(0.35, sp * 0.02) * (interior ? 0.7 : 1), t, 0.1);
     this.rainG.gain.setTargetAtTime((+rain || 0) * (interior ? 0.05 : 0.09), t, 0.3);
-    this.hornG.gain.setTargetAtTime(bus.horn ? 0.22 : 0, t, 0.015);
+    // il tram non ha il clacson: campanello a rintocchi finché si tiene premuto H
+    this.hornG.gain.setTargetAtTime(bus.horn && !bus.isTram ? 0.22 : 0, t, 0.015);
+    if (bus.isTram && bus.horn) { this.bellT = (this.bellT || 0) - dt; if (this.bellT <= 0) { this.tramBell(); this.bellT = 0.3; } }
+    else this.bellT = 0;
     // retromarcia
     if (bus.dir < 0) {
       this.revT += dt;
@@ -204,6 +207,21 @@ export class Audio {
     for (let i = 0; i < 3; i++) this.tone(1050, 0.12, { type: 'square', gain: 0.06, delay: i * 0.3 });
     this.noiseBurst({ dur: 1.0, freq: 2600, q: 0.8, gain: 0.3, delay: 0.9 });
     this.noiseBurst({ dur: 0.15, type: 'lowpass', freq: 300, gain: 0.5, delay: 2.0 });
+  }
+  // campanello del tram: colpo metallico con parziali inarmoniche che si smorzano
+  tramBell() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    for (const [f, g, d] of [[1185, 0.15, 0.9], [2650, 0.07, 0.55], [3920, 0.035, 0.35], [600, 0.05, 0.7]]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine'; o.frequency.value = f;
+      const gg = ctx.createGain();
+      gg.gain.setValueAtTime(0.0001, t);
+      gg.gain.exponentialRampToValueAtTime(g, t + 0.004);
+      gg.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(gg).connect(this.master);
+      o.start(t); o.stop(t + d + 0.05);
+    }
   }
   bell() {
     this.tone(1320, 0.7, { gain: 0.2 });

@@ -268,3 +268,26 @@ export function signAtlas() {
   const t = makeTex(c, false);
   return t;
 }
+
+// Cartelli per il tram: pantografo da abbassare (sinistra) e da rialzare (destra), quadrato blu con il simbolo bianco
+export function pantographSignTexture() {
+  const [c, x] = canvas(256, 128);
+  for (const [k, up] of [[0, false], [1, true]]) {
+    const ox = k * 128;
+    x.fillStyle = '#1f5fbf'; x.fillRect(ox + 4, 4, 120, 120);
+    x.strokeStyle = '#fff'; x.lineWidth = 4; x.strokeRect(ox + 8, 8, 112, 112);
+    x.strokeStyle = '#fff'; x.lineWidth = 6;
+    // tetto del veicolo, bracci e strisciante
+    x.beginPath(); x.moveTo(ox + 30, 100); x.lineTo(ox + 98, 100); x.stroke();
+    const top = up ? 34 : 78;
+    x.beginPath(); x.moveTo(ox + 50, 100); x.lineTo(ox + (up ? 74 : 86), (100 + top) / 2); x.lineTo(ox + 58, top); x.stroke();
+    x.beginPath(); x.moveTo(ox + 36, top); x.lineTo(ox + 80, top); x.stroke();
+    // freccia
+    x.fillStyle = '#fff'; x.beginPath();
+    if (up) { x.moveTo(ox + 100, 30); x.lineTo(ox + 112, 50); x.lineTo(ox + 88, 50); }
+    else { x.moveTo(ox + 100, 76); x.lineTo(ox + 112, 56); x.lineTo(ox + 88, 56); }
+    x.closePath(); x.fill();
+    x.font = 'bold 13px Arial'; x.textAlign = 'center'; x.fillText(up ? 'ALZARE' : 'ABBASSARE', ox + 64, 22);
+  }
+  return makeTex(c, false);
+}

@@ -126,7 +126,8 @@ export class HUD {
       c.restore();
     };
     dial(80, 80, 66, bus.speedKmh, 80, 5, Math.round(bus.speedKmh), 'km/h', '#ff7043');
-    if (bus.electric) dial(W - 80, 80, 66, Math.max(0, bus.powerKw), 200, 25, bus.dir < 0 ? 'R' : bus.powerKw < -2 ? 'REC' : 'E', 'kW', bus.powerKw < -2 ? '#66bb6a' : '#a6d22e');
+    if (bus.isTram) dial(W - 80, 80, 66, Math.max(0, bus.powerKw), 500, 50, bus.powerKw < -2 ? 'REC' : bus.wired ? 'T' : 'BAT', 'kW', bus.powerKw < -2 ? '#66bb6a' : bus.wired ? '#4fc3f7' : '#ffb74d');
+    else if (bus.electric) dial(W - 80, 80, 66, Math.max(0, bus.powerKw), 200, 25, bus.dir < 0 ? 'R' : bus.powerKw < -2 ? 'REC' : 'E', 'kW', bus.powerKw < -2 ? '#66bb6a' : '#a6d22e');
     else dial(W - 80, 80, 66, bus.rpm, 2500, 250, bus.dir < 0 ? 'R' : bus.speedKmh < 0.5 && bus.throttle < 0.05 ? 'D' : 'D' + bus.gear, 'rpm', '#4fc3f7');
     // pedali
     const bar = (x, v, col, lbl) => {
@@ -134,8 +135,16 @@ export class HUD {
       c.fillStyle = col; c.fillRect(x, 30 + 100 * (1 - v), 10, 100 * v);
       c.fillStyle = '#b0bec5'; c.font = '10px Arial'; c.textAlign = 'center'; c.fillText(lbl, x + 5, 145);
     };
-    bar(W / 2 - 18, bus.throttle, '#66bb6a', 'GAS');
+    bar(W / 2 - 18, bus.throttle, '#66bb6a', bus.isTram ? 'TRAZ.' : 'GAS');
     bar(W / 2 + 8, bus.brake, '#ef5350', 'FRENO');
+    if (bus.isTram) {
+      // pantografo e batteria
+      c.fillStyle = bus.pantoPos > 0.97 ? '#4fc3f7' : bus.pantoPos < 0.03 ? '#ffb74d' : '#cfd8dc';
+      c.font = 'bold 11px Arial'; c.textAlign = 'center';
+      c.fillText(bus.pantoPos > 0.97 ? 'PANT ▲' : bus.pantoPos < 0.03 ? 'PANT ▼' : 'PANT …', W / 2 - 5, 14);
+      c.fillStyle = bus.battery < 0.2 ? '#ef5350' : '#b0bec5';
+      c.fillText(`BATT ${Math.round(bus.battery * 100)}%`, W / 2 - 5, 157);
+    }
   }
 
   drawMinimap(bus, m, ctx) {

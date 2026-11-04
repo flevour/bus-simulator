@@ -145,6 +145,32 @@ Stessa interfaccia del `Bus`, così missione, HUD, telecamere, audio e salvatagg
 * Verifica che con 4 moduli (anche solo un test con il parametro forzato) il convoglio segua bene le curve.
 * Le linee bus non devono cambiare comportamento: prova una corsa del 24 dopo le modifiche.
 
+## Stato
+
+Prima versione realizzata in `src/tram/tram.js` (TrackPath, corsie, modello a moduli, classe `Tram`),
+`src/world/traffic.js` (`TramSim`), `src/game/routes.js` (`buildTramRoute`), `src/game/mission.js` (regole del
+tram, pantografo), `scripts/build_gtfs.py` (`load_tram`). L'area di gioco arriva fino alla Guizza.
+
+Regole aggiunte nel frattempo:
+
+* **Pantografo**: a Prato della Valle non c'è la linea aerea. Va abbassato prima di arrivarci, in entrambi i sensi, e
+  rialzato subito dopo. Il tratto è definito in `catenaryGaps()`: ±130 m dalla fermata.
+* **Campanello** al posto del clacson.
+
+## Per le linee future (SIR2, SIR3, SIR4, SIR5)
+
+Il nuovo piazzale della stazione ha gli anelli del tram a **ovali concentrici**: i tram girano attorno al piazzale e
+più linee condividono tratti di binario. Oggi la sede è un'unica polilinea (`net.tram[0]`) con due corsie. Per le
+nuove linee:
+
+* passare a un **grafo di binari** (archi con la loro geometria, deviatoi ai nodi), costruito dai binari OSM
+  `railway=tram` e dagli shape GTFS di ogni linea;
+* il percorso di una corsa diventa una sequenza di archi del grafo (come per i bus sulla rete stradale), con gli
+  anelli percorsi nel verso giusto;
+* `TramSim` e la linea aerea lavorano sul grafo, non su una sola polilinea;
+* le banchine possono stare a destra, a sinistra o al centro (isola tra due binari): le porte si aprono dal lato
+  della banchina.
+
 ## Fuori dall'obiettivo per ora
 
 SIR2 e SIR3 come dati (basterà aggiungerli quando ci saranno shape e orari), linee tram con deviazioni, depositi.

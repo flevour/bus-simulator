@@ -5,12 +5,19 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Prossimi passi
 
-1. [ ] **Tram SIR1 guidabile** sulla sua linea (3 moduli; in futuro linee con 4 moduli). Specifica pronta:
-   [`docs/prompt-tram.md`](docs/prompt-tram.md).
-2. [ ] **Segnaletica reale da OpenStreetMap**: STOP, dare precedenza, semafori, strisce pedonali e fermate del tram nei
+1. [~] **Tram SIR1 guidabile**: prima versione fatta (vedi "Fatto"). Restano:
+   - il traffico che dà la precedenza al tram agli incroci;
+   - i semafori del tram;
+   - la sede allineata ai binari OSM: oggi segue lo shape GTFS e in qualche via un palazzo la invade;
+   - interni più curati;
+   - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
+2. [ ] **Nuovo piazzale della stazione** con gli anelli (ovali concentrici) del tram, per le linee future
+   **SIR2, SIR3, SIR4, SIR5**. La geometria del tram dovrà gestire più linee, gli anelli e i deviatoi, non una sola
+   sede: modellarla come grafo di binari (rami e scambi) su cui ogni linea ha il suo percorso.
+3. [ ] **Segnaletica reale da OpenStreetMap**: STOP, dare precedenza, semafori, strisce pedonali e fermate del tram nei
    punti veri. Query e istruzioni: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md). Oggi i cartelli
    seguono regole sul tipo di strada.
-3. [ ] **Segnaletica orizzontale dai tag OSM già presenti** (`lanes` su ~5400 strade, `lanes:forward/backward`,
+4. [ ] **Segnaletica orizzontale dai tag OSM già presenti** (`lanes` su ~5400 strade, `lanes:forward/backward`,
    `overtaking`, `turn:lanes`, `lanes:psv`):
    - numero di corsie e linee divisorie;
    - mezzeria continua dove `overtaking=no`;
@@ -81,6 +88,14 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [ ] Test automatici in CI (build + giro dell'autopilota in headless).
 
 ## Fatto
+
+- [x] Tram SIR1 guidabile (3 moduli, numero di moduli come dato della linea):
+  - corse reali GTFS (anche le limitate);
+  - corsie e rotaie per senso, banchine a destra, fermata col muso a fine banchina;
+  - manipolatore, campanello, cambio cabina, limiti in curva;
+  - linea aerea con pantografo, da abbassare a Prato della Valle (a batteria) e rialzare subito dopo;
+  - tram automatici con la stessa livrea.
+- [x] Area di gioco allargata a sud fino al capolinea della Guizza (strade OSM già nell'export, edifici Overture).
 
 - [x] Linee urbane reali dal GTFS Busitalia (varianti, fermate, orari feriali e festivi); strade OSM; edifici Overture.
 - [x] Pausa, salvataggio e ripresa della corsa; teletrasporto (J e clic sulla mappa grande).

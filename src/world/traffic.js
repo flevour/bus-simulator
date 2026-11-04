@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, mulberry32 } from './spatial.js';
 import { Y_ROAD, zoneOf } from './city.js';
+import { TrackPath, TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 
 // ------------------------------------------------------------------
 // Semafori
@@ -474,77 +475,94 @@ export class Walkers {
 // Tram SIR1 (Translohr): due convogli che percorrono la sede tranviaria e si fermano alle fermate
 // ------------------------------------------------------------------
 export class TramSim {
-  constructor(scene, net) {
-    this.line = (net.tram || [])[0] || [];
+  // tram automatici sulla sede: ognuno sulla corsia di destra del suo verso, fermate con il muso a fine banchina.
+  // opts.starts: [[s del muso, verso], ...]; opts.modules: moduli del convoglio
+  constructor(scene, net, opts = {}) {
     this.trams = [];
-    if (this.line.length < 2) return;
-    const cum = [0];
-    for (let i = 1; i < this.line.length; i++) cum.push(cum[i - 1] + Math.hypot(this.line[i].x - this.line[i - 1].x, this.line[i].z - this.line[i - 1].z));
-    this.cum = cum;
-    this.len = cum[cum.length - 1];
-    // fermate proiettate sul tracciato
+    const line = (net.tram || [])[0];
+    if (!line || line.length < 2) return;
+    this.center = new TrackPath(line);
+    this.len = this.center.len;
+    this.modules = opts.modules || 3;
+    this.L = tramLength(this.modules);
     this.stopS = [];
     for (const st of net.tramStops || []) {
-      let best = 1e9, bs = 0;
-      for (let i = 0; i < this.line.length - 1; i++) {
-        const a = this.line[i], b = this.line[i + 1];
-        const ex = b.x - a.x, ez = b.z - a.z, l2 = ex * ex + ez * ez || 1;
-        const t = Math.max(0, Math.min(1, ((st.x - a.x) * ex + (st.z - a.z) * ez) / l2));
-        const d = Math.hypot(st.x - a.x - ex * t, st.z - a.z - ez * t);
-        if (d < best) { best = d; bs = cum[i] + Math.sqrt(l2) * t; }
-      }
-      if (best < 40) this.stopS.push(bs);
+      const pr = this.center.project(st.x, st.z);
+      if (pr.d < 40 && !this.stopS.some((x) => Math.abs(x - pr.s) < 20)) this.stopS.push(pr.s);
     }
     this.stopS.sort((a, b) => a - b);
-    const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
-    const body = lam(0xf2f2ee), red = lam(0xc8102e), glass = lam(0x1d2a33), roof = lam(0xb5b9bd);
-    const modG = [new THREE.BoxGeometry(2.6, 2.1, 10.2).translate(0, 1.55, 0), new THREE.BoxGeometry(2.62, 0.5, 10.22).translate(0, 0.65, 0), new THREE.BoxGeometry(2.64, 1.1, 9.6).translate(0, 1.9, 0), new THREE.BoxGeometry(2.0, 0.35, 8).translate(0, 2.75, 0)];
-    const mats = [body, red, glass, roof];
-    for (const [s0, dir] of [[this.len * 0.25, 1], [this.len * 0.7, -1]]) {
-      const modules = [];
-      for (let k = 0; k < 3; k++) {
-        const g = new THREE.Group();
-        modG.forEach((geo, i) => { const m = new THREE.Mesh(geo, mats[i]); m.castShadow = true; g.add(m); });
-        scene.add(g);
-        modules.push(g);
-      }
-      this.trams.push({ s: s0, dir, v: 0, wait: 0, modules, parts: [], nextStop: null });
+    this.catenaryAt = opts.catenaryAt || (() => true);
+    this.scene = scene;
+    this.reset(opts.starts);
+  }
+  // ricrea i tram automatici (es. a ogni corsa: col tram del giocatore resta solo quello del verso opposto)
+  reset(starts) {
+    for (const tr of this.trams) { for (const m of tr.mods) this.scene.remove(m.group); for (const b of tr.bellows) this.scene.remove(b); }
+    this.trams = [];
+    starts = starts || [[this.len * 0.25, 1], [this.len * 0.7, -1]];
+    const scene = this.scene;
+    for (const [s0, dir] of starts) {
+      const c = buildTramConvoy(scene, this.modules, 'SIR1', dir > 0 ? 'Pontevigodarzere' : 'Guizza');
+      this.trams.push({ s: s0, dir, v: 0, wait: 0, mods: c.mods, bellows: c.bellows, parts: [], served: null, panto: 1 });
     }
   }
-  at(s) {
-    s = Math.max(0, Math.min(this.len, s));
-    let i = 0;
-    while (i < this.cum.length - 2 && this.cum[i + 1] < s) i++;
-    const a = this.line[i], b = this.line[i + 1], l = this.cum[i + 1] - this.cum[i] || 1, t = (s - this.cum[i]) / l;
-    return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, h: Math.atan2(b.x - a.x, b.z - a.z) };
+  lanePoint(s, dir) {
+    const p = this.center.at(s);
+    return { x: p.x - p.dz * dir * TRAM.lane, z: p.z + p.dx * dir * TRAM.lane, fx: p.dx * dir, fz: p.dz * dir };
   }
-  update(dt, bus) {
+  update(dt, others = []) {
+    if (!Array.isArray(others)) others = [others];
     for (const tr of this.trams) {
-      // prossima fermata nella direzione di marcia
-      const ahead = tr.dir > 0 ? this.stopS.find((x) => x > tr.s + 0.5) : [...this.stopS].reverse().find((x) => x < tr.s - 0.5);
+      // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
+      const stopAt = (x) => x + tr.dir * 12;
+      const next = tr.dir > 0 ? this.stopS.find((x) => stopAt(x) > tr.s + 0.5 && x !== tr.served) : [...this.stopS].reverse().find((x) => stopAt(x) < tr.s - 0.5 && x !== tr.served);
       let vt = 8.5;
       if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
-      else if (ahead != null) {
-        const d = Math.abs(ahead - tr.s);
+      else if (next != null) {
+        const d = Math.abs(stopAt(next) - tr.s);
         vt = Math.min(vt, Math.sqrt(2 * 0.9 * d) + 0.3);
-        if (d < 1) { tr.wait = 18; tr.s = ahead + tr.dir * 1.2; }
+        if (d < 0.8) { tr.wait = 18; tr.served = next; }
       }
-      // si ferma se il bus è sulla sede davanti
-      const head = this.at(tr.s + tr.dir * 5);
-      if (Math.hypot(bus.x - head.x, bus.z - head.z) < 14) {
-        const f = (bus.x - head.x) * Math.sin(head.h) * tr.dir + (bus.z - head.z) * Math.cos(head.h) * tr.dir;
-        if (f > -2) vt = 0;
+      // chi è sulla stessa corsia davanti (bus, tram del giocatore, altri tram): ci si ferma a distanza
+      const head = this.lanePoint(tr.s, tr.dir);
+      const obst = [];
+      for (const o of others) if (o) obst.push(...(o.isTram && o.trackPoints ? o.trackPoints() : [{ x: o.x, z: o.z }]));
+      for (const t2 of this.trams) if (t2 !== tr) for (const p of t2.parts) obst.push(p);
+      for (const o of obst) {
+        const rx = o.x - head.x, rz = o.z - head.z;
+        if (Math.abs(rx) > 60 || Math.abs(rz) > 60) continue;
+        const ahead = rx * head.fx + rz * head.fz, lat = Math.abs(rx * -head.fz + rz * head.fx);
+        if (lat < 2.2 && ahead > -2 && ahead < 30) vt = Math.min(vt, Math.max(0, (ahead - 7) * 0.5));
       }
       tr.v += Math.max(-2.5, Math.min(1.0, vt - tr.v)) * dt * 2;
       tr.v = Math.max(0, tr.v);
       tr.s += tr.v * tr.dir * dt;
-      if (tr.s >= this.len - 2 || tr.s <= 2) { tr.dir *= -1; tr.wait = 30; tr.s = Math.max(2.1, Math.min(this.len - 2.1, tr.s)); }
+      // al capolinea il guidatore cambia cabina: il muso diventa l'altra estremità
+      if ((tr.dir > 0 && tr.s >= this.len - 2) || (tr.dir < 0 && tr.s <= 2)) {
+        tr.s -= tr.dir * this.L; tr.dir *= -1; tr.wait = 30; tr.v = 0; tr.served = null;
+      }
+      // nel tratto senza linea aerea il pantografo si abbassa
+      const pm = tr.mods[1];
+      if (pm && pm.panto) {
+        const want = this.catenaryAt(pm.group.position.x, pm.group.position.z) ? 1 : 0;
+        tr.panto += Math.sign(want - tr.panto) * Math.min(Math.abs(want - tr.panto), dt / 4);
+        setPantograph(pm.panto, tr.panto);
+      }
       tr.parts.length = 0;
-      tr.modules.forEach((g, k) => {
-        const p = this.at(tr.s - tr.dir * (5.3 + k * 10.7));
-        g.position.set(p.x, 0.14, p.z);
-        g.rotation.y = p.h + (tr.dir < 0 ? Math.PI : 0);
-        for (const o of [-3.4, 0, 3.4]) tr.parts.push({ x: p.x + Math.sin(p.h) * o, z: p.z + Math.cos(p.h) * o, h: p.h, isTram: true, bump: 0 });
+      let off = 0;
+      tr.mods.forEach((m, k) => {
+        const sa = tr.s - tr.dir * off, sb = sa - tr.dir * m.len;
+        const a = this.lanePoint(sa, tr.dir), b = this.lanePoint(sb, tr.dir);
+        m.group.position.set((a.x + b.x) / 2, Y_ROAD, (a.z + b.z) / 2);
+        m.group.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
+        const h = m.group.rotation.y;
+        for (const f of [0.15, 0.5, 0.85]) tr.parts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, h, isTram: true, bump: 0 });
+        if (k < tr.mods.length - 1) {
+          const j = this.lanePoint(sb - tr.dir * TRAM.gap / 2, tr.dir);
+          tr.bellows[k].position.set(j.x, Y_ROAD + 1.41, j.z);
+          tr.bellows[k].rotation.y = h;
+        }
+        off += m.len + TRAM.gap;
       });
     }
   }
