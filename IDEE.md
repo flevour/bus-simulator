@@ -110,7 +110,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 - [x] Linee urbane reali dal GTFS Busitalia (varianti, fermate, orari feriali e festivi); strade OSM; edifici Overture.
 - [x] Pausa, salvataggio e ripresa della corsa; teletrasporto (J e clic sulla mappa grande).
-- [x] Sede tranviaria del SIR1 con corsie rosse e rotaia; due tram automatici.
+- [x] Sede tranviaria del SIR1 con corsie rosse e rotaia; tram automatici dall'orario GTFS (quanti ne sono in servizio
+  a quell'ora, ognuno sulla sua corsa; al capolinea prendono la corsa successiva).
 - [x] Livree: moderna elettrica (argento, tetto blu, verde lime) e storica arancione e bianca.
 - [x] Sguardo col mouse (trascinamento), V o doppio clic per tornare avanti.
 - [x] Il ritardatario arriva da dietro e sale dalla porta posteriore.

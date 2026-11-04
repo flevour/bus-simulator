@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
 import { Y_ROAD, TRAM_HW, zoneOf } from './city.js';
+import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 
 // ------------------------------------------------------------------
@@ -543,11 +544,42 @@ export class Walkers {
 }
 
 // ------------------------------------------------------------------
-// Tram SIR1 (Translohr): due convogli che percorrono la sede tranviaria e si fermano alle fermate
+// Tram SIR1 (Translohr): i convogli in servizio secondo l'orario, sulla sede tranviaria, con le fermate delle loro corse
 // ------------------------------------------------------------------
+// Viaggi dei tram dall'orario GTFS (giorno 'feriale' | 'festivo'). Il GTFS pubblica ogni viaggio anche spezzato in tratti
+// (Guizza → Cavalletto, Stazione → Pontevigodarzere, Santo → Pontevigodarzere…) che si sovrappongono alla corsa intera:
+// un tratto la cui prima e ultima fermata sono servite da una corsa più lunga, nello stesso verso, entro 3 minuti è lo
+// stesso tram. Restano i viaggi veri: nei feriali 12-13 tram in servizio per quasi tutto il giorno.
+export function tramRuns(lines, track, day) {
+  const runs = [];
+  for (const L of lines) for (const v of L.variants) {
+    const dir = track.dirOf(v), P = track.path(dir);
+    // progressiva del muso fermo a fine banchina (12 m oltre la palina), sempre crescente lungo la corsa
+    const ss = [];
+    for (const st of v.stops) ss.push(Math.max(ss.length ? ss[ss.length - 1] : -Infinity, P.project(st.x, st.z).s + 12));
+    for (const { t, d } of v[day] || []) runs.push({ line: L, v, t, d, dir, ss, times: v.offsets.map((o) => t + (o * d) / v.duration) });
+  }
+  runs.sort((a, b) => a.t - b.t);
+  const passAt = (c, st) => {
+    let best = null, bd = 150;
+    c.v.stops.forEach((s2, i) => { const d = Math.hypot(s2.x - st.x, s2.z - st.z); if (d < bd) { bd = d; best = c.times[i]; } });
+    return best;
+  };
+  const near = (a, b) => a != null && Math.abs(a - b) <= 180;
+  const covers = (c, k) => c !== k && c.dir === k.dir && c.v.stops.length > k.v.stops.length && c.t <= k.t + 180 && c.t + c.d >= k.t + k.d - 180 &&
+    near(passAt(c, k.v.stops[0]), k.t) && near(passAt(c, k.v.stops[k.v.stops.length - 1]), k.t + k.d);
+  let lo = 0;
+  return runs.filter((k) => {
+    while (runs[lo].t < k.t - 4000) lo++;
+    for (let i = lo; i < runs.length && runs[i].t <= k.t + 180; i++) if (covers(runs[i], k)) return false;
+    return true;
+  });
+}
+
 export class TramSim {
   // tram automatici sulla sede: ognuno sulla corsia di destra del suo verso, fermate con il muso a fine banchina.
-  // opts.starts: [[s del muso, verso], ...]; opts.modules: moduli del convoglio
+  // Con l'orario (setService) i tram sono quelli in servizio a quell'ora, ognuno sulla sua corsa; senza, opts.starts:
+  // [[s del muso, verso], ...] che girano tra i capolinea. opts.modules: moduli del convoglio
   // track: binari per verso (TramTrack della città); s di ogni tram è lungo il binario del suo verso
   constructor(scene, net, opts = {}) {
     this.trams = [];
@@ -560,34 +592,119 @@ export class TramSim {
     this.scene = scene;
     this.reset(opts.starts);
   }
-  // ricrea i tram automatici (es. a ogni corsa: col tram del giocatore resta solo quello del verso opposto)
+  // ricrea i tram automatici senza orario: girano tra i capolinea
   reset(starts) {
-    for (const tr of this.trams) { for (const m of tr.mods) this.scene.remove(m.group); for (const b of tr.bellows) this.scene.remove(b); }
-    this.trams = [];
+    this.runs = null;
+    while (this.trams.length) this.remove(this.trams[0]);
     starts = starts || [[this.track.path(1).len * 0.25, 1], [this.track.path(-1).len * 0.3, -1]];
-    const scene = this.scene;
-    for (const [s0, dir] of starts) {
-      const c = buildTramConvoy(scene, this.modules, 'SIR1', dir > 0 ? 'Pontevigodarzere' : 'Guizza');
-      this.trams.push({ s: s0, dir, v: 0, wait: 0, mods: c.mods, bellows: c.bellows, parts: [], served: null, panto: 1 });
+    for (const [s0, dir] of starts) this.add(s0, dir, dir > 0 ? 'Pontevigodarzere' : 'Guizza');
+  }
+  add(s, dir, dest) {
+    const c = buildTramConvoy(this.scene, this.modules, 'SIR1', dest);
+    const tr = { s, dir, v: 0, wait: 0, mods: c.mods, bellows: c.bellows, parts: [], served: null, panto: 1, run: null, k: 0 };
+    this.trams.push(tr);
+    return tr;
+  }
+  remove(tr) {
+    for (const m of tr.mods) this.scene.remove(m.group);
+    for (const b of tr.bellows) this.scene.remove(b);
+    this.trams.splice(this.trams.indexOf(tr), 1);
+  }
+  // servizio dall'orario: day 'feriale' | 'festivo'; mine: corsa guidata dal giocatore { v, t }, che non ha un gemello
+  // automatico (e nemmeno la corsa intera che la contiene)
+  setService(lines, day, mine = null) {
+    while (this.trams.length) this.remove(this.trams[0]);
+    let runs = tramRuns(lines, this.track, day);
+    if (mine) {
+      const st0 = mine.v.stops[0], dir = this.track.dirOf(mine.v);
+      runs = runs.filter((r) => r.dir !== dir || !r.v.stops.some((s, i) => Math.hypot(s.x - st0.x, s.z - st0.z) < 150 && Math.abs(r.times[i] - mine.t) <= 180));
     }
+    this.runs = runs;
+    this.lastClock = null;
+  }
+  destOf(run) { return run.v.headsign.replace(/ \(.*$/, ''); }
+  // posizione che l'orario dà alla corsa all'ora clock (tra due fermate, in proporzione al tempo)
+  spawnAt(run, clock) {
+    const { times, ss } = run;
+    let k = 0;
+    while (k < times.length - 2 && times[k + 1] <= clock) k++;
+    const f = Math.max(0, Math.min(1, (clock - times[k]) / Math.max(1, times[k + 1] - times[k])));
+    const tr = this.add(ss[k] + (ss[k + 1] - ss[k]) * f, run.dir, this.destOf(run));
+    tr.run = run; tr.k = k + 1; tr.v = f > 0 ? 6 : 0;
+    run.tram = tr;
+    return tr;
+  }
+  // tram in servizio a quell'ora: dopo un salto d'orario (avvio, teletrasporto) si ricompone tutto dall'orario
+  schedule(clock) {
+    const jump = this.lastClock == null || clock < this.lastClock - 1 || clock - this.lastClock > 60;
+    if (jump) {
+      while (this.trams.length) this.remove(this.trams[0]);
+      for (const r of this.runs) r.tram = null;
+      for (const r of this.runs) if (r.t <= clock && clock < r.t + r.d) this.spawnAt(r, clock);
+    } else {
+      // corse che partono ora senza un tram che le aspetti al capolinea: ne entra uno nuovo
+      for (const r of this.runs) if (r.t > this.lastClock && r.t <= clock && !r.tram) this.spawnAt(r, clock);
+    }
+    this.lastClock = clock;
+  }
+  // fine corsa: al capolinea il tram prende la prossima corsa che parte da lì entro 20 minuti, altrimenti esce
+  endRun(tr, clock) {
+    const last = tr.run.v.stops[tr.run.v.stops.length - 1];
+    let next = null;
+    for (const r of this.runs) {
+      if (r.tram || r.t < clock - 30 || r.t > clock + 1200) continue;
+      const s0 = r.v.stops[0];
+      if (Math.hypot(s0.x - last.x, s0.z - last.z) < 60 && (!next || r.t < next.t)) next = r;
+    }
+    if (!next) { this.remove(tr); return; }
+    // cambio cabina: il muso diventa l'altra estremità, sul binario della nuova corsa
+    const tail = this.track.path(tr.dir).at(tr.s - this.L);
+    tr.dir = next.dir; tr.s = this.track.path(tr.dir).project(tail.x, tail.z).s;
+    tr.run = next; tr.k = 1; tr.v = 0; tr.wait = Math.max(30, next.t - clock);
+    next.tram = tr;
+    this.setDest(tr, this.destOf(next));
   }
   lanePoint(s, dir) {
     const p = this.track.path(dir).at(s);
     return { x: p.x, z: p.z, fx: p.dx, fz: p.dz };
   }
-  update(dt, others = []) {
+  // clock: ora del gioco (secondi), per il servizio dall'orario
+  update(dt, others = [], clock = null) {
     if (!Array.isArray(others)) others = [others];
+    if (!this.runs || clock == null) { this.move(dt, others, null); return; }
+    // con l'attesa accelerata in fermata l'orologio corre (x12): i tram la seguono a passi normali
+    const cd = this.lastClock == null ? dt : clock - this.lastClock;
+    this.schedule(clock);
+    const n = cd > dt * 1.5 && cd < 60 ? Math.min(15, Math.round(cd / dt)) : 1;
+    for (let i = 0; i < n; i++) this.move(dt, others, clock - (n - 1 - i) * dt);
+  }
+  move(dt, others, clock) {
+    const ended = [];
     for (const tr of this.trams) {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
       const P = this.track.path(tr.dir);
-      const stopAt = (x) => x + 12;
-      const next = this.stopsDir[tr.dir].find((x) => stopAt(x) > tr.s + 0.5 && x !== tr.served);
       let vt = 8.5;
       if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
-      else if (next != null) {
-        const d = stopAt(next) - tr.s;
-        vt = Math.min(vt, Math.sqrt(2 * 0.9 * d) + 0.3);
-        if (d < 0.8) { tr.wait = 18; tr.served = next; }
+      else if (tr.run) {
+        const d = tr.run.ss[tr.k] - tr.s;
+        // in linea alla velocità che porta alla prossima fermata in orario (tra 11 e 30 km/h), arrivando 15 s prima
+        // della partenza; in ritardo si va al massimo
+        const left = tr.run.times[tr.k] - 15 - clock;
+        if (left > 0) vt = Math.max(3, Math.min(8.5, d / left));
+        vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d)) + 0.3);
+        if (d < 0.8) {
+          if (tr.k >= tr.run.ss.length - 1) ended.push(tr);
+          // in anticipo sull'orario si aspetta la partenza (al massimo 2 minuti); in fermata comunque almeno 15 s
+          else { tr.wait = Math.max(15, Math.min(120, tr.run.times[tr.k] - clock)); tr.k++; }
+        }
+      } else {
+        const stopAt = (x) => x + 12;
+        const next = this.stopsDir[tr.dir].find((x) => stopAt(x) > tr.s + 0.5 && x !== tr.served);
+        if (next != null) {
+          const d = stopAt(next) - tr.s;
+          vt = Math.min(vt, Math.sqrt(2 * 0.9 * d) + 0.3);
+          if (d < 0.8) { tr.wait = 18; tr.served = next; }
+        }
       }
       // segnale del tram a via impedita: si rallenta per fermarsi alla linea
       if (this.signals) {
@@ -610,8 +727,11 @@ export class TramSim {
       tr.s += tr.v * dt;
       // al capolinea il guidatore cambia cabina: il muso diventa l'altra estremità, sul binario dell'altro verso
       if (tr.s >= P.len - 2) {
-        const tail = P.at(tr.s - this.L);
-        tr.dir *= -1; tr.s = this.track.path(tr.dir).project(tail.x, tail.z).s; tr.wait = 30; tr.v = 0; tr.served = null;
+        if (tr.run) { tr.s = P.len - 2; tr.v = 0; if (!ended.includes(tr)) ended.push(tr); }
+        else {
+          const tail = P.at(tr.s - this.L);
+          tr.dir *= -1; tr.s = this.track.path(tr.dir).project(tail.x, tail.z).s; tr.wait = 30; tr.v = 0; tr.served = null;
+        }
       }
       // nel tratto senza linea aerea il pantografo si abbassa
       const pm = tr.mods[1];
@@ -640,6 +760,11 @@ export class TramSim {
         off += m.len + TRAM.gap;
       });
     }
+    for (const tr of ended) this.endRun(tr, clock);
+  }
+  // indicatore di linea e destinazione sulle due cabine
+  setDest(tr, dest) {
+    for (const m of tr.mods) if (m.led) { m.led.material.map.dispose(); m.led.material.map = ledTexture('SIR1', dest); m.led.material.needsUpdate = true; }
   }
   // di notte fanali accesi in testa e luci rosse in coda
   setNight(f) {

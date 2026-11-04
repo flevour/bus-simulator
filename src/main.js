@@ -625,15 +625,15 @@ function startMission(resume = null) {
     V.trackPath = tr.path;
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
-    // dei tram automatici resta quello che viene in senso opposto, dall'altra parte della linea
-    trams.reset([[T.path(-tr.sig).len * 0.15, -tr.sig]]);
   } else {
     bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery });
-    trams.reset();
   }
   resetLook(false);
   bus.onShift = () => audio.shift();
   mission = new Mission({ scene, net, line: L, route: V, day: settings.variant, departure: settings.departure, depDur: settings.depDur, hud, audio, lights, city, free: settings.mode === 'free' });
+  // tram automatici: quelli in servizio all'ora della corsa secondo l'orario GTFS; la corsa che guida il giocatore
+  // non ha un gemello automatico
+  trams.setService(TRAM_LINES, settings.variant, bus.isTram && settings.mode !== 'free' ? { v: V, t: settings.departure } : null);
   mission.dest = destName;
   const st0 = mission.stops[0];
   if (bus.isTram) {
@@ -958,7 +958,7 @@ function step(dt) {
     if (Math.abs(indAccum) > 0.9 && Math.abs(bus.steerIn) < 0.12) { bus.indicator = 0; indAccum = 0; }
   }
   lights.update(dt);
-  trams.update(dt, bus);
+  trams.update(dt, bus, mission.clock);
   // incroci col tram: chiamata dei tram in arrivo, segnali a barre, precedenza delle auto
   tramSignals.update(dt, tramOccupancy(), traffic);
   if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');

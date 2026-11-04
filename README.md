@@ -43,8 +43,11 @@ vere, e produce `src/data/padova-map.json` per il gioco.
   cortili interni. Altezza: piani da OSM se presenti, altrimenti altezza Microsoft ML (stimata da immagini
   satellitari) convertita in piani con una calibrazione sugli edifici OSM, altrimenti stima per tipologia.
   La geometria è costruita a riquadri da 400 m, prima quelli vicini al bus.
-* **Tram SIR1**: la sede tranviaria (corsie rosse e rotaia centrale) viene dal tracciato GTFS; due tram
-  circolano e si fermano alle fermate. Guidare sulla corsia riservata costa punti.
+* **Tram SIR1**: la sede tranviaria (corsie rosse e rotaia centrale) viene dal tracciato GTFS. I tram automatici sono
+  quelli in servizio a quell'ora secondo l'orario GTFS: nei feriali 12-13 per quasi tutto il giorno, nei festivi 7-12.
+  Ognuno segue la sua corsa, regola la velocità sull'orario e al capolinea cambia cabina e prende la corsa successiva.
+  Il GTFS pubblica ogni viaggio anche spezzato in tratti (Guizza → Cavalletto, Stazione → Pontevigodarzere…): i tratti
+  coperti da una corsa più lunga entro 3 minuti sono lo stesso tram e non si contano. Guidare sulla corsia riservata costa punti.
 * Gli edifici del centro hanno la pianta reale, con l'altezza da OSM quando c'è, altrimenti stimata; quelli di pianta
   rettangolare hanno il tetto a padiglione in coppi, le facciate hanno zoccolo, cornicione e persiane e nel centro
   storico molti hanno i portici ad arco al piano terra. Basilica del
