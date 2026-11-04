@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, mulberry32 } from './spatial.js';
 import { Y_ROAD, zoneOf } from './city.js';
-import { TrackPath, TRAM, tramLength, buildTramConvoy, setPantograph, tramStopPlacements } from '../tram/tram.js';
+import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 
 // ------------------------------------------------------------------
 // Semafori
@@ -487,17 +487,14 @@ export class Walkers {
 export class TramSim {
   // tram automatici sulla sede: ognuno sulla corsia di destra del suo verso, fermate con il muso a fine banchina.
   // opts.starts: [[s del muso, verso], ...]; opts.modules: moduli del convoglio
+  // track: binari per verso (TramTrack della città); s di ogni tram è lungo il binario del suo verso
   constructor(scene, net, opts = {}) {
     this.trams = [];
-    const line = (net.tram || [])[0];
-    if (!line || line.length < 2) return;
-    this.center = new TrackPath(line);
-    this.len = this.center.len;
+    this.track = opts.track;
+    if (!this.track) return;
     this.modules = opts.modules || 3;
     this.L = tramLength(this.modules);
-    // fermate per verso di marcia (le stesse banchine disegnate dalla città)
-    const pl = tramStopPlacements(this.center);
-    this.stopsDir = { 1: pl.filter((p) => p.sig > 0).map((p) => p.s), '-1': pl.filter((p) => p.sig < 0).map((p) => p.s) };
+    this.stopsDir = { 1: this.track.stopsDir[1].map((p) => p.s), '-1': this.track.stopsDir[-1].map((p) => p.s) };
     this.catenaryAt = opts.catenaryAt || (() => true);
     this.scene = scene;
     this.reset(opts.starts);
@@ -506,7 +503,7 @@ export class TramSim {
   reset(starts) {
     for (const tr of this.trams) { for (const m of tr.mods) this.scene.remove(m.group); for (const b of tr.bellows) this.scene.remove(b); }
     this.trams = [];
-    starts = starts || [[this.len * 0.25, 1], [this.len * 0.7, -1]];
+    starts = starts || [[this.track.path(1).len * 0.25, 1], [this.track.path(-1).len * 0.3, -1]];
     const scene = this.scene;
     for (const [s0, dir] of starts) {
       const c = buildTramConvoy(scene, this.modules, 'SIR1', dir > 0 ? 'Pontevigodarzere' : 'Guizza');
@@ -514,20 +511,20 @@ export class TramSim {
     }
   }
   lanePoint(s, dir) {
-    const p = this.center.at(s);
-    return { x: p.x - p.dz * dir * TRAM.lane, z: p.z + p.dx * dir * TRAM.lane, fx: p.dx * dir, fz: p.dz * dir };
+    const p = this.track.path(dir).at(s);
+    return { x: p.x, z: p.z, fx: p.dx, fz: p.dz };
   }
   update(dt, others = []) {
     if (!Array.isArray(others)) others = [others];
     for (const tr of this.trams) {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
-      const stopAt = (x) => x + tr.dir * 12;
-      const stops = this.stopsDir[tr.dir];
-      const next = tr.dir > 0 ? stops.find((x) => stopAt(x) > tr.s + 0.5 && x !== tr.served) : [...stops].reverse().find((x) => stopAt(x) < tr.s - 0.5 && x !== tr.served);
+      const P = this.track.path(tr.dir);
+      const stopAt = (x) => x + 12;
+      const next = this.stopsDir[tr.dir].find((x) => stopAt(x) > tr.s + 0.5 && x !== tr.served);
       let vt = 8.5;
       if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
       else if (next != null) {
-        const d = Math.abs(stopAt(next) - tr.s);
+        const d = stopAt(next) - tr.s;
         vt = Math.min(vt, Math.sqrt(2 * 0.9 * d) + 0.3);
         if (d < 0.8) { tr.wait = 18; tr.served = next; }
       }
@@ -549,30 +546,34 @@ export class TramSim {
       }
       tr.v += Math.max(-2.5, Math.min(1.0, vt - tr.v)) * dt * 2;
       tr.v = Math.max(0, tr.v);
-      tr.s += tr.v * tr.dir * dt;
-      // al capolinea il guidatore cambia cabina: il muso diventa l'altra estremità
-      if ((tr.dir > 0 && tr.s >= this.len - 2) || (tr.dir < 0 && tr.s <= 2)) {
-        tr.s -= tr.dir * this.L; tr.dir *= -1; tr.wait = 30; tr.v = 0; tr.served = null;
+      tr.s += tr.v * dt;
+      // al capolinea il guidatore cambia cabina: il muso diventa l'altra estremità, sul binario dell'altro verso
+      if (tr.s >= P.len - 2) {
+        const tail = P.at(tr.s - this.L);
+        tr.dir *= -1; tr.s = this.track.path(tr.dir).project(tail.x, tail.z).s; tr.wait = 30; tr.v = 0; tr.served = null;
       }
       // nel tratto senza linea aerea il pantografo si abbassa
       const pm = tr.mods[1];
       if (pm && pm.panto) {
-        const want = this.catenaryAt(pm.group.position.x, pm.group.position.z) ? 1 : 0;
+        const want = this.track.wireAt(tr.dir, tr.s - (TRAM.cab + TRAM.gap + TRAM.mid / 2)) ? 1 : 0;
         tr.panto += Math.sign(want - tr.panto) * Math.min(Math.abs(want - tr.panto), dt / 4);
         setPantograph(pm.panto, tr.panto);
       }
       tr.parts.length = 0;
       let off = 0;
       tr.mods.forEach((m, k) => {
-        const sa = tr.s - tr.dir * off, sb = sa - tr.dir * m.len;
+        const sa = tr.s - off, sb = sa - m.len;
         const a = this.lanePoint(sa, tr.dir), b = this.lanePoint(sb, tr.dir);
-        m.group.position.set((a.x + b.x) / 2, Y_ROAD, (a.z + b.z) / 2);
+        const ha = this.track.heightAt(tr.dir, sa), hb = this.track.heightAt(tr.dir, sb);
+        m.group.position.set((a.x + b.x) / 2, Y_ROAD + (ha + hb) / 2, (a.z + b.z) / 2);
+        m.group.rotation.order = 'YXZ';
         m.group.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
+        m.group.rotation.x = -Math.atan2(ha - hb, m.len);
         const h = m.group.rotation.y;
         for (const f of [0.15, 0.5, 0.85]) tr.parts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, h, isTram: true, bump: 0 });
         if (k < tr.mods.length - 1) {
-          const j = this.lanePoint(sb - tr.dir * TRAM.gap / 2, tr.dir);
-          tr.bellows[k].position.set(j.x, Y_ROAD + 1.41, j.z);
+          const j = this.lanePoint(sb - TRAM.gap / 2, tr.dir);
+          tr.bellows[k].position.set(j.x, Y_ROAD + 1.41 + hb, j.z);
           tr.bellows[k].rotation.y = h;
         }
         off += m.len + TRAM.gap;
@@ -603,34 +604,39 @@ export class TramSignals {
     this.list = [];
     this.byEdge = new Map();
     this.violations = [];
-    const C = city.tramCenter;
-    if (!C) return;
+    const T = city.tramTrack;
+    if (!T) return;
     const q = [];
-    for (let i = 0; i < C.pts.length - 1; i++) {
-      const a = C.pts[i], b = C.pts[i + 1];
-      const tl = C.cum[i + 1] - C.cum[i];
-      if (tl < 0.1) continue;
-      const tdx = (b.x - a.x) / tl, tdz = (b.z - a.z) / tl;
-      for (const it of city.segGrid.query((a.x + b.x) / 2, (a.z + b.z) / 2, tl / 2 + 20, q)) {
-        if (it.kind !== 'road' || !it.ref || it.ref.ped || it.ref.elev || it.ref.tunnel) continue;
-        const e = it.ref;
-        const ex = it.bx - it.ax, ez = it.bz - it.az, el = Math.hypot(ex, ez) || 1;
-        const den = (b.x - a.x) * ez - (b.z - a.z) * ex;
-        if (Math.abs(den) < 1e-6) continue;
-        const t = ((it.ax - a.x) * ez - (it.az - a.z) * ex) / den, u = ((it.ax - a.x) * (b.z - a.z) - (it.az - a.z) * (b.x - a.x)) / den;
-        if (t < 0 || t > 1 || u < 0 || u > 1) continue;
-        const sinA = Math.abs(tdx * (ez / el) - tdz * (ex / el));
-        if (sinA < 0.3) continue; // strade che corrono accanto alla sede, non la attraversano
-        const sT = C.cum[i] + t * tl, tE = u * el;
-        if (this.list.some((x) => Math.abs(x.sT - sT) < 6)) continue;
-        const x = {
-          e, tE, sT, px: a.x + (b.x - a.x) * t, pz: a.z + (b.z - a.z) * t,
-          halfE: Math.min(14, (3.4 + 0.6) / sinA), halfT: Math.min(14, (e.width / 2 + 1) / sinA),
-          req: 0, state: 'H', after: 0, prev: new Map(),
-        };
-        this.list.push(x);
-        if (!this.byEdge.has(e)) this.byEdge.set(e, []);
-        this.byEdge.get(e).push(x);
+    // incroci a raso tra il binario di ogni verso e le strade
+    for (const dir of [1, -1]) {
+      const C = T.path(dir);
+      for (let i = 0; i < C.pts.length - 1; i++) {
+        const a = C.pts[i], b = C.pts[i + 1];
+        const tl = C.cum[i + 1] - C.cum[i];
+        if (tl < 0.05) continue;
+        const tdx = (b.x - a.x) / tl, tdz = (b.z - a.z) / tl;
+        for (const it of city.segGrid.query((a.x + b.x) / 2, (a.z + b.z) / 2, tl / 2 + 20, q)) {
+          if (it.kind !== 'road' || !it.ref || it.ref.ped || it.ref.elev || it.ref.tunnel) continue;
+          const e = it.ref;
+          const ex = it.bx - it.ax, ez = it.bz - it.az, el = Math.hypot(ex, ez) || 1;
+          const den = (b.x - a.x) * ez - (b.z - a.z) * ex;
+          if (Math.abs(den) < 1e-6) continue;
+          const t = ((it.ax - a.x) * ez - (it.az - a.z) * ex) / den, u = ((it.ax - a.x) * (b.z - a.z) - (it.az - a.z) * (b.x - a.x)) / den;
+          if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+          const sinA = Math.abs(tdx * (ez / el) - tdz * (ex / el));
+          if (sinA < 0.3) continue; // strade che corrono accanto alla sede, non la attraversano
+          const sT = C.cum[i] + t * tl, tE = u * el;
+          if (T.heightAt(dir, sT) > 1.5) continue; // binario in quota: la strada passa sotto
+          if (this.list.some((x) => x.dir === dir && Math.abs(x.sT - sT) < 6)) continue;
+          const x = {
+            dir, e, tE, sT, px: a.x + (b.x - a.x) * t, pz: a.z + (b.z - a.z) * t,
+            halfE: Math.min(10, (TRAM.lane + 0.6) / sinA), halfT: Math.min(14, (e.width / 2 + 1) / sinA),
+            req: 0, state: 'H', after: 0, prev: new Map(),
+          };
+          this.list.push(x);
+          if (!this.byEdge.has(e)) this.byEdge.set(e, []);
+          this.byEdge.get(e).push(x);
+        }
       }
     }
     // incroci vicini a un semaforo stradale: la chiamata del tram mette l'incrocio in fase tram
@@ -641,11 +647,11 @@ export class TramSignals {
       x.sig = best;
       if (best) this.sigs.add(best);
     }
-    this.buildHeads(scene, C);
+    this.buildHeads(scene, T);
   }
-  // un segnale per senso di marcia, a destra della corsia, prima dell'incrocio
-  buildHeads(scene, C) {
-    const n = this.list.length * 2;
+  // un segnale per incrocio, a destra del binario, prima della strada
+  buildHeads(scene, T) {
+    const n = this.list.length;
     if (!n) return;
     const statics = [];
     const mk = (geo) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), n); m.count = n; m.frustumCulled = false; scene.add(m); return m; };
@@ -655,14 +661,13 @@ export class TramSignals {
     tri.moveTo(-0.13, -0.1); tri.lineTo(0.13, -0.1); tri.lineTo(0, 0.12); tri.closePath();
     this.tri = mk(new THREE.ShapeGeometry(tri));
     this.heads = [];
-    for (const x of this.list) for (const dir of [1, -1]) {
-      const s = x.sT - dir * (x.halfT + 3);
-      const p = C.at(s), rx = -p.dz * dir, rz = p.dx * dir;
-      const px = p.x + rx * 3.75, pz = p.z + rz * 3.75, ang = Math.atan2(-p.dx * dir, -p.dz * dir);
-      statics.push(new THREE.CylinderGeometry(0.05, 0.06, 3.0, 6).translate(px, Y_ROAD + 1.5, pz));
-      statics.push(new THREE.BoxGeometry(0.5, 0.62, 0.16).rotateY(ang).translate(px, Y_ROAD + 3.1, pz));
+    for (const x of this.list) {
+      const s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s);
+      const px = p.x - p.dz * (TRAM.lane + 0.35), pz = p.z + p.dx * (TRAM.lane + 0.35), ang = Math.atan2(-p.dx, -p.dz);
+      statics.push(new THREE.CylinderGeometry(0.05, 0.06, 3.0, 6).translate(px, Y_ROAD + h + 1.5, pz));
+      statics.push(new THREE.BoxGeometry(0.5, 0.62, 0.16).rotateY(ang).translate(px, Y_ROAD + h + 3.1, pz));
       const fx = Math.sin(ang), fz = Math.cos(ang);
-      this.heads.push({ x, dir, pos: new THREE.Vector3(px + fx * 0.085, Y_ROAD + 3.1, pz + fz * 0.085), ang, shown: null });
+      this.heads.push({ x, pos: new THREE.Vector3(px + fx * 0.085, Y_ROAD + h + 3.1, pz + fz * 0.085), ang, shown: null });
     }
     const box = new THREE.Mesh(mergeGeometries(statics), new THREE.MeshLambertMaterial({ color: 0x1b1d1f }));
     scene.add(box);
@@ -692,7 +697,8 @@ export class TramSignals {
     for (const x of this.list) {
       let need = false;
       for (const o of occ) {
-        const d = (x.sT - o.front) * o.dir; // distanza del muso dall'incrocio (positiva se davanti)
+        if (o.dir !== x.dir) continue;
+        const d = x.sT - o.front; // distanza del muso dall'incrocio lungo il binario (positiva se davanti)
         const on = d > -(o.len + x.halfT) && d <= x.halfT;
         const coming = d > x.halfT && d < 25 + o.v * 6 && !o.dwell;
         if (on || coming) need = true;
@@ -728,8 +734,10 @@ export class TramSignals {
     let gap = Infinity;
     for (const x of xs) {
       if (x.req <= 0) continue;
-      const pos = c.fwd ? x.tE : c.edge.len - x.tE;
-      const stop = Math.min(pos - x.halfE - 2.5, g.s1 - 0.3);
+      // ci si ferma prima del primo binario che si incontra (anche se il tram arriva su quello più lontano)
+      let pos = c.fwd ? x.tE : c.edge.len - x.tE, half = x.halfE;
+      for (const y of xs) { const py = c.fwd ? y.tE : c.edge.len - y.tE; if (py < pos && pos - py < 14) { pos = py; half = y.halfE; } }
+      const stop = Math.min(pos - half - 2.5, g.s1 - 0.3);
       const dist = stop - c.s;
       if (dist > -0.5 && dist < 80) gap = Math.min(gap, Math.max(0, dist));
     }
@@ -739,8 +747,8 @@ export class TramSignals {
   stopAhead(s, dir) {
     let best = Infinity;
     for (const x of this.list) {
-      if (x.state === 'V') continue;
-      const d = (x.sT - dir * (x.halfT + 1.5) - s) * dir;
+      if (x.state === 'V' || x.dir !== dir) continue;
+      const d = x.sT - (x.halfT + 1.5) - s;
       if (d > -0.5 && d < best) best = d;
     }
     return best;

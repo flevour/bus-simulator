@@ -28,6 +28,13 @@ export class TrackPath {
     const dx = (b.x - a.x) / l, dz = (b.z - a.z) / l;
     return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, dx, dz, h: Math.atan2(dx, dz) };
   }
+  // tratto da s0 a s1 (s0 < s1), con i vertici intermedi
+  slice(s0, s1) {
+    const pts = [this.at(s0)];
+    for (let i = 1; i < this.pts.length - 1; i++) if (this.cum[i] > s0 + 0.3 && this.cum[i] < s1 - 0.3) pts.push(this.pts[i]);
+    pts.push(this.at(s1));
+    return new TrackPath(pts.map((p) => ({ x: p.x, z: p.z })));
+  }
   // proiezione di un punto: s, distanza e scostamento laterale (positivo a destra del verso del tracciato)
   project(x, z) {
     let best = { s: 0, d: Infinity, lat: 0 };
@@ -74,13 +81,110 @@ export function lanePath(center, s0, s1, lane = TRAM.lane) {
 
 // Percorso di una corsa: le fermate proiettate sulla sede, la corsia nel verso di marcia, un po' di binario
 // prima della prima fermata (il convoglio ci sta tutto dietro la banchina) e dopo l'ultima.
-export function tramRoute(net, variant, modules = 3) {
-  const center = new TrackPath(net.tram[0]);
-  const ss = variant.stops.map((st) => center.project(st.x, st.z).s);
-  const sig = ss[ss.length - 1] >= ss[0] ? 1 : -1;
+export function tramRoute(track, variant, modules = 3, full = false) {
+  const sig = track.dirOf(variant), P = track.path(sig);
+  if (full) return { path: P, sig, offset: 0 };
+  const ss = variant.stops.map((st) => P.project(st.x, st.z).s);
   const back = tramLength(modules) + 20;
-  const s0 = Math.max(0, Math.min(center.len, ss[0] - sig * back)), s1 = Math.max(0, Math.min(center.len, ss[ss.length - 1] + sig * 30));
-  return { path: lanePath(center, s0, s1), sig, center };
+  const s0 = Math.max(0, ss[0] - back), s1 = Math.min(P.len, ss[ss.length - 1] + 30);
+  return { path: P.slice(s0, s1), sig, offset: s0 };
+}
+
+// ---------- binari per verso di marcia ----------
+// Ogni verso ha il suo binario (dir +1 verso nord, Guizza → Pontevigodarzere; -1 verso sud). Dove i due versi corrono
+// affiancati (doppio binario) i binari sono le due corsie della sede comune, a ±1,7 m dall'asse del tracciato verso nord.
+// Dove si separano (l'anello della stazione percorso solo verso nord, i tratti su vie diverse a sud) ogni verso segue il
+// suo tracciato GTFS a binario singolo. I passaggi tra doppio e singolo sono raccordati su ~25 m.
+// Primo passo verso un grafo di binari per le linee future (SIR2-5, ovali concentrici della stazione).
+function rampWeights(flags, step, ramp) {
+  const n = flags.length, out = flags.slice();
+  // via i tratti troppo corti (rumore dei tracciati GTFS)
+  const minRun = Math.ceil(30 / step);
+  let i = 0;
+  while (i < n) { let j = i; while (j < n && out[j] === out[i]) j++; if (j - i < minRun && i > 0 && j < n) for (let k = i; k < j; k++) out[k] = out[i - 1]; i = j; }
+  const k = step / ramp, w = out.map(Number);
+  for (let i = 1; i < n; i++) w[i] = Math.max(w[i - 1] - k, Math.min(w[i - 1] + k, w[i]));
+  for (let i = n - 2; i >= 0; i--) w[i] = Math.max(w[i + 1] - k, Math.min(w[i + 1] + k, w[i]));
+  return w;
+}
+const STEP = 3, NEAR = 9;
+const sampleS = (len) => { const out = []; for (let s = 0; s < len; s += STEP) out.push(s); out.push(len); return out; };
+export class TramTrack {
+  constructor(net) {
+    const raw = net.tram || [];
+    const C = (this.C = new TrackPath(raw[0]));
+    const S = raw[1] && raw[1].length > 1 ? new TrackPath(raw[1]) : null;
+    // verso nord: lungo l'asse, a destra di 1,7 m dove c'è l'altro verso
+    const ns = sampleS(C.len);
+    const wN = rampWeights(ns.map((s) => { const p = C.at(s); return S && S.project(p.x, p.z).d < NEAR ? 1 : 0; }), STEP, 25);
+    const north = ns.map((s, i) => { const p = C.at(s), o = TRAM.lane * wN[i]; return { x: p.x - p.dz * o, z: p.z + p.dx * o }; });
+    let south, wS;
+    if (S) {
+      const ss = sampleS(S.len), cs = [], flags = [];
+      for (const s of ss) { const p = S.at(s), pr = C.project(p.x, p.z); cs.push(pr.s); flags.push(pr.d < NEAR ? 1 : 0); }
+      wS = rampWeights(flags, STEP, 25);
+      south = ss.map((s, i) => {
+        const p = S.at(s), q = C.at(cs[i]);
+        const lx = q.x + q.dz * TRAM.lane, lz = q.z - q.dx * TRAM.lane; // corsia sinistra dell'asse = destra di chi va a sud
+        return { x: p.x + (lx - p.x) * wS[i], z: p.z + (lz - p.z) * wS[i] };
+      });
+    } else {
+      south = north.map((p, i) => { const q = C.at(ns[i]); return { x: q.x + q.dz * TRAM.lane, z: q.z - q.dx * TRAM.lane }; }).reverse();
+      wS = wN.slice().reverse();
+    }
+    this.paths = { 1: new TrackPath(dedup(north)), '-1': new TrackPath(dedup(south)) };
+    // doppio binario lungo ogni percorso (0..1), campionato come i punti
+    this.dbl = { 1: resampleW(this.paths[1], north, wN), '-1': resampleW(this.paths[-1], south, wS) };
+    this.h = { 1: null, '-1': null };
+    // fermate per verso: dalle fermate reali di tutte le corse
+    this.stopsDir = { 1: [], '-1': [] };
+    for (const L of TRAM_LINES) for (const v of L.variants) {
+      const d = this.dirOf(v), P = this.paths[d];
+      for (const st of v.stops) {
+        const sp = P.project(st.x, st.z).s;
+        if (!this.stopsDir[d].some((o) => Math.abs(o.s - sp) < 20)) this.stopsDir[d].push({ s: sp, name: st.name });
+      }
+    }
+    for (const d of [1, -1]) this.stopsDir[d].sort((a, b) => a.s - b.s);
+    // tratti senza linea aerea (Prato della Valle), per verso
+    this.gaps = { 1: [], '-1': [] };
+    for (const d of [1, -1]) for (const st of this.stopsDir[d]) if (/prato/i.test(st.name)) this.gaps[d].push([st.s - CATENARY_GAP_HALF, st.s + CATENARY_GAP_HALF]);
+  }
+  path(dir) { return this.paths[dir > 0 ? 1 : -1]; }
+  // verso di una corsa: dalle sue fermate sul percorso verso nord
+  dirOf(v) {
+    const P = this.paths[1], a = P.project(v.stops[0].x, v.stops[0].z).s, b = P.project(v.stops[v.stops.length - 1].x, v.stops[v.stops.length - 1].z).s;
+    return b >= a ? 1 : -1;
+  }
+  doubleAt(dir, s) { const P = this.path(dir), w = this.dbl[dir > 0 ? 1 : -1]; return w[Math.min(w.length - 1, P.seg(s))]; }
+  wireAt(dir, s) { return !this.gaps[dir > 0 ? 1 : -1].some(([a, b]) => s > a && s < b); }
+  gapAhead(dir, s, dist) { return this.gaps[dir > 0 ? 1 : -1].some(([a]) => a - s > 0 && a - s < dist); }
+  // quota del binario (cavalcavia): campionata ogni 5 m, levigata
+  setHeights(fn) {
+    for (const d of [1, -1]) {
+      const P = this.paths[d], raw = [];
+      for (let s = 0; s <= P.len; s += 5) { const p = P.at(s); raw.push(fn(p.x, p.z)); }
+      const sm = raw.map((_, i) => { let a = 0, n = 0; for (let k = -5; k <= 5; k++) { const v = raw[i + k]; if (v != null) { a += v; n++; } } return a / n; });
+      this.h[d] = sm.map((v) => (v < 0.25 ? 0 : v));
+    }
+  }
+  heightAt(dir, s) {
+    const h = this.h[dir > 0 ? 1 : -1];
+    if (!h) return 0;
+    const f = Math.max(0, Math.min(h.length - 1, s / 5)), i = Math.floor(f), t = f - i;
+    return h[i] + ((h[Math.min(h.length - 1, i + 1)] ?? h[i]) - h[i]) * t;
+  }
+}
+function dedup(pts) { return pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 0.05); }
+function resampleW(P, pts, w) {
+  // pesi per vertice del percorso (dopo dedup i vertici possono essere meno dei campioni)
+  const out = [];
+  let j = 0;
+  for (let i = 0; i < P.pts.length; i++) {
+    while (j < pts.length - 1 && Math.hypot(pts[j].x - P.pts[i].x, pts[j].z - P.pts[i].z) > 0.06) j++;
+    out.push(w[Math.min(j, w.length - 1)]);
+  }
+  return out;
 }
 
 // Fermate del tram lungo la sede, per verso di marcia: dalle fermate reali di tutte le corse (il GTFS ha una banchina
@@ -251,6 +355,10 @@ export class Tram {
     this.isTram = true;
     this.electric = true;
     this.path = path;
+    // binario del verso di marcia (TramTrack) e progressiva di inizio del percorso su quel binario
+    this.track = opts.track || null;
+    this.dirSig = opts.dir || 1;
+    this.pathOffset = opts.offset || 0;
     this.nMod = Math.max(3, modules);
     this.length = tramLength(this.nMod);
     this.scene = scene;
@@ -345,6 +453,9 @@ export class Tram {
     return Math.max(15, Math.min(70, Math.floor(v / 5) * 5));
   }
   togglePantograph() { this.pantoUp = !this.pantoUp; return this.pantoUp; }
+  // cambio di binario (cambio cabina al capolinea): nuovo percorso, nuovo verso
+  setPath(path, dir, offset = 0) { this.path = path; this.dirSig = dir; this.pathOffset = offset; this.facing = 1; this.aFwd = 1; }
+  hAt(s) { return this.track ? this.track.heightAt(this.dirSig, this.pathOffset + s) : 0; }
   // punto del pantografo (centro del modulo che lo porta)
   pantoPoint() { return { x: this.pantoModule.group.position.x, z: this.pantoModule.group.position.z }; }
   // punti lungo il convoglio (per chi segue sulla stessa corsia)
@@ -382,9 +493,11 @@ export class Tram {
     let off = 0;
     this.modules.forEach((m, k) => {
       const sa = this.sA - this.aFwd * off, sb = sa - this.aFwd * m.len;
-      const a = P.at(sa), b = P.at(sb);
-      m.group.position.set((a.x + b.x) / 2, (this.elev || 0) + 0.14, (a.z + b.z) / 2);
+      const a = P.at(sa), b = P.at(sb), ha = this.hAt(sa), hb = this.hAt(sb);
+      m.group.position.set((a.x + b.x) / 2, (ha + hb) / 2 + 0.14, (a.z + b.z) / 2);
+      m.group.rotation.order = 'YXZ';
       m.group.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
+      m.group.rotation.x = -Math.atan2((ha - hb) * this.aFwd, m.len);
       if (this.derailAmt > 0) {
         const w = this.derailAmt * (this.facing === this.aFwd ? this.nMod - k : k + 1) / this.nMod; // più la testa
         const hh = m.group.rotation.y, side = this.derailSide;
@@ -395,7 +508,7 @@ export class Tram {
       } else m.group.rotation.z = 0;
       if (k < this.nMod - 1) {
         const j = P.at(sb - this.aFwd * TRAM.gap / 2), bl = this.bellows[k];
-        bl.position.set(j.x, (this.elev || 0) + 1.55, j.z);
+        bl.position.set(j.x, this.hAt(sb) + 1.55, j.z);
         bl.rotation.y = j.h;
       }
       off += m.len + TRAM.gap;
@@ -405,6 +518,7 @@ export class Tram {
     const sr = this.sFront - this.facing * TRAM.ref;
     const r = P.at(sr), ra = P.at(sr + 4), rb = P.at(sr - 4);
     this.x = r.x; this.z = r.z;
+    this.elev = this.hAt(sr);
     const hc = Math.atan2(ra.x - rb.x, ra.z - rb.z);
     this.h = this.facing > 0 ? hc : hc + Math.PI;
   }
@@ -427,7 +541,9 @@ export class Tram {
     // pantografo: sale e scende in ~4 s; alimentazione dal filo solo se è alzato e c'è la linea aerea
     this.pantoPos += Math.sign((this.pantoUp ? 1 : 0) - this.pantoPos) * Math.min(Math.abs((this.pantoUp ? 1 : 0) - this.pantoPos), dt / 4);
     setPantograph(this.pantoModule.panto, this.pantoPos);
-    const wire = !world || !world.catenaryAt || world.catenaryAt(this.pantoPoint().x, this.pantoPoint().z);
+    const sPanto = this.sFront - this.facing * (TRAM.cab + TRAM.gap + TRAM.mid / 2);
+    const wire = !this.track || this.track.wireAt(this.dirSig, this.pathOffset + sPanto);
+    this.wireAvail = wire;
     this.wired = wire && this.pantoPos > 0.97;
     // trazione: 48 kN fino a ~36 km/h, poi potenza costante (480 kW dal filo, 160 kW a batteria); niente trazione a porte aperte
     const Pmax = this.wired ? 480000 : this.battery > 0.03 ? 160000 : 0;

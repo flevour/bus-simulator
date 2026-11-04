@@ -57,6 +57,7 @@ export class HUD {
     }
     if (!m.free) $('stops-progress').textContent = `Fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length}`;
     $('request').classList.toggle('on', m.request);
+    $('request').hidden = !!m.tram; // sul tram non si prenota: ferma sempre
     $('pax').textContent = m.onboard.length;
     $('score').textContent = m.score;
     const cb = $('comfort-bar');

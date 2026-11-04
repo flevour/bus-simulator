@@ -207,7 +207,8 @@ export class Mission {
       }
       // fermata saltata
       if (!st.arrived && along > 25 && st.idx < this.stops.length - 1) {
-        const wanted = st.waiting.length > 0 || this.onboard.some((d) => d === st.idx);
+        // il tram si ferma a tutte le fermate; il bus solo se qualcuno sale o scende
+        const wanted = this.tram || st.waiting.length > 0 || this.onboard.some((d) => d === st.idx);
         if (wanted) {
           this.addScore(-120, `Fermata saltata: ${st.name}!`);
           this.stats.skipped++;
@@ -222,7 +223,7 @@ export class Mission {
 
     // ---- prenotazione fermata ----
     const ns = this.stops[this.nextStop];
-    if (ns && !this.request && !ns.arrived && this.onboard.some((d) => d === ns.idx) && ns.s - this.s < 320 && this.rnd() < dt * 0.6) {
+    if (ns && !this.tram && !this.request && !ns.arrived && this.onboard.some((d) => d === ns.idx) && ns.s - this.s < 320 && this.rnd() < dt * 0.6) {
       this.request = true;
       this.audio.bell();
       this.hud.toast('🔔 Fermata prenotata', 'info');
@@ -327,10 +328,8 @@ export class Mission {
 
   // Tram: a Prato della Valle non c'è la linea aerea. Il pantografo va abbassato prima (O) e rialzato subito dopo.
   checkPantograph(tram, dt) {
-    const city = this.city;
-    if (!city || !city.catenaryAt) return;
-    const pp = tram.pantoPoint();
-    const wire = city.catenaryAt(pp.x, pp.z);
+    if (!tram.track) return;
+    const wire = tram.wireAvail !== false;
     if (!wire && tram.pantoPos > 0.3) {
       if (this.cooldown('pantoKo', 25)) {
         this.audio.crash && this.audio.crash(0.4);
@@ -340,7 +339,7 @@ export class Mission {
       this._pantoOk = true; // niente bonus: l'ha abbassato l'emergenza
     }
     // avviso prima del tratto senza filo
-    const fr = tram.path.at(tram.sFront), gap = city.catenaryGapNear && city.catenaryGapNear(fr.x, fr.z, 140);
+    const gap = tram.track.gapAhead(tram.dirSig, tram.pathOffset + tram.sFront, 140);
     if (gap && wire && tram.pantoUp && tram.v > 1 && this.cooldown('pantoWarn', 30)) this.hud.toast('🔌 Tra poco Prato della Valle: abbassa il pantografo (O)', 'info');
     if (!wire && !tram.pantoUp && !this._pantoOk) { this._pantoOk = true; this.addScore(20, 'Pantografo abbassato in tempo ✔'); }
     // dopo il tratto: rialzarlo subito

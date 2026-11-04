@@ -478,6 +478,18 @@ def main(osm_path, gtfs_dir, out, overture_path=None):
     tram_stop_ids = set()
     if tshapes:
         main_shape = max(tshapes, key=tshapes.get)
+        # secondo tracciato: il più completo del verso opposto (dove i due versi si separano, es. l'anello della
+        # stazione percorso solo verso nord, la sede di ogni verso segue il suo)
+        tdir = {}
+        for t in rd('trips.txt'):
+            if t['route_id'] in troutes:
+                tdir.setdefault(t['shape_id'], t.get('direction_id') or '0')
+        npts = defaultdict(int)
+        for r in rd('shapes.txt'):
+            if r['shape_id'] in tshapes:
+                npts[r['shape_id']] += 1
+        opp = [k for k in tshapes if tdir.get(k) != tdir.get(main_shape)]
+        opp_shape = max(opp, key=lambda k: (npts[k] > 0.8 * npts[main_shape], tshapes[k] * npts[k])) if opp else None
         pts = []
         for r in rd('shapes.txt'):
             if r['shape_id'] == main_shape:
@@ -488,6 +500,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None):
             x, z = xz(la, lo)
             flat += [round(x, 1), round(z, 1)]
         tram.append(flat)
+        if opp_shape:
+            op = sorted((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])) for r in rd('shapes.txt') if r['shape_id'] == opp_shape)
+            tram.append([round(v, 1) for _, la, lo in op for v in xz(la, lo)])
         trip = ttrips[main_shape]
         for r in rd('stop_times.txt'):
             if r['trip_id'] == trip:

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildNetwork, LINES, TRAM_LINES, fmtHM } from './data/padova.js';
-import { Tram, tramRoute, lanePath, TRAM } from './tram/tram.js';
+import { Tram, tramRoute, TRAM } from './tram/tram.js';
 import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
 import { Bus } from './bus/bus.js';
@@ -87,7 +87,7 @@ function buildWorld() {
   city = new City(scene, net);
   lights = new TrafficLights(scene, net);
   city.buildSigns();
-  trams = new TramSim(scene, net, { catenaryAt: (x, z) => city.catenaryAt(x, z) });
+  trams = new TramSim(scene, net, { track: city.tramTrack });
   // incroci con la sede: precedenza al tram e semafori a barre
   tramSignals = new TramSignals(scene, city, lights);
   trams.signals = tramSignals;
@@ -241,12 +241,9 @@ function changeTramCab() {
   if (Math.abs(bus.v) > 0.05 || !bus.doorsClosed || bus.doorTarget > 0) { hud.toast('Fermati con le porte chiuse per cambiare cabina', 'bad'); return; }
   const P = bus.path, sf = bus.sFront;
   if (sf < P.len - 70 && sf > 70) { hud.toast('Si cambia cabina solo al capolinea', 'info'); return; }
-  // corsia opposta lungo tutta la linea, col muso dove ora c'è la coda
-  const C = trams.center, tail = P.at(sf - bus.length);
-  const pr = C.project(tail.x, tail.z), here = C.project(P.at(sf).x, P.at(sf).z);
-  const sig = pr.s > here.s ? 1 : -1;
-  const np = lanePath(C, sig > 0 ? 0 : C.len, sig > 0 ? C.len : 0);
-  bus.path = np;
+  // binario dell'altro verso (lungo tutta la linea), col muso dove ora c'è la coda: si passa dallo scambio
+  const T = city.tramTrack, tail = P.at(sf - bus.length), nd = -bus.dirSig, np = T.path(nd);
+  bus.setPath(np, nd, 0);
   bus.setFront(np.project(tail.x, tail.z).s);
   bus.parking = true;
   chase.init = false;
@@ -608,13 +605,13 @@ function startMission(resume = null) {
   const destName = V.stops[V.stops.length - 1].name;
   if (L.tram) {
     // tram: la corsia del verso di marcia (in giro libero tutta la linea)
-    const tr = tramRoute(net, V, L.modules);
-    const C = trams.center;
-    V.trackPath = settings.mode === 'free' ? lanePath(C, tr.sig > 0 ? 0 : C.len, tr.sig > 0 ? C.len : 0) : tr.path;
-    bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: V.trackPath });
+    const T = city.tramTrack;
+    const tr = tramRoute(T, V, L.modules, settings.mode === 'free');
+    V.trackPath = tr.path;
+    bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
     // dei tram automatici resta quello che viene in senso opposto, dall'altra parte della linea
-    trams.reset([[tr.sig > 0 ? C.len * 0.85 : C.len * 0.15, -tr.sig]]);
+    trams.reset([[T.path(-tr.sig).len * 0.15, -tr.sig]]);
   } else {
     bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery });
     trams.reset();
@@ -874,7 +871,6 @@ function updateMirrors() {
 const world = {
   wet: false, offRoad: false, slope: 0,
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
-  catenaryAt: (x, z) => city.catenaryAt(x, z),
   carsNear: (x, z, r) => { const a = traffic ? traffic.near(x, z, r) : []; return trams ? a.concat(trams.near(x, z, r)) : a; },
 };
 let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, tramLaneT = 0, kerbT = 0;
@@ -885,9 +881,7 @@ const playerOcc = { player: true, front: 0, dir: 1, len: 0, v: 0, dwell: false }
 function tramOccupancy() {
   const occ = trams.trams.map((tr) => ({ front: tr.s, dir: tr.dir, len: trams.L, v: tr.v, dwell: tr.wait > 0 }));
   if (bus && bus.isTram) {
-    const C = trams.center, f = bus.path.at(bus.sFront), r = bus.path.at(bus.sFront - bus.facing * bus.length);
-    const fs = C.project(f.x, f.z).s, rs = C.project(r.x, r.z).s;
-    Object.assign(playerOcc, { front: fs, dir: fs >= rs ? 1 : -1, len: Math.abs(fs - rs), v: bus.v, dwell: bus.doorsAnyOpen });
+    Object.assign(playerOcc, { front: bus.pathOffset + bus.sFront, dir: bus.dirSig, len: bus.length, v: bus.v, dwell: bus.doorsAnyOpen });
     occ.push(playerOcc);
   }
   return occ;

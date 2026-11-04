@@ -4,7 +4,7 @@ import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
 import { LINES } from '../data/padova.js';
-import { TrackPath, TRAM, catenaryGaps, CATENARY_HEIGHT, tramStopPlacements } from '../tram/tram.js';
+import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 
 export const Y_ROAD = 0.14;
@@ -505,18 +505,6 @@ export class City {
     }
   }
 
-  // tram: c'è la linea aerea sopra questo punto della sede? (no nei tratti a batteria, es. Prato della Valle)
-  catenaryAt(x, z) {
-    if (!this.tramCenter || !this.catenaryGaps || !this.catenaryGaps.length) return true;
-    const pr = this.tramCenter.project(x, z);
-    return !(pr.d < 12 && this.catenaryGaps.some(([a, b]) => pr.s > a && pr.s < b));
-  }
-  // un tratto senza linea aerea comincia entro r metri?
-  catenaryGapNear(x, z, r) {
-    for (const g of this.catenaryGaps || []) for (const s of g) { const p = this.tramCenter.at(s); if (Math.hypot(p.x - x, p.z - z) < r) return true; }
-    return false;
-  }
-
   // vero se il punto è in una zona dove le ruote possono uscire un po' dall'asfalto (incroci, curve strette, rotonde)
   kerbAllowance(x, z) {
     const arr = this.kerbGrid.query(x, z, 20, this._qk || (this._qk = []));
@@ -590,94 +578,130 @@ export class City {
   buildTramway() {
     const tram = this.net.tram || [];
     if (!tram.length) return;
+    // binari per verso (doppio binario dove i versi corrono affiancati, singolo dove si separano) e quote del cavalcavia
+    const track = (this.tramTrack = new TramTrack(this.net));
+    this.tramCenter = track.C;
+    track.setHeights((x, z) => this.nearElevatedHeight(x, z));
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
-    for (const t of tram) {
-      for (let i = 0; i < t.length - 1; i++) {
-        const a = t[i], b = t[i + 1];
-        red.ribbon(a.x, a.z, b.x, b.z, TRAM_HW * 2, Y_ROAD + 0.03, 8);
-        const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, nx = -(b.z - a.z) / l, nz = (b.x - a.x) / l;
-        // una rotaia di guida al centro di ogni corsia (Translohr: un'unica rotaia per binario)
-        for (const sd of [-1, 1]) rail.ribbon(a.x + nx * sd * TRAM.lane, a.z + nz * sd * TRAM.lane, b.x + nx * sd * TRAM.lane, b.z + nz * sd * TRAM.lane, 0.22, Y_ROAD + 0.05, 8);
-        for (const sd of [-1, 1]) kerb.ribbon(a.x + nx * sd * TRAM_HW, a.z + nz * sd * TRAM_HW, b.x + nx * sd * TRAM_HW, b.z + nz * sd * TRAM_HW, 0.3, Y_ROAD + 0.06, 8);
-        red.disc(b.x, b.z, TRAM_HW, Y_ROAD + 0.029, 12, 8);
+    const deck = [], piers = [], poles = [], wires = [];
+    const L = TRAM.lane;
+    for (const dir of [1, -1]) {
+      const P = track.path(dir);
+      let lastPole = -1e9, prevWire = null;
+      for (let i = 0; i < P.pts.length - 1; i++) {
+        const a = P.pts[i], b = P.pts[i + 1], sa = P.cum[i], sb = P.cum[i + 1];
+        const l = sb - sa;
+        if (l < 0.05) continue;
+        const ha = track.heightAt(dir, sa), hb = track.heightAt(dir, sb);
+        const ex = (b.x - a.x) / l, ez = (b.z - a.z) / l, nx = -ez, nz = ex;
+        const hFn = ha || hb ? (x, z) => ha + (hb - ha) * Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l)) : null;
+        const off = (o) => [a.x + nx * o, a.z + nz * o, b.x + nx * o, b.z + nz * o];
+        // corsia rossa, rotaia di guida al centro, cordolo esterno (e interno dove il binario è singolo)
+        red.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.03, 8, 0, hFn);
+        red.disc(b.x, b.z, L, Y_ROAD + 0.029 + hb, 8, 8);
+        rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8, 0, hFn);
+        kerb.ribbon(...off(L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
+        if (track.doubleAt(dir, sa) < 0.5) kerb.ribbon(...off(-L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
+        // in quota (cavalcavia Borgomagno): impalcato con parapetti e pile
+        const hm = (ha + hb) / 2;
+        if (hm > 0.4) {
+          const ang = Math.atan2(ex, ez), mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+          deck.push(new THREE.BoxGeometry(L * 2 + 0.4, 0.6, l + 0.05).rotateY(ang).translate(mx, Y_ROAD + hm - 0.32, mz));
+          deck.push(new THREE.BoxGeometry(0.22, 1.0, l + 0.05).rotateY(ang).translate(mx + nx * (L + 0.1), Y_ROAD + hm + 0.45, mz + nz * (L + 0.1)));
+          if (track.doubleAt(dir, sa) < 0.5) deck.push(new THREE.BoxGeometry(0.22, 1.0, l + 0.05).rotateY(ang).translate(mx - nx * (L + 0.1), Y_ROAD + hm + 0.45, mz - nz * (L + 0.1)));
+          if (hm > 1.5 && Math.floor(sb / 22) !== Math.floor(sa / 22)) piers.push(new THREE.BoxGeometry(0.9, hm - 0.6, 0.9).translate(b.x, Y_ROAD + (hm - 0.6) / 2, b.z));
+        }
+      }
+      // linea aerea: un filo sopra ogni binario; pali ogni 30 m (al centro della sede sul doppio binario, a lato sul singolo)
+      for (let sp = 0; sp <= P.len; sp += 6) {
+        const p = P.at(sp), h = track.heightAt(dir, sp);
+        if (!track.wireAt(dir, sp)) { prevWire = null; continue; }
+        if (prevWire) {
+          const wl = Math.hypot(p.x - prevWire.x, p.z - prevWire.z);
+          wires.push(new THREE.BoxGeometry(0.035, 0.035, wl).rotateY(Math.atan2(p.x - prevWire.x, p.z - prevWire.z)).translate((p.x + prevWire.x) / 2, Y_ROAD + CATENARY_HEIGHT + (h + prevWire.h) / 2, (p.z + prevWire.z) / 2));
+        }
+        prevWire = { x: p.x, z: p.z, h };
+        if (sp - lastPole < 30) continue;
+        lastPole = sp;
+        const dbl = track.doubleAt(dir, sp) > 0.5;
+        if (dbl && dir < 0) continue; // sul doppio binario i pali centrali li mette il verso nord
+        const ang = Math.atan2(p.dx, p.dz), po = dbl ? -L : L + 0.9; // palo al centro della sede o a destra del binario
+        const px = p.x - p.dz * po, pz = p.z + p.dx * po;
+        poles.push(new THREE.CylinderGeometry(0.09, 0.12, CATENARY_HEIGHT + 0.7, 6).translate(px, Y_ROAD + h + (CATENARY_HEIGHT + 0.7) / 2, pz));
+        const armLen = dbl ? L * 2 + 0.8 : L + 1.4, ac = dbl ? 0 : -(L + 0.9) / 2;
+        poles.push(new THREE.BoxGeometry(armLen, 0.1, 0.1).rotateY(ang).translate(px - p.dz * ac, Y_ROAD + h + CATENARY_HEIGHT + 0.35, pz + p.dx * ac));
       }
     }
-    // linea aerea: pali centrali ogni 30 m con la mensola, un filo di contatto per corsia; niente fili a Prato della Valle
-    const center = new TrackPath(tram[0]);
-    this.tramCenter = center;
-    this.catenaryGaps = catenaryGaps(center, this.net.tramStops);
-    const inGap = (s) => this.catenaryGaps.some(([g0, g1]) => s > g0 && s < g1);
-    const poles = [], wires = [];
-    let prev = null;
-    for (let s = 0; s <= center.len; s += 30) {
-      const p = center.at(s);
-      if (inGap(s)) { prev = null; continue; }
-      const ang = Math.atan2(p.dx, p.dz);
-      poles.push(new THREE.CylinderGeometry(0.09, 0.12, CATENARY_HEIGHT + 0.7, 6).translate(p.x, Y_ROAD + (CATENARY_HEIGHT + 0.7) / 2, p.z));
-      poles.push(new THREE.BoxGeometry(TRAM.lane * 2 + 0.8, 0.1, 0.1).rotateY(ang).translate(p.x, Y_ROAD + CATENARY_HEIGHT + 0.35, p.z));
-      if (prev) for (const sd of [-1, 1]) {
-        const ax = prev.x - prev.dz * sd * TRAM.lane, az = prev.z + prev.dx * sd * TRAM.lane, bx = p.x - p.dz * sd * TRAM.lane, bz = p.z + p.dx * sd * TRAM.lane;
-        const wl = Math.hypot(bx - ax, bz - az);
-        wires.push(new THREE.BoxGeometry(0.035, 0.035, wl).rotateY(Math.atan2(bx - ax, bz - az)).translate((ax + bx) / 2, Y_ROAD + CATENARY_HEIGHT, (az + bz) / 2));
-      }
-      prev = p;
-    }
+    const tex = TX.tramLaneTexture();
+    const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
+    rm.receiveShadow = true;
+    this.group.add(rm, new THREE.Mesh(rail.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)), new THREE.Mesh(kerb.build(), layer(new THREE.MeshLambertMaterial({ color: 0xd8d4cc }), 6)));
+    if (deck.length) { const dm = new THREE.Mesh(mergeGeometries(deck), new THREE.MeshLambertMaterial({ color: 0xb7b1a6 })); dm.castShadow = true; this.group.add(dm); }
+    if (piers.length) this.group.add(new THREE.Mesh(mergeGeometries(piers), new THREE.MeshLambertMaterial({ color: 0xa8a39a })));
     if (poles.length) { const pm = new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x6f767c })); pm.castShadow = true; this.group.add(pm); }
     if (wires.length) this.group.add(new THREE.Mesh(mergeGeometries(wires), new THREE.MeshBasicMaterial({ color: 0x2a2d30 })));
-    // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per i due sensi
+    // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per ogni verso
     const pan = [], panTex = TX.pantographSignTexture();
-    for (const [g0, g1] of this.catenaryGaps) {
-      for (const [sAt, dir, up] of [[g0 - 60, 1, 0], [g1 + 8, 1, 1], [g1 + 60, -1, 0], [g0 - 8, -1, 1]]) {
-        const p = center.at(sAt), rx = -p.dz * dir, rz = p.dx * dir, px = p.x + rx * (TRAM_HW + 0.5), pz = p.z + rz * (TRAM_HW + 0.5);
-        const ang = Math.atan2(-p.dx * dir, -p.dz * dir); // il cartello guarda il tram che arriva
-        pan.push({ g: new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6).translate(px, Y_ROAD + 1.3, pz), mat: 'pole' });
+    for (const dir of [1, -1]) {
+      const P = track.path(dir);
+      for (const [g0, g1] of track.gaps[dir]) for (const [sAt, up] of [[g0 - 60, 0], [g1 + 8, 1]]) {
+        const p = P.at(sAt), px = p.x - p.dz * (L + 1.9), pz = p.z + p.dx * (L + 1.9), h = track.heightAt(dir, sAt);
+        const ang = Math.atan2(-p.dx, -p.dz); // il cartello guarda il tram che arriva
+        pan.push({ g: new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6).translate(px, Y_ROAD + h + 1.3, pz), mat: 'pole' });
         const pl = new THREE.PlaneGeometry(0.7, 0.7);
         const uv = pl.attributes.uv;
         for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5 + (up ? 0.5 : 0));
-        pan.push({ g: pl.rotateY(ang).translate(px, Y_ROAD + 2.35, pz), mat: 'sign' });
+        pan.push({ g: pl.rotateY(ang).translate(px, Y_ROAD + h + 2.35, pz), mat: 'sign' });
       }
     }
     if (pan.length) {
       this.group.add(new THREE.Mesh(mergeGeometries(pan.filter((x) => x.mat === 'pole').map((x) => x.g)), new THREE.MeshLambertMaterial({ color: 0x8f9497 })));
       this.group.add(new THREE.Mesh(mergeGeometries(pan.filter((x) => x.mat === 'sign').map((x) => x.g)), new THREE.MeshLambertMaterial({ map: panTex, side: THREE.DoubleSide })));
     }
-    const tex = TX.tramLaneTexture();
-    const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
-    rm.receiveShadow = true;
-    this.group.add(rm, new THREE.Mesh(rail.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)), new THREE.Mesh(kerb.build(), layer(new THREE.MeshLambertMaterial({ color: 0xd8d4cc }), 6)));
-    // banchine delle fermate del tram: dalle fermate reali di tutte le corse, a destra del verso di marcia di chi le
-    // serve; a fine banchina la linea bianca di fermata (lì si ferma il muso)
+    // banchine: a destra del binario di chi le serve, con la linea bianca di fermata a fine banchina
     const plat = [], roofs = [], stopLines = new GeoBuilder();
-    for (const st of tramStopPlacements(center)) {
-      const p = center.at(st.s), dx = p.dx * st.sig, dz = p.dz * st.sig, rx = -dz, rz = dx;
-      const ang = Math.atan2(dx, dz);
-      // banchina piena se c'è spazio, altrimenti più stretta e attaccata alla sede (dove la sede corre accanto alla strada)
-      const wide = this.clearance(p.x + rx * (TRAM_HW + 1.5), p.z + rz * (TRAM_HW + 1.5), ['road'], 20) >= 0.3;
-      const off = wide ? TRAM_HW + 1.5 : TRAM_HW + 1.1, ox = rx * off, oz = rz * off;
-      plat.push(new THREE.BoxGeometry(wide ? 2.8 : 2.0, 0.3, 30).rotateY(ang).translate(p.x + ox, Y_ROAD + 0.15, p.z + oz));
-      roofs.push(new THREE.BoxGeometry(wide ? 2.4 : 1.8, 0.15, 12).rotateY(ang).translate(p.x + ox, 3.1, p.z + oz));
-      for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(p.x + ox + dx * k - rx * (wide ? 0.9 : 0.6), 1.6, p.z + oz + dz * k - rz * (wide ? 0.9 : 0.6)));
-      // linea di fermata trasversale sulla corsia
-      const q = center.at(st.s + st.sig * TRAM_STOP_AHEAD), qx = q.x + rx * TRAM.lane, qz = q.z + rz * TRAM.lane;
-      const P = (a, w) => [qx + dx * a + rx * w, Y_ROAD + 0.045, qz + dz * a + rz * w];
-      stopLines.quad(P(-0.2, -1.6), P(-0.2, 1.6), P(0.2, -1.6), P(0.2, 1.6), [0, 0, 1, 0, 0, 1, 1, 1]);
-    }
-    if (stopLines.pos.length) this.group.add(new THREE.Mesh(stopLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2f2ea }), 7)));
-    // scambio ai due capolinea (cambio cabina): un deviatoio che collega le due corsie nel binario tronco
-    const xo = new GeoBuilder();
-    for (const [s0, s1] of [[14, 38], [center.len - 14, center.len - 38]]) {
-      const n = 12;
-      for (let i = 0; i < n; i++) {
-        const t0 = i / n, t1 = (i + 1) / n;
-        const pa = center.at(s0 + (s1 - s0) * t0), pb = center.at(s0 + (s1 - s0) * t1);
-        const wa = TRAM.lane * (1 - 2 * t0), wb = TRAM.lane * (1 - 2 * t1);
-        xo.ribbon(pa.x - pa.dz * wa, pa.z + pa.dx * wa, pb.x - pb.dz * wb, pb.z + pb.dx * wb, 0.22, Y_ROAD + 0.05, 8);
+    for (const dir of [1, -1]) {
+      const P = track.path(dir);
+      for (const st of track.stopsDir[dir]) {
+        const p = P.at(st.s), dx = p.dx, dz = p.dz, rx = -dz, rz = dx, ang = Math.atan2(dx, dz), h = track.heightAt(dir, st.s);
+        // banchina piena se c'è spazio, altrimenti più stretta e attaccata alla sede (dove la sede corre accanto alla strada)
+        const wide = this.clearance(p.x + rx * (L + 1.5), p.z + rz * (L + 1.5), ['road'], 20) >= 0.3;
+        const off = wide ? L + 1.5 : L + 1.1, ox = rx * off, oz = rz * off; // bordo verso il tram a 1,8 m dal binario
+        plat.push(new THREE.BoxGeometry(wide ? 2.8 : 2.0, 0.3, 30).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 0.15, p.z + oz));
+        roofs.push(new THREE.BoxGeometry(wide ? 2.4 : 1.8, 0.15, 12).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 2.96, p.z + oz));
+        for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(p.x + ox + dx * k + rx * (wide ? 0.9 : 0.6), Y_ROAD + h + 1.46, p.z + oz + dz * k + rz * (wide ? 0.9 : 0.6)));
+        const q = P.at(st.s + TRAM_STOP_AHEAD), qr = [-q.dz, q.dx];
+        const Q = (a, w) => [q.x + q.dx * a + qr[0] * w, Y_ROAD + h + 0.045, q.z + q.dz * a + qr[1] * w];
+        stopLines.quad(Q(-0.2, -1.6), Q(-0.2, 1.6), Q(0.2, -1.6), Q(0.2, 1.6), [0, 0, 1, 0, 0, 1, 1, 1]);
       }
     }
-    this.group.add(new THREE.Mesh(xo.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)));
+    if (stopLines.pos.length) this.group.add(new THREE.Mesh(stopLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2f2ea }), 7)));
     if (plat.length) this.group.add(new THREE.Mesh(mergeGeometries(plat), new THREE.MeshLambertMaterial({ color: 0xc9c3b8 })));
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
+    // scambi ai capolinea (cambio cabina): un deviatoio che collega i due binari nel tratto tronco
+    const xo = new GeoBuilder();
+    const N = track.path(1), S = track.path(-1);
+    for (const [A, sA, B] of [[N, N.len - 40, S], [S, S.len - 40, N]]) {
+      const pa = A.at(sA), tgt = A.at(sA + 24), sb = B.project(tgt.x, tgt.z).s, pb = B.at(Math.min(B.len, Math.max(0, sb)));
+      if (Math.hypot(pb.x - pa.x, pb.z - pa.z) < 40) xo.ribbon(pa.x, pa.z, pb.x, pb.z, 0.22, Y_ROAD + 0.055, 8);
+    }
+    this.group.add(new THREE.Mesh(xo.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)));
   }
+
+  // quota della strada in quota più vicina (per il binario del tram che corre accanto al cavalcavia)
+  nearElevatedHeight(x, z) {
+    const arr = this.segGrid.query(x, z, 18, this._qe || (this._qe = []));
+    let h = 0, bd = Infinity;
+    for (const it of arr) {
+      const e = it.ref;
+      if (it.kind !== 'road' || !e || !e.elev) continue;
+      const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
+      if (r.d < it.hw + 9 && r.d < bd) { bd = r.d; h = edgeHeight(e, r.t * e.len); }
+    }
+    return h;
+  }
+  // tram: c'è la linea aerea sopra il binario di verso dir alla progressiva s?
+  catenaryAt(dir, s) { return !this.tramTrack || this.tramTrack.wireAt(dir, s); }
 
   // la sede del tram sotto un punto?
   onTramway(x, z, margin = -0.4) {
