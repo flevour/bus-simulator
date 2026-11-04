@@ -131,8 +131,13 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
 function readInput() {
-  input.throttle = keys.has('KeyW') || keys.has('ArrowUp');
-  input.brake = keys.has('KeyS') || keys.has('ArrowDown');
+  const fwdKey = keys.has('KeyW') || keys.has('ArrowUp'), backKey = keys.has('KeyS') || keys.has('ArrowDown');
+  // in retromarcia, appena fermi, W rimette la marcia avanti
+  if (bus && bus.dir < 0 && fwdKey && Math.abs(bus.v) < 0.15) setDirection(1);
+  // in retromarcia i pedali si scambiano: S dà gas all'indietro, W frena
+  const rev = bus && bus.dir < 0;
+  input.throttle = rev ? backKey : fwdKey;
+  input.brake = rev ? fwdKey : backKey;
   input.left = keys.has('KeyA') || keys.has('ArrowLeft');
   input.right = keys.has('KeyD') || keys.has('ArrowRight');
   input.shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
@@ -194,8 +199,12 @@ function onKeyPress(code) {
     case 'KeyL': bus.lights = !bus.lights; audio.tick(true); break;
     case 'Space': bus.parking = !bus.parking; audio.noiseBurst({ dur: 0.4, freq: 3000, gain: 0.2 }); hud.toast(bus.parking ? 'Freno di stazionamento inserito' : 'Freno di stazionamento rilasciato', 'info'); break;
     case 'KeyR':
-      if (Math.abs(bus.v) < 0.3) { bus.dir *= -1; bus.gear = 1; hud.toast(bus.dir < 0 ? 'Retromarcia inserita (R)' : 'Marcia avanti (D)', 'info'); }
+      if (Math.abs(bus.v) < 0.3) setDirection(-bus.dir);
       else hud.toast('Fermati per cambiare direzione di marcia', 'bad');
+      break;
+    // da fermo, premere di nuovo S inserisce la retromarcia (con le porte chiuse)
+    case 'KeyS': case 'ArrowDown':
+      if (bus.dir > 0 && Math.abs(bus.v) < 0.15 && bus.doorsClosed && bus.doorTarget === 0) setDirection(-1);
       break;
     case 'KeyK':
       if (Math.abs(bus.v) < 0.3) { bus.kneelTarget = bus.kneelTarget ? 0 : 1; audio.noiseBurst({ dur: 1.4, freq: 2000, gain: 0.25 }); }
@@ -207,6 +216,12 @@ function onKeyPress(code) {
     case 'KeyU': audio.muted = !audio.muted; audio.setMuted(audio.muted); hud.toast(audio.muted ? 'Audio disattivato' : 'Audio attivo', 'info'); break;
     case 'KeyI': showHelp = !showHelp; $('help').style.display = showHelp ? 'block' : 'none'; break;
   }
+}
+
+function setDirection(d) {
+  if (bus.dir === d) return;
+  bus.dir = d; bus.gear = 1;
+  hud.toast(d < 0 ? 'Retromarcia inserita (R): S per arretrare, W per frenare' : 'Marcia avanti (D)', 'info');
 }
 
 function setIndicator(v) {
@@ -351,6 +366,7 @@ function saveGame() {
     },
     bus: { x: bus.x, z: bus.z, h: bus.h, lights: bus.lights, dir: bus.dir, odo: bus.odometer },
     cam: camMode,
+    weather: { cloud: wx.cloud, rain: wx.rain, fog: wx.fog, wet: wx.wet, target: wx.target, phase: wx.phase, next: wx.next },
     summary: m.free ? `Giro libero · Linea ${settings.line.id}` : `Linea ${settings.line.id} → ${m.dest} · fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length} (${m.stops[Math.min(m.nextStop, m.stops.length - 1)].name})`,
     clockText: fmtHM(m.clock),
   };
@@ -562,10 +578,10 @@ function startMission(resume = null) {
   paused = false;
   $('pause').classList.add('hidden');
   if (!resume) camMode = 0;
-  rain.visible = settings.weather === 'rain';
+  initWeather(resume && resume.weather);
   setupWeatherAndTime(true);
   const night = mission._night || 0;
-  if (!resume) bus.lights = night > 0.3 || settings.weather !== 'clear';
+  if (!resume) bus.lights = night > 0.3 || wx.rain > 0.3 || wx.fog > 0.3;
   saveTimer = 0;
   if (resume) {
     hud.setLine(mission.free ? { id: L.id, color: L.color } : L, mission.free ? 'Giro libero' : destName);
@@ -613,7 +629,49 @@ function showResults() {
 // ------------------------------------------------------------------
 // Ora del giorno e meteo
 // ------------------------------------------------------------------
+// Meteo: valori continui che sfumano (nuvole, pioggia, nebbia, asfalto bagnato).
+// Con "Variabile" si parte col sereno e un piccolo programma alterna pioggia o nebbia.
+const wx = { cloud: 0, rain: 0, fog: 0, wet: 0, target: { cloud: 0, rain: 0, fog: 0 }, phase: 'clear', next: 0 };
+const WX_PRESET = { clear: { cloud: 0, rain: 0, fog: 0 }, rain: { cloud: 1, rain: 1, fog: 0 }, fog: { cloud: 0.8, rain: 0, fog: 1 } };
+const rand = (a, b) => a + Math.random() * (b - a);
+function initWeather(saved) {
+  if (saved && saved.target) { Object.assign(wx, saved, { target: { ...saved.target } }); return; }
+  const p = WX_PRESET[settings.weather] || WX_PRESET.clear;
+  Object.assign(wx, p, { wet: p.rain, target: { ...p }, phase: 'clear', next: rand(80, 160) });
+}
+function updateWeather(dt) {
+  if (settings.weather === 'variable' && (wx.next -= dt) <= 0) {
+    if (wx.phase === 'clear') {
+      wx.phase = 'clouds'; wx.target = { cloud: 0.65, rain: 0, fog: 0 }; wx.next = rand(45, 75);
+      hud.toast('☁️ Il cielo si sta coprendo…', 'info');
+    } else if (wx.phase === 'clouds') {
+      if (Math.random() < 0.6) {
+        wx.phase = 'rain'; wx.target = { cloud: 1, rain: rand(0.6, 1), fog: 0 };
+        hud.toast('🌧️ Comincia a piovere: la frenata si allunga, accendi i fari (L)', 'info');
+      } else {
+        wx.phase = 'fog'; wx.target = { cloud: 0.8, rain: 0, fog: rand(0.75, 1) };
+        hud.toast('🌫️ Arriva la nebbia: rallenta e accendi i fari (L)', 'info');
+      }
+      wx.next = rand(150, 300);
+    } else {
+      hud.toast(wx.phase === 'rain' ? '🌤️ Smette di piovere, le strade restano bagnate per un po\'' : '🌤️ La nebbia si dirada', 'info');
+      wx.phase = 'clear'; wx.target = { cloud: 0, rain: 0, fog: 0 }; wx.next = rand(120, 240);
+    }
+  }
+  // velocità delle transizioni: la pioggia arriva solo con le nuvole, la nebbia sale e si dirada lenta
+  const ease = (k, up, down) => { const d = wx.target[k] - wx[k]; wx[k] += Math.sign(d) * Math.min(Math.abs(d), dt / (d > 0 ? up : down)); };
+  ease('cloud', 35, 50);
+  ease('rain', 25, 20);
+  ease('fog', 50, 60);
+  wx.rain = Math.min(wx.rain, wx.cloud + 0.05);
+  // l'asfalto si bagna in fretta e asciuga piano
+  wx.wet += wx.rain > wx.wet ? (wx.rain - wx.wet) * Math.min(1, dt / 8) : -Math.min(wx.wet - wx.rain, dt / 150);
+  const changing = Math.abs(wx.target.cloud - wx.cloud) + Math.abs(wx.target.rain - wx.rain) + Math.abs(wx.target.fog - wx.fog) > 0.002 || Math.abs(wx.wet - wx.rain) > 0.01;
+  return changing;
+}
+
 const tmpC = new THREE.Color(), tmpC2 = new THREE.Color();
+const lerp = THREE.MathUtils.lerp;
 function setupWeatherAndTime() {
   const hour = ((mission.clock / 3600) % 24 + 24) % 24;
   const t = (hour - 6.6) / (18.9 - 6.6); // 0 alba, 1 tramonto
@@ -621,8 +679,8 @@ function setupWeatherAndTime() {
   const az = Math.PI * t;
   const day = THREE.MathUtils.smoothstep(elev, -0.08, 0.25);
   const golden = THREE.MathUtils.smoothstep(elev, -0.1, 0.05) * (1 - THREE.MathUtils.smoothstep(elev, 0.1, 0.35));
-  const w = settings.weather;
-  const overcast = w === 'rain' ? 0.85 : w === 'fog' ? 0.7 : 0;
+  const overcast = Math.min(1, Math.max(wx.cloud * 0.85, wx.fog * 0.7));
+  const dim = Math.min(1, overcast / 0.7); // 0 sereno, 1 coperto
   const night = 1 - day;
   mission._night = night;
   // colori del cielo
@@ -639,20 +697,21 @@ function setupWeatherAndTime() {
   skyU.sunDir.value.copy(sd);
   skyU.sunCol.value.set(golden > 0.3 ? 0xffb070 : 0xfff2d0);
   sun.userData.dir = sd;
-  sun.intensity = day * (w === 'clear' ? 2.6 : 0.5) * (1 - golden * 0.4);
+  sun.intensity = day * lerp(2.6, 0.5, dim) * (1 - golden * 0.4);
   sun.color.set(golden > 0.2 ? 0xffc890 : 0xfff2e0);
-  hemi.intensity = 0.18 + day * (w === 'clear' ? 0.9 : 0.75);
+  hemi.intensity = 0.18 + day * lerp(0.9, 0.75, dim);
   hemi.color.copy(tmpC2).lerp(new THREE.Color(0xffffff), 0.4);
   ambient.intensity = 0.25 + night * 0.35;
   ambient.color.set(night > 0.5 ? 0x5060a0 : 0x8090b0);
   // nebbia
   const fogCol = tmpC2.clone();
   scene.fog.color.copy(fogCol);
-  if (w === 'fog') { scene.fog.near = 5; scene.fog.far = 140; }
-  else if (w === 'rain') { scene.fog.near = 30; scene.fog.far = 700; }
-  else { scene.fog.near = 300; scene.fog.far = night > 0.5 ? 1800 : 2800; }
+  // visibilità: sfuma in scala logaritmica tra sereno, pioggia e nebbia
+  const farClear = night > 0.5 ? 1800 : 2800;
+  scene.fog.near = lerp(lerp(300, 30, wx.rain), 5, wx.fog);
+  scene.fog.far = Math.exp(lerp(lerp(Math.log(farClear), Math.log(700), wx.rain), Math.log(140), wx.fog));
   renderer.toneMappingExposure = 1.0 + night * 0.25;
-  city.setNight(night, w === 'rain' ? 1 : 0);
+  city.setNight(night, wx.wet);
   traffic && traffic.setNight(night);
   if (bus) bus.cabinLightMat.emissiveIntensity = 0.2 + night * 0.8;
 }
@@ -724,26 +783,35 @@ const world = {
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
   carsNear: (x, z, r) => { const a = traffic ? traffic.near(x, z, r) : []; return trams ? a.concat(trams.near(x, z, r)) : a; },
 };
-let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, tramLaneT = 0;
+let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, tramLaneT = 0, kerbT = 0;
 let lastT = performance.now();
 
 function step(dt) {
   readInput();
-  world.wet = settings.weather === 'rain';
+  const wxChanging = updateWeather(dt);
+  world.wet = wx.wet > 0.35;
   // superficie
   let onSidewalk = false;
   const mid = city.roadInfo(bus.x, bus.z);
   world.offRoad = mid.off > 5;
-  for (const [lx, lz] of [[1.15, 5.6], [-1.15, 5.6], [1.15, -5.6], [-1.15, -5.6]]) {
+  // marciapiede: contano le ruote, non la carrozzeria che in curva sporge sopra il cordolo.
+  // Le ruote posteriori tagliano le curve: più margine, e ancora di più a incroci, curve strette e rotonde.
+  let kerb = false;
+  for (const [lx, lz, rear] of [[1.05, 3.3, 0], [-1.05, 3.3, 0], [1.05, -2.6, 1], [-1.05, -2.6, 1]]) {
     const p = bus.toWorld(lx, lz);
     const ri = city.roadInfo(p.x, p.z);
-    if (ri.off > 0.35 && ri.off < 6) onSidewalk = true;
+    if (ri.off < 0.5 || ri.off > 6) continue;
+    const tol = rear ? 1.0 : 0.5;
+    if (ri.off > tol && (ri.off > tol + (rear ? 0.9 : 0.5) || !city.kerbAllowance(p.x, p.z))) kerb = true;
   }
+  // un tocco di un istante non conta
+  kerbT = kerb ? kerbT + dt : 0;
+  onSidewalk = kerbT > 0.3;
   const pf = bus.toWorld(0, 3.3), pr = bus.toWorld(0, -2.6);
   const hF = city.heightAt(pf.x, pf.z), hR = city.heightAt(pr.x, pr.z);
   world.slope = (hF - hR) / 5.9;
   bus.elev = (hF + hR) / 2 + (hF - hR) * (0.3 / 5.9);
-  const hit = bus.update(dt, { ...input, wipers: settings.weather === 'rain' }, world);
+  const hit = bus.update(dt, { ...input, wipers: wx.rain > 0.08 }, world);
   if (hit && hit.impact > 1.2 && !bus._crashCd) {
     audio.crash(hit.impact / 4);
     mission.onCrash(hit);
@@ -776,14 +844,15 @@ function step(dt) {
   walkers.update(dt, bus);
   // limite di velocità reale (OSM maxspeed) dove indicato, altrimenti 30 in centro e 50 fuori
   const speedLimit = mid.edge && mid.edge.speed ? Math.min(90, mid.edge.speed) : zoneOf(bus.x, bus.z) === 0 ? 30 : 50;
-  const ctx = { speedLimit, onSidewalk, night: (mission._night || 0) > 0.5 };
+  // fari obbligatori di notte e con scarsa visibilità (pioggia forte, nebbia)
+  const ctx = { speedLimit, onSidewalk, night: (mission._night || 0) > 0.5 || wx.fog > 0.6 || wx.rain > 0.6 };
   mission.update(dt, bus, ctx);
   city.update(dt);
   envTimer -= dt;
-  if (envTimer <= 0) { setupWeatherAndTime(); envTimer = 2; }
+  if (envTimer <= 0) { setupWeatherAndTime(); envTimer = wxChanging ? 0.2 : 2; }
   saveTimer += dt;
   if (saveTimer > 5) { saveTimer = 0; saveGame(); }
-  audio.update(dt, bus, { interior: camMode === 0 || camMode === 2, rain: settings.weather === 'rain' });
+  audio.update(dt, bus, { interior: camMode === 0 || camMode === 2, rain: wx.rain });
   const ri = frame % 6 === 0 ? city.roadInfo(bus.x, bus.z) : null;
   if (ri && ri.edge) hudStreet = ri.edge.name;
   hud.update(bus, mission, { speedLimit, net, traffic, lights, street: hudStreet });
@@ -797,7 +866,10 @@ function render(dt) {
   sun.position.set(bus.x + sd.x * 400, sd.y * 400, bus.z + sd.z * 400);
   sun.target.position.set(bus.x, 0, bus.z);
   sky.position.copy(camera.position);
+  rain.visible = wx.rain > 0.02;
   if (rain.visible) {
+    rainGeo.setDrawRange(0, Math.ceil(RAIN_N * Math.min(1, wx.rain * 1.1)) * 2);
+    rain.material.opacity = 0.2 + 0.3 * wx.rain;
     rain.position.set(camera.position.x, camera.position.y - 10, camera.position.z);
     const a = rain.geometry.attributes.position.array;
     for (let i = 0; i < RAIN_N; i++) {
@@ -881,7 +953,7 @@ setTimeout(() => {
   $('loading').style.display = 'none';
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
-  window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, setCam: (m) => (camMode = m),
+  window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; },
     sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();

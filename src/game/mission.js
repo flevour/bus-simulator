@@ -54,6 +54,16 @@ export class Mission {
     this.net = net; this.line = line; this.variant = day; this.routeData = route; this.hud = hud; this.audio = audio; this.lights = lights; this.city = city;
     this.route = buildRoute(net, route);
     this.stops = this.route.stops;
+    // la palina disegnata può essere spostata di qualche metro (vicino agli incroci): la zona di fermata la segue
+    if (city && city.stopPlacements) this.stops.forEach((st, k) => {
+      const pl = city.stopPlacements.find((p) => p.id === st.gtfs.id);
+      if (!pl) return;
+      const pr = projectOnRoute(this.route, pl.cx, pl.cz, st.s, 30, 30);
+      const prev = this.stops[k - 1], next = this.stops[k + 1];
+      if (pr.d > 6 || Math.abs(pr.s - st.s) > 20 || (prev && pr.s < prev.s + 15) || (next && pr.s > next.s - 15) || pr.s > this.route.length - 15) return;
+      const p = pointAt(this.route, pr.s), hw = p.seg.hw, rx = -p.dz, rz = p.dx;
+      Object.assign(st, { s: pr.s, x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw });
+    });
     this.dest = this.stops[this.stops.length - 1].name;
     this.departure = departure;
     this.clock = departure - 25; // poco prima della partenza

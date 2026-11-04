@@ -154,7 +154,7 @@ export class Audio {
     const sp = Math.abs(bus.v);
     this.roadF.frequency.setTargetAtTime(200 + sp * 40, t, 0.1);
     this.roadG.gain.setTargetAtTime(Math.min(0.35, sp * 0.02) * (interior ? 0.7 : 1), t, 0.1);
-    this.rainG.gain.setTargetAtTime(rain ? (interior ? 0.05 : 0.09) : 0, t, 0.3);
+    this.rainG.gain.setTargetAtTime((+rain || 0) * (interior ? 0.05 : 0.09), t, 0.3);
     this.hornG.gain.setTargetAtTime(bus.horn ? 0.22 : 0, t, 0.015);
     // retromarcia
     if (bus.dir < 0) {

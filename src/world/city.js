@@ -18,6 +18,80 @@ export function layer(mat, n) {
   return mat;
 }
 
+// ---------- forma degli incroci ----------
+// Raggio di raccordo del cordolo per tipo di strada (indice di ROAD_CLASS)
+const filletOf = (e) => (e.cls <= 2 ? 6 : e.cls <= 4 ? 4.5 : e.cls <= 6 ? 3.5 : 2.5);
+// Poligono dell'incrocio: ogni strada arriva con i suoi bordi dritti e tra due strade vicine il cordolo
+// gira con una curva (raccordo). Restituisce i punti in ordine di angolo e la distanza a cui tagliare ogni strada.
+// extra allarga i bordi (per il marciapiede) e riduce i raccordi dello stesso valore (archi concentrici).
+function junctionShape(n, extra = 0, trimIn = null) {
+  const arms = n.edges.map((e) => {
+    const o = e.a === n.id ? 1 : -1;
+    const dx = e.dx * o, dz = e.dz * o;
+    return { e, dx, dz, hw: e.width / 2 + extra, ang: Math.atan2(dz, dx) };
+  }).sort((p, q) => p.ang - q.ang);
+  const N = arms.length;
+  const trim = new Map();
+  for (const a of arms) trim.set(a.e, trimIn ? trimIn.get(a.e) : Math.max(1.5, a.hw * 0.4));
+  const wedges = [];
+  for (let i = 0; i < N; i++) {
+    const A = arms[i], B = arms[(i + 1) % N];
+    let th = B.ang - A.ang;
+    if (th <= 0) th += Math.PI * 2;
+    // bordo di A verso B: normale (-dz, dx); bordo di B verso A: normale (dz, -dx)
+    const ax = n.x - A.dz * A.hw, az = n.z + A.dx * A.hw;
+    const bx = n.x + B.dz * B.hw, bz = n.z - B.dx * B.hw;
+    const w = { A, B, straight: true };
+    // tra due tratti dell'anello di una rotonda il bordo interno resta quello dell'isola: niente raccordo
+    if (th < 2.95 && !(A.e.roundabout && B.e.roundabout)) {
+      // intersezione dei due bordi: ax + A.d * t = bx + B.d * s
+      const det = A.dx * -B.dz - A.dz * -B.dx;
+      if (Math.abs(det) > 1e-4) {
+        const rx = bx - ax, rz = bz - az;
+        const t = (rx * -B.dz - rz * -B.dx) / det, sB = (A.dx * rz - A.dz * rx) / det;
+        if (t > -0.5 && sB > -0.5) {
+          const R = Math.max(0, Math.min(filletOf(A.e), filletOf(B.e)) - extra);
+          const T = Math.min(14, R / Math.tan(th / 2));
+          w.straight = false;
+          w.I = [ax + A.dx * t, az + A.dz * t];
+          w.ta = Math.max(0, t + T); w.tb = Math.max(0, sB + T);
+          w.Pa = [ax + A.dx * w.ta, az + A.dz * w.ta];
+          w.Pb = [bx + B.dx * w.tb, bz + B.dz * w.tb];
+          trim.set(A.e, Math.max(trim.get(A.e), w.ta)); trim.set(B.e, Math.max(trim.get(B.e), w.tb));
+        }
+      }
+    }
+    w.ax = ax; w.az = az; w.bx = bx; w.bz = bz;
+    wedges.push(w);
+  }
+  // contorno: per ogni strada i due spigoli al taglio, poi il raccordo verso la successiva
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    const A = arms[i], w = wedges[i], tA = trim.get(A.e);
+    const px = n.x + A.dx * tA, pz = n.z + A.dz * tA;
+    pts.push([px + A.dz * A.hw, pz - A.dx * A.hw]); // lato verso la strada precedente
+    pts.push([px - A.dz * A.hw, pz + A.dx * A.hw]); // lato verso la successiva
+    if (!w.straight) {
+      // curva di Bézier quadratica tra i punti di tangenza, col vertice all'incrocio dei bordi
+      const [x0, z0] = w.Pa, [x1, z1] = w.I, [x2, z2] = w.Pb;
+      for (let k = 0; k <= 6; k++) {
+        const u = k / 6, a = (1 - u) * (1 - u), b = 2 * u * (1 - u), c = u * u;
+        pts.push([a * x0 + b * x1 + c * x2, a * z0 + b * z1 + c * z2]);
+      }
+    }
+  }
+  return { pts, trim };
+}
+
+function pointInPoly(x, z, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, zi] = pts[i], [xj, zj] = pts[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 // ---------- helper geometria ----------
 class GeoBuilder {
   constructor() { this.pos = []; this.uv = []; this.idx = []; }
@@ -53,6 +127,15 @@ class GeoBuilder {
       this.uv.push(px / uvScale, pz / uvScale);
       if (i) this.idx.push(b, b + i + 1, b + i);
     }
+  }
+  // poligono a ventaglio dal centro (cx, cz); punti in ordine di angolo crescente come disc()
+  fan(cx, cz, pts, y, uvScale = 20) {
+    const b = this.pos.length / 3;
+    this.pos.push(cx, y, cz);
+    this.uv.push(cx / uvScale, cz / uvScale);
+    for (const [px, pz] of pts) { this.pos.push(px, y, pz); this.uv.push(px / uvScale, pz / uvScale); }
+    const m = pts.length;
+    for (let i = 0; i < m; i++) this.idx.push(b, b + 1 + ((i + 1) % m), b + 1 + i);
   }
   build() {
     const g = new THREE.BufferGeometry();
@@ -179,6 +262,7 @@ export class City {
     scene.add(this.group);
     this.rnd = mulberry32(1234);
     this.segGrid = new Grid(80);
+    this.kerbGrid = new Grid(40); // incroci, curve strette e rotonde: dove la ruota posteriore taglia la curva
     this.obstacles = new Grid(40);
     this.obstacleCount = 0;
     this.zones = [];
@@ -225,6 +309,25 @@ export class City {
       }
       this.addSeg(n.x, n.z, n.x + 0.01, n.z, n.radius, 'road', null);
     }
+    // incroci veri (3+ strade): poligono con raccordi al posto del disco
+    this.jctGrid = new Grid(40);
+    for (const n of Object.values(nodes)) {
+      if (n.edges.length < 3) continue;
+      const sh = junctionShape(n);
+      n.trim = sh.trim; n.poly = sh.pts;
+      n.walkPoly = junctionShape(n, SIDEWALK, sh.trim).pts;
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (const [x, z] of sh.pts) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
+      this.jctGrid.insertAABB({ pts: sh.pts }, x0, z0, x1, z1);
+    }
+    // zone con fascia sormontabile: un bus da 12 m non può restare tutto sull'asfalto
+    const kz = (ax, az, bx, bz, hw) => this.kerbGrid.insertAABB({ ax, az, bx, bz, hw }, Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw);
+    for (const n of Object.values(nodes)) {
+      const deg = n.edges.length;
+      if (!deg) continue;
+      if (deg >= 3 || deg === 1 || n.bend > 0.12 || n.edges.some((e) => e.roundabout)) kz(n.x, n.z, n.x + 0.01, n.z, n.radius + (deg === 1 ? 10 : 9));
+    }
+    for (const e of edges) if (e.roundabout) { const A = nodes[e.a], B = nodes[e.b]; kz(A.x, A.z, B.x, B.z, e.width / 2 + 5); }
     for (const w of water) for (let i = 0; i < w.pts.length - 1; i++) this.addSeg(w.pts[i].x, w.pts[i].z, w.pts[i + 1].x, w.pts[i + 1].z, w.width / 2 + 6, 'water', w);
     for (const r of rails) if (!r.tunnel) for (let i = 0; i < r.pts.length - 1; i++) this.addSeg(r.pts[i].x, r.pts[i].z, r.pts[i + 1].x, r.pts[i + 1].z, 3.2, 'rail');
     for (const t of this.net.tram || []) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, TRAM_HW, 'tram');
@@ -267,6 +370,10 @@ export class City {
       const d = distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d - it.hw;
       if (d < best.off) best = { off: d, edge: it.ref };
     }
+    if (best.off > -0.3 && this.jctGrid) {
+      const jq = this.jctGrid.query(x, z, 1, this._qj || (this._qj = []));
+      for (const it of jq) if (pointInPoly(x, z, it.pts)) { best.off = -0.3; break; }
+    }
     return best;
   }
 
@@ -293,7 +400,8 @@ export class City {
     const marks = new GeoBuilder();
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
-      const ra = A.joint ? 0 : A.radius * 0.6, rb = B.joint ? 0 : B.radius * 0.6;
+      let ra = A.joint ? 0 : A.trim ? A.trim.get(e) : A.radius * 0.6, rb = B.joint ? 0 : B.trim ? B.trim.get(e) : B.radius * 0.6;
+      if (ra + rb > e.len - 0.2) { const k = Math.max(0, e.len - 0.2) / (ra + rb); ra *= k; rb *= k; }
       const ax = A.x + e.dx * ra, az = A.z + e.dz * ra, bx = B.x - e.dx * rb, bz = B.z - e.dz * rb;
       const hFn = e.elev ? (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz) : null;
       (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : e.oneway ? roadOw : road).ribbon(ax, az, bx, bz, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
@@ -301,8 +409,8 @@ export class City {
       if (e.elev) { this.buildOverpass(e, A, curb); continue; }
       // strisce pedonali vicino agli incroci
       for (const [N, dirSign] of [[A, 1], [B, -1]]) {
-        if (N.edges.length < 3 || N.edges.filter((x) => x.main).length < 3) continue;
-        const base = N.radius + 1.2;
+        if (e.roundabout || N.edges.length < 3 || N.edges.filter((x) => x.main).length < 3) continue;
+        const base = (N.trim ? N.trim.get(e) - 1.2 : N.radius) + 1.2;
         for (let k = -e.width / 2 + 0.6; k < e.width / 2 - 0.4; k += 1.0) {
           const cx = N.x + e.dx * dirSign * (base + 2) + -e.dz * k, cz = N.z + e.dz * dirSign * (base + 2) + e.dx * k;
           const hx = e.dx * 1.7, hz = e.dz * 1.7, wx = -e.dz * 0.25, wz = e.dx * 0.25;
@@ -315,6 +423,11 @@ export class City {
       if (!n.edges.length || (n.joint && n.bend < 0.02)) continue;
       const seg = n.joint ? 10 : 18;
       // nelle curve il disco sta sotto l'asfalto e riempie solo lo spicchio tra i due tratti
+      if (n.poly) {
+        inter.fan(n.x, n.z, n.poly, Y_ROAD + 0.01 + (n.h || 0), 20);
+        if (!n.edges.every((e) => e.ped)) walkDisc.fan(n.x, n.z, n.walkPoly, Y_SIDEWALK - 0.005 + (n.h || 0), 6);
+        continue;
+      }
       (n.joint ? joints : inter).disc(n.x, n.z, n.radius, Y_ROAD + (n.joint ? -0.005 : 0.01) + (n.h || 0), seg, 20);
       if (!n.edges.every((e) => e.ped)) walkDisc.disc(n.x, n.z, n.radius + SIDEWALK + (n.joint ? 0 : 2), Y_SIDEWALK - 0.005 + (n.h || 0), seg, 6);
     }
@@ -388,6 +501,13 @@ export class City {
       m.castShadow = m.receiveShadow = true;
       this.group.add(m);
     }
+  }
+
+  // vero se il punto è in una zona dove le ruote possono uscire un po' dall'asfalto (incroci, curve strette, rotonde)
+  kerbAllowance(x, z) {
+    const arr = this.kerbGrid.query(x, z, 20, this._qk || (this._qk = []));
+    for (const it of arr) if (distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw) return true;
+    return false;
   }
 
   // quota della strada sotto un punto (cavalcavia), 0 altrove
@@ -638,7 +758,7 @@ export class City {
     const frame = new THREE.MeshLambertMaterial({ color: 0x2b3a4a });
     const yellow = new THREE.MeshLambertMaterial({ color: 0xf2c200 });
     const poleG = new THREE.CylinderGeometry(0.05, 0.05, 3, 8);
-    const marks = new GeoBuilder();
+    const marks = new GeoBuilder(), busText = new GeoBuilder();
     const frames = [], glasses = [], benches = [], signs = [], yellows = [];
     const ATLAS_COLS = 16;
     const atlas = document.createElement('canvas');
@@ -676,14 +796,28 @@ export class City {
       yellows.push(bg);
       // obstacle pensilina
       if (this.clearance(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, ['road'], 20) > 0.8) this.addObstacle(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, 2.6, 1.0, Math.atan2(-st.dz, st.dx), 'shelter');
-      // segnaletica gialla "BUS" sulla corsia
+      // segnaletica gialla della fermata (stile italiano): zig-zag all'ingresso e all'uscita,
+      // linea tratteggiata lato corsia e la scritta BUS, leggibile da chi arriva
       const lx = st.cx + st.rx * (st.hw - 1.6), lz = st.cz + st.rz * (st.hw - 1.6);
       const y = Y_ROAD + 0.025;
-      const L0 = -16, L1 = 6;
-      for (const [o0, o1, w0, w1] of [[L0, L1, -1.4, -1.25], [L0, L1, 1.25, 1.4], [L0, L0 + 0.15, -1.4, 1.4], [L1 - 0.15, L1, -1.4, 1.4]]) {
-        const p = (o, w) => [lx + st.dx * o + st.rx * w, y, lz + st.dz * o + st.rz * w];
-        marks.quad(p(o0, w0), p(o0, w1), p(o1, w0), p(o1, w1), [0, 0, 1, 0, 0, 1, 1, 1]);
-      }
+      const p = (o, w) => [lx + st.dx * o + st.rx * w, y, lz + st.dz * o + st.rz * w];
+      // o: lungo la strada (0 = palina), w: verso il marciapiede
+      const WL = -1.1, WC = 1.3, LW = 0.07; // bordo lato corsia, bordo lato marciapiede, mezza larghezza linea
+      const line = (o0, w0, o1, w1) => {
+        const l = Math.hypot(o1 - o0, w1 - w0) || 1, no = -(w1 - w0) / l * LW, nw = (o1 - o0) / l * LW;
+        marks.quad(p(o0 - no, w0 - nw), p(o0 + no, w0 + nw), p(o1 - no, w1 - nw), p(o1 + no, w1 + nw), [0, 0, 1, 0, 0, 1, 1, 1]);
+      };
+      const zig = (o0, o1) => { // tre "V" dal bordo corsia al marciapiede
+        const n = 6, step = (o1 - o0) / n;
+        for (let i = 0; i < n; i++) line(o0 + step * i, i % 2 ? WC : WL, o0 + step * (i + 1), i % 2 ? WL : WC);
+      };
+      const Z0 = -16, M0 = -11, M1 = 1, Z1 = 6;
+      zig(Z0, M0);
+      zig(M1, Z1);
+      for (let o = M0 + 0.5; o < M1 - 0.4; o += 1.2) line(o, WL, Math.min(o + 0.6, M1), WL);
+      // scritta BUS: il testo corre attraverso la corsia, le lettere guardano avanti
+      const t0 = -6.2, t1 = -4.6;
+      busText.quad(p(t0, WL + 0.3), p(t0, WC - 0.1), p(t1, WL + 0.3), p(t1, WC - 0.1), [0, 0, 1, 0, 0, 1, 1, 1]);
     }
     const atlasTex = TX.makeTex(atlas, false);
     this.group.add(new THREE.Mesh(mergeGeometries(signs), new THREE.MeshBasicMaterial({ map: atlasTex, side: THREE.DoubleSide })));
@@ -693,6 +827,16 @@ export class City {
     this.group.add(fm, new THREE.Mesh(mergeGeometries(glasses), glass), new THREE.Mesh(mergeGeometries(benches), new THREE.MeshLambertMaterial({ color: 0x8a6a44 })));
     const ym = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2c200 }), 4));
     this.group.add(ym);
+    // texture della scritta BUS gialla (lettere allungate come la segnaletica orizzontale)
+    const bc = document.createElement('canvas');
+    bc.width = 256; bc.height = 128;
+    const bx = bc.getContext('2d');
+    bx.fillStyle = '#f2c200';
+    bx.font = 'bold 120px Arial';
+    bx.textAlign = 'center'; bx.textBaseline = 'middle';
+    bx.fillText('BUS', 128, 68, 240);
+    const bt = new THREE.Mesh(busText.build(), layer(new THREE.MeshLambertMaterial({ map: TX.makeTex(bc, false), transparent: true, alphaTest: 0.4, depthWrite: false }), 4));
+    this.group.add(bt);
   }
 
   // ---- edifici ----

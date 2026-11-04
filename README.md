@@ -79,6 +79,7 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 | **F** | apri / chiudi porte (con porte aperte è attivo il freno di fermata) |
 | **Q / E** | freccia sinistra / destra · **G** quattro frecce |
 | **Spazio** | freno di stazionamento |
+| **S** di nuovo, da fermo | retromarcia: poi **S** arretra e **W** frena; fermandosi con **W** si torna in marcia avanti |
 | **R** | marcia avanti / retromarcia (da fermo) |
 | **L** | fari · **H** clacson · **K** inginocchiamento |
 | **C** | cambia visuale (cabina, esterna, passeggeri, dall'alto) |
@@ -100,7 +101,8 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 ### Punteggio
 
 * ✅ puntualità alla fermata, accostamento preciso, uso corretto delle frecce, comfort dei passeggeri
-* ❌ semaforo rosso, autovelox (30 km/h in centro, 50 fuori), incidenti, marciapiede, fermate saltate,
+* ❌ semaforo rosso, autovelox (30 km/h in centro, 50 fuori), incidenti, ruote sul marciapiede (la carrozzeria che sporge
+  in curva non conta, e a incroci e rotonde la ruota posteriore può tagliare la curva), fermate saltate,
   partenze anticipate, porte aperte fuori fermata, passeggeri lasciati a terra, frenate e curve brusche
 
 ## Cosa c'è dentro
@@ -116,7 +118,9 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 * **Traffico** con modello IDM, semafori sincronizzati, auto che suonano il clacson e sorpassano il bus fermo, pedoni.
 * **Passeggeri** che aspettano, salgono, prenotano la fermata e scendono, con annunci vocali in italiano.
 * **Audio sintetizzato**: motore diesel, turbo, porte pneumatiche con cicalino, freni ad aria, campanello, frecce, pioggia.
-* **Meteo**: sereno, pioggia (asfalto bagnato, frenata più lunga, tergicristalli) e la classica **nebbia padana**.
+* **Meteo**: sereno, pioggia (asfalto bagnato, frenata più lunga, tergicristalli), la classica **nebbia padana** oppure
+  **variabile**: si parte col sereno, il cielo si copre e arriva la pioggia o la nebbia, con transizioni graduali; dopo la
+  pioggia le strade restano bagnate per un po'.
 
 ## Struttura
 

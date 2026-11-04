@@ -90,18 +90,27 @@ export function allStopPlacements(net, snap, clear = () => 9) {
       if (l2 < 0.01) continue;
       const t = Math.max(0, Math.min(1, ((st.x - A.x) * ex + (st.z - A.z) * ez) / l2));
       const cx = A.x + ex * t, cz = A.z + ez * t, d = Math.hypot(st.x - cx, st.z - cz);
-      if (d < bd) { bd = d; best = { cx, cz, l: Math.sqrt(l2), ex, ez, e: net.edgeBetween(v.nodes[i], v.nodes[i + 1]) }; }
+      if (d < bd) { bd = d; best = { cx, cz, l: Math.sqrt(l2), ex, ez, at: t * Math.sqrt(l2), e: net.edgeBetween(v.nodes[i], v.nodes[i + 1]) }; }
     }
     if (!best || !best.e || best.e.elev) continue;
     const dx = best.ex / best.l, dz = best.ez / best.l, hw = best.e.width / 2;
     const rx = -dz, rz = dx; // la palina sta a destra della direzione di marcia
     if (out.some((o) => Math.hypot(o.cx - best.cx, o.cz - best.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) continue;
-    const px = best.cx + rx * (hw + 1.6), pz = best.cz + rz * (hw + 1.6);
-    // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate)
-    if (clear(px, pz) < 0.6 || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < 0.6) continue;
+    // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate, incroci):
+    // se il punto esatto è occupato si sposta la fermata di qualche metro lungo la strada
+    let spot = null;
+    for (const sh of [0, -4, 4, -8, 8, -12, 12, -16]) {
+      if (best.at + sh < 0 || best.at + sh > best.l) continue;
+      const cx = best.cx + dx * sh, cz = best.cz + dz * sh;
+      const px = cx + rx * (hw + 1.6), pz = cz + rz * (hw + 1.6);
+      if (clear(px, pz) < 0.6 || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < 0.6) continue;
+      spot = { cx, cz, px, pz };
+      break;
+    }
+    if (!spot) continue;
     out.push({
-      name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: px, z: pz, cx: best.cx, cz: best.cz, dx, dz, rx, rz, hw,
+      id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
+      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw,
     });
   }
   return out;
