@@ -70,6 +70,44 @@ export const TRAM_LINES = (MAP.tramLines || []).map((l) => {
 // Prato della Valle è una piazza-parco: non è un edificio OSM, lo modelliamo noi
 export const LANDMARKS = { prato: [45.39814, 11.8766] };
 
+// Lo shape GTFS del tram al capolinea va oltre la banchina d'arrivo e torna indietro sul binario di partenza
+// (inversione col cambio cabina). La sede è una sola con due binari: si taglia nel punto più lontano.
+function cutReversal(t) {
+  const n = t.length;
+  let cut = -1;
+  for (let i = Math.max(1, n - 15); i < n - 1; i++) {
+    const a = t[i - 1], b = t[i], e = t[n - 1];
+    const lx = b.x - a.x, lz = b.z - a.z, ll = Math.hypot(lx, lz) || 1;
+    const ox = e.x - b.x, oz = e.z - b.z, ol = Math.hypot(ox, oz) || 1;
+    if (ol > 5 && ol < 250 && (lx * ox + lz * oz) / (ll * ol) < -0.6) cut = i;
+  }
+  return cut > 0 ? t.slice(0, cut + 1) : t;
+}
+
+// Curve raccordate: a ogni vertice un arco di raggio fino a R (limitato dalla lunghezza dei tratti vicini),
+// campionato ogni ~2,5 m. Il tracciato GTFS è una spezzata: così tram, binari e linea aerea girano morbidi.
+function smoothTrack(t, R = 28) {
+  const out = [t[0]];
+  for (let i = 1; i < t.length - 1; i++) {
+    const a = t[i - 1], b = t[i], c = t[i + 1];
+    const l1 = Math.hypot(b.x - a.x, b.z - a.z), l2 = Math.hypot(c.x - b.x, c.z - b.z);
+    if (l1 < 0.5 || l2 < 0.5) continue;
+    const d1x = (b.x - a.x) / l1, d1z = (b.z - a.z) / l1, d2x = (c.x - b.x) / l2, d2z = (c.z - b.z) / l2;
+    const th = Math.acos(Math.max(-1, Math.min(1, d1x * d2x + d1z * d2z)));
+    if (th < 0.03) { out.push(b); continue; }
+    const T = Math.min(R * Math.tan(th / 2), l1 * 0.45, l2 * 0.45);
+    const r = T / Math.tan(th / 2);
+    const p1 = { x: b.x - d1x * T, z: b.z - d1z * T }, p2 = { x: b.x + d2x * T, z: b.z + d2z * T };
+    const n = Math.max(2, Math.ceil((r * th) / 2.5));
+    for (let k = 0; k <= n; k++) {
+      const u = k / n, wa = (1 - u) * (1 - u), wb = 2 * u * (1 - u), wc = u * u;
+      out.push({ x: wa * p1.x + wb * b.x + wc * p2.x, z: wa * p1.z + wb * b.z + wc * p2.z });
+    }
+  }
+  out.push(t[t.length - 1]);
+  return out;
+}
+
 export function buildNetwork() {
   const nodes = {};
   const N = MAP.nodes.length / 2;
@@ -79,8 +117,10 @@ export function buildNetwork() {
   const rails = MAP.rails.map(([bt, yard, f]) => ({ bridge: bt === 1, tunnel: bt === 2, yard: !!yard, pts: flat(f) })).filter((r) => r.pts.length > 1);
   const buildings = MAP.buildings.map(([h, kind, name, f, holes]) => ({ h, kind, name, pts: flat(f), holes: holes ? holes.map(flat) : null }));
   // tram SIR1: tracciato e fermate (sede tranviaria in mezzo a Via Aspetti, Via Reni, ecc.)
-  // binario di coda di 40 m oltre i capolinea: il convoglio sta tutto dietro la banchina
+  // sede del tram: inversione ai capolinea tagliata, curve raccordate, binario tronco di 40 m oltre i capolinea
   const tram = (MAP.tram || []).map(flat).filter((t) => t.length > 1).map((t) => {
+    t = cutReversal(cutReversal(t).reverse()).reverse();
+    t = smoothTrack(t);
     const ext = (p, q) => { const l = Math.hypot(p.x - q.x, p.z - q.z) || 1; return { x: p.x + ((p.x - q.x) / l) * 40, z: p.z + ((p.z - q.z) / l) * 40 }; };
     return [ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])];
   });

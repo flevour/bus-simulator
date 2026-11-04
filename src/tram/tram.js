@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ledTexture } from '../world/textures.js';
+import { TRAM_LINES } from '../data/padova.js';
 
 // Tram su gomma a guida vincolata (Translohr del SIR1): moduli articolati che seguono la rotaia centrale.
 // Misure in metri. Con 3 moduli ~25 m (STE3), con 4 moduli ~33 m (linee future).
@@ -80,6 +81,21 @@ export function tramRoute(net, variant, modules = 3) {
   const back = tramLength(modules) + 20;
   const s0 = Math.max(0, Math.min(center.len, ss[0] - sig * back)), s1 = Math.max(0, Math.min(center.len, ss[ss.length - 1] + sig * 30));
   return { path: lanePath(center, s0, s1), sig, center };
+}
+
+// Fermate del tram lungo la sede, per verso di marcia: dalle fermate reali di tutte le corse (il GTFS ha una banchina
+// per direzione). s lungo la sede, sig = verso di chi la serve. Le stesse posizioni valgono per banchine, missione e tram
+// automatici.
+export function tramStopPlacements(center) {
+  const out = [];
+  for (const L of TRAM_LINES) for (const v of L.variants) {
+    const ss = v.stops.map((st) => center.project(st.x, st.z).s);
+    const sig = ss[ss.length - 1] >= ss[0] ? 1 : -1;
+    v.stops.forEach((st, k) => {
+      if (!out.some((o) => o.sig === sig && Math.abs(o.s - ss[k]) < 20)) out.push({ s: ss[k], sig, name: st.name });
+    });
+  }
+  return out.sort((a, b) => a.s - b.s);
 }
 
 // Tratti senza linea aerea (s lungo la sede): a Prato della Valle il tram va a batteria, col pantografo abbassato.
@@ -164,16 +180,17 @@ function buildModule(kind, len, opts) {
     }
     doors.push({ z: dz, leaves, kind });
   }
-  let eye = null, dash = null, led = null;
+  let eye = null, dash = null, led = null, headMat = null, tailMat = null;
   if (cab) {
     // testata: parabrezza grande e inclinato, fanali bassi, display di linea
     const f = len / 2;
     box(W, 0.75, 0.5, M.blue, 0, 0.8, f - 0.05, inner); // il muso resta sotto il parabrezza
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.12, 1.5), M.glass);
     ws.position.set(0, 1.95, f + 0.06); ws.rotation.x = -0.22; inner.add(ws);
+    headMat = M.head.clone(); tailMat = M.tail.clone();
     for (const sx of [-0.78, 0.78]) {
-      box(0.32, 0.14, 0.05, M.head, sx, 0.72, f + 0.24, inner);
-      box(0.18, 0.1, 0.05, M.tail, sx * 1.12, 0.95, f + 0.24, inner);
+      box(0.32, 0.14, 0.05, headMat, sx, 0.72, f + 0.24, inner);
+      box(0.18, 0.1, 0.05, tailMat, sx * 1.12, 0.95, f + 0.24, inner);
     }
     led = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.3), new THREE.MeshBasicMaterial({ map: ledTexture(opts.line, opts.dest) }));
     led.position.set(0, 2.72, f + 0.02); inner.add(led);
@@ -190,7 +207,7 @@ function buildModule(kind, len, opts) {
     dash.position.set(-0.7, 1.58, f - 1.07); dash.rotation.y = Math.PI; dash.rotation.x = 0.45; inner.add(dash);
     // montanti e tetto della cabina visti da dentro
     for (const sx of [-1, 1]) box(0.12, 1.5, 0.14, M.skirt, sx * (W / 2 - 0.08), 1.95, f - 0.05, inner);
-    box(W - 0.1, 0.05, 1.6, M.cabin, 0, 2.42, f - 0.9, inner);
+    box(W - 0.1, 0.05, 1.6, M.consoleBlue, 0, 2.42, f - 0.9, inner);
     // occhi del guidatore: telaio con +z verso il muso
     eye = new THREE.Object3D();
     inner.add(eye);
@@ -212,7 +229,7 @@ function buildModule(kind, len, opts) {
     if (doorZ.some((dz) => Math.abs(z - dz) < 1.2)) continue;
     for (const sx of [-0.62, 0.62]) box(0.48, 0.45, 0.45, M.seat, sx, 0.82, z, inner);
   }
-  return { group, inner, len, kind, doors, eye, dash, led, panto };
+  return { group, inner, len, kind, doors, eye, dash, led, panto, headMat, tailMat };
 }
 
 // altezza del pantografo: 0 abbassato, 1 contro il filo di contatto
@@ -277,6 +294,10 @@ export class Tram {
     this.doors = this.modules.flatMap((m) => m.doors.map((d) => ({ ...d, module: m })));
     this.doorOpen = this.doors.map(() => 0);
     this.cabinLightMat = tramMaterials().cabin;
+    // fari: un proiettore che segue la cabina attiva
+    this.spot = new THREE.SpotLight(0xfff1d0, 0, 90, 0.5, 0.5, 1.2);
+    this.spot.position.set(0, 1.0, TRAM.cab / 2);
+    this.spot.target.position.set(0, 0, TRAM.cab / 2 + 25);
     this.brakeMat = tramMaterials().tail;
     this._hPrev = null;
     this.syncTransform();
@@ -379,6 +400,7 @@ export class Tram {
       }
       off += m.len + TRAM.gap;
     });
+    if (this.spot && this.spot.parent !== this.activeCab.inner) this.activeCab.inner.add(this.spot, this.spot.target);
     // punto di riferimento (come il centro del bus): 6 m dietro il muso della cabina attiva
     const sr = this.sFront - this.facing * TRAM.ref;
     const r = P.at(sr), ra = P.at(sr + 4), rb = P.at(sr - 4);
@@ -391,9 +413,9 @@ export class Tram {
     const sp = Math.abs(this.v);
     // manipolatore: come i pedali del bus, progressivo; Shift per la tacca piena
     const thrT = input.throttle && !input.brake ? (input.shift ? 1 : 0.6) : 0;
-    const brkT = input.brake ? (input.shift ? 1 : 0.5) : 0;
+    const brkT = input.brake ? (input.shift ? 1 : 0.6) : 0;
     this.throttle += Math.sign(thrT - this.throttle) * Math.min(Math.abs(thrT - this.throttle), dt * (thrT > this.throttle ? 0.9 : 3));
-    this.brake += Math.sign(brkT - this.brake) * Math.min(Math.abs(brkT - this.brake), dt * (brkT > this.brake ? 1.4 : 4));
+    this.brake += Math.sign(brkT - this.brake) * Math.min(Math.abs(brkT - this.brake), dt * (brkT > this.brake ? 2.5 : 4));
     if (this.throttle > 0.1 && this.parking) this.parking = false;
     // porte
     for (let i = 0; i < this.doorOpen.length; i++) {
@@ -412,7 +434,10 @@ export class Tram {
     let F = doorHold || this.derailT > 0 ? 0 : this.throttle * Math.min(48000, Pmax / Math.max(1, sp));
     if (sp * 3.6 > 70) F = 0;
     const res = 0.004 * m * 9.81 + 0.5 * 1.2 * 2.6 * 3.1 * sp * sp;
-    let dec = this.brake * (0.6 + 0.8 * this.brake) * 1.25; // fino a ~1,75 m/s² con Shift
+    // frenata di servizio: ~1,3 m/s² con S, ~2,2 m/s² con Shift+S; col manipolatore in neutro un leggero freno
+    // elettrico (~0,3 m/s²) fa rallentare il tram come quelli veri
+    let dec = this.brake * 2.2;
+    if (this.throttle < 0.05 && this.brake < 0.05) dec = Math.max(dec, 0.3 * Math.min(1, sp / 3));
     if (this.parking || doorHold) dec = Math.max(dec, 2.2);
     if (input.emergency) dec = 2.6;
     const vPrev = this.v;
@@ -470,10 +495,13 @@ export class Tram {
     // accelerazione laterale dei passeggeri: v² per la curvatura media (non il salto della spezzata)
     this.aLat += (this.v * this.v * this.curvature(this.sFront - this.facing * this.length / 2) - this.aLat) * Math.min(1, dt * 4);
     this.blink += dt;
-    // fanali e luci di stop
-    const M = tramMaterials();
-    M.head.emissiveIntensity = this.lights ? 2.2 : 0.15;
-    M.tail.emissiveIntensity = this.brake > 0.05 || doorHold ? 2.2 : this.lights ? 0.8 : 0;
+    // fanali bianchi davanti (cabina attiva), luci rosse dietro (accese anche in frenata e a porte aperte)
+    for (const m of [this.modules[0], this.modules[this.nMod - 1]]) {
+      const front = m === this.activeCab;
+      m.headMat.emissiveIntensity = front ? (this.lights ? 2.4 : 0.2) : 0;
+      m.tailMat.emissiveIntensity = front ? 0 : this.brake > 0.05 || doorHold ? 2.4 : this.lights ? 0.9 : 0.05;
+    }
+    this.spot.intensity = this.lights ? 120 : 0;
     this.animDoors();
     return hit;
   }

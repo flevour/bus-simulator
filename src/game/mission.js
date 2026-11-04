@@ -117,10 +117,11 @@ export class Mission {
     const n = this.rollWaiting(st);
     for (let i = 0; i < n; i++) {
       const along = this.tram ? -3 - this.rnd() * 20 : -1 - this.rnd() * 7;
-      let back = 0.5 + this.rnd() * 1.6;
+      // sul tram si aspetta sulla banchina (larga o stretta); alla fermata del bus sul marciapiede
+      let back = this.tram ? -0.6 + this.rnd() * 1.0 : 0.5 + this.rnd() * 1.6;
       // dove la sede del tram corre accanto alla carreggiata si resta in fila sul bordo, mai sui binari
       const onTram = (b) => this.city && this.city.onTramway && this.city.onTramway(st.x + st.dx * along + st.rx * b, st.z + st.dz * along + st.rz * b, 0.3);
-      while (back > -1.3 && onTram(back)) back -= 0.25;
+      while (!this.tram && back > -1.3 && onTram(back)) back -= 0.25;
       const p = this.crowd.add({
         x: st.x + st.dx * along + st.rx * back,
         z: st.z + st.dz * along + st.rz * back,

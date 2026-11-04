@@ -4,7 +4,8 @@ import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
 import { LINES } from '../data/padova.js';
-import { TrackPath, TRAM, catenaryGaps, CATENARY_HEIGHT } from '../tram/tram.js';
+import { TrackPath, TRAM, catenaryGaps, CATENARY_HEIGHT, tramStopPlacements } from '../tram/tram.js';
+import { TRAM_STOP_AHEAD } from '../game/routes.js';
 
 export const Y_ROAD = 0.14;
 export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie rosse e rotaia centrale)
@@ -644,27 +645,36 @@ export class City {
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
     rm.receiveShadow = true;
     this.group.add(rm, new THREE.Mesh(rail.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)), new THREE.Mesh(kerb.build(), layer(new THREE.MeshLambertMaterial({ color: 0xd8d4cc }), 6)));
-    // banchine delle fermate del tram, lungo la sede
-    const plat = [], roofs = [];
-    for (const st of this.net.tramStops || []) {
-      let best = null, bd = 40;
-      for (const t of tram) for (let i = 0; i < t.length - 1; i++) {
-        const r = distToSeg(st.x, st.z, t[i].x, t[i].z, t[i + 1].x, t[i + 1].z);
-        if (r.d < bd) { bd = r.d; best = { a: t[i], b: t[i + 1], t: r.t }; }
-      }
-      if (!best) continue;
-      const { a, b } = best;
-      const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, dx = (b.x - a.x) / l, dz = (b.z - a.z) / l;
-      const cx = a.x + (b.x - a.x) * best.t, cz = a.z + (b.z - a.z) * best.t;
+    // banchine delle fermate del tram: dalle fermate reali di tutte le corse, a destra del verso di marcia di chi le
+    // serve; a fine banchina la linea bianca di fermata (lì si ferma il muso)
+    const plat = [], roofs = [], stopLines = new GeoBuilder();
+    for (const st of tramStopPlacements(center)) {
+      const p = center.at(st.s), dx = p.dx * st.sig, dz = p.dz * st.sig, rx = -dz, rz = dx;
       const ang = Math.atan2(dx, dz);
-      for (const sd of [-1, 1]) {
-        const ox = -dz * sd * (TRAM_HW + 1.5), oz = dx * sd * (TRAM_HW + 1.5);
-        if (this.clearance(cx + ox, cz + oz, ['road'], 20) < 0.3) continue;
-        plat.push(new THREE.BoxGeometry(2.8, 0.3, 30).rotateY(ang).translate(cx + ox, Y_ROAD + 0.15, cz + oz));
-        roofs.push(new THREE.BoxGeometry(2.4, 0.15, 12).rotateY(ang).translate(cx + ox, 3.1, cz + oz));
-        for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(cx + ox + dx * k - dz * sd * 0.9, 1.6, cz + oz + dz * k + dx * sd * 0.9));
+      // banchina piena se c'è spazio, altrimenti più stretta e attaccata alla sede (dove la sede corre accanto alla strada)
+      const wide = this.clearance(p.x + rx * (TRAM_HW + 1.5), p.z + rz * (TRAM_HW + 1.5), ['road'], 20) >= 0.3;
+      const off = wide ? TRAM_HW + 1.5 : TRAM_HW + 1.1, ox = rx * off, oz = rz * off;
+      plat.push(new THREE.BoxGeometry(wide ? 2.8 : 2.0, 0.3, 30).rotateY(ang).translate(p.x + ox, Y_ROAD + 0.15, p.z + oz));
+      roofs.push(new THREE.BoxGeometry(wide ? 2.4 : 1.8, 0.15, 12).rotateY(ang).translate(p.x + ox, 3.1, p.z + oz));
+      for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(p.x + ox + dx * k - rx * (wide ? 0.9 : 0.6), 1.6, p.z + oz + dz * k - rz * (wide ? 0.9 : 0.6)));
+      // linea di fermata trasversale sulla corsia
+      const q = center.at(st.s + st.sig * TRAM_STOP_AHEAD), qx = q.x + rx * TRAM.lane, qz = q.z + rz * TRAM.lane;
+      const P = (a, w) => [qx + dx * a + rx * w, Y_ROAD + 0.045, qz + dz * a + rz * w];
+      stopLines.quad(P(-0.2, -1.6), P(-0.2, 1.6), P(0.2, -1.6), P(0.2, 1.6), [0, 0, 1, 0, 0, 1, 1, 1]);
+    }
+    if (stopLines.pos.length) this.group.add(new THREE.Mesh(stopLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2f2ea }), 7)));
+    // scambio ai due capolinea (cambio cabina): un deviatoio che collega le due corsie nel binario tronco
+    const xo = new GeoBuilder();
+    for (const [s0, s1] of [[14, 38], [center.len - 14, center.len - 38]]) {
+      const n = 12;
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n, t1 = (i + 1) / n;
+        const pa = center.at(s0 + (s1 - s0) * t0), pb = center.at(s0 + (s1 - s0) * t1);
+        const wa = TRAM.lane * (1 - 2 * t0), wb = TRAM.lane * (1 - 2 * t1);
+        xo.ribbon(pa.x - pa.dz * wa, pa.z + pa.dx * wa, pb.x - pb.dz * wb, pb.z + pb.dx * wb, 0.22, Y_ROAD + 0.05, 8);
       }
     }
+    this.group.add(new THREE.Mesh(xo.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)));
     if (plat.length) this.group.add(new THREE.Mesh(mergeGeometries(plat), new THREE.MeshLambertMaterial({ color: 0xc9c3b8 })));
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
   }

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, mulberry32 } from './spatial.js';
 import { Y_ROAD, zoneOf } from './city.js';
-import { TrackPath, TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
+import { TrackPath, TRAM, tramLength, buildTramConvoy, setPantograph, tramStopPlacements } from '../tram/tram.js';
 
 // ------------------------------------------------------------------
 // Semafori
@@ -76,6 +76,14 @@ export class TrafficLights {
   }
 
   stateOf(sig, phase) {
+    // fase del tram (chiamata da un tram in arrivo): chi aveva il verde passa al giallo per 3 s, poi rosso per tutti
+    if (sig.tramT > 0) {
+      const base = this.cycleState(sig, phase);
+      return sig.tramT < 3 && base !== 'R' ? 'Y' : 'R';
+    }
+    return this.cycleState(sig, phase);
+  }
+  cycleState(sig, phase) {
     let t = (this.time + sig.offset) % sig.total;
     const c = sig.cycle;
     // fasi: [A verde, A giallo, tutto rosso, B verde, B giallo, tutto rosso]
@@ -487,12 +495,9 @@ export class TramSim {
     this.len = this.center.len;
     this.modules = opts.modules || 3;
     this.L = tramLength(this.modules);
-    this.stopS = [];
-    for (const st of net.tramStops || []) {
-      const pr = this.center.project(st.x, st.z);
-      if (pr.d < 40 && !this.stopS.some((x) => Math.abs(x - pr.s) < 20)) this.stopS.push(pr.s);
-    }
-    this.stopS.sort((a, b) => a - b);
+    // fermate per verso di marcia (le stesse banchine disegnate dalla città)
+    const pl = tramStopPlacements(this.center);
+    this.stopsDir = { 1: pl.filter((p) => p.sig > 0).map((p) => p.s), '-1': pl.filter((p) => p.sig < 0).map((p) => p.s) };
     this.catenaryAt = opts.catenaryAt || (() => true);
     this.scene = scene;
     this.reset(opts.starts);
@@ -517,7 +522,8 @@ export class TramSim {
     for (const tr of this.trams) {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
       const stopAt = (x) => x + tr.dir * 12;
-      const next = tr.dir > 0 ? this.stopS.find((x) => stopAt(x) > tr.s + 0.5 && x !== tr.served) : [...this.stopS].reverse().find((x) => stopAt(x) < tr.s - 0.5 && x !== tr.served);
+      const stops = this.stopsDir[tr.dir];
+      const next = tr.dir > 0 ? stops.find((x) => stopAt(x) > tr.s + 0.5 && x !== tr.served) : [...stops].reverse().find((x) => stopAt(x) < tr.s - 0.5 && x !== tr.served);
       let vt = 8.5;
       if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
       else if (next != null) {
@@ -573,6 +579,14 @@ export class TramSim {
       });
     }
   }
+  // di notte fanali accesi in testa e luci rosse in coda
+  setNight(f) {
+    for (const tr of this.trams) {
+      const head = tr.mods[0], tail = tr.mods[tr.mods.length - 1];
+      if (head.headMat) { head.headMat.emissiveIntensity = f > 0.3 ? 2 : 0.2; head.tailMat.emissiveIntensity = 0; }
+      if (tail.tailMat) { tail.tailMat.emissiveIntensity = f > 0.3 ? 0.9 : 0.05; tail.headMat.emissiveIntensity = 0; }
+    }
+  }
   near(x, z, r) {
     const out = [];
     for (const tr of this.trams) for (const p of tr.parts) if (Math.abs(p.x - x) < r + 6 && Math.abs(p.z - z) < r + 6) out.push(p);
@@ -585,7 +599,7 @@ export class TramSim {
 // barra orizzontale (via impedita) a barra verticale (via libera) dopo qualche secondo, a incrocio sgombro; quando il
 // tram è passato mostra il triangolo (attenzione) e torna alla barra orizzontale.
 export class TramSignals {
-  constructor(scene, city) {
+  constructor(scene, city, lights) {
     this.list = [];
     this.byEdge = new Map();
     this.violations = [];
@@ -618,6 +632,14 @@ export class TramSignals {
         if (!this.byEdge.has(e)) this.byEdge.set(e, []);
         this.byEdge.get(e).push(x);
       }
+    }
+    // incroci vicini a un semaforo stradale: la chiamata del tram mette l'incrocio in fase tram
+    this.sigs = new Set();
+    for (const x of this.list) {
+      let best = null, bd = 35;
+      for (const sg of (lights && lights.signals) || []) { const d = Math.hypot(sg.node.x - x.px, sg.node.z - x.pz); if (d < bd) { bd = d; best = sg; } }
+      x.sig = best;
+      if (best) this.sigs.add(best);
     }
     this.buildHeads(scene, C);
   }
@@ -666,6 +688,7 @@ export class TramSignals {
   // occ: tram presenti [{ front (s lungo la sede), dir, len, v, dwell, player }]; cars: auto vicine per sapere se l'incrocio è sgombro
   update(dt, occ, traffic) {
     this.violations.length = 0;
+    for (const sg of this.sigs) sg._call = false;
     for (const x of this.list) {
       let need = false;
       for (const o of occ) {
@@ -682,8 +705,11 @@ export class TramSignals {
       }
       if (need) {
         x.req += dt;
+        if (x.sig) x.sig._call = true;
         const busy = traffic && traffic.near(x.px, x.pz, 4.5).some((c) => !c.isTram && c.v > 0.2);
-        if (x.state !== 'V' && x.req > 2.5 && !busy) x.state = 'V';
+        // con un semaforo stradale: via libera solo dopo giallo e rosso per le auto
+        const ready = x.sig ? x.sig.tramT > 4.5 : x.req > 2.5;
+        if (x.state !== 'V' && ready && !busy) x.state = 'V';
         if (x.state === 'T') x.state = 'H';
         x.after = 0;
       } else {
@@ -692,6 +718,7 @@ export class TramSignals {
         x.req = 0;
       }
     }
+    for (const sg of this.sigs) sg.tramT = sg._call ? (sg.tramT || 0) + dt : 0;
     this.drawHeads(false);
   }
   // le auto si fermano prima della sede se l'incrocio è chiamato da un tram

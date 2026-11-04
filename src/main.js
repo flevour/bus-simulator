@@ -89,7 +89,7 @@ function buildWorld() {
   city.buildSigns();
   trams = new TramSim(scene, net, { catenaryAt: (x, z) => city.catenaryAt(x, z) });
   // incroci con la sede: precedenza al tram e semafori a barre
-  tramSignals = new TramSignals(scene, city);
+  tramSignals = new TramSignals(scene, city, lights);
   trams.signals = tramSignals;
 }
 
@@ -790,6 +790,7 @@ function setupWeatherAndTime() {
   renderer.toneMappingExposure = 1.0 + night * 0.25;
   city.setNight(night, wx.wet);
   traffic && traffic.setNight(night);
+  trams && trams.setNight(night);
   if (bus) bus.cabinLightMat.emissiveIntensity = 0.2 + night * 0.8;
 }
 
@@ -955,7 +956,7 @@ function step(dt) {
   walkers.update(dt, bus);
   // limite di velocità reale (OSM maxspeed) dove indicato, altrimenti 30 in centro e 50 fuori
   // tram: 30 in centro storico, 50 altrove (la sede non ha i limiti delle strade)
-  if (bus.isTram && frame % 15 === 0) bus._curveLim = bus.curveLimit();
+  if (bus.isTram && ((bus._curveT = (bus._curveT || 0) - dt) <= 0 || bus._curveLim == null)) { bus._curveLim = bus.curveLimit(); bus._curveT = 0.25; }
   const speedLimit = bus.isTram ? Math.min(zoneOf(bus.x, bus.z) === 0 ? 30 : 50, bus._curveLim || 70) : mid.edge && mid.edge.speed ? Math.min(90, mid.edge.speed) : zoneOf(bus.x, bus.z) === 0 ? 30 : 50;
   // fari obbligatori di notte e con scarsa visibilità (pioggia forte, nebbia)
   const ctx = { speedLimit, onSidewalk, night: (mission._night || 0) > 0.5 || wx.fog > 0.6 || wx.rain > 0.6 };
