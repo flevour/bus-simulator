@@ -159,11 +159,21 @@ export class TramTrack {
   doubleAt(dir, s) { const P = this.path(dir), w = this.dbl[dir > 0 ? 1 : -1]; return w[Math.min(w.length - 1, P.seg(s))]; }
   wireAt(dir, s) { return !this.gaps[dir > 0 ? 1 : -1].some(([a, b]) => s > a && s < b); }
   gapAhead(dir, s, dist) { return this.gaps[dir > 0 ? 1 : -1].some(([a]) => a - s > 0 && a - s < dist); }
-  // quota del binario (cavalcavia): campionata ogni 5 m, levigata
+  // quota del binario (cavalcavia): campionata ogni 5 m, levigata. Dove i binari sono affiancati stanno sullo stesso
+  // impalcato: vale la quota più alta delle due corsie (sul Cavalcavia Borgomagno il binario verso nord è più lontano
+  // dalla strada e da solo resterebbe a terra)
   setHeights(fn) {
     for (const d of [1, -1]) {
       const P = this.paths[d], raw = [];
-      for (let s = 0; s <= P.len; s += 5) { const p = P.at(s); raw.push(fn(p.x, p.z, p.dx, p.dz)); }
+      for (let s = 0; s <= P.len; s += 5) {
+        const p = P.at(s);
+        let h = fn(p.x, p.z, p.dx, p.dz);
+        if (this.doubleAt(d, s) > 0.5) {
+          const c = this.C.at(this.C.project(p.x, p.z).s);
+          h = Math.max(h, fn(2 * c.x - p.x, 2 * c.z - p.z, p.dx, p.dz));
+        }
+        raw.push(h);
+      }
       const sm = raw.map((_, i) => { let a = 0, n = 0; for (let k = -5; k <= 5; k++) { const v = raw[i + k]; if (v != null) { a += v; n++; } } return a / n; });
       this.h[d] = sm.map((v) => (v < 0.25 ? 0 : v));
     }
