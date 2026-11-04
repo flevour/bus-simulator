@@ -6,7 +6,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 ## Prossimi passi
 
 1. [~] **Tram SIR1 guidabile**: fatto (vedi "Fatto"). Restano:
-   - la sede allineata ai binari OSM: oggi segue lo shape GTFS e in qualche via un palazzo la invade;
+   - la sede allineata ai binari OSM (`railway=tram`, da scaricare: l'export non li contiene): oggi segue lo shape
+     GTFS, levigato e spostato di lato dove i binari entrerebbero nelle facciate (Corso Vittorio Emanuele, Riviere);
+     resta da sistemare il binario tronco oltre il capolinea della Guizza, che entra in un edificio;
    - i semafori del tram coordinati con quelli stradali agli incroci semaforizzati;
    - interni più curati;
    - pedoni che attraversano la sede e si fermano;
