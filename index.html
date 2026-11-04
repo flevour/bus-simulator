@@ -21,41 +21,48 @@
       </header>
       <div class="menu-grid">
         <section>
-          <h3>1 · Scegli la linea</h3>
+          <h3>1 · Mezzo</h3>
+          <div class="seg" id="vehicle">
+            <button data-k="bus" class="sel">🚌 Autobus</button>
+            <button data-k="tram">🚋 Tram</button>
+          </div>
+          <div id="livery-box">
+            <div class="note">Livrea dell'autobus</div>
+            <div class="seg" id="livery">
+              <button data-l="moderna" class="sel">⚡ Moderno elettrico</button>
+              <button data-l="storica">🟠 Storico arancione</button>
+            </div>
+          </div>
+          <h3>2 · Scegli la linea</h3>
           <div id="line-list"></div>
         </section>
         <section>
-          <h3>2 · Servizio</h3>
+          <h3>3 · Servizio</h3>
           <div class="seg" id="variant">
             <button data-v="feriale" class="sel">Feriale</button>
             <button data-v="festivo">Festivo</button>
           </div>
           <div class="note" id="variant-note"></div>
-          <h3>3 · Direzione e percorso</h3>
+          <h3>4 · Direzione e percorso</h3>
           <div class="seg col" id="direction">
             <button data-d="1" class="sel">Andata</button>
             <button data-d="-1">Ritorno</button>
           </div>
           <select id="route-variant" aria-label="Percorso"></select>
           <div class="note" id="dir-note"></div>
-          <h3>4 · Corsa</h3>
+          <h3>5 · Corsa</h3>
           <select id="departure"></select>
-          <h3>5 · Modalità</h3>
+          <h3>6 · Modalità</h3>
           <div class="seg" id="mode">
             <button data-m="service" class="sel">🚏 Servizio di linea</button>
             <button data-m="free">🗺️ Giro libero</button>
           </div>
-          <h3>6 · Autobus</h3>
-          <div class="seg" id="livery">
-            <button data-l="moderna" class="sel">⚡ Moderno elettrico</button>
-            <button data-l="storica">🟠 Storico arancione</button>
-          </div>
           <h3>7 · Meteo</h3>
           <div class="seg" id="weather">
-            <button data-w="clear" class="sel">☀️ Sereno</button>
+            <button data-w="variable" class="sel">🌦️ Variabile</button>
+            <button data-w="clear">☀️ Sereno</button>
             <button data-w="rain">🌧️ Pioggia</button>
             <button data-w="fog">🌫️ Nebbia</button>
-            <button data-w="variable">🌦️ Variabile</button>
           </div>
           <button id="start" class="primary">▶ Inizia il servizio</button>
           <div id="resume-box" hidden>
@@ -135,7 +142,7 @@
         <li><b>Spazio</b> freno a mano · <b>retromarcia</b>: da fermo ripremi <b>S</b> (poi S arretra e W frena; fermo con W torni in avanti), oppure <b>R</b> · <b>L</b> fari · <b>H</b> clacson · <b>K</b> inginocchiamento · <b>G</b> quattro frecce</li>
         <li><b>C</b> visuale (cabina, esterna, passeggeri, dall'alto) · <b>Z/X</b> guarda a sinistra/destra (oppure trascina col mouse; <b>V</b> o doppio clic per tornare avanti) · <b>M</b> mappa grande · <b>T</b> salta l'attesa in fermata · <b>J</b> teletrasporto · <b>P</b> pausa</li>
         <li>Quando sei in anticipo e tutti sono saliti, l'attesa in fermata scorre accelerata.</li>
-        <li><b>Tram SIR1</b>: W/S manipolatore, F porte, <b>H</b> campanello, <b>O</b> pantografo (abbassalo prima di Prato della Valle e rialzalo subito dopo), <b>B</b> cambio cabina al capolinea. Fermati col muso a fine banchina.</li>
+        <li><b>Tram SIR1</b>: W/S manipolatore, F porte, <b>H</b> campanello, <b>O</b> pantografo (abbassalo prima di Prato della Valle e rialzalo subito dopo), <b>B</b> cambio cabina al capolinea. Fermati col muso a fine banchina. Segnali del tram: barra orizzontale = fermo, verticale = via libera, triangolo = attenzione. Le curve troppo veloci fanno deragliare!</li>
       </ul>
       <div class="sub">Premi I per chiudere</div>
     </div>

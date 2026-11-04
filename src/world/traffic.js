@@ -290,6 +290,8 @@ export class Traffic {
       }
       // semaforo a fine arco
       const g = this.laneGeom(c);
+      // incrocio con la sede del tram chiamato da un tram: ci si ferma prima
+      if (!c.turn && ctx.tramSignals) gap = Math.min(gap, ctx.tramSignals.carGap(c, g));
       if (!c.turn) {
         const to = g.to;
         if (to.signal) {
@@ -523,6 +525,11 @@ export class TramSim {
         vt = Math.min(vt, Math.sqrt(2 * 0.9 * d) + 0.3);
         if (d < 0.8) { tr.wait = 18; tr.served = next; }
       }
+      // segnale del tram a via impedita: si rallenta per fermarsi alla linea
+      if (this.signals) {
+        const d = this.signals.stopAhead(tr.s, tr.dir);
+        if (d < 60) vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d - 0.5)));
+      }
       // chi è sulla stessa corsia davanti (bus, tram del giocatore, altri tram): ci si ferma a distanza
       const head = this.lanePoint(tr.s, tr.dir);
       const obst = [];
@@ -570,5 +577,145 @@ export class TramSim {
     const out = [];
     for (const tr of this.trams) for (const p of tr.parts) if (Math.abs(p.x - x) < r + 6 && Math.abs(p.z - z) < r + 6) out.push(p);
     return out;
+  }
+}
+
+// Incroci tra la sede del tram e le strade: priorità al tram.
+// Quando un tram si avvicina (o è sull'incrocio) le auto si fermano prima della sede; il segnale del tram passa da
+// barra orizzontale (via impedita) a barra verticale (via libera) dopo qualche secondo, a incrocio sgombro; quando il
+// tram è passato mostra il triangolo (attenzione) e torna alla barra orizzontale.
+export class TramSignals {
+  constructor(scene, city) {
+    this.list = [];
+    this.byEdge = new Map();
+    this.violations = [];
+    const C = city.tramCenter;
+    if (!C) return;
+    const q = [];
+    for (let i = 0; i < C.pts.length - 1; i++) {
+      const a = C.pts[i], b = C.pts[i + 1];
+      const tl = C.cum[i + 1] - C.cum[i];
+      if (tl < 0.1) continue;
+      const tdx = (b.x - a.x) / tl, tdz = (b.z - a.z) / tl;
+      for (const it of city.segGrid.query((a.x + b.x) / 2, (a.z + b.z) / 2, tl / 2 + 20, q)) {
+        if (it.kind !== 'road' || !it.ref || it.ref.ped || it.ref.elev || it.ref.tunnel) continue;
+        const e = it.ref;
+        const ex = it.bx - it.ax, ez = it.bz - it.az, el = Math.hypot(ex, ez) || 1;
+        const den = (b.x - a.x) * ez - (b.z - a.z) * ex;
+        if (Math.abs(den) < 1e-6) continue;
+        const t = ((it.ax - a.x) * ez - (it.az - a.z) * ex) / den, u = ((it.ax - a.x) * (b.z - a.z) - (it.az - a.z) * (b.x - a.x)) / den;
+        if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+        const sinA = Math.abs(tdx * (ez / el) - tdz * (ex / el));
+        if (sinA < 0.3) continue; // strade che corrono accanto alla sede, non la attraversano
+        const sT = C.cum[i] + t * tl, tE = u * el;
+        if (this.list.some((x) => Math.abs(x.sT - sT) < 6)) continue;
+        const x = {
+          e, tE, sT, px: a.x + (b.x - a.x) * t, pz: a.z + (b.z - a.z) * t,
+          halfE: Math.min(14, (3.4 + 0.6) / sinA), halfT: Math.min(14, (e.width / 2 + 1) / sinA),
+          req: 0, state: 'H', after: 0, prev: new Map(),
+        };
+        this.list.push(x);
+        if (!this.byEdge.has(e)) this.byEdge.set(e, []);
+        this.byEdge.get(e).push(x);
+      }
+    }
+    this.buildHeads(scene, C);
+  }
+  // un segnale per senso di marcia, a destra della corsia, prima dell'incrocio
+  buildHeads(scene, C) {
+    const n = this.list.length * 2;
+    if (!n) return;
+    const statics = [];
+    const mk = (geo) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), n); m.count = n; m.frustumCulled = false; scene.add(m); return m; };
+    this.hBar = mk(new THREE.PlaneGeometry(0.3, 0.07));
+    this.vBar = mk(new THREE.PlaneGeometry(0.07, 0.3));
+    const tri = new THREE.Shape();
+    tri.moveTo(-0.13, -0.1); tri.lineTo(0.13, -0.1); tri.lineTo(0, 0.12); tri.closePath();
+    this.tri = mk(new THREE.ShapeGeometry(tri));
+    this.heads = [];
+    for (const x of this.list) for (const dir of [1, -1]) {
+      const s = x.sT - dir * (x.halfT + 3);
+      const p = C.at(s), rx = -p.dz * dir, rz = p.dx * dir;
+      const px = p.x + rx * 3.75, pz = p.z + rz * 3.75, ang = Math.atan2(-p.dx * dir, -p.dz * dir);
+      statics.push(new THREE.CylinderGeometry(0.05, 0.06, 3.0, 6).translate(px, Y_ROAD + 1.5, pz));
+      statics.push(new THREE.BoxGeometry(0.5, 0.62, 0.16).rotateY(ang).translate(px, Y_ROAD + 3.1, pz));
+      const fx = Math.sin(ang), fz = Math.cos(ang);
+      this.heads.push({ x, dir, pos: new THREE.Vector3(px + fx * 0.085, Y_ROAD + 3.1, pz + fz * 0.085), ang, shown: null });
+    }
+    const box = new THREE.Mesh(mergeGeometries(statics), new THREE.MeshLambertMaterial({ color: 0x1b1d1f }));
+    scene.add(box);
+    this.box = box;
+    this.M = new THREE.Matrix4(); this.Q = new THREE.Quaternion(); this.Z = new THREE.Vector3(0, 0, 0); this.O = new THREE.Vector3(1, 1, 1);
+    this.drawHeads(true);
+  }
+  drawHeads(force) {
+    if (!this.heads) return;
+    let dirty = false;
+    this.heads.forEach((hd, i) => {
+      const st = hd.x.state;
+      if (!force && hd.shown === st) return;
+      hd.shown = st; dirty = true;
+      this.Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), hd.ang);
+      for (const [mesh, on] of [[this.hBar, st === 'H'], [this.vBar, st === 'V'], [this.tri, st === 'T']]) {
+        this.M.compose(hd.pos, this.Q, on ? this.O : this.Z);
+        mesh.setMatrixAt(i, this.M);
+      }
+    });
+    if (dirty) for (const m of [this.hBar, this.vBar, this.tri]) m.instanceMatrix.needsUpdate = true;
+  }
+  // occ: tram presenti [{ front (s lungo la sede), dir, len, v, dwell, player }]; cars: auto vicine per sapere se l'incrocio è sgombro
+  update(dt, occ, traffic) {
+    this.violations.length = 0;
+    for (const x of this.list) {
+      let need = false;
+      for (const o of occ) {
+        const d = (x.sT - o.front) * o.dir; // distanza del muso dall'incrocio (positiva se davanti)
+        const on = d > -(o.len + x.halfT) && d <= x.halfT;
+        const coming = d > x.halfT && d < 25 + o.v * 6 && !o.dwell;
+        if (on || coming) need = true;
+        // il tram del giocatore entra nell'incrocio con la barra orizzontale?
+        if (o.player) {
+          const pd = x.prev.get(o) ?? d;
+          if (pd > x.halfT + 0.3 && d <= x.halfT + 0.3 && x.state === 'H' && o.v > 0.5) this.violations.push(x);
+          x.prev.set(o, d);
+        }
+      }
+      if (need) {
+        x.req += dt;
+        const busy = traffic && traffic.near(x.px, x.pz, 4.5).some((c) => !c.isTram && c.v > 0.2);
+        if (x.state !== 'V' && x.req > 2.5 && !busy) x.state = 'V';
+        if (x.state === 'T') x.state = 'H';
+        x.after = 0;
+      } else {
+        if (x.state === 'V') { x.state = 'T'; x.after = 0; }
+        if (x.state === 'T' && (x.after += dt) > 2) x.state = 'H';
+        x.req = 0;
+      }
+    }
+    this.drawHeads(false);
+  }
+  // le auto si fermano prima della sede se l'incrocio è chiamato da un tram
+  carGap(c, g) {
+    const xs = this.byEdge.get(c.edge);
+    if (!xs) return Infinity;
+    let gap = Infinity;
+    for (const x of xs) {
+      if (x.req <= 0) continue;
+      const pos = c.fwd ? x.tE : c.edge.len - x.tE;
+      const stop = Math.min(pos - x.halfE - 2.5, g.s1 - 0.3);
+      const dist = stop - c.s;
+      if (dist > -0.5 && dist < 80) gap = Math.min(gap, Math.max(0, dist));
+    }
+    return gap;
+  }
+  // per i tram automatici: distanza dalla prossima linea d'arresto a via impedita
+  stopAhead(s, dir) {
+    let best = Infinity;
+    for (const x of this.list) {
+      if (x.state === 'V') continue;
+      const d = (x.sT - dir * (x.halfT + 1.5) - s) * dir;
+      if (d > -0.5 && d < best) best = d;
+    }
+    return best;
   }
 }

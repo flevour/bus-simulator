@@ -1,7 +1,7 @@
 # 🚌 Padova Bus Simulator
 
 Simulatore di autobus urbano **in prima persona** ambientato a **Padova**, realizzato con [Three.js](https://threejs.org/).
-Scegli una linea, il servizio **feriale** o **festivo**, la direzione e la corsa dell'orario, poi porta i passeggeri a destinazione rispettando fermate, semafori, limiti di velocità e tabella di marcia.
+Scegli il mezzo (**autobus** o **tram**), una linea, il servizio **feriale** o **festivo**, la direzione e la corsa dell'orario, poi porta i passeggeri a destinazione rispettando fermate, semafori, limiti di velocità e tabella di marcia.
 
 **Gioca online:** https://flevour.github.io/bus-simulator/
 
@@ -108,7 +108,14 @@ future potranno averne 4.
 * Ci si ferma con il muso a fine banchina; nelle curve strette il limite scende (fino a 15 km/h).
 * A **Prato della Valle** non c'è la linea aerea: il pantografo va abbassato prima, in entrambi i sensi, e rialzato
   subito dopo. Nel tratto il tram va a batteria. Pantografo alzato senza filo: −150 punti.
-* Il tram non ha la retromarcia; le auto che tagliano la sede di traverso fanno frenare il tram senza colpa.
+* **Precedenza al tram**: quando un tram si avvicina a un incrocio con la sede, le auto si fermano prima della linea.
+* **Semafori del tram** (segnali a barre bianche):
+  * **barra orizzontale**: via impedita;
+  * **barra verticale**: via libera, a incrocio sgombro dopo la chiamata;
+  * **triangolo**: attenzione.
+  * Passare con la barra orizzontale costa punti.
+* **Curve troppo veloci fanno deragliare il tram**: arrivano i soccorsi (−300 punti) e dopo qualche secondo si riparte.
+* Il tram non ha la retromarcia; un'auto che taglia la sede di traverso fa frenare il tram senza colpa.
 
 ## Come si gioca
 
@@ -143,7 +150,7 @@ future potranno averne 4.
   I cartelli seguono regole sul tipo di strada: l'export OSM non contiene i nodi con i cartelli reali.
 * **Passeggeri** che aspettano, salgono, prenotano la fermata e scendono, con annunci vocali in italiano.
 * **Audio sintetizzato**: motore diesel, turbo, porte pneumatiche con cicalino, freni ad aria, campanello, frecce, pioggia.
-* **Meteo**: sereno, pioggia (asfalto bagnato, frenata più lunga, tergicristalli), la classica **nebbia padana** oppure
+* **Meteo** (predefinito: variabile): sereno, pioggia (asfalto bagnato, frenata più lunga, tergicristalli), la classica **nebbia padana** oppure
   **variabile**: si parte col sereno, il cielo si copre e arriva la pioggia o la nebbia, con transizioni graduali; dopo la
   pioggia le strade restano bagnate per un po'.
 

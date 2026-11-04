@@ -5,11 +5,11 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Prossimi passi
 
-1. [~] **Tram SIR1 guidabile**: prima versione fatta (vedi "Fatto"). Restano:
-   - il traffico che dà la precedenza al tram agli incroci;
-   - i semafori del tram;
+1. [~] **Tram SIR1 guidabile**: fatto (vedi "Fatto"). Restano:
    - la sede allineata ai binari OSM: oggi segue lo shape GTFS e in qualche via un palazzo la invade;
+   - i semafori del tram coordinati con quelli stradali agli incroci semaforizzati;
    - interni più curati;
+   - pedoni che attraversano la sede e si fermano;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
 2. [ ] **Nuovo piazzale della stazione** con gli anelli (ovali concentrici) del tram, per le linee future
    **SIR2, SIR3, SIR4, SIR5**. La geometria del tram dovrà gestire più linee, gli anelli e i deviatoi, non una sola
@@ -57,7 +57,6 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [ ] Pedoni che attraversano sulle strisce con obbligo di precedenza (e punti).
 - [ ] Penalità per non dare precedenza a chi arriva (rotonde, dare precedenza).
 - [ ] Corsie preferenziali vere: bonus per il bus, auto che non le usano.
-- [ ] Semafori del tram (barre bianche) e priorità semaforica.
 - [ ] Traffico più lento con pioggia e nebbia.
 
 ## Passeggeri e servizio
@@ -95,6 +94,10 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
   - manipolatore, campanello, cambio cabina, limiti in curva;
   - linea aerea con pantografo, da abbassare a Prato della Valle (a batteria) e rialzare subito dopo;
   - tram automatici con la stessa livrea.
+- [x] Precedenza al tram agli incroci (48 incroci con la sede), semafori del tram a barre con chiamata, deragliamento
+  in curva troppo veloce.
+- [x] Menu: prima la scelta del mezzo (autobus o tram), poi le linee; livrea solo per l'autobus. Meteo variabile
+  predefinito.
 - [x] Area di gioco allargata a sud fino al capolinea della Guizza (strade OSM già nell'export, edifici Overture).
 
 - [x] Linee urbane reali dal GTFS Busitalia (varianti, fermate, orari feriali e festivi); strade OSM; edifici Overture.

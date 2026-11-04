@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { buildNetwork, LINES, TRAM_LINES, fmtHM } from './data/padova.js';
 import { Tram, tramRoute, lanePath, TRAM } from './tram/tram.js';
 import { City, zoneOf } from './world/city.js';
-import { TrafficLights, Traffic, Walkers, TramSim } from './world/traffic.js';
+import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
 import { Bus } from './bus/bus.js';
 import { Mission, scheduleFor } from './game/mission.js';
 import { pointAt, projectOnRoute } from './game/routes.js';
@@ -78,7 +78,7 @@ scene.add(rain);
 // ------------------------------------------------------------------
 // Mondo
 // ------------------------------------------------------------------
-let net, city, lights, trams;
+let net, city, lights, trams, tramSignals;
 const hud = new HUD();
 const audio = new Audio();
 
@@ -88,6 +88,9 @@ function buildWorld() {
   lights = new TrafficLights(scene, net);
   city.buildSigns();
   trams = new TramSim(scene, net, { catenaryAt: (x, z) => city.catenaryAt(x, z) });
+  // incroci con la sede: precedenza al tram e semafori a barre
+  tramSignals = new TramSignals(scene, city);
+  trams.signals = tramSignals;
 }
 
 // ------------------------------------------------------------------
@@ -179,7 +182,7 @@ canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
 // linee bus e tram nel menu
 const ALL_LINES = [...LINES, ...TRAM_LINES];
-const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'clear', mode: 'service', livery: 'moderna' };
+const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus' };
 let indAccum = 0, lastBlinkOn = false, wasMoving = false;
 let showHelp = false;
 
@@ -425,7 +428,8 @@ function resumeSaved() {
   if (!d) return;
   const L = ALL_LINES.find((l) => l.id === d.settings.line);
   if (!L) { clearSave(); return; }
-  Object.assign(settings, d.settings, { line: L });
+  Object.assign(settings, d.settings, { line: L, vehicle: L.tram ? 'tram' : 'bus' });
+  renderLines();
   // il menu mostra le scelte della corsa ripresa
   for (const [id, attr, val] of [['livery', 'l', settings.livery || 'moderna'], ['weather', 'w', settings.weather], ['mode', 'm', settings.mode]])
     document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle('sel', b.dataset[attr] === val));
@@ -517,10 +521,28 @@ function refreshStops() {
   $('stop-list').innerHTML = v.stops.map((s, i) => `<li class="${i === 0 || i === v.stops.length - 1 ? 'term' : ''}"><span>${s.name}</span><span class="t">${fmtHM(times[i])}</span></li>`).join('');
 }
 
-function buildMenu() {
-  $('line-list').innerHTML = ALL_LINES.map((L) => `<div class="line-card${L.tram ? ' tram' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.tram ? 'Tram · ' : ''}${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive</div></div></div>`).join('');
+// elenco delle linee del mezzo scelto (autobus o tram)
+function renderLines() {
+  const tram = settings.vehicle === 'tram';
+  $('line-list').innerHTML = ALL_LINES.filter((L) => !!L.tram === tram).map((L) => `<div class="line-card${L.tram ? ' tram' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive</div></div></div>`).join('');
   const pick = (el) => { settings.line = ALL_LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0]; refreshMenu(); };
   document.querySelectorAll('.line-card').forEach((el) => { el.addEventListener('click', () => pick(el)); el.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(el); }); });
+  // la livrea riguarda solo l'autobus
+  $('livery-box').hidden = tram;
+  document.querySelectorAll('#vehicle button').forEach((b) => b.classList.toggle('sel', b.dataset.k === settings.vehicle));
+}
+function setVehicle(k) {
+  settings.vehicle = k;
+  if (!!settings.line.tram !== (k === 'tram')) {
+    settings.line = k === 'tram' && TRAM_LINES[0] ? TRAM_LINES[0] : L24;
+    settings.vIdx = settings.line.pair[0];
+  }
+  renderLines();
+  refreshMenu();
+}
+
+function buildMenu() {
+  renderLines();
   const seg = (id, attr, fn) => document.querySelectorAll(`#${id} button`).forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll(`#${id} button`).forEach((x) => x.classList.remove('sel'));
     b.classList.add('sel');
@@ -532,6 +554,7 @@ function buildMenu() {
   seg('weather', 'w', (w) => { settings.weather = w; });
   seg('mode', 'm', (m) => { settings.mode = m; });
   seg('livery', 'l', (l) => { settings.livery = l; });
+  seg('vehicle', 'k', (k) => setVehicle(k));
   $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
   $('start').addEventListener('click', () => startMission());
   $('resume').addEventListener('click', () => togglePause(false));
@@ -589,6 +612,7 @@ function startMission(resume = null) {
     const C = trams.center;
     V.trackPath = settings.mode === 'free' ? lanePath(C, tr.sig > 0 ? 0 : C.len, tr.sig > 0 ? C.len : 0) : tr.path;
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: V.trackPath });
+    bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
     // dei tram automatici resta quello che viene in senso opposto, dall'altra parte della linea
     trams.reset([[tr.sig > 0 ? C.len * 0.85 : C.len * 0.15, -tr.sig]]);
   } else {
@@ -855,6 +879,19 @@ const world = {
 let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, tramLaneT = 0, kerbT = 0;
 let lastT = performance.now();
 
+// posizione dei tram lungo la sede (per gli incroci): automatici e, se c'è, quello del giocatore
+const playerOcc = { player: true, front: 0, dir: 1, len: 0, v: 0, dwell: false };
+function tramOccupancy() {
+  const occ = trams.trams.map((tr) => ({ front: tr.s, dir: tr.dir, len: trams.L, v: tr.v, dwell: tr.wait > 0 }));
+  if (bus && bus.isTram) {
+    const C = trams.center, f = bus.path.at(bus.sFront), r = bus.path.at(bus.sFront - bus.facing * bus.length);
+    const fs = C.project(f.x, f.z).s, rs = C.project(r.x, r.z).s;
+    Object.assign(playerOcc, { front: fs, dir: fs >= rs ? 1 : -1, len: Math.abs(fs - rs), v: bus.v, dwell: bus.doorsAnyOpen });
+    occ.push(playerOcc);
+  }
+  return occ;
+}
+
 function step(dt) {
   readInput();
   const wxChanging = updateWeather(dt);
@@ -903,6 +940,9 @@ function step(dt) {
   }
   lights.update(dt);
   trams.update(dt, bus);
+  // incroci col tram: chiamata dei tram in arrivo, segnali a barre, precedenza delle auto
+  tramSignals.update(dt, tramOccupancy(), traffic);
+  if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
   city.streamTiles(bus.x, bus.z, 5);
   // corsia riservata del tram
   const fr = bus.toWorld(0, 4);
@@ -910,7 +950,7 @@ function step(dt) {
     tramLaneT += dt;
     if (tramLaneT > 2.5 && mission.cooldown('tram', 12)) mission.addScore(mission.free ? 0 : -25, '🚋 Corsia riservata al tram!', 'bad');
   } else tramLaneT = 0;
-  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen });
+  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals });
   for (const c of traffic.honks) audio.carHorn(Math.hypot(c.x - bus.x, c.z - bus.z));
   walkers.update(dt, bus);
   // limite di velocità reale (OSM maxspeed) dove indicato, altrimenti 30 in centro e 50 fuori
@@ -1026,7 +1066,7 @@ setTimeout(() => {
   $('loading').style.display = 'none';
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
-  window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
+  window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; },
     sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();

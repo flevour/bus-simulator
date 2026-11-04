@@ -239,6 +239,7 @@ export class Tram {
     this.scene = scene;
     // stato: posizione del muso A lungo il percorso, verso di marcia (+1 = s crescente)
     this.aFwd = 1; this.facing = 1;
+    this.derailT = 0; this.derailAmt = 0; this.derailSide = 1;
     this.sA = 0;
     this.v = 0; this.dir = 1; this.gear = 1; this.rpm = 0; this.powerKw = 0;
     this.throttle = 0; this.brake = 0; this.parking = true;
@@ -309,10 +310,10 @@ export class Tram {
     this.syncTransform();
   }
   // curvatura media del percorso attorno a s (1/m), su 24 m: la spezzata del GTFS diventa una curva
-  curvature(s) {
+  curvature(s, signed = false) {
     const a = this.path.at(s - 12), b = this.path.at(s + 12);
     const d = Math.atan2(Math.sin(b.h - a.h), Math.cos(b.h - a.h));
-    return Math.abs(d) / 24;
+    return (signed ? d : Math.abs(d)) / 24;
   }
   // velocità massima per la curva più stretta nei prossimi `ahead` metri (accelerazione laterale ~1 m/s²)
   curveLimit(ahead = 70) {
@@ -363,6 +364,14 @@ export class Tram {
       const a = P.at(sa), b = P.at(sb);
       m.group.position.set((a.x + b.x) / 2, (this.elev || 0) + 0.14, (a.z + b.z) / 2);
       m.group.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
+      if (this.derailAmt > 0) {
+        const w = this.derailAmt * (this.facing === this.aFwd ? this.nMod - k : k + 1) / this.nMod; // più la testa
+        const hh = m.group.rotation.y, side = this.derailSide;
+        m.group.position.x += -Math.cos(hh) * side * 1.1 * w;
+        m.group.position.z += Math.sin(hh) * side * 1.1 * w;
+        m.group.rotation.y += side * 0.12 * w;
+        m.group.rotation.z = side * 0.05 * w;
+      } else m.group.rotation.z = 0;
       if (k < this.nMod - 1) {
         const j = P.at(sb - this.aFwd * TRAM.gap / 2), bl = this.bellows[k];
         bl.position.set(j.x, (this.elev || 0) + 1.55, j.z);
@@ -400,7 +409,7 @@ export class Tram {
     this.wired = wire && this.pantoPos > 0.97;
     // trazione: 48 kN fino a ~36 km/h, poi potenza costante (480 kW dal filo, 160 kW a batteria); niente trazione a porte aperte
     const Pmax = this.wired ? 480000 : this.battery > 0.03 ? 160000 : 0;
-    let F = doorHold ? 0 : this.throttle * Math.min(48000, Pmax / Math.max(1, sp));
+    let F = doorHold || this.derailT > 0 ? 0 : this.throttle * Math.min(48000, Pmax / Math.max(1, sp));
     if (sp * 3.6 > 70) F = 0;
     const res = 0.004 * m * 9.81 + 0.5 * 1.2 * 2.6 * 3.1 * sp * sp;
     let dec = this.brake * (0.6 + 0.8 * this.brake) * 1.25; // fino a ~1,75 m/s² con Shift
@@ -417,13 +426,28 @@ export class Tram {
     if (this.wired) this.battery = Math.min(1, this.battery + dt / 90);
     else this.battery = Math.max(0, this.battery - (Math.max(0, F * sp) / 1000) * dt / 3600 / 20 - dt / 3600 / 4);
     this.aLong += ((this.v - vPrev) / dt - this.aLong) * Math.min(1, dt * 8);
-    // collisioni: auto o tram sulla corsia davanti al muso
+    // deragliamento: in curva oltre ~3 m/s² di accelerazione laterale il carrello di testa esce dalla rotaia
     let hit = null;
+    if (this.derailT > 0) {
+      this.v = 0;
+      this.derailT -= dt;
+      this.derailAmt = Math.min(1, this.derailAmt + dt * 3);
+      if (this.derailT <= 0) { this.derailAmt = 0; this.syncTransform(); this.onRerail && this.onRerail(); }
+    } else {
+      const k = this.curvature(this.sFront - this.facing * 3, true);
+      if (this.v > 4 && this.v * this.v * Math.abs(k) > 3.0) {
+        this.derailT = 10; this.derailAmt = 0; this.derailSide = (k > 0 ? 1 : -1) * this.facing;
+        hit = { kind: 'derail', impact: 9, x: this.x, z: this.z, lz: 1 };
+        this.v = 0;
+      }
+    }
+    // collisioni: auto o tram sulla corsia davanti al muso
     if (world && world.carsNear) {
       const fr = this.path.at(this.sFront), fdx = fr.dx * this.facing, fdz = fr.dz * this.facing;
       for (const c of world.carsNear(fr.x, fr.z, 6)) {
         const rx = c.x - fr.x, rz = c.z - fr.z;
         const ahead = rx * fdx + rz * fdz, lat = Math.abs(rx * -fdz + rz * fdx);
+        if (hit) break; // già deragliato
         if (ahead > -0.5 && ahead < (c.isTram ? 3.2 : 2.4) && lat < 1.9) {
           const across = c.h != null && Math.abs(Math.sin(c.h) * fdx + Math.cos(c.h) * fdz) < 0.6;
           hit = { kind: c.isTram ? 'tram' : 'car', car: c, impact: this.v, x: fr.x, z: fr.z, lz: 1, crossing: !c.isTram && across };

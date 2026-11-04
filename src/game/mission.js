@@ -516,6 +516,12 @@ export class Mission {
   onCrash(hit) {
     if (hit.impact < 1.2) return;
     if (!this.cooldown('crash', 2.5)) return;
+    if (hit.kind === 'derail') {
+      this.stats.crashes++;
+      this.comfort = 0;
+      this.addScore(-300, '💥 Deragliamento! Curva presa troppo veloce: arrivano i soccorsi');
+      return;
+    }
     // tram: l'auto che taglia la sede di traverso è in torto (il tram ha la precedenza)
     if (this.tram && hit.crossing) { this.hud.toast('🚗 Un\'auto ha tagliato la strada al tram: frenata d\'emergenza', 'info'); this.comfort = Math.max(0, this.comfort - 15); return; }
     // tamponamento subito: non è colpa dell'autista
