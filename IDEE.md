@@ -26,6 +26,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Mappa e dati
 
+- [ ] Fonti open data per un gioco più realistico (semafori e cartelli reali, domanda di passeggeri da ISTAT e poli OSM,
+  meteo reale da Open-Meteo, altezze dalla CTR del Veneto): ricerca in [`docs/OPEN_DATA.md`](docs/OPEN_DATA.md).
+
 - [ ] Foto aeree per le strisce (mezzeria, linee di arresto). Pipeline offline: ortofoto a ~20 cm/pixel, riconoscimento
   delle strisce, aggancio alle strade OSM. Problemi:
   - licenza: Google e Bing non permettono di ricavarne dati; le ortofoto della Regione Veneto sono da verificare;
