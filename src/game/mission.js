@@ -311,8 +311,27 @@ export class Mission {
     // salita (porta anteriore)
     this.boardT -= dt;
     const cap = 100;
+    const board = (q) => {
+      q.dead = true;
+      st.waiting.splice(st.waiting.indexOf(q), 1);
+      this.onboard.push(q.dest);
+      this.stats.boarded++;
+      bus.passengers = this.onboard.length;
+      bus.setPassengerVisuals(this.onboard.length);
+      this.audio.tone(1500, 0.08, { gain: 0.05 }); // validatrice
+      if (q.runner) this.addScore(40, 'Hai aspettato il ritardatario: che gentile! 😊');
+    };
+    // il ritardatario arriva da dietro: sale dalla porta posteriore, senza fare la fila davanti
+    const run = st.waiting.find((q) => q.runner && !q.boarding);
+    const rd = BUS.doors[2], rdp = run && bus.toWorld(-1.8, (rd.z0 + rd.z1) / 2);
+    if (run && bus.doorTarget > 0 && bus.doorOpen[2] > 0.6 && Math.hypot(run.x - rdp.x, run.z - rdp.z) < 2.5 && this.onboard.length + this.walkingIn() < cap) {
+      run.boarding = true;
+      run.target = bus.toWorld(-1.45, (rd.z0 + rd.z1) / 2);
+      run.speed = Math.max(run.speed, 3);
+      run.onArrive = board;
+    }
     if (st.waiting.length && this.boardT <= 0 && this.onboard.length + this.walkingIn() < cap) {
-      const p = st.waiting.find((q) => !q.boarding);
+      const p = st.waiting.find((q) => !q.boarding && !q.runner);
       if (p) {
         p.boarding = true;
         const door = BUS.doors[0];
@@ -324,16 +343,7 @@ export class Mission {
           if (bus.kneelTarget > 0) this.addScore(15, 'Bus inginocchiato per la signora anziana 👵');
           else this.hud.toast('👵 Sale una persona anziana: premi K per abbassare il bus', 'info');
         }
-        p.onArrive = (q) => {
-          q.dead = true;
-          st.waiting.splice(st.waiting.indexOf(q), 1);
-          this.onboard.push(q.dest);
-          this.stats.boarded++;
-          bus.passengers = this.onboard.length;
-          bus.setPassengerVisuals(this.onboard.length);
-          this.audio.tone(1500, 0.08, { gain: 0.05 }); // validatrice
-          if (q.runner) this.addScore(40, 'Hai aspettato il ritardatario: che gentile! 😊');
-        };
+        p.onArrive = board;
         this.boardT = p.elderly ? 2.4 : 0.5 + this.rnd() * 0.5;
       }
     }
@@ -361,21 +371,22 @@ export class Mission {
     if (!st || !this.atStop || st.idx === this.stops.length - 1 || st.runnerDone) return;
     st.runnerDone = true;
     if (this.rnd() > 0.45) return;
-    // parte da dietro il bus, ben visibile nello specchietto destro
-    const back = bus.toWorld(-2.6, -14);
+    // parte da dietro il bus, ben visibile nello specchietto destro, e punta alla porta posteriore
+    const back = bus.toWorld(-2.6, -17);
     const p = this.crowd.add({
       x: back.x, z: back.z, h: bus.h, ph: 0, speed: 4.6, sc: 1.0,
       col: new THREE.Color(0xff3d00), dest: this.pickDest(st.idx), runner: true,
     });
-    const door = bus.toWorld(-1.8, (BUS.doors[0].z0 + BUS.doors[0].z1) / 2);
+    const rd = BUS.doors[2];
+    const door = bus.toWorld(-1.8, (rd.z0 + rd.z1) / 2);
     p.target = { x: door.x, z: door.z };
     p.onArrive = () => {
-      if (bus.doorTarget === 0 && !st.left) { this.hud.toast('✊ Bussa alla porta: "Aspetti! Aspetti!"', 'info'); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5 }); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5, delay: 0.25 }); }
+      if (bus.doorTarget === 0 && !st.left) { this.hud.toast('✊ Bussa alla porta posteriore: "Aspetti! Aspetti!"', 'info'); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5 }); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5, delay: 0.25 }); }
     };
     st.waiting.push(p);
     this.audio.tone(880, 0.15, { type: 'square', gain: 0.05 });
     this.audio.tone(880, 0.15, { type: 'square', gain: 0.05, delay: 0.2 });
-    this.hud.toast('🏃 "Aspettiii!" Un ritardatario corre verso la porta: riapri (F)?', 'info');
+    this.hud.toast('🏃 "Aspettiii!" Un ritardatario corre verso la porta posteriore: riapri (F)?', 'info');
     this.runner = { p, st };
   }
   walkingIn() { return this.crowd.people.filter((p) => p.boarding && !p.dead).length; }
