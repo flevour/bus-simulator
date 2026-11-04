@@ -42,7 +42,27 @@ export class Audio {
     this.lfo.type = 'square';
     const lfoG = ctx.createGain();
     lfoG.gain.value = 0.12;
+    this.lfoG = lfoG;
     this.lfo.connect(lfoG).connect(this.engGain.gain);
+    // motore elettrico: fischio dell'inverter che sale con la velocità
+    this.elecG = ctx.createGain();
+    this.elecG.gain.value = 0;
+    const ef = ctx.createBiquadFilter();
+    ef.type = 'bandpass';
+    ef.frequency.value = 900;
+    ef.Q.value = 0.7;
+    ef.connect(this.elecG).connect(this.master);
+    this.elecF = ef;
+    this.elecOscs = [];
+    for (const [type, mul, g] of [['sine', 1, 0.6], ['triangle', 2.0, 0.25], ['sine', 3.02, 0.12]]) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      const gg = ctx.createGain();
+      gg.gain.value = g;
+      o.connect(gg).connect(ef);
+      o.start();
+      this.elecOscs.push({ o, mul });
+    }
     this.lfo.start();
     // turbo
     this.turbo = ctx.createOscillator();
@@ -105,6 +125,23 @@ export class Audio {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const rpm = bus.rpm;
+    const sp0 = Math.abs(bus.v);
+    if (bus.electric) {
+      // niente diesel: solo inverter, ventole e rotolamento
+      this.engGain.gain.setTargetAtTime(0, t, 0.05);
+      this.lfoG.gain.setTargetAtTime(0, t, 0.05);
+      this.turboG.gain.setTargetAtTime(0, t, 0.05);
+      const fw = 140 + sp0 * 62;
+      for (const { o, mul } of this.elecOscs) o.frequency.setTargetAtTime(fw * mul, t, 0.05);
+      this.elecF.frequency.setTargetAtTime(fw * 1.6, t, 0.08);
+      const load = Math.max(bus.throttle, (bus.brake || 0) * Math.min(1, sp0 / 3) * 0.6);
+      const g = (interior ? 0.05 : 0.035) * (0.25 + load * 0.75) * Math.min(1, 0.15 + sp0 / 4);
+      this.elecG.gain.setTargetAtTime(g, t, 0.08);
+    } else {
+      this.elecG.gain.setTargetAtTime(0, t, 0.05);
+      this.lfoG.gain.setTargetAtTime(0.12, t, 0.05);
+    }
+    if (!bus.electric) {
     const f = (rpm / 60) * 3;
     for (const { o, mul } of this.oscs) o.frequency.setTargetAtTime(f * mul, t, 0.05);
     this.lfo.frequency.setTargetAtTime(f / 2, t, 0.05);
@@ -113,6 +150,7 @@ export class Audio {
     this.engGain.gain.setTargetAtTime((interior ? 0.22 : 0.32) * (0.45 + load * 0.55 + rpm / 4000), t, 0.08);
     this.turbo.frequency.setTargetAtTime(1800 + rpm * 1.4, t, 0.2);
     this.turboG.gain.setTargetAtTime(load * Math.max(0, rpm - 1100) / 1200 * 0.012, t, 0.2);
+    }
     const sp = Math.abs(bus.v);
     this.roadF.frequency.setTargetAtTime(200 + sp * 40, t, 0.1);
     this.roadG.gain.setTargetAtTime(Math.min(0.35, sp * 0.02) * (interior ? 0.7 : 1), t, 0.1);

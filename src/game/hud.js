@@ -126,7 +126,8 @@ export class HUD {
       c.restore();
     };
     dial(80, 80, 66, bus.speedKmh, 80, 5, Math.round(bus.speedKmh), 'km/h', '#ff7043');
-    dial(W - 80, 80, 66, bus.rpm, 2500, 250, bus.dir < 0 ? 'R' : bus.speedKmh < 0.5 && bus.throttle < 0.05 ? 'D' : 'D' + bus.gear, 'rpm', '#4fc3f7');
+    if (bus.electric) dial(W - 80, 80, 66, Math.max(0, bus.powerKw), 200, 25, bus.dir < 0 ? 'R' : bus.powerKw < -2 ? 'REC' : 'E', 'kW', bus.powerKw < -2 ? '#66bb6a' : '#a6d22e');
+    else dial(W - 80, 80, 66, bus.rpm, 2500, 250, bus.dir < 0 ? 'R' : bus.speedKmh < 0.5 && bus.throttle < 0.05 ? 'D' : 'D' + bus.gear, 'rpm', '#4fc3f7');
     // pedali
     const bar = (x, v, col, lbl) => {
       c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x, 30, 10, 100);

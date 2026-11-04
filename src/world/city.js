@@ -497,9 +497,9 @@ export class City {
   }
 
   // la sede del tram sotto un punto?
-  onTramway(x, z) {
+  onTramway(x, z, margin = -0.4) {
     const arr = this.segGrid.query(x, z, 6, this._qt || (this._qt = []));
-    for (const it of arr) if (it.kind === 'tram' && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw - 0.4) return true;
+    for (const it of arr) if (it.kind === 'tram' && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw + margin) return true;
     return false;
   }
 

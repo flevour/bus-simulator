@@ -73,7 +73,8 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 | **R** | marcia avanti / retromarcia (da fermo) |
 | **L** | fari · **H** clacson · **K** inginocchiamento |
 | **C** | cambia visuale (cabina, esterna, passeggeri, dall'alto) |
-| **Z / X** | guarda a sinistra / destra |
+| **Z / X** | guarda a sinistra / destra (tenendo premuto) |
+| **Mouse** | trascina per guardarti intorno (nella visuale esterna ruota attorno al bus) · **V** o doppio clic: sguardo avanti |
 | **T** | salta l'attesa in fermata (in anticipo l'attesa scorre comunque ×12) |
 | **J** | teletrasporto: prossima fermata, fermata successiva o luoghi principali (tasti 1–9) |
 | **M** | mappa grande (clic su una strada per teletrasportarti) · **I** aiuto · **U** audio on/off · **P / Esc** pausa |
@@ -99,6 +100,8 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
   alberi, lampioni, marciapiedi, strisce pedonali, fiumi (Brenta, Bacchiglione, Piovego, Tronco Maestro) con ponti, ferrovia.
 * **Monumenti**: Prato della Valle con l'Isola Memmia, il canale e le statue, Basilica del Santo, Palazzo della Ragione,
   Torre dell'Orologio, Duomo, Specola, Cappella degli Scrovegni, Stazione FS, Ospedale, Fiera.
+* **Due livree**: il bus moderno **elettrico** (argento con tetto blu e verde lime, motore a coppia piena da fermo,
+  recupero di energia in frenata, fischio dell'inverter) e lo **storico arancione e bianco** con il diesel.
 * **Bus** da 12 m con fisica a bicicletta sull'asse posteriore, cambio automatico a 6 marce con convertitore di coppia,
   retarder, freno di fermata, sospensioni (beccheggio/rollio), porte animate, display LED, specchietti retrovisori reali.
 * **Traffico** con modello IDM, semafori sincronizzati, auto che suonano il clacson e sorpassano il bus fermo, pedoni.

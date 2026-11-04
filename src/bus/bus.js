@@ -40,7 +40,7 @@ export class Bus {
     this.v = 0; this.steer = 0; this.steerIn = 0;
     this.throttle = 0; this.brake = 0;
     this.gear = 1; this.dir = 1; // 1 = D, -1 = R
-    this.rpm = IDLE; this.shiftTimer = 0;
+    this.rpm = IDLE; this.shiftTimer = 0; this.powerKw = 0;
     this.parking = true;
     this.doorOpen = [0, 0, 0];
     this.doorTarget = 0;
@@ -63,8 +63,18 @@ export class Bus {
   buildModel(lineInfo) {
     const B = this.body;
     const lam = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o });
-    const paint = lam(0xf3f3ef);
-    const stripe = lam(new THREE.Color(lineInfo.color));
+    // livree ispirate ai bus urbani di Padova: moderna elettrica (argento, tetto blu, verde lime) e storica (arancio e bianco)
+    const LIV = {
+      moderna: { lower: 0xc3c7cc, upper: 0xd8dbdf, stripe: 0xa6d22e, door: 0x7a1f2b, accent: 0x1d3b8f, roof: 0x2a56c6, label: '100% ELETTRICO', fleet: '46' + String(100 + ((lineInfo.id.charCodeAt(0) * 7) % 900)).padStart(3, '0') },
+      storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, accent: 0x5a5f66, roof: 0xe0e0dc, label: '', fleet: String(800 + ((lineInfo.id.charCodeAt(0) * 3) % 90)) },
+    };
+    const liv = LIV[lineInfo.livery] || LIV.moderna;
+    this.livery = lineInfo.livery || 'moderna';
+    this.electric = this.livery === 'moderna';
+    const paint = lam(liv.upper);
+    const lower = lam(liv.lower);
+    const doorPaint = lam(liv.door);
+    const stripe = lam(liv.stripe);
     const dark = lam(0x1d1f22);
     const grey = lam(0x6d7278);
     const interiorWall = lam(0xd9dcdf);
@@ -93,9 +103,9 @@ export class Bus {
       const x = side * (HW - 0.03);
       const excl = side < 0 ? [...arches, ...doorEx] : arches;
       // fascia bassa (0.95 - YB) continua tranne porte
-      for (const [a, b] of pieces(side < 0 ? doorEx : [])) box(0.06, YB - 0.9, b - a, paint, x, (YB + 0.9) / 2, (a + b) / 2);
+      for (const [a, b] of pieces(side < 0 ? doorEx : [])) box(0.06, YB - 0.9, b - a, lower, x, (YB + 0.9) / 2, (a + b) / 2);
       // gonna (Y0-0.9) esclusi passaruota e porte
-      for (const [a, b] of pieces(excl)) box(0.06, 0.9 - Y0, b - a, paint, x, (0.9 + Y0) / 2, (a + b) / 2);
+      for (const [a, b] of pieces(excl)) box(0.06, 0.9 - Y0, b - a, lower, x, (0.9 + Y0) / 2, (a + b) / 2);
       // striscia colorata
       for (const [a, b] of pieces(side < 0 ? doorEx : [])) {
         const s = box(0.02, 0.16, b - a, stripe, x + side * 0.03, 1.0, (a + b) / 2);
@@ -117,12 +127,20 @@ export class Bus {
     }
     // tetto
     box(BUS.width, YT - YW, BUS.length - 0.1, paint, 0, (YW + YT) / 2, 0);
-    box(1.6, 0.32, 2.8, lam(0xe0e0dc), 0, YT + 0.16, 0.8); // climatizzatore
-    box(1.4, 0.25, 1.6, lam(0xe0e0dc), 0, YT + 0.12, -4.6);
+    if (this.electric) {
+      // carenatura blu con le batterie sul tetto
+      box(2.2, 0.5, 9.2, lam(liv.roof), 0, YT + 0.25, -0.4);
+      box(2.0, 0.35, 1.2, lam(liv.roof), 0, YT + 0.17, 4.6);
+      for (const sd of [1, -1]) box(0.02, 0.18, BUS.length - 0.6, stripe, sd * (HW + 0.01), YW - 0.12, 0).castShadow = false; // fascia lime sotto il tetto
+      for (const sd of [1, -1]) box(0.02, 0.12, BUS.length - 0.4, lam(liv.accent), sd * (HW + 0.01), Y0 + 0.1, 0).castShadow = false;
+    } else {
+      box(1.6, 0.32, 2.8, lam(0xe0e0dc), 0, YT + 0.16, 0.8); // climatizzatore
+      box(1.4, 0.25, 1.6, lam(0xe0e0dc), 0, YT + 0.12, -4.6);
+    }
     // pavimento
     box(BUS.width - 0.1, 0.08, BUS.length - 0.1, lam(0x4b4f55), 0, Y0 + 0.04, 0);
     // frontale
-    box(BUS.width, 0.62, 0.12, paint, 0, Y0 + 0.31, L2 - 0.06);
+    box(BUS.width, 0.62, 0.12, lower, 0, Y0 + 0.31, L2 - 0.06);
     box(BUS.width + 0.04, 0.25, 0.2, dark, 0, Y0 + 0.1, L2); // paraurti
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(BUS.width - 0.1, 1.95), new THREE.MeshLambertMaterial({ color: 0x223844, transparent: true, opacity: 0.3 }));
     ws.position.set(0, 1.9, L2 - 0.02);
@@ -143,7 +161,7 @@ export class Bus {
     ledR.rotation.y = Math.PI;
     B.add(ledR);
     // retro
-    box(BUS.width, YT - Y0, 0.1, paint, 0, (YT + Y0) / 2 - 0.3, -L2 + 0.05).scale.set(1, 0.72, 1);
+    box(BUS.width, YT - Y0, 0.1, lower, 0, (YT + Y0) / 2 - 0.3, -L2 + 0.05).scale.set(1, 0.72, 1);
     box(BUS.width + 0.04, 0.25, 0.2, dark, 0, Y0 + 0.1, -L2);
     const rw = new THREE.Mesh(new THREE.PlaneGeometry(BUS.width - 0.4, 0.8), new THREE.MeshLambertMaterial({ color: 0x1d2a33, transparent: true, opacity: 0.6 }));
     rw.position.set(0, 2.35, -L2 - 0.01);
@@ -151,7 +169,9 @@ export class Bus {
     B.add(rw);
     // logo laterale "PADOVA"
     for (const side of [1, -1]) {
-      const t = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.3), new THREE.MeshBasicMaterial({ map: labelTexture('PADOVA · LINEA ' + lineInfo.id, { w: 512, h: 80, bg: '#f3f3ef', fg: lineInfo.color, font: 'bold 46px Arial' }) }));
+      const hex = '#' + new THREE.Color(liv.lower).getHexString();
+      const txt = liv.label ? liv.label + '  ' + liv.fleet : 'PADOVA  ' + liv.fleet;
+      const t = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.3), new THREE.MeshBasicMaterial({ map: labelTexture(txt, { w: 512, h: 80, bg: hex, fg: this.electric ? '#1d3b8f' : '#ffffff', font: 'bold 46px Arial' }) }));
       t.position.set(side * (HW + 0.005), 0.62, -0.9);
       t.rotation.y = side * Math.PI / 2;
       B.add(t);
@@ -196,7 +216,7 @@ export class Bus {
         const g = new THREE.Group();
         const zc = d.z0 + w / 2 + k * w;
         g.position.set(-HW - 0.01, 0, zc);
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.28, w - 0.02), paint);
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.28, w - 0.02), doorPaint);
         frame.position.y = Y0 + 1.16;
         frame.scale.set(1, 1, 1);
         const gl = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.14, 1.9), doorGlass);
@@ -449,7 +469,14 @@ export class Bus {
     if (doorBrake || this.parking) throttle = 0;
     if (this.throttle > 0.1 && this.parking) this.parking = false; // rilascio automatico al primo gas
 
-    // motore e cambio automatico
+    // motore e cambio automatico (diesel) oppure motore elettrico a presa diretta
+    let Fdrive;
+    if (this.electric) {
+      this.gear = 1;
+      // coppia piena da fermo, poi potenza costante (200 kW)
+      Fdrive = throttle * Math.min(30000, 200000 / Math.max(1, sp)) * (this.dir < 0 ? 0.4 : 1);
+      this.rpm += (300 + sp * 170 - this.rpm) * Math.min(1, dt * 6);
+    } else {
     const wheelRpm = (sp / BUS.wheelR) * 60 / (2 * Math.PI);
     const ratio = GEARS[this.gear - 1] * FINAL;
     let rpmGear = wheelRpm * ratio;
@@ -466,9 +493,12 @@ export class Bus {
       else if (rpmGear < 800 && this.gear > 1) { this.gear--; this.shiftTimer = 0.4; this.onShift && this.onShift(-1); }
     }
     const tq = torqueAt(this.rpm) * (1 + tcFactor * 0.7);
-    let Fdrive = throttle * tq * (this.dir < 0 ? 3.2 * FINAL : ratio) * 0.88 / BUS.wheelR;
+    Fdrive = throttle * tq * (this.dir < 0 ? 3.2 * FINAL : ratio) * 0.88 / BUS.wheelR;
     if (this.shiftTimer > 0.3) Fdrive *= 0.25;
+    }
     if (sp * 3.6 > (this.dir < 0 ? 12 : 72)) Fdrive = 0; // limitatore
+    // potenza erogata (kW), negativa in recupero di energia quando si frena
+    this.powerKw += ((Fdrive * sp - (this.electric ? this.brake * Math.min(1, sp / 2) * 90000 : 0)) / 1000 - this.powerKw) * Math.min(1, dt * 5);
     const m = this.mass;
     const grip = world.wet ? 0.75 : 1;
     const surface = world.offRoad ? 2.5 : 1;
@@ -642,7 +672,8 @@ export class Bus {
       x.fillText(label, cx, 78);
     };
     gauge(64, this.speedKmh, 80, Math.round(this.speedKmh), '#4fc3f7');
-    gauge(192, this.rpm, 2500, this.dir < 0 ? 'R' : 'D' + this.gear, '#ffb74d');
+    if (this.electric) gauge(192, Math.max(0, this.powerKw), 200, this.dir < 0 ? 'R' : this.powerKw < -2 ? 'REC' : 'E', this.powerKw < -2 ? '#66bb6a' : '#a6d22e');
+    else gauge(192, this.rpm, 2500, this.dir < 0 ? 'R' : 'D' + this.gear, '#ffb74d');
     if (state.doors) { x.fillStyle = '#ff5252'; x.fillRect(116, 10, 24, 14); }
     if (state.request) { x.fillStyle = '#ffeb3b'; x.fillRect(116, 30, 24, 14); }
     if (this.parking) { x.fillStyle = '#ff1744'; x.font = 'bold 16px Arial'; x.fillText('P', 128, 118); }

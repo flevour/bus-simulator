@@ -147,8 +147,30 @@ let running = false, paused = false;
 let camMode = 0; // 0 cabina, 1 esterna, 2 passeggeri, 3 dall'alto
 const CAM_NAMES = ['Cabina di guida', 'Esterna', 'Passeggeri', 'Dall\'alto'];
 let lookYaw = 0;
+// sguardo col mouse: trascina nella vista (cabina/passeggeri: gira la testa; esterna: ruota attorno al bus)
+const mouseLook = { yaw: 0, pitch: 0, drag: null };
+function resetLook(toast) {
+  mouseLook.yaw = 0; mouseLook.pitch = 0;
+  if (toast) hud.toast('Sguardo in avanti', 'info');
+}
+canvas.addEventListener('mousedown', (e) => {
+  if (!running || paused || e.button !== 0) return;
+  mouseLook.drag = { x: e.clientX, y: e.clientY };
+  canvas.classList.add('dragging');
+});
+window.addEventListener('mousemove', (e) => {
+  const d = mouseLook.drag;
+  if (!d) return;
+  const dx = e.clientX - d.x, dy = e.clientY - d.y;
+  d.x = e.clientX; d.y = e.clientY;
+  const k = camMode === 1 ? 0.006 : 0.0045;
+  mouseLook.yaw = Math.max(-2.6, Math.min(2.6, mouseLook.yaw - dx * k));
+  mouseLook.pitch = Math.max(-0.7, Math.min(0.55, mouseLook.pitch - dy * 0.0035));
+});
+window.addEventListener('mouseup', () => { mouseLook.drag = null; canvas.classList.remove('dragging'); });
+canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
-const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'clear', mode: 'service' };
+const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'clear', mode: 'service', livery: 'moderna' };
 let indAccum = 0, lastBlinkOn = false, wasMoving = false;
 let showHelp = false;
 
@@ -178,7 +200,8 @@ function onKeyPress(code) {
     case 'KeyK':
       if (Math.abs(bus.v) < 0.3) { bus.kneelTarget = bus.kneelTarget ? 0 : 1; audio.noiseBurst({ dur: 1.4, freq: 2000, gain: 0.25 }); }
       break;
-    case 'KeyC': camMode = (camMode + 1) % 4; hud.toast('Visuale: ' + CAM_NAMES[camMode], 'info'); break;
+    case 'KeyC': camMode = (camMode + 1) % 4; resetLook(false); hud.toast('Visuale: ' + CAM_NAMES[camMode], 'info'); break;
+    case 'KeyV': resetLook(true); break;
     case 'KeyM': hud.setBigMap(!hud.big); break;
     case 'KeyT': mission.skipWait(); break;
     case 'KeyU': audio.muted = !audio.muted; audio.setMuted(audio.muted); hud.toast(audio.muted ? 'Audio disattivato' : 'Audio attivo', 'info'); break;
@@ -320,7 +343,7 @@ function saveGame() {
   const data = {
     v: 2,
     savedAt: Date.now(),
-    settings: { line: settings.line.id, variant: settings.variant, vIdx: settings.vIdx, departure: settings.departure, depDur: settings.depDur, weather: settings.weather, mode: settings.mode },
+    settings: { line: settings.line.id, variant: settings.variant, vIdx: settings.vIdx, departure: settings.departure, depDur: settings.depDur, weather: settings.weather, mode: settings.mode, livery: settings.livery },
     mission: {
       clock: m.clock, nextStop: m.nextStop, s: m.s, score: m.score, stats: m.stats, comfort: m.comfort,
       onboard: m.onboard, log: m.log.slice(-40),
@@ -355,6 +378,9 @@ function resumeSaved() {
   const L = LINES.find((l) => l.id === d.settings.line);
   if (!L) { clearSave(); return; }
   Object.assign(settings, d.settings, { line: L });
+  // il menu mostra le scelte della corsa ripresa
+  for (const [id, attr, val] of [['livery', 'l', settings.livery || 'moderna'], ['weather', 'w', settings.weather], ['mode', 'm', settings.mode]])
+    document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle('sel', b.dataset[attr] === val));
   startMission(d);
 }
 function applySave(d) {
@@ -454,6 +480,7 @@ function buildMenu() {
   $('route-variant').addEventListener('change', (e) => { settings.vIdx = Number(e.target.value); refreshMenu(); });
   seg('weather', 'w', (w) => { settings.weather = w; });
   seg('mode', 'm', (m) => { settings.mode = m; });
+  seg('livery', 'l', (l) => { settings.livery = l; });
   $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
   $('start').addEventListener('click', () => startMission());
   $('resume').addEventListener('click', () => togglePause(false));
@@ -505,7 +532,8 @@ function startMission(resume = null) {
   const L = settings.line;
   const V = curVariant();
   const destName = V.stops[V.stops.length - 1].name;
-  bus = new Bus(scene, { id: L.id, color: L.color, dest: destName });
+  bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery });
+  resetLook(false);
   bus.onShift = () => audio.shift();
   mission = new Mission({ scene, net, line: L, route: V, day: settings.variant, departure: settings.departure, depDur: settings.depDur, hud, audio, lights, city, free: settings.mode === 'free' });
   mission.dest = destName;
@@ -645,14 +673,16 @@ function updateCamera(dt) {
     const vib = (Math.random() - 0.5) * 0.004 * (0.3 + bus.throttle);
     camera.position.copy(local).add(V2.set(0, vib, 0));
     bus.body.getWorldQuaternion(Qt);
-    Ex.set(camMode === 0 ? -0.13 : -0.12, Math.PI + lookYaw, 0, 'YXZ');
+    Ex.set((camMode === 0 ? -0.13 : -0.12) + mouseLook.pitch, Math.PI + lookYaw + mouseLook.yaw, 0, 'YXZ');
     Qy.setFromEuler(Ex);
     camera.quaternion.copy(Qt).multiply(Qy);
     camera.fov = camMode === 0 ? 68 : 75;
     chase.init = false;
   } else if (camMode === 1) {
-    const f = V2.set(bus.fx, 0, bus.fz);
-    const target = V.set(bus.x, bus.elev || 0, bus.z).addScaledVector(f, -17).add(new THREE.Vector3(0, 6.5, 0));
+    // la visuale esterna gira attorno al bus trascinando il mouse (o con Z/X)
+    const oy = mouseLook.yaw + lookYaw * 1.4, cy = Math.cos(oy), sy = Math.sin(oy);
+    const f = V2.set(bus.fx * cy + bus.fz * sy, 0, -bus.fx * sy + bus.fz * cy);
+    const target = V.set(bus.x, bus.elev || 0, bus.z).addScaledVector(f, -17).add(new THREE.Vector3(0, 6.5 + mouseLook.pitch * 10, 0));
     if (!chase.init) { chase.pos.copy(target); chase.init = true; }
     chase.pos.lerp(target, Math.min(1, dt * 3));
     camera.position.copy(chase.pos);

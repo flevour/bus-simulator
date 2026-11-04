@@ -104,7 +104,11 @@ export class Mission {
     st.spawned = true;
     const n = this.rollWaiting(st);
     for (let i = 0; i < n; i++) {
-      const along = -1 - this.rnd() * 7, back = 0.5 + this.rnd() * 1.6;
+      const along = -1 - this.rnd() * 7;
+      let back = 0.5 + this.rnd() * 1.6;
+      // dove la sede del tram corre accanto alla carreggiata si resta in fila sul bordo, mai sui binari
+      const onTram = (b) => this.city && this.city.onTramway && this.city.onTramway(st.x + st.dx * along + st.rx * b, st.z + st.dz * along + st.rz * b, 0.3);
+      while (back > -1.3 && onTram(back)) back -= 0.25;
       const p = this.crowd.add({
         x: st.x + st.dx * along + st.rx * back,
         z: st.z + st.dz * along + st.rz * back,
