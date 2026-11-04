@@ -108,6 +108,56 @@ function smoothTrack(t, R = 28) {
   return out;
 }
 
+// Lo shape GTFS non sta sempre in mezzo alla via: nelle strade strette del centro (Corso Vittorio Emanuele, le Riviere)
+// un binario finiva nelle facciate. Dove serve l'asse si sposta di lato quanto basta (fino a 5 m), con raccordi di
+// ~30 m; half: distanze dall'asse da tenere fuori dagli edifici. Il vero rimedio è seguire i binari OSM (railway=tram).
+function clearOfBuildings(t, buildings, half) {
+  const C = 20, grid = new Map();
+  let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
+  for (const p of t) { bx0 = Math.min(bx0, p.x - 30); bz0 = Math.min(bz0, p.z - 30); bx1 = Math.max(bx1, p.x + 30); bz1 = Math.max(bz1, p.z + 30); }
+  for (const b of buildings) {
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (const p of b.pts) { x0 = Math.min(x0, p.x); z0 = Math.min(z0, p.z); x1 = Math.max(x1, p.x); z1 = Math.max(z1, p.z); }
+    if (x1 < bx0 || x0 > bx1 || z1 < bz0 || z0 > bz1) continue;
+    for (let gx = Math.floor(x0 / C); gx <= Math.floor(x1 / C); gx++)
+      for (let gz = Math.floor(z0 / C); gz <= Math.floor(z1 / C); gz++) {
+        const k = gx + ',' + gz;
+        if (!grid.has(k)) grid.set(k, []);
+        grid.get(k).push(b);
+      }
+  }
+  const inside = (x, z, pts) => {
+    let c = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a.z > z) !== (b.z > z) && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) c = !c;
+    }
+    return c;
+  };
+  const blocked = (x, z) => (grid.get(Math.floor(x / C) + ',' + Math.floor(z / C)) || []).some((b) => inside(x, z, b.pts) && !(b.holes || []).some((h) => inside(x, z, h)));
+  // ricampionato ogni 3 m, con la normale (a sinistra) in ogni punto
+  const pts = [t[0]];
+  for (let i = 1; i < t.length; i++) {
+    const a = t[i - 1], b = t[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 3));
+    for (let k = 1; k <= n; k++) pts.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
+  }
+  const nor = pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { x: -(b.z - a.z) / l, z: (b.x - a.x) / l };
+  });
+  const sh = pts.map((p, i) => {
+    const n = nor[i], free = (s) => half.every((o) => !blocked(p.x + n.x * (s + o), p.z + n.z * (s + o)));
+    if (free(0)) return 0;
+    for (let s = 0.5; s <= 5; s += 0.5) { if (free(s)) return s; if (free(-s)) return -s; }
+    return 0;
+  });
+  // raccordo: il tratto spostato si allarga (lo spostamento maggiore nei 15 m vicini) e poi si media
+  const W = 5, at = (arr, i) => arr[Math.max(0, Math.min(arr.length - 1, i))];
+  const wide = sh.map((_, i) => { let m = 0; for (let k = -W; k <= W; k++) { const v = at(sh, i + k); if (Math.abs(v) > Math.abs(m)) m = v; } return m; });
+  const sm = wide.map((_, i) => { let a = 0; for (let k = -W; k <= W; k++) a += at(wide, i + k); return a / (2 * W + 1); });
+  return pts.map((p, i) => ({ x: p.x + nor[i].x * sm[i], z: p.z + nor[i].z * sm[i] }));
+}
+
 export function buildNetwork() {
   const nodes = {};
   const N = MAP.nodes.length / 2;
@@ -118,11 +168,12 @@ export function buildNetwork() {
   const buildings = MAP.buildings.map(([h, kind, name, f, holes]) => ({ h, kind, name, pts: flat(f), holes: holes ? holes.map(flat) : null }));
   // tram SIR1: tracciato e fermate (sede tranviaria in mezzo a Via Aspetti, Via Reni, ecc.)
   // sede del tram: inversione ai capolinea tagliata, curve raccordate, binario tronco di 40 m oltre i capolinea
-  const tram = (MAP.tram || []).map(flat).filter((t) => t.length > 1).map((t) => {
+  // l'asse (verso nord) porta i due binari affiancati a ±1,7 m; il secondo tracciato è a binario singolo
+  const tram = (MAP.tram || []).map(flat).filter((t) => t.length > 1).map((t, k) => {
     t = cutReversal(cutReversal(t).reverse()).reverse();
     t = smoothTrack(t);
     const ext = (p, q) => { const l = Math.hypot(p.x - q.x, p.z - q.z) || 1; return { x: p.x + ((p.x - q.x) / l) * 40, z: p.z + ((p.z - q.z) / l) * 40 }; };
-    return [ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])];
+    return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], buildings, k === 0 ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
   });
   const tramStops = (MAP.tramStops || []).map(([x, z, name]) => ({ x, z, name }));
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
