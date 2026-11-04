@@ -194,11 +194,14 @@ export class Bus {
       box(0.06, 0.08, 0.2, s > 0 ? this.indMatL : this.indMatR, s * (HW + 0.02), 1.05, 3.9);
       box(0.12, 0.1, 0.06, this.revMat, s * 0.7, 0.55, -L2 - 0.01);
     }
-    // fari reali
-    this.headLight = new THREE.SpotLight(0xfff1d0, 0, 90, 0.5, 0.5, 1.2);
-    this.headLight.position.set(0, 1.0, L2);
-    this.headLight.target.position.set(0, 0, L2 + 25);
-    B.add(this.headLight, this.headLight.target);
+    // fari reali: due proiettori, ognuno davanti al suo gruppo ottico, appena divergenti
+    this.headLights = [1, -1].map((s) => {
+      const l = new THREE.SpotLight(0xfff1d0, 0, 90, 0.42, 0.5, 1.2);
+      l.position.set(s * 0.9, 0.85, L2);
+      l.target.position.set(s * 1.6, 0, L2 + 25);
+      B.add(l, l.target);
+      return l;
+    });
 
     // specchietti
     for (const s of [1, -1]) {
@@ -643,7 +646,7 @@ export class Bus {
     this.tailMat.emissiveIntensity = this.lights ? 0.9 : 0.05;
     this.brakeMat.emissiveIntensity = this.brake > 0.05 || this.doorsAnyOpen ? 2.5 : 0;
     this.revMat.emissiveIntensity = this.dir < 0 ? 2 : 0;
-    this.headLight.intensity = this.lights ? 120 : 0;
+    for (const l of this.headLights) l.intensity = this.lights ? 75 : 0;
     // tergicristalli
     if (input.wipers) {
       this.wiperT += dt * 2.4;
