@@ -28,6 +28,7 @@ class GeoBuilder {
   // nastro da A a B, larghezza w, quota y; v in metri / vScale (spezzato in tratti <= 40 m)
   ribbon(ax, az, bx, bz, w, y, vScale = 12, v0 = 0, hFn = null) {
     const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz);
+    if (l < 0.01) return;
     const nx = (-dz / l) * (w / 2), nz = (dx / l) * (w / 2);
     const n = Math.max(1, Math.ceil(l / (hFn ? 10 : 40)));
     for (let k = 0; k < n; k++) {
@@ -37,6 +38,18 @@ class GeoBuilder {
       const y0 = y + (hFn ? hFn(x0, z0) : 0), y1 = y + (hFn ? hFn(x1, z1) : 0);
       // u: 0 sinistra -> 1 destra rispetto alla direzione
       this.quad([x0 - nx, y0, z0 - nz], [x0 + nx, y0, z0 + nz], [x1 - nx, y1, z1 - nz], [x1 + nx, y1, z1 + nz], [0, va, 1, va, 0, vb, 1, vb]);
+    }
+  }
+  disc(x, z, r, y, seg = 16, uvScale = 20) {
+    const b = this.pos.length / 3;
+    this.pos.push(x, y, z);
+    this.uv.push(x / uvScale, z / uvScale);
+    for (let i = 0; i <= seg; i++) {
+      const a = (i / seg) * Math.PI * 2;
+      const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      this.pos.push(px, y, pz);
+      this.uv.push(px / uvScale, pz / uvScale);
+      if (i) this.idx.push(b, b + i + 1, b + i);
     }
   }
   build() {
@@ -72,13 +85,17 @@ function polyRibbon(pts, w, y, vScale = 20) {
 }
 
 // ---------- materiale edifici con finestre procedurali ----------
-export function makeBuildingMaterial(uniforms) {
-  const m = new THREE.MeshLambertMaterial({ color: 0xffffff });
+export function makeBuildingMaterial(uniforms, merged = false) {
+  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: merged });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNight = uniforms.uNight;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN; varying float vSeed; varying float vH;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN; varying float vSeed; varying float vH;' + (merged ? '\nattribute float aSeed; attribute float aH;' : ''))
+      .replace('#include <begin_vertex>', merged ? `#include <begin_vertex>
+        vWP = (modelMatrix * vec4(position, 1.0)).xyz;
+        vWN = normalize(mat3(modelMatrix) * normal);
+        vSeed = aSeed;
+        vH = aH;` : `#include <begin_vertex>
         mat4 bIM = modelMatrix * instanceMatrix;
         vWP = (bIM * vec4(position, 1.0)).xyz;
         vWN = normalize(mat3(bIM) * normal);
@@ -144,15 +161,12 @@ export class City {
     this.zones = [];
     this.nightMats = [];
     this.lampPositions = [];
-    this.indexFeatures();
-    this.buildGround();
-    this.buildRoads();
-    this.buildWater();
-    this.buildRailway();
-    this.buildLandmarks();
-    this.buildStops();
-    this.buildBuildings();
-    this.buildTreesAndLamps();
+    this.timings = {};
+    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps']) {
+      const t0 = performance.now();
+      this[step]();
+      this.timings[step] = Math.round(performance.now() - t0);
+    }
   }
 
   // ---- indici spaziali ----
@@ -170,12 +184,13 @@ export class City {
     return b;
   }
   indexFeatures() {
-    const { nodes, edges, water, railway } = this.net;
+    const { nodes, edges, water, rails } = this.net;
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
       this.addSeg(A.x, A.z, B.x, B.z, e.width / 2, 'road', e);
     }
     for (const n of Object.values(nodes)) {
+      if (!n.edges.length) { n.radius = 0; continue; }
       const wmax = Math.max(...n.edges.map((e) => e.width));
       // i vertici intermedi di una via (due soli archi) non sono incroci
       n.joint = n.edges.length === 2;
@@ -188,7 +203,7 @@ export class City {
       this.addSeg(n.x, n.z, n.x + 0.01, n.z, n.radius, 'road', null);
     }
     for (const w of water) for (let i = 0; i < w.pts.length - 1; i++) this.addSeg(w.pts[i].x, w.pts[i].z, w.pts[i + 1].x, w.pts[i + 1].z, w.width / 2 + 6, 'water', w);
-    for (let i = 0; i < railway.length - 1; i++) this.addSeg(railway[i].x, railway[i].z, railway[i + 1].x, railway[i + 1].z, 9, 'rail');
+    for (const r of rails) if (!r.tunnel) for (let i = 0; i < r.pts.length - 1; i++) this.addSeg(r.pts[i].x, r.pts[i].z, r.pts[i + 1].x, r.pts[i + 1].z, 3.2, 'rail');
   }
   // distanza libera (positiva = fuori) dalle feature
   clearance(x, z, kinds = null, r = 40) {
@@ -234,8 +249,8 @@ export class City {
   // ---- terreno ----
   buildGround() {
     const tex = TX.groundTexture();
-    tex.repeat.set(160, 160);
-    const g = new THREE.PlaneGeometry(16000, 16000, 128, 128); // suddiviso: triangoli enormi danno problemi di profondità
+    tex.repeat.set(220, 220);
+    const g = new THREE.PlaneGeometry(22000, 22000, 176, 176); // suddiviso: triangoli enormi danno problemi di profondità
     g.rotateX(-Math.PI / 2);
     const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex }));
     m.receiveShadow = true;
@@ -246,17 +261,18 @@ export class City {
   buildRoads() {
     const { nodes, edges } = this.net;
     const road = new GeoBuilder();
+    const plain = new GeoBuilder(); // residenziali e di servizio: asfalto senza segnaletica
+    const ped = new GeoBuilder(); // aree pedonali lastricate
     const walk = new GeoBuilder();
     const curb = [];
-    const inter = [], walkDisc = [];
     const marks = new GeoBuilder();
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
       const ra = A.joint ? 0 : A.radius * 0.6, rb = B.joint ? 0 : B.radius * 0.6;
       const ax = A.x + e.dx * ra, az = A.z + e.dz * ra, bx = B.x - e.dx * rb, bz = B.z - e.dz * rb;
       const hFn = e.elev ? (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz) : null;
-      road.ribbon(ax, az, bx, bz, e.width, Y_ROAD, 12, 0, hFn);
-      walk.ribbon(A.x, A.z, B.x, B.z, e.width + (e.elev ? 2 : SIDEWALK * 2), Y_SIDEWALK, 6, 0, hFn);
+      (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : road).ribbon(ax, az, bx, bz, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
+      if (!e.ped) walk.ribbon(A.x, A.z, B.x, B.z, e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2), Y_SIDEWALK, 6, 0, hFn);
       if (e.elev) { this.buildOverpass(e, A, curb); continue; }
       // strisce pedonali vicino agli incroci
       for (const [N, dirSign] of [[A, 1], [B, -1]]) {
@@ -269,29 +285,35 @@ export class City {
         }
       }
     }
-    const joints = [];
+    const inter = new GeoBuilder(), joints = new GeoBuilder(), walkDisc = new GeoBuilder();
     for (const n of Object.values(nodes)) {
-      if (n.joint && n.bend < 0.02) continue;
-      const seg = n.joint ? 12 : 28;
+      if (!n.edges.length || (n.joint && n.bend < 0.02)) continue;
+      const seg = n.joint ? 10 : 18;
       // nelle curve il disco sta sotto l'asfalto e riempie solo lo spicchio tra i due tratti
-      (n.joint ? joints : inter).push(disc(n.x, n.z, n.radius, Y_ROAD + (n.joint ? -0.005 : 0.01) + (n.h || 0), seg, 20));
-      walkDisc.push(disc(n.x, n.z, n.radius + SIDEWALK + (n.joint ? 0 : 2), Y_SIDEWALK - 0.005 + (n.h || 0), seg, 6));
+      (n.joint ? joints : inter).disc(n.x, n.z, n.radius, Y_ROAD + (n.joint ? -0.005 : 0.01) + (n.h || 0), seg, 20);
+      if (!n.edges.every((e) => e.ped)) walkDisc.disc(n.x, n.z, n.radius + SIDEWALK + (n.joint ? 0 : 2), Y_SIDEWALK - 0.005 + (n.h || 0), seg, 6);
     }
     const roadTex = TX.roadTexture();
     const roadMat = layer(new THREE.MeshLambertMaterial({ map: roadTex }), 2);
     this.roadMat = roadMat;
     const rm = new THREE.Mesh(road.build(), roadMat);
     rm.receiveShadow = true;
-    const im = new THREE.Mesh(mergeGeometries(inter), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3));
-    if (joints.length) {
-      const jm = new THREE.Mesh(mergeGeometries(joints), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture(), color: 0xf4f4f4 }), 1.5));
+    const im = new THREE.Mesh(inter.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3));
+    {
+      const jm = new THREE.Mesh(joints.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture(), color: 0xf4f4f4 }), 1.5));
       jm.receiveShadow = true;
       this.group.add(jm);
     }
     im.receiveShadow = true;
     const swTex = TX.sidewalkTexture();
     const swMat = layer(new THREE.MeshLambertMaterial({ map: swTex }), 1);
-    const wm = new THREE.Mesh(mergeGeometries([walk.build().toNonIndexed(), ...walkDisc.map((g) => g.toNonIndexed())]), swMat);
+    const plainM = new THREE.Mesh(plain.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
+    plainM.receiveShadow = true;
+    const pedTex = TX.sidewalkTexture();
+    const pedM = new THREE.Mesh(ped.build(), layer(new THREE.MeshLambertMaterial({ map: pedTex, color: 0xf0e8dc }), 2));
+    pedM.receiveShadow = true;
+    this.group.add(plainM, pedM);
+    const wm = new THREE.Mesh(mergeGeometries([walk.build().toNonIndexed(), walkDisc.build().toNonIndexed()]), swMat);
     wm.receiveShadow = true;
     const cm = new THREE.Mesh(curb.length ? mergeGeometries(curb) : new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ color: 0xbdb8ae }));
     const mk = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4));
@@ -369,6 +391,7 @@ export class City {
     const par = [];
     const { nodes, edges } = this.net;
     for (const e of edges) {
+      if (!e.bridge) continue;
       const A = nodes[e.a], B = nodes[e.b];
       for (const w of this.net.water)
         for (let i = 0; i < w.pts.length - 1; i++) {
@@ -401,21 +424,25 @@ export class City {
   }
 
   buildRailway() {
-    const t = TX.railTexture();
-    const g = polyRibbon(this.net.railway, 14, 0.06, 14);
-    this.group.add(new THREE.Mesh(g, layer(new THREE.MeshLambertMaterial({ map: t }), 1)));
-    // pali della linea aerea
+    // un nastro per ogni binario OSM (i fasci di stazione sono binari paralleli)
+    const t = TX.railTexture1();
+    const geos = [];
+    for (const r of this.net.rails) if (!r.tunnel) geos.push(polyRibbon(r.pts, 4.4, r.bridge ? 0.09 : 0.06, 6));
+    if (geos.length) this.group.add(new THREE.Mesh(mergeGeometries(geos.map((g) => g.toNonIndexed())), layer(new THREE.MeshLambertMaterial({ map: t }), 1)));
+    // pali della linea aerea lungo le linee principali
     const poles = [];
-    const pts = this.net.railway;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const l = Math.hypot(b.x - a.x, b.z - a.z);
-      for (let s = 0; s < l; s += 50) {
-        const x = a.x + ((b.x - a.x) * s) / l, z = a.z + ((b.z - a.z) * s) / l;
-        if (this.clearance(x, z, ['road']) < 3) continue;
-        const p = new THREE.BoxGeometry(0.3, 7, 0.3);
-        p.translate(x + ((b.z - a.z) / l) * 7.5, 3.5, z - ((b.x - a.x) / l) * 7.5);
-        poles.push(p);
+    for (const r of this.net.rails) {
+      if (r.yard || r.tunnel) continue;
+      let acc = 0;
+      for (let i = 0; i < r.pts.length - 1; i++) {
+        const a = r.pts[i], b = r.pts[i + 1];
+        const l = Math.hypot(b.x - a.x, b.z - a.z);
+        for (let s = (60 - acc) % 60; s < l; s += 60) {
+          const x = a.x + ((b.x - a.x) * s) / l + ((b.z - a.z) / l) * 3.4, z = a.z + ((b.z - a.z) * s) / l - ((b.x - a.x) / l) * 3.4;
+          if (this.clearance(x, z, ['road'], 20) < 2) continue;
+          poles.push(new THREE.BoxGeometry(0.28, 7, 0.28).translate(x, 3.5, z));
+        }
+        acc = (acc + l) % 60;
       }
     }
     if (poles.length) this.group.add(new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x777777 })));
@@ -447,11 +474,7 @@ export class City {
       return false;
     };
     fit('prato', 120, 160, { ell: true, maxShift: 80, scales: [1, 0.92, 0.85, 0.75] });
-    fit('santo', 56, 24); fit('ragione', 42, 16); fit('orologio', 12, 7); fit('duomo', 36, 18);
-    fit('specola', 9, 9); fit('scrovegni', 8, 16); fit('ospedale', 62, 52); fit('fiera', 66, 46);
-    this.stationLen = 0;
-    for (const len of [200, 160, 120, 90]) if (fit('stazione', len / 2 + 2, 11, { maxShift: 140 })) { this.stationLen = len; break; }
-    this.landmarkFit = Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.scale]));
+    this.landmarkFit = { prato: L.prato.scale };
     const add = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; this.group.add(mesh); return mesh; };
     const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
     const box = (w, h, d, mat, x, y, z, ry = 0) => {
@@ -526,180 +549,6 @@ export class City {
       // Loggia Amulea (a ovest)
     }
 
-    // Basilica del Santo
-    if (L.santo.scale) {
-      const c = L.santo;
-      this.zones.push({ x: c.x, z: c.z, rx: 70, rz: 40 });
-      box(100, 24, 42, brick, c.x, 12, c.z);
-      box(8, 30, 34, brick, c.x - 50, 15, c.z); // facciata
-      // cupole
-      const domeG = new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2);
-      const domes = [[-25, 0, 12], [-5, 0, 12], [15, 0, 12], [35, 0, 15], [5, 13, 8], [5, -13, 8], [-25, 13, 6], [-25, -13, 6]];
-      for (const [dx, dz, r] of domes) {
-        const dm = new THREE.Mesh(domeG, lead);
-        dm.scale.set(r, r * 1.25, r);
-        dm.position.set(c.x + dx, 24, c.z + dz);
-        add(dm);
-        const lan = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.15, r * 0.15, r * 0.6, 8), lead);
-        lan.position.set(c.x + dx, 24 + r * 1.25 + r * 0.3, c.z + dz);
-        add(lan);
-      }
-      // campanili a minareto
-      for (const dz of [-17, 17]) {
-        const t = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3, 50, 12), brick);
-        t.position.set(c.x + 30, 25, c.z + dz);
-        add(t);
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(3, 10, 12), lead);
-        tip.position.set(c.x + 30, 55, c.z + dz);
-        add(tip);
-      }
-      this.addObstacle(c.x, c.z, 54, 22, 0, 'landmark');
-    }
-
-    // Palazzo della Ragione (tetto a carena di nave)
-    if (L.ragione.scale) {
-      const c = L.ragione;
-      this.zones.push({ x: c.x, z: c.z, rx: 55, rz: 30 });
-      box(80, 14, 27, lam(0xe2c9a2), c.x, 7, c.z);
-      const roof = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 80, 24, 1, false, 0, Math.PI), lead);
-      roof.rotation.z = Math.PI / 2;
-      roof.rotation.y = Math.PI / 2;
-      roof.scale.set(1, 1, 0.9);
-      roof.position.set(c.x, 14, c.z);
-      add(roof);
-      // logge
-      box(82, 6, 2, lam(0xf0e4cc), c.x, 3, c.z - 14.5);
-      box(82, 6, 2, lam(0xf0e4cc), c.x, 3, c.z + 14.5);
-      this.addObstacle(c.x, c.z, 41, 15, 0, 'landmark');
-    }
-
-    // Torre dell'Orologio
-    if (L.orologio.scale) {
-      const c = L.orologio;
-      this.zones.push({ x: c.x, z: c.z, rx: 18, rz: 18 });
-      box(22, 14, 12, lam(0xead9b8), c.x, 7, c.z);
-      box(8, 32, 8, lam(0xead9b8), c.x, 16, c.z);
-      const face = new THREE.Mesh(new THREE.CircleGeometry(2.6, 24), lam(0x1a3b7a));
-      face.position.set(c.x, 22, c.z + 4.05);
-      add(face);
-      const crown = new THREE.Mesh(new THREE.ConeGeometry(5, 5, 4), lead);
-      crown.rotation.y = Math.PI / 4;
-      crown.position.set(c.x, 34.5, c.z);
-      add(crown);
-    }
-
-    // Duomo
-    if (L.duomo.scale) {
-      const c = L.duomo;
-      this.zones.push({ x: c.x, z: c.z, rx: 45, rz: 30 });
-      box(70, 22, 34, lam(0xd8c4a4), c.x, 11, c.z, 0.1);
-      const dm = new THREE.Mesh(new THREE.SphereGeometry(11, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), lead);
-      dm.position.set(c.x + 15, 22, c.z);
-      add(dm);
-      box(9, 40, 9, brick, c.x - 30, 20, c.z + 22);
-    }
-
-    // Specola
-    if (L.specola.scale) {
-      const c = L.specola;
-      this.zones.push({ x: c.x, z: c.z, rx: 20, rz: 20 });
-      box(15, 42, 15, brick, c.x, 21, c.z);
-      box(9, 6, 9, stone, c.x, 45, c.z);
-      this.addObstacle(c.x, c.z, 8, 8, 0, 'landmark');
-    }
-
-    // Cappella degli Scrovegni ed Eremitani
-    if (L.scrovegni.scale) {
-      const c = L.scrovegni;
-      this.zones.push({ x: c.x, z: c.z, rx: 30, rz: 40 });
-      box(10, 11, 30, brick, c.x, 5.5, c.z);
-      const r = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 30, 3, 1), lam(0x8c4a33));
-      r.rotation.x = Math.PI / 2;
-      r.rotation.z = Math.PI / 2;
-      r.scale.set(1, 1, 0.5);
-      r.position.set(c.x, 12.5, c.z);
-      add(r);
-      const gt = TX.grassTexture();
-      gt.repeat.set(4, 4);
-      const g = new THREE.Mesh(new THREE.CircleGeometry(38, 24), layer(new THREE.MeshLambertMaterial({ map: gt }), 1));
-      g.rotation.x = -Math.PI / 2;
-      g.position.set(c.x, 0.06, c.z);
-      this.group.add(g);
-      this.addObstacle(c.x, c.z, 5, 15, 0, 'landmark');
-    }
-
-    // Stazione FS: fabbricato davanti al piazzale reale (corsie e tram vengono dal GTFS) e fascio binari
-    if (this.stationLen) {
-      const c = L.stazione, LEN = this.stationLen;
-      this.zones.push({ x: c.x, z: c.z - 30, rx: LEN / 2 + 40, rz: 60 });
-      const trav = lam(0xe6dfcf), glassD = lam(0x2b3a46), steel = lam(0x5d646b), plat = lam(0xbdb6a8);
-      box(LEN, 12, 18, trav, c.x, 6, c.z);
-      box(LEN + 0.4, 2.6, 18.4, glassD, c.x, 8.4, c.z);
-      box(Math.min(56, LEN * 0.4), 17, 22, lam(0xdcd4c2), c.x, 8.5, c.z);
-      const hw = Math.min(48, LEN * 0.34);
-      const hall = new THREE.Mesh(new THREE.PlaneGeometry(hw, 10.5), new THREE.MeshLambertMaterial({ color: 0x3b5870 }));
-      hall.position.set(c.x, 6.2, c.z + 11.06);
-      this.group.add(hall);
-      for (let x = -hw / 2; x <= hw / 2 + 0.1; x += hw / 8) box(0.35, 10.5, 0.3, steel, c.x + x, 6.2, c.z + 11.1).castShadow = false;
-      const clock = new THREE.Mesh(new THREE.CircleGeometry(1.9, 32), lam(0xfafafa));
-      clock.position.set(c.x, 13.4, c.z + 11.07);
-      this.group.add(clock);
-      for (const [w, h, r] of [[0.12, 1.3, 0.6], [0.1, 1.7, 2.4]]) {
-        const hand = new THREE.Mesh(new THREE.PlaneGeometry(w, h), lam(0x111111));
-        hand.geometry.translate(0, h / 2, 0);
-        hand.position.set(c.x, 13.4, c.z + 11.09);
-        hand.rotation.z = r;
-        this.group.add(hand);
-      }
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(22, 2.4), new THREE.MeshBasicMaterial({ map: TX.labelTexture('PADOVA', { bg: '#dcd4c2', fg: '#1d3f8f', font: 'bold 92px Arial' }) }));
-      sign.position.set(c.x, 15.6, c.z + 11.07);
-      this.group.add(sign);
-      box(LEN, 0.35, 6, steel, c.x, 5.2, c.z + 12);
-      for (let x = -LEN / 2 + 5; x <= LEN / 2 - 5; x += 19) box(0.3, 5, 0.3, steel, c.x + x, 2.6, c.z + 14.6);
-      this.addObstacle(c.x, c.z, LEN / 2, 9.5, 0, 'landmark');
-      // binari dietro al fabbricato, con marciapiedi coperti e un treno regionale
-      const rt = TX.railTexture();
-      rt.repeat.set(2, 1);
-      const yard = polyRibbon([{ x: c.x - LEN / 2 - 60, z: c.z - 40 }, { x: c.x + LEN / 2 + 60, z: c.z - 40 }], 44, 0.07, 14);
-      this.group.add(new THREE.Mesh(yard, layer(new THREE.MeshLambertMaterial({ map: rt }), 1)));
-      for (const dz of [-24, -44]) {
-        box(LEN, 0.9, 5, plat, c.x, 0.45, c.z + dz);
-        box(LEN - 20, 0.25, 6, steel, c.x, 4.4, c.z + dz);
-        for (let x = -LEN / 2 + 15; x <= LEN / 2 - 15; x += 15) box(0.25, 3.6, 0.25, steel, c.x + x, 2.6, c.z + dz);
-      }
-      const coach = lam(0xf2f2ee), band = lam(0x223040), blue = lam(0x1f6fb2), roofM = lam(0x9aa0a6);
-      for (let k = 0; k < Math.min(4, Math.floor(LEN / 27)); k++) {
-        const x = c.x - LEN / 2 + 20 + k * 26;
-        box(25, 3.2, 2.9, coach, x, 2.2, c.z - 34);
-        box(25.05, 0.95, 2.95, band, x, 2.6, c.z - 34);
-        box(25.05, 0.35, 2.95, blue, x, 1.3, c.z - 34);
-        box(24.6, 0.3, 2.6, roofM, x, 3.9, c.z - 34);
-      }
-    }
-
-    // Ospedale
-    if (L.ospedale.scale) {
-      const c = L.ospedale;
-      this.zones.push({ x: c.x, z: c.z, rx: 90, rz: 70 });
-      box(110, 28, 26, lam(0xeeeeea), c.x, 14, c.z - 25, 0.4);
-      box(80, 36, 22, lam(0xe3e6e8), c.x + 10, 18, c.z + 25, 0.4);
-      const cross = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ map: TX.labelTexture('+', { w: 128, h: 128, bg: '#ffffff', fg: '#d01010', font: 'bold 120px Arial' }) }));
-      cross.position.set(c.x - 10, 30, c.z - 11.8);
-      cross.rotation.y = 0.4;
-      this.group.add(cross);
-      this.addObstacle(c.x, c.z - 25, 55, 13, 0.4, 'landmark');
-      this.addObstacle(c.x + 10, c.z + 25, 40, 11, 0.4, 'landmark');
-    }
-
-    // Fiera
-    if (L.fiera.scale) {
-      const c = L.fiera;
-      this.zones.push({ x: c.x, z: c.z, rx: 80, rz: 55 });
-      box(60, 12, 90, lam(0xb9bcc0), c.x - 35, 6, c.z);
-      box(60, 14, 90, lam(0xa9aeb4), c.x + 35, 7, c.z);
-      box(8, 60, 8, lam(0x8899aa), c.x, 30, c.z + 50);
-      this.addObstacle(c.x, c.z, 65, 45, 0, 'landmark');
-    }
   }
 
   // ---- fermate (scenografia per tutte le linee) ----
@@ -767,6 +616,184 @@ export class City {
   }
 
   // ---- edifici ----
+  // dentro l'area coperta dagli edifici OSM non si generano edifici procedurali
+  inOsmArea(x, z) {
+    const b = this.net.buildingBBox;
+    return b && x > b[0] + 40 && x < b[2] - 40 && z > b[1] + 40 && z < b[3] - 40;
+  }
+
+  // edifici reali OSM: pianta estrusa, finestre procedurali, tetti piani, muri come ostacoli
+  buildRealBuildings() {
+    const list = this.net.buildings;
+    if (!list || !list.length) return;
+    const W = { pos: [], nrm: [], col: [], seed: [], h: [] };
+    const R = { pos: [], col: [] };
+    const hash = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
+    const C = new THREE.Color();
+    this.specials = [];
+    for (const b of list) {
+      const pts = b.pts;
+      if (pts.length < 3) continue;
+      let cx = 0, cz = 0, area2 = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        cx += p.x; cz += p.z;
+        area2 += p.x * q.z - q.x * p.z;
+      }
+      cx /= pts.length; cz /= pts.length;
+      const area = Math.abs(area2) / 2;
+      if (area < 6) continue;
+      const r = hash(cx, cz);
+      const zone = zoneOf(cx, cz);
+      const nm = b.name || '';
+      const church = /church|cathedral|chapel|basilica/.test(b.kind) || /^(Chiesa|Basilica|Duomo|Cattedrale|Oratorio)/i.test(nm);
+      let h = b.h;
+      if (!h) {
+        if (b.kind === 'garage' || b.kind === 'garages') h = 3;
+        else if (b.kind === 'roof') h = 4.5;
+        else if (b.kind === 'house') h = 6.5 + r * 3;
+        else if (b.kind === 'industrial' || b.kind === 'warehouse') h = 8 + r * 4;
+        else if (church) h = 14 + r * 6;
+        else if (area < 40) h = 3.5 + r * 2;
+        else h = zone === 0 ? 10 + Math.floor(r * 4) * 3.1 : 9 + Math.floor(r * 5) * 3.1;
+      }
+      let col;
+      if (church) col = C.set(r < 0.5 ? 0xa45a3c : 0xd8c4a4);
+      else if (b.kind === 'hospital') col = C.set(0xeeeeea);
+      else { const pal = zone === 0 ? PAL_CENTRO : zone === 1 ? PAL_MID : PAL_OUT; col = C.set(pal[Math.floor(r * pal.length)]); }
+      const special = /Sant'Antonio/i.test(nm) ? 'santo' : /Palazzo della Ragione/i.test(nm) ? 'ragione' : /Duomo|Cattedrale|Santa Maria Assunta/i.test(nm) && church ? 'duomo' : /Specola/i.test(nm) ? 'specola' : /Scrovegni/i.test(nm) ? 'scrovegni' : b.kind === 'train_station' || /Stazione di Padova/i.test(nm) ? 'stazione' : null;
+      if (special === 'santo') { h = 24; col = C.set(0xa45a3c); }
+      if (special === 'ragione') { h = 14; col = C.set(0xe2c9a2); }
+      if (special === 'specola') { h = 40; col = C.set(0xa45a3c); }
+      if (special === 'scrovegni') { h = 12; col = C.set(0xa45a3c); }
+      if (special === 'stazione') { h = Math.max(h, 13); col = C.set(0xe6dfcf); }
+      if (special) this.specials.push({ kind: special, pts, cx, cz, h, area });
+      const ccw = area2 > 0; // con z verso sud
+      const seed = r;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        const ex = q.x - p.x, ez = q.z - p.z, l = Math.hypot(ex, ez);
+        if (l < 0.05) continue;
+        // normale verso l'esterno
+        let nx = ez / l, nz = -ex / l;
+        if (!ccw) { nx = -nx; nz = -nz; }
+        const v = [[p.x, 0, p.z], [q.x, 0, q.z], [q.x, h, q.z], [p.x, 0, p.z], [q.x, h, q.z], [p.x, h, p.z]];
+        const order = ccw ? [0, 2, 1, 3, 5, 4] : [0, 1, 2, 3, 4, 5];
+        for (const k of order) {
+          W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(seed); W.h.push(h);
+        }
+        // muro come ostacolo (solo per i poligoni complessi; i semplici hanno un box unico)
+        if (pts.length > 5) this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
+      }
+      if (pts.length <= 5) {
+        // box orientato sul lato più lungo
+        let bi = 0, bl = 0;
+        for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; const l = Math.hypot(q.x - p.x, q.z - p.z); if (l > bl) { bl = l; bi = i; } }
+        const p = pts[bi], q = pts[(bi + 1) % pts.length];
+        const ca = (q.x - p.x) / bl, sa = (q.z - p.z) / bl;
+        let mnx = Infinity, mxx = -Infinity, mnz = Infinity, mxz = -Infinity;
+        for (const v of pts) { const u = v.x * ca + v.z * sa, w = -v.x * sa + v.z * ca; mnx = Math.min(mnx, u); mxx = Math.max(mxx, u); mnz = Math.min(mnz, w); mxz = Math.max(mxz, w); }
+        const uc = (mnx + mxx) / 2, wc = (mnz + mxz) / 2;
+        this.addObstacle(uc * ca - wc * sa, uc * sa + wc * ca, (mxx - mnx) / 2, (mxz - mnz) / 2, Math.atan2(-sa, ca), 'building');
+      }
+      // tetto piano
+      const contour = pts.map((p) => new THREE.Vector2(p.x, p.z));
+      let tris;
+      try { tris = THREE.ShapeUtils.triangulateShape(contour, []); } catch (e) { tris = []; }
+      const rc = zone === 0 && !church ? C.set([0xa4553a, 0xb0603f, 0x94503a, 0xb86d4b][Math.floor(r * 4)]) : church ? C.set(0x8c4a33) : C.set(0x77736c).offsetHSL(0, 0, (r - 0.5) * 0.1);
+      for (const t of tris) {
+        const [a, bb, c] = t;
+        // faccia verso l'alto
+        const s = (contour[bb].x - contour[a].x) * (contour[c].y - contour[a].y) - (contour[bb].y - contour[a].y) * (contour[c].x - contour[a].x);
+        const ids = s > 0 ? [a, c, bb] : [a, bb, c];
+        for (const k of ids) { R.pos.push(contour[k].x, h, contour[k].y); R.col.push(rc.r, rc.g, rc.b); }
+      }
+    }
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.Float32BufferAttribute(W.pos, 3));
+    wg.setAttribute('normal', new THREE.Float32BufferAttribute(W.nrm, 3));
+    wg.setAttribute('color', new THREE.Float32BufferAttribute(W.col, 3));
+    wg.setAttribute('aSeed', new THREE.Float32BufferAttribute(W.seed, 1));
+    wg.setAttribute('aH', new THREE.Float32BufferAttribute(W.h, 1));
+    const wm = new THREE.Mesh(wg, makeBuildingMaterial(this.uniforms, true));
+    wm.castShadow = wm.receiveShadow = true;
+    const rg = new THREE.BufferGeometry();
+    rg.setAttribute('position', new THREE.Float32BufferAttribute(R.pos, 3));
+    rg.setAttribute('color', new THREE.Float32BufferAttribute(R.col, 3));
+    rg.computeVertexNormals();
+    const rm = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    rm.castShadow = rm.receiveShadow = true;
+    this.group.add(wm, rm);
+    this.realBuildingCount = list.length;
+    this.buildSpecials();
+  }
+
+  // decorazioni dei monumenti sulle piante reali
+  buildSpecials() {
+    const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+    const lead = lam(0x7d8a86), brick = lam(0xa45a3c);
+    const add = (m) => { m.castShadow = true; this.group.add(m); return m; };
+    // rettangolo orientato minimo (asse lungo) di un poligono
+    const obb = (pts) => {
+      let best = null;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        const a = Math.atan2(q.z - p.z, q.x - p.x), c = Math.cos(a), s = Math.sin(a);
+        let mnx = Infinity, mxx = -Infinity, mnz = Infinity, mxz = -Infinity;
+        for (const v of pts) { const u = v.x * c + v.z * s, w = -v.x * s + v.z * c; mnx = Math.min(mnx, u); mxx = Math.max(mxx, u); mnz = Math.min(mnz, w); mxz = Math.max(mxz, w); }
+        const ar = (mxx - mnx) * (mxz - mnz);
+        if (!best || ar < best.ar) {
+          const uc = (mnx + mxx) / 2, wc = (mnz + mxz) / 2;
+          best = { ar, a, c, s, L: mxx - mnx, Wd: mxz - mnz, x: uc * c - wc * s, z: uc * s + wc * c };
+        }
+      }
+      if (best.L < best.Wd) { best = { ...best, a: best.a + Math.PI / 2, L: best.Wd, Wd: best.L }; best.c = Math.cos(best.a); best.s = Math.sin(best.a); }
+      return best;
+    };
+    const at = (o, u, w) => ({ x: o.x + u * o.c - w * o.s, z: o.z + u * o.s + w * o.c });
+    for (const sp of this.specials) {
+      const o = obb(sp.pts);
+      if (sp.kind === 'santo') {
+        const domeG = new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+        const r = Math.min(13, o.Wd * 0.32);
+        for (const [f, k, rr] of [[-0.3, 0, 1], [-0.08, 0, 1], [0.14, 0, 1], [0.34, 0, 1.2], [-0.3, 0.3, 0.55], [-0.3, -0.3, 0.55], [0.14, 0.3, 0.6], [0.14, -0.3, 0.6]]) {
+          const p = at(o, f * o.L, k * o.Wd);
+          const d = add(new THREE.Mesh(domeG, lead));
+          d.scale.set(r * rr, r * rr * 1.25, r * rr);
+          d.position.set(p.x, sp.h, p.z);
+          const lan = add(new THREE.Mesh(new THREE.CylinderGeometry(r * rr * 0.15, r * rr * 0.15, r * rr * 0.6, 8), lead));
+          lan.position.set(p.x, sp.h + r * rr * 1.25 + r * rr * 0.3, p.z);
+        }
+        for (const k of [-0.42, 0.42]) {
+          const p = at(o, 0.24 * o.L, k * o.Wd);
+          const t = add(new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3, 50, 12), brick));
+          t.position.set(p.x, 25, p.z);
+          const tip = add(new THREE.Mesh(new THREE.ConeGeometry(3, 10, 12), lead));
+          tip.position.set(p.x, 55, p.z);
+        }
+      } else if (sp.kind === 'ragione') {
+        const roof = add(new THREE.Mesh(new THREE.CylinderGeometry(o.Wd / 2, o.Wd / 2, o.L, 24, 1, false, 0, Math.PI), lead));
+        roof.rotation.order = 'YXZ';
+        roof.rotation.y = -o.a;
+        roof.rotation.z = Math.PI / 2;
+        roof.scale.set(1, 1, 0.9);
+        roof.position.set(o.x, sp.h, o.z);
+      } else if (sp.kind === 'duomo') {
+        const p = at(o, 0.25 * o.L, 0);
+        const d = add(new THREE.Mesh(new THREE.SphereGeometry(Math.min(12, o.Wd * 0.35), 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), lead));
+        d.position.set(p.x, sp.h, p.z);
+      } else if (sp.kind === 'stazione' && sp.area > 800) {
+        // scritta PADOVA sulla facciata rivolta a sud (verso il piazzale)
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(22, o.L * 0.4), 2.4), new THREE.MeshBasicMaterial({ map: TX.labelTexture('PADOVA', { bg: '#dcd4c2', fg: '#1d3f8f', font: 'bold 92px Arial' }), side: THREE.DoubleSide }));
+        const n = { x: -o.s, z: o.c };
+        const sgn = n.z > 0 ? 1 : -1;
+        sign.position.set(o.x + n.x * sgn * (o.Wd / 2 + 0.2), sp.h - 2, o.z + n.z * sgn * (o.Wd / 2 + 0.2));
+        sign.rotation.y = Math.atan2(n.x * sgn, n.z * sgn);
+        this.group.add(sign);
+      }
+    }
+  }
+
   buildBuildings() {
     const { nodes, edges } = this.net;
     const rnd = this.rnd;
@@ -789,6 +816,7 @@ export class City {
         while (s < e.len - mB) {
           const mx = A.x + e.dx * s, mz = A.z + e.dz * s;
           const zone = zoneOf(mx, mz);
+          if (this.inOsmArea(mx, mz) || e.ped || e.service) { s += 40; continue; }
           if (zone === 2 && (Math.hypot(mx - CENTRO.x, mz - CENTRO.z) > 5500 || rnd() < 0.45)) { s += 40; continue; }
           const w = zone === 0 ? 9 + rnd() * 10 : 12 + rnd() * 16;
           const gap = zone === 0 ? rnd() * 0.5 : 2 + rnd() * 10;
@@ -859,6 +887,7 @@ export class City {
           const maxD = zone === 0 ? 18 : zone === 1 ? 9 : 3;
           const prob = zone === 0 ? 0.9 : zone === 1 ? 0.5 : 0.18;
           if (zone === 2 && Math.hypot(x - CENTRO.x, z - CENTRO.z) > 5500) continue;
+          if (this.inOsmArea(x, z)) continue;
           if (d > maxD || rnd() > prob) continue;
           const be = edges[src[k]];
           if (zone === 2 && rnd() < 0.35) { this.fillerTrees.push({ x, z, big: true }); continue; }

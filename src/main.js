@@ -409,6 +409,7 @@ function startMission(resume = null) {
   const p = pointAt(mission.route, st0.s - 6.5);
   const lat = st0.hw - 1.7;
   bus.place(p.x + -p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
+  mission.s = Math.max(0, st0.s - 6.5);
   bus.setInnerDisplay('Linea ' + L.id + ' – ' + destName);
   if (resume) applySave(resume);
   lights.time = resume ? resume.mission.clock : settings.departure;
@@ -630,7 +631,8 @@ function step(dt) {
   traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen });
   for (const c of traffic.honks) audio.carHorn(Math.hypot(c.x - bus.x, c.z - bus.z));
   walkers.update(dt, bus);
-  const speedLimit = zoneOf(bus.x, bus.z) === 0 ? 30 : 50;
+  // limite di velocità reale (OSM maxspeed) dove indicato, altrimenti 30 in centro e 50 fuori
+  const speedLimit = mid.edge && mid.edge.speed ? Math.min(90, mid.edge.speed) : zoneOf(bus.x, bus.z) === 0 ? 30 : 50;
   const ctx = { speedLimit, onSidewalk, night: (mission._night || 0) > 0.5 };
   mission.update(dt, bus, ctx);
   city.update(dt);

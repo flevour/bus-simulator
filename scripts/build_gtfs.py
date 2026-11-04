@@ -210,5 +210,84 @@ def main(src, out):
         print(l['id'], len(l['variants']), 'varianti;', v['headsign'], '|', len(v['fer']), 'fer', len(v['fes']), 'fes')
 
 
+def load(src):
+    """Linee urbane con varianti (tracciato in lat/lon), fermate e orari, senza costruire la rete."""
+    rd = lambda f: csv.DictReader(open(f'{src}/{f}', encoding='utf-8-sig'))
+    routes = {r['route_id']: r for r in rd('routes.txt')}
+    trips = {t['trip_id']: t for t in rd('trips.txt')}
+    stops = {s['stop_id']: s for s in rd('stops.txt')}
+    cal = defaultdict(set)
+    for r in rd('calendar_dates.txt'):
+        if r['exception_type'] == '1':
+            cal[r['service_id']].add(r['date'])
+    shapes = defaultdict(list)
+    for r in rd('shapes.txt'):
+        shapes[r['shape_id']].append((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])))
+    by_line = defaultdict(list)
+    for t in trips.values():
+        lid = line_id(routes[t['route_id']]['route_short_name'])
+        if lid:
+            by_line[lid].append(t)
+    trip_ids = {t['trip_id'] for ts in by_line.values() for t in ts}
+    times = defaultdict(list)
+    for r in rd('stop_times.txt'):
+        if r['trip_id'] in trip_ids:
+            times[r['trip_id']].append((int(r['stop_sequence']), secs(r['departure_time'] or r['arrival_time']), r['stop_id']))
+    stop_index, stops_out = {}, []
+
+    def stop_ref(sid):
+        if sid not in stop_index:
+            s = stops[sid]
+            x, z = xz(float(s['stop_lat']), float(s['stop_lon']))
+            stop_index[sid] = len(stops_out)
+            desc = clean_name(s['stop_desc'] or s['stop_name'])
+            stops_out.append([round(x, 1), round(z, 1), desc, street_of(desc)])
+        return stop_index[sid]
+
+    lines = []
+    for lid, ts in by_line.items():
+        color = '#' + (routes[ts[0]['route_id']]['route_color'] or '607d8b')
+        groups = defaultdict(list)
+        for t in ts:
+            if t['trip_id'] in times and t['shape_id'] in shapes:
+                groups[t['shape_id']].append(t)
+        variants = []
+        for sid, tt in groups.items():
+            fer = [t for t in tt if FER_DATE in cal[t['service_id']]]
+            fes = [t for t in tt if FES_DATE in cal[t['service_id']]]
+            if len(fer) + len(fes) < 2:
+                continue
+            pts = [(la, lo) for _, la, lo in sorted(shapes[sid])]
+            if any(math.hypot(*xz(la, lo)) > RADIUS for la, lo in pts):
+                continue
+            ref = sorted(fer or fes, key=lambda t: times[t['trip_id']][-1][1] - times[t['trip_id']][0][1])[len(fer or fes) // 2]
+            st = sorted(times[ref['trip_id']])
+            t0 = st[0][1]
+
+            def deps(lst):
+                out = []
+                for t in lst:
+                    s2 = sorted(times[t['trip_id']])
+                    out.append([s2[0][1], s2[-1][1] - s2[0][1]])
+                return sorted(out)
+
+            head = Counter(t['trip_headsign'] for t in tt).most_common(1)[0][0]
+            variants.append({
+                'headsign': clean_name(head), 'shape_pts': pts,
+                'stops': [stop_ref(s[2]) for s in st], 'offsets': [s[1] - t0 for s in st],
+                'duration': max(1, st[-1][1] - t0), 'fer': deps(fer), 'fes': deps(fes),
+            })
+        if variants:
+            variants.sort(key=lambda v: -(len(v['fer']) + len(v['fes'])))
+            lines.append({'id': lid, 'color': color, 'variants': variants[:10]})
+
+    def sort_key(l):
+        m = re.match(r'(\d+)(.*)', l['id'])
+        return (int(m.group(1)), m.group(2))
+
+    lines.sort(key=sort_key)
+    return {'lines': lines, 'stops': stops_out}
+
+
 if __name__ == '__main__':
     main(sys.argv[1], sys.argv[2])

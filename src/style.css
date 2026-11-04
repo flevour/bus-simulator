@@ -123,3 +123,5 @@ button.link { background: none; border: 0; color: #90a4ae; text-decoration: unde
 #route-variant { margin-top: 6px; font-size: 13px; }
 #line-list { max-height: 440px; overflow: auto; padding-right: 4px; }
 button.primary:disabled { filter: grayscale(1); opacity: .5; cursor: default; }
+
+.disclaimer a { color: inherit; }

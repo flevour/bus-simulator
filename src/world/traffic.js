@@ -14,7 +14,7 @@ export class TrafficLights {
     // semafori agli incroci tra vie molto percorse (almeno tre bracci con 4+ linee), a non meno di 90 m l'uno dall'altro
     const weight = (n) => n.edges.reduce((s, e) => s + e.routes, 0);
     const cand = Object.values(net.nodes)
-      .filter((n) => n.edges.length >= 3 && n.edges.filter((e) => e.routes >= 4).length >= 3 && Math.hypot(n.x + 150, n.z - 120) < 4800)
+      .filter((n) => n.edges.length >= 3 && !n.edges.some((e) => e.roundabout) && n.edges.filter((e) => e.cls <= 2 || e.routes >= 2).length >= 3 && Math.hypot(n.x + 150, n.z - 120) < 4800)
       .sort((a, b) => weight(b) - weight(a));
     const chosen = [];
     for (const n of cand) if (!chosen.some((k) => Math.hypot(k.x - n.x, k.z - n.z) < 90)) chosen.push(n);
@@ -167,20 +167,29 @@ export class Traffic {
     const e = car.edge, n = this.net.nodes;
     const from = car.fwd ? n[e.a] : n[e.b], to = car.fwd ? n[e.b] : n[e.a];
     const dx = car.fwd ? e.dx : -e.dx, dz = car.fwd ? e.dz : -e.dz;
-    const off = e.width / 4;
+    const off = e.oneway && e.width < 8 ? 0 : e.width / 4;
     const rx = -dz * off, rz = dx * off;
     const s0 = from.radius * 0.8, s1 = e.len - to.radius * 0.8;
     return { from, to, dx, dz, rx, rz, s0, s1, sx: from.x + rx, sz: from.z + rz };
   }
 
+  // tratto carrabile a caso vicino al bus (ricerca spaziale: la città è molto grande)
+  randomEdgeNear(x, z, minD, maxD) {
+    const a = this.rnd() * Math.PI * 2, d = minD + this.rnd() * (maxD - minD);
+    const arr = this.city.segGrid.query(x + Math.cos(a) * d, z + Math.sin(a) * d, 80, this._re || (this._re = []));
+    const cand = arr.filter((it) => it.kind === 'road' && it.ref && !it.ref.ped && (!it.ref.service || this.rnd() < 0.15));
+    return cand.length ? cand[Math.floor(this.rnd() * cand.length)].ref : null;
+  }
+  allowed(e, fwd) { return !e.ped && (!e.oneway || (e.oneway === 1) === fwd); }
+
   spawn(bus, minD = 120, maxD = 1400, cars = this.cars) {
-    const edges = this.net.edges;
-    for (let tries = 0; tries < 40; tries++) {
-      const e = edges[Math.floor(this.rnd() * edges.length)];
-      const fwd = this.rnd() < 0.5;
+    for (let tries = 0; tries < 12; tries++) {
+      const e = this.randomEdgeNear(bus.x, bus.z, minD, maxD);
+      if (!e) continue;
+      const fwd = e.oneway ? e.oneway === 1 : this.rnd() < 0.5;
       const car = { edge: e, fwd, s: 0, v: 0, turn: null, id: Math.random() };
       const g = this.laneGeom(car);
-      if (g.s1 - g.s0 < 10) continue;
+      if (g.s1 - g.s0 < 3) continue;
       car.s = g.s0 + this.rnd() * (g.s1 - g.s0);
       const x = g.sx + g.dx * car.s, z = g.sz + g.dz * car.s;
       const d = Math.hypot(x - bus.x, z - bus.z);
@@ -200,10 +209,11 @@ export class Traffic {
 
   chooseNext(car) {
     const to = car.fwd ? this.net.nodes[car.edge.b] : this.net.nodes[car.edge.a];
-    let opts = to.edges.filter((e) => e !== car.edge);
+    let opts = to.edges.filter((e) => e !== car.edge && this.allowed(e, e.a === to.id));
+    if (!opts.length) opts = to.edges.filter((e) => !e.ped);
     if (!opts.length) opts = [car.edge];
-    // le vie principali attirano più traffico delle traverse
-    const w = opts.map((e) => (e.main ? 3 : 1) * (to.edges.length > 1 && e.b !== e.a ? 1 : 0.2));
+    // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio
+    const w = opts.map((e) => (e.main ? 4 : e.service ? 0.08 : e.cls === 6 ? 0.3 : 1));
     let r = this.rnd() * w.reduce((a, b) => a + b, 0), k = 0;
     while (k < opts.length - 1 && (r -= w[k]) > 0) k++;
     const e = opts[k];
@@ -415,9 +425,11 @@ export class Walkers {
     this.P = new THREE.Vector3();
   }
   spawn(bus) {
-    const edges = this.net.edges;
-    for (let k = 0; k < 20; k++) {
-      const e = edges[Math.floor(this.rnd() * edges.length)];
+    for (let k = 0; k < 10; k++) {
+      const a0 = this.rnd() * Math.PI * 2, d0 = 40 + this.rnd() * 520;
+      const arr = this.city ? this.city.segGrid.query(bus.x + Math.cos(a0) * d0, bus.z + Math.sin(a0) * d0, 60, this._re || (this._re = [])).filter((it) => it.kind === 'road' && it.ref) : [];
+      if (!arr.length) continue;
+      const e = arr[Math.floor(this.rnd() * arr.length)].ref;
       const A = this.net.nodes[e.a], B = this.net.nodes[e.b];
       const s = A.radius + this.rnd() * (e.len - A.radius - B.radius);
       const side = this.rnd() < 0.5 ? -1 : 1;

@@ -138,6 +138,21 @@ export function railTexture() {
   return makeTex(c);
 }
 
+// singolo binario su massicciata (u attraverso, v lungo: 1 = 6 m)
+export function railTexture1() {
+  const [c, x] = canvas(64, 256);
+  const rnd = mulberry32(19);
+  x.fillStyle = '#6b6259';
+  x.fillRect(0, 0, 64, 256);
+  noise(x, 64, 256, 2500, rnd, 0.2);
+  x.fillStyle = '#4a3b2e';
+  for (let j = 0; j < 256; j += 21) x.fillRect(10, j, 44, 8);
+  x.fillStyle = '#a2a2a8';
+  x.fillRect(19, 0, 3, 256);
+  x.fillRect(42, 0, 3, 256);
+  return makeTex(c);
+}
+
 // Testo su tabella (es. nome fermata)
 export function labelTexture(text, opts = {}) {
   const { w = 512, h = 128, bg = '#0b3d91', fg = '#ffffff', font = 'bold 56px Arial', border = null } = opts;

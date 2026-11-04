@@ -12,29 +12,42 @@ npm run build      # build di produzione in dist/
 npm run build:single  # un unico file HTML autosufficiente in dist-single/index.html
 ```
 
-## Dati reali: GTFS Busitalia Veneto
+## Dati reali: OpenStreetMap + GTFS Busitalia Veneto
 
-Rete stradale, linee, percorsi, fermate e orari vengono dal **GTFS ufficiale di Busitalia Veneto** (feed BusOne,
-`https://proxy.busone.app/biv/gtfs.zip`). I tracciati di tutte le linee sono costruiti su un unico grafo stradale:
-le vie percorse da più linee condividono gli stessi vertici, quindi dall'unione dei tracciati si ottiene la **rete reale
-delle strade percorse dai mezzi pubblici di Padova** (circa 16.000 tratti), con le fermate nella posizione vera.
+La mappa unisce due fonti aperte:
 
-* **Linee**: tutte le 22 linee urbane del feed (2, 3, 4, 5, 6, 7, 9, 10, 11, 11B, 12, 13, 14, 15B, 16, 19, 21, 22, 24, 25, 42, 88); sono esclusi i percorsi che escono oltre 9 km dal centro.
-  Per ogni linea si sceglie direzione e variante di percorso (con il numero di corse feriali e festive).
-* **Orari**: le corse sono quelle del GTFS per un mercoledì (feriale) e una domenica (festivo); gli orari di
-  passaggio alle fermate sono quelli reali della corsa.
-* **Monumenti**: Prato della Valle, Santo, Palazzo della Ragione, Stazione FS ecc. sono modelli semplificati,
-  allineati automaticamente alla rete reale. Fiumi e ferrovia sono ancora tracciati approssimati.
-* Il **tram SIR1** compare come strada (binari condivisi) ma non è tra le linee guidabili.
+* **OpenStreetMap** (`data/osm-padova.json`, export Overpass): tutte le strade carrabili con nome, corsie,
+  sensi unici, limiti di velocità e ponti; le piante dei ~21.000 edifici del centro; i binari (anche i fasci di
+  stazione e lo scalo); fiumi e canali (Brenta, Bacchiglione, Piovego, Tronco Maestro, Scaricatore…).
+* **GTFS ufficiale di Busitalia Veneto** (feed BusOne, `https://proxy.busone.app/biv/gtfs.zip`): le 22 linee urbane
+  con le varianti di percorso, le fermate reali e gli orari delle corse di un mercoledì (feriale) e di una domenica
+  (festivo).
 
-Per aggiornare i dati:
+`scripts/build_map.py` aggancia ogni tracciato GTFS alle strade OSM (map matching), così i bus percorrono le vie
+vere, e produce `src/data/padova-map.json` per il gioco.
+
+* Gli edifici del centro hanno la pianta reale, con l'altezza da OSM quando c'è, altrimenti stimata. Basilica del
+  Santo (cupole e campanili), Palazzo della Ragione (tetto a carena) e Duomo sono decorati sulla loro pianta.
+  Fuori dall'area degli edifici OSM i palazzi sono generati lungo le strade.
+* Prato della Valle (isola Memmia, canale, statue) è modellato a parte e allineato alle strade reali.
+* I ponti stradali sopra la ferrovia diventano cavalcavia in quota, con le rampe.
+* I limiti di velocità vengono dai tag `maxspeed` di OSM quando presenti (altrimenti 30 in centro, 50 fuori).
+* Il **tram SIR1** non è tra le linee guidabili.
+
+Per rigenerare i dati:
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_gtfs.py /tmp/biv src/data/gtfs-padova.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json
 ```
 
-Le vie senza autobus (strade residenziali) non sono nel GTFS: per averle servono i dati OpenStreetMap.
+Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).
+
+## Modalità
+
+* **Servizio di linea**: corsa con orario, fermate, passeggeri e punteggio.
+* **Giro libero**: niente orari né fermate, giri dove vuoi per tutta la città (valgono comunque semafori, limiti e marciapiedi).
+
 
 ## Comandi (tastiera)
 
@@ -86,8 +99,8 @@ Le vie senza autobus (strade residenziali) non sono nel GTFS: per averle servono
 
 ```
 src/
-  data/padova.js     rete stradale e linee (dal GTFS), fiumi, monumenti
-  data/gtfs-padova.json  dati generati da scripts/build_gtfs.py
+  data/padova.js     carica la mappa: strade, edifici, ferrovia, acque, linee
+  data/padova-map.json  dati generati da scripts/build_map.py (OSM + GTFS)
   world/city.js      generazione della città
   world/traffic.js   semafori, auto, pedoni
   bus/bus.js         modello 3D e fisica del bus
