@@ -126,6 +126,12 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
   **variabile**: si parte col sereno, il cielo si copre e arriva la pioggia o la nebbia, con transizioni graduali; dopo la
   pioggia le strade restano bagnate per un po'.
 
+## Sviluppo
+
+* Si lavora su `main` con push continuo: ogni push pubblica su GitHub Pages. Le regole di progetto sono in `CLAUDE.md`.
+* Idee e prossimi passi: [`IDEE.md`](IDEE.md). Specifica del tram guidabile: [`docs/prompt-tram.md`](docs/prompt-tram.md).
+  Export della segnaletica reale: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
+
 ## Struttura
 
 ```
