@@ -553,7 +553,7 @@ export class City {
 
   // ---- fermate (scenografia per tutte le linee) ----
   buildStops() {
-    this.stopPlacements = allStopPlacements(this.net, (x, z) => this.snapToRoad(x, z));
+    this.stopPlacements = allStopPlacements(this.net, (x, z) => this.snapToRoad(x, z), (x, z) => this.clearance(x, z, ['road'], 20));
     const glass = new THREE.MeshLambertMaterial({ color: 0x9fc4d6, transparent: true, opacity: 0.35 });
     const frame = new THREE.MeshLambertMaterial({ color: 0x2b3a4a });
     const yellow = new THREE.MeshLambertMaterial({ color: 0xf2c200 });
@@ -683,18 +683,7 @@ export class City {
           W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(seed); W.h.push(h);
         }
         // muro come ostacolo (solo per i poligoni complessi; i semplici hanno un box unico)
-        if (pts.length > 5) this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
-      }
-      if (pts.length <= 5) {
-        // box orientato sul lato più lungo
-        let bi = 0, bl = 0;
-        for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; const l = Math.hypot(q.x - p.x, q.z - p.z); if (l > bl) { bl = l; bi = i; } }
-        const p = pts[bi], q = pts[(bi + 1) % pts.length];
-        const ca = (q.x - p.x) / bl, sa = (q.z - p.z) / bl;
-        let mnx = Infinity, mxx = -Infinity, mnz = Infinity, mxz = -Infinity;
-        for (const v of pts) { const u = v.x * ca + v.z * sa, w = -v.x * sa + v.z * ca; mnx = Math.min(mnx, u); mxx = Math.max(mxx, u); mnz = Math.min(mnz, w); mxz = Math.max(mxz, w); }
-        const uc = (mnx + mxx) / 2, wc = (mnz + mxz) / 2;
-        this.addObstacle(uc * ca - wc * sa, uc * sa + wc * ca, (mxx - mnx) / 2, (mxz - mnz) / 2, Math.atan2(-sa, ca), 'building');
+        this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
       }
       // tetto piano
       const contour = pts.map((p) => new THREE.Vector2(p.x, p.z));

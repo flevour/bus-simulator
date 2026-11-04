@@ -71,7 +71,7 @@ export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400) {
 }
 
 // Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia
-export function allStopPlacements(net, snap) {
+export function allStopPlacements(net, snap, clear = () => 9) {
   const served = new Map();
   for (const L of LINES) for (const v of L.variants) for (const st of v.stops) {
     const set = served.get(st.id) || served.set(st.id, new Set()).get(st.id);
@@ -87,6 +87,9 @@ export function allStopPlacements(net, snap) {
     if ((st.x - r.cx) * -dz + (st.z - r.cz) * dx < 0) { dx = -dx; dz = -dz; }
     const rx = -dz, rz = dx;
     if (out.some((o) => Math.hypot(o.cx - r.cx, o.cz - r.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) continue;
+    // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate)
+    const px = r.cx + rx * (r.hw + 1.6), pz = r.cz + rz * (r.hw + 1.6);
+    if (clear(px, pz) < 0.6 || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < 0.6) continue;
     out.push({
       name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
       x: r.cx + rx * (r.hw + 1.6), z: r.cz + rz * (r.hw + 1.6), cx: r.cx, cz: r.cz, dx, dz, rx, rz, hw: r.hw,

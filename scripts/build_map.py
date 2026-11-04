@@ -395,6 +395,54 @@ def main(osm_path, gtfs_dir, out):
                 flat += [round(pts[i][0], 1), round(pts[i][1], 1)]
             water.append([nm, wd, flat])
 
+    # larghezza delle strade limitata allo spazio libero tra le facciate reali
+    WC = 25
+    wgrid = defaultdict(list)
+    for b in buildings:
+        f = b[3]
+        n = len(f) // 2
+        for i in range(n):
+            ax, az, bx, bz = f[2 * i], f[2 * i + 1], f[2 * ((i + 1) % n)], f[2 * ((i + 1) % n) + 1]
+            for gx in range(int(min(ax, bx) // WC), int(max(ax, bx) // WC) + 1):
+                for gz in range(int(min(az, bz) // WC), int(max(az, bz) // WC) + 1):
+                    wgrid[(gx, gz)].append((ax, az, bx, bz))
+    narrowed = 0
+    for e in edges:
+        a, b, cls, wd = e[0], e[1], e[2], e[3]
+        (ax, az), (bx, bz) = nodes[a], nodes[b]
+        L = math.hypot(bx - ax, bz - az)
+        if L < 1:
+            continue
+        dx, dz = (bx - ax) / L, (bz - az) / L
+        rx, rz = -dz, dx
+        free = 1e9
+        for t in (0.2, 0.5, 0.8):
+            px, pz = ax + (bx - ax) * t, az + (bz - az) * t
+            dl = dr = 1e9
+            for gx in range(int((px - 15) // WC), int((px + 15) // WC) + 1):
+                for gz in range(int((pz - 15) // WC), int((pz + 15) // WC) + 1):
+                    for (sx, sz, ex, ez) in wgrid.get((gx, gz), ()):
+                        ux, uz = ex - sx, ez - sz
+                        l2 = ux * ux + uz * uz or 1e-9
+                        tt = max(0, min(1, ((px - sx) * ux + (pz - sz) * uz) / l2))
+                        qx, qz = sx + ux * tt - px, sz + uz * tt - pz
+                        d = math.hypot(qx, qz)
+                        if d > 15:
+                            continue
+                        # solo muri ai lati (non davanti/dietro lungo la strada)
+                        side = qx * rx + qz * rz
+                        if abs(qx * dx + qz * dz) > d * 0.8:
+                            continue
+                        if side >= 0:
+                            dr = min(dr, d)
+                        else:
+                            dl = min(dl, d)
+            free = min(free, 2 * min(dl, dr) - 1.0)
+        if free < wd:
+            e[3] = round(max(4.2, free), 1)
+            narrowed += 1
+    print('strade ristrette tra le facciate:', narrowed)
+
     nodes_flat = []
     for x, z in nodes:
         nodes_flat += [round(x, 1), round(z, 1)]
