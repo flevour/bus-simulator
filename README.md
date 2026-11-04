@@ -3,6 +3,8 @@
 Simulatore di autobus urbano **in prima persona** ambientato a **Padova**, realizzato con [Three.js](https://threejs.org/).
 Scegli una linea, il servizio **feriale** o **festivo**, la direzione e la corsa dell'orario, poi porta i passeggeri a destinazione rispettando fermate, semafori, limiti di velocità e tabella di marcia.
 
+**Gioca online:** https://flevour.github.io/bus-simulator/
+
 ## Avvio
 
 ```bash
@@ -11,6 +13,13 @@ npm run dev        # server di sviluppo su http://localhost:5173
 npm run build      # build di produzione in dist/
 npm run build:single  # un unico file HTML autosufficiente in dist-single/index.html
 ```
+
+### Pubblicazione su GitHub Pages
+
+Il workflow `.github/workflows/pages.yml` compila il gioco (`npm run build`) e pubblica `dist/` su GitHub Pages
+a ogni push sul ramo principale (o a mano da *Actions → Pubblica su GitHub Pages → Run workflow*).
+Va attivato una sola volta: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+I percorsi del build sono relativi (`base: './'`), quindi il gioco funziona anche sotto `/bus-simulator/`.
 
 ## Dati reali: OpenStreetMap + GTFS Busitalia Veneto
 
