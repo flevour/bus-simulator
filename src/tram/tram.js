@@ -163,7 +163,7 @@ export class TramTrack {
   setHeights(fn) {
     for (const d of [1, -1]) {
       const P = this.paths[d], raw = [];
-      for (let s = 0; s <= P.len; s += 5) { const p = P.at(s); raw.push(fn(p.x, p.z)); }
+      for (let s = 0; s <= P.len; s += 5) { const p = P.at(s); raw.push(fn(p.x, p.z, p.dx, p.dz)); }
       const sm = raw.map((_, i) => { let a = 0, n = 0; for (let k = -5; k <= 5; k++) { const v = raw[i + k]; if (v != null) { a += v; n++; } } return a / n; });
       this.h[d] = sm.map((v) => (v < 0.25 ? 0 : v));
     }

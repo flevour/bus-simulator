@@ -591,7 +591,7 @@ export class City {
     // binari per verso (doppio binario dove i versi corrono affiancati, singolo dove si separano) e quote del cavalcavia
     const track = (this.tramTrack = new TramTrack(this.net));
     this.tramCenter = track.C;
-    track.setHeights((x, z) => this.nearElevatedHeight(x, z));
+    track.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz));
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
     const deck = [], piers = [], poles = [], wires = [];
     const L = TRAM.lane;
@@ -699,12 +699,15 @@ export class City {
   }
 
   // quota della strada in quota più vicina (per il binario del tram che corre accanto al cavalcavia)
-  nearElevatedHeight(x, z) {
+  // quota del cavalcavia che il binario affianca (direzione dx, dz): contano solo le strade in quota quasi parallele;
+  // quelle che lo scavalcano di traverso (Corso Tredici Giugno a Pontevigodarzere) gli passano sopra
+  nearElevatedHeight(x, z, dx, dz) {
     const arr = this.segGrid.query(x, z, 18, this._qe || (this._qe = []));
     let h = 0, bd = Infinity;
     for (const it of arr) {
       const e = it.ref;
       if (it.kind !== 'road' || !e || !e.elev) continue;
+      if (dx != null && Math.abs(dx * e.dz - dz * e.dx) > 0.7) continue;
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
       if (r.d < it.hw + 9 && r.d < bd) { bd = r.d; h = edgeHeight(e, r.t * e.len); }
     }
