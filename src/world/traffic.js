@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Grid, mulberry32 } from './spatial.js';
+import { Grid, distToSeg, mulberry32 } from './spatial.js';
 import { Y_ROAD, zoneOf } from './city.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 
@@ -449,23 +449,39 @@ export class Walkers {
     this.S = new THREE.Vector3(1, 1, 1);
     this.P = new THREE.Vector3();
   }
+  // punto di marciapiede: lontano dalle carreggiate (le vie pedonali vanno bene) e dalla sede del tram
+  onWalk(x, z) {
+    for (const it of this.city.segGrid.query(x, z, 12, this._qw || (this._qw = []))) {
+      if (it.kind !== 'tram' && (it.kind !== 'road' || (it.ref && it.ref.ped))) continue;
+      if (distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw + 0.4) return false;
+    }
+    return true;
+  }
   spawn(bus) {
+    if (!this.city) return;
     for (let k = 0; k < 10; k++) {
       const a0 = this.rnd() * Math.PI * 2, d0 = 40 + this.rnd() * 520;
-      const arr = this.city ? this.city.segGrid.query(bus.x + Math.cos(a0) * d0, bus.z + Math.sin(a0) * d0, 60, this._re || (this._re = [])).filter((it) => it.kind === 'road' && it.ref) : [];
+      // niente pedoni accanto a cavalcavia e gallerie: a terra finirebbero sulla strada sotto
+      const arr = this.city.segGrid.query(bus.x + Math.cos(a0) * d0, bus.z + Math.sin(a0) * d0, 60, this._re || (this._re = [])).filter((it) => it.kind === 'road' && it.ref && !it.ref.elev && !it.ref.tunnel);
       if (!arr.length) continue;
       const e = arr[Math.floor(this.rnd() * arr.length)].ref;
       const A = this.net.nodes[e.a], B = this.net.nodes[e.b];
       const s = A.radius + this.rnd() * (e.len - A.radius - B.radius);
       const side = this.rnd() < 0.5 ? -1 : 1;
       const off = e.width / 2 + 1.2 + this.rnd() * 2.2;
-      const x = A.x + e.dx * s - e.dz * side * off, z = A.z + e.dz * s + e.dx * side * off;
+      const at = (t) => [A.x + e.dx * t - e.dz * side * off, A.z + e.dz * t + e.dx * side * off];
+      const [x, z] = at(s);
       const d = Math.hypot(x - bus.x, z - bus.z);
-      if (d > 600 || d < 40) continue;
+      if (d > 600 || d < 40 || !this.onWalk(x, z)) continue;
       const zone = zoneOf(x, z);
       if (zone === 2 && this.rnd() < 0.7) continue;
+      // tratto di marciapiede libero attorno al punto: il pedone va avanti e indietro lì dentro
+      let s0 = s, s1 = s;
+      while (s0 - 1.5 > A.radius && s - s0 < 60 && this.onWalk(...at(s0 - 1.5))) s0 -= 1.5;
+      while (s1 + 1.5 < e.len - B.radius && s1 - s < 60 && this.onWalk(...at(s1 + 1.5))) s1 += 1.5;
+      if (s1 - s0 < 4) continue;
       const dir = this.rnd() < 0.5 ? 1 : -1;
-      this.list.push({ e, s, side, off, dir, v: 1.1 + this.rnd() * 0.5, x, z, ph: this.rnd() * 6, col: new THREE.Color().setHSL(this.rnd(), 0.45, 0.25 + this.rnd() * 0.4), sc: 0.9 + this.rnd() * 0.2 });
+      this.list.push({ e, s, s0, s1, side, off, dir, v: 1.1 + this.rnd() * 0.5, x, z, ph: this.rnd() * 6, col: new THREE.Color().setHSL(this.rnd(), 0.45, 0.25 + this.rnd() * 0.4), sc: 0.9 + this.rnd() * 0.2 });
       return;
     }
   }
@@ -475,7 +491,7 @@ export class Walkers {
       if (Math.hypot(p.x - bus.x, p.z - bus.z) > 700) { this.list.splice(i, 1); continue; }
       p.s += p.v * p.dir * dt;
       const A = this.net.nodes[p.e.a], B = this.net.nodes[p.e.b];
-      if (p.s < A.radius || p.s > p.e.len - B.radius) p.dir *= -1;
+      if ((p.s < p.s0 && p.dir < 0) || (p.s > p.s1 && p.dir > 0)) p.dir *= -1;
       p.x = A.x + p.e.dx * p.s - p.e.dz * p.side * p.off;
       p.z = A.z + p.e.dz * p.s + p.e.dx * p.side * p.off;
       p.ph += dt * p.v * 5;
