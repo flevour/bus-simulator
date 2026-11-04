@@ -132,6 +132,9 @@ export class TramTrack {
       south = north.map((p, i) => { const q = C.at(ns[i]); return { x: q.x + q.dz * TRAM.lane, z: q.z - q.dx * TRAM.lane }; }).reverse();
       wS = wN.slice().reverse();
     }
+    // i punti GTFS fitti e rumorosi (anello della stazione, Borgomagno) lasciano spigoli che i raccordi non tolgono:
+    // media mobile su ±9 m, due passate, estremi fermi. Una curva vera di 28 m si sposta di circa mezzo metro
+    smoothLane(north); smoothLane(south);
     this.paths = { 1: new TrackPath(dedup(north)), '-1': new TrackPath(dedup(south)) };
     // doppio binario lungo ogni percorso (0..1), campionato come i punti
     this.dbl = { 1: resampleW(this.paths[1], north, wN), '-1': resampleW(this.paths[-1], south, wS) };
@@ -183,6 +186,16 @@ export class TramTrack {
     if (!h) return 0;
     const f = Math.max(0, Math.min(h.length - 1, s / 5)), i = Math.floor(f), t = f - i;
     return h[i] + ((h[Math.min(h.length - 1, i + 1)] ?? h[i]) - h[i]) * t;
+  }
+}
+function smoothLane(pts, k = 3, passes = 2) {
+  for (let pass = 0; pass < passes; pass++) {
+    const src = pts.map((p) => ({ x: p.x, z: p.z }));
+    for (let i = k; i < pts.length - k; i++) {
+      let x = 0, z = 0;
+      for (let j = -k; j <= k; j++) { x += src[i + j].x; z += src[i + j].z; }
+      pts[i].x = x / (2 * k + 1); pts[i].z = z / (2 * k + 1);
+    }
   }
 }
 function dedup(pts) { return pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 0.05); }
