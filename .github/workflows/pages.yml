@@ -1,10 +1,11 @@
 # Compila il gioco con Vite e lo pubblica su GitHub Pages.
 # Una tantum, nel repository: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Pubblica solo da main: l'ambiente github-pages accetta deploy soltanto da quel ramo.
 name: Pubblica su GitHub Pages
 
 on:
   push:
-    branches: [claude/padova-bus-simulator, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

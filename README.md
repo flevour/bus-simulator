@@ -17,7 +17,7 @@ npm run build:single  # un unico file HTML autosufficiente in dist-single/index.
 ### Pubblicazione su GitHub Pages
 
 Il workflow `.github/workflows/pages.yml` compila il gioco (`npm run build`) e pubblica `dist/` su GitHub Pages
-a ogni push sul ramo principale (o a mano da *Actions → Pubblica su GitHub Pages → Run workflow*).
+a ogni push su `main` (o a mano da *Actions → Pubblica su GitHub Pages → Run workflow*).
 Va attivato una sola volta: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 I percorsi del build sono relativi (`base: './'`), quindi il gioco funziona anche sotto `/bus-simulator/`.
 
