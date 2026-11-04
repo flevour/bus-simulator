@@ -30,6 +30,8 @@ DRIVE = {
     'unclassified': (4, 8), 'residential': (5, 7), 'living_street': (6, 6), 'service': (7, 5.5), 'pedestrian': (8, 6),
 }
 SKIP_SERVICE = {'parking_aisle', 'driveway', 'drive-through', 'emergency_access'}
+# area di gioco (Centro storico + Arcella), in gradi: ovest, sud, est, nord
+FOCUS = (11.852, 45.390, 11.912, 45.449)
 WATER_W = {'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
 
 
@@ -82,9 +84,14 @@ def speed_of(tags):
     return int(m.group(1)) if m else 0
 
 
-def main(osm_path, gtfs_dir, out):
+def in_focus(lat, lon, m=0.0):
+    return FOCUS[0] - m <= lon <= FOCUS[2] + m and FOCUS[1] - m <= lat <= FOCUS[3] + m
+
+
+def main(osm_path, gtfs_dir, out, overture_path=None):
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
-    ways = [e for e in els if e['type'] == 'way' and 'geometry' in e]
+    # solo gli elementi che toccano l'area di gioco (con un piccolo margine)
+    ways = [e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
 
     # ---------------- strade ----------------
     roads = []
@@ -348,7 +355,9 @@ def main(osm_path, gtfs_dir, out):
 
     # ---------------- edifici ----------------
     buildings = []
-    for w in ways:
+    if overture_path:
+        buildings = overture_buildings(overture_path)
+    for w in ([] if overture_path else ways):
         t = w.get('tags', {})
         if 'building' not in t or w['nodes'][0] != w['nodes'][-1]:
             continue
@@ -453,6 +462,41 @@ def main(osm_path, gtfs_dir, out):
             narrowed += 1
     print('strade ristrette tra le facciate:', narrowed)
 
+    # tram SIR1 (dal GTFS): tracciato principale e fermate, per la sede tranviaria
+    import csv
+    rd = lambda f: csv.DictReader(open(f'{gtfs_dir}/{f}', encoding='utf-8-sig'))
+    troutes = {r['route_id'] for r in rd('routes.txt') if r['agency_id'] != '10'}
+    tshapes, ttrips = defaultdict(int), {}
+    for t in rd('trips.txt'):
+        if t['route_id'] in troutes:
+            tshapes[t['shape_id']] += 1
+            ttrips.setdefault(t['shape_id'], t['trip_id'])
+    tram = []
+    tram_stop_ids = set()
+    if tshapes:
+        main_shape = max(tshapes, key=tshapes.get)
+        pts = []
+        for r in rd('shapes.txt'):
+            if r['shape_id'] == main_shape:
+                pts.append((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])))
+        pts.sort()
+        flat = []
+        for _, la, lo in pts:
+            x, z = xz(la, lo)
+            flat += [round(x, 1), round(z, 1)]
+        tram.append(flat)
+        trip = ttrips[main_shape]
+        for r in rd('stop_times.txt'):
+            if r['trip_id'] == trip:
+                tram_stop_ids.add((int(r['stop_sequence']), r['stop_id']))
+    stops_by_id = {s['stop_id']: s for s in rd('stops.txt')}
+    tram_stops = []
+    for _, sid in sorted(tram_stop_ids):
+        s = stops_by_id[sid]
+        x, z = xz(float(s['stop_lat']), float(s['stop_lon']))
+        tram_stops.append([round(x, 1), round(z, 1), build_gtfs.clean_name(s['stop_desc'] or s['stop_name'])])
+    print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops))
+
     nodes_flat = []
     for x, z in nodes:
         nodes_flat += [round(x, 1), round(z, 1)]
@@ -461,12 +505,138 @@ def main(osm_path, gtfs_dir, out):
         'origin': [ORIGIN_LAT, ORIGIN_LON], 'ferDate': build_gtfs.FER_DATE, 'fesDate': build_gtfs.FES_DATE,
         'nodes': nodes_flat, 'edges': [v for e in edges for v in e], 'names': names,
         'stops': gt['stops'], 'lines': lines_out,
-        'buildings': buildings, 'rails': rails, 'water': water,
+        'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramStops': tram_stops,
     }
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
     print(f'nodi {len(nodes)} archi {len(edges)} edifici {len(buildings)} binari {len(rails)} acque {len(water)} linee {len(lines_out)} varianti non agganciate {failed}')
 
 
+# altezza Microsoft ML -> numero di piani (calibrata sugli edifici con building:levels OSM)
+ML_CAL = [(0, 1), (4.7, 1), (5.3, 2), (6.3, 3), (8.1, 4), (11.0, 5), (14.3, 6.5), (25.0, 9), (50.0, 15), (86.0, 20)]
+
+
+def floors_from_ml(h):
+    for (h0, f0), (h1, f1) in zip(ML_CAL, ML_CAL[1:]):
+        if h <= h1:
+            return f0 + (f1 - f0) * (h - h0) / (h1 - h0)
+    return ML_CAL[-1][1] * h / ML_CAL[-1][0]
+
+
+def ring_area(r):
+    a = 0.0
+    for (x1, z1), (x2, z2) in zip(r, r[1:] + r[:1]):
+        a += x1 * z2 - x2 * z1
+    return a / 2
+
+
+def overture_buildings(path):
+    """Edifici Overture (piante OSM + Microsoft, con cortili) con altezza stimata in modo realistico."""
+    import struct
+    import zlib
+    import pyarrow.parquet as pq
+    rows = pq.read_table(path).to_pylist()
+
+    def rings_of(wkb):
+        # WKB little/big endian: Polygon (3) o MultiPolygon (6)
+        def rd_poly(buf, off):
+            bo = '<' if buf[off] == 1 else '>'
+            typ = struct.unpack_from(bo + 'I', buf, off + 1)[0]
+            off += 5
+            polys = []
+            if typ == 3:
+                n = struct.unpack_from(bo + 'I', buf, off)[0]; off += 4
+                rings = []
+                for _ in range(n):
+                    m = struct.unpack_from(bo + 'I', buf, off)[0]; off += 4
+                    pts = struct.unpack_from(bo + 'd' * (2 * m), buf, off); off += 16 * m
+                    rings.append([(pts[2 * i], pts[2 * i + 1]) for i in range(m)])
+                polys.append(rings)
+            elif typ == 6:
+                n = struct.unpack_from(bo + 'I', buf, off)[0]; off += 4
+                for _ in range(n):
+                    p2, off = rd_poly(buf, off)
+                    polys += p2
+            return polys, off
+        return rd_poly(bytes(wkb), 0)[0]
+
+    out = []
+    for r in rows:
+        if r.get('is_underground'):
+            continue
+        name = (r.get('names') or {}).get('primary') or ''
+        cls = r.get('class') or ''
+        sub = r.get('subtype') or ''
+        for rings in rings_of(r['geometry']):
+            loc = []
+            for ring in rings:
+                pts = [xz(lat, lon) for lon, lat in ring]
+                if len(pts) > 1 and pts[0] == pts[-1]:
+                    pts = pts[:-1]
+                if len(pts) < 3:
+                    continue
+                far = max(range(len(pts)), key=lambda i: math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]))
+                keep = rdp(pts, 0.35, {far})
+                loc.append([pts[i] for i in keep])
+            if not loc or len(loc[0]) < 3:
+                continue
+            outer, holes = loc[0], [h for h in loc[1:] if len(h) >= 3 and abs(ring_area(h)) > 12]
+            area = abs(ring_area(outer)) - sum(abs(ring_area(h)) for h in holes)
+            if area < 4:
+                continue
+            cx = sum(p[0] for p in outer) / len(outer)
+            cz = sum(p[1] for p in outer) / len(outer)
+            centro = math.hypot(cx + 150, (cz - 120) * 1.15) < 950
+            seed = (zlib.crc32(r['id'].encode()) % 1000) / 1000
+            src_h = None
+            ml = False
+            for s in r.get('sources') or []:
+                if s.get('property') == '/properties/height':
+                    ml = s.get('dataset') == 'Microsoft ML Buildings'
+            # 1) piani da OSM  2) altezza OSM  3) altezza Microsoft calibrata  4) stima per tipologia
+            if r.get('num_floors'):
+                floors = float(r['num_floors'])
+            elif r.get('height') and not ml:
+                src_h = float(r['height'])
+                floors = None
+            elif r.get('height'):
+                floors = floors_from_ml(float(r['height']))
+            else:
+                floors = None
+            if src_h is None and floors is None:
+                if cls in ('garage', 'garages', 'carport', 'shed', 'roof', 'hut'):
+                    floors = 1
+                elif cls in ('church', 'cathedral', 'chapel', 'basilica'):
+                    src_h = 16 + seed * 8
+                elif cls in ('house', 'detached', 'semidetached_house', 'terrace'):
+                    floors = 2 + (seed > 0.7)
+                elif centro:
+                    # centro storico: 3-5 piani, più alti sui lotti grandi
+                    floors = 3 + (area > 220) + (area > 600 and seed > 0.4) + (seed > 0.85)
+                elif area < 60:
+                    floors = 1
+                elif area < 160:
+                    floors = 2 + (seed > 0.6)
+                else:
+                    floors = 4 + int(seed * 3)
+            if src_h is None:
+                floors = max(1, round(floors))
+                fh = 3.5 if centro else 3.1
+                src_h = floors * fh + (0.8 if floors > 1 else 0.4)
+            kind = 'church' if cls in ('church', 'cathedral', 'chapel', 'basilica') else 'train_station' if cls == 'train_station' else cls if cls in ('house', 'apartments', 'garage', 'garages', 'roof', 'industrial', 'warehouse', 'commercial', 'retail', 'hospital', 'school', 'university') else ''
+            flat = []
+            for x, z in outer:
+                flat += [round(x, 1), round(z, 1)]
+            hflat = []
+            for h in holes:
+                hf = []
+                for x, z in h:
+                    hf += [round(x, 1), round(z, 1)]
+                hflat.append(hf)
+            out.append([round(src_h, 1), kind, name, flat, hflat] if hflat else [round(src_h, 1), kind, name, flat])
+    print('edifici Overture:', len(out))
+    return out
+
+
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], sys.argv[3])
+    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else None)

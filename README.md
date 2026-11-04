@@ -67,7 +67,8 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 | **C** | cambia visuale (cabina, esterna, passeggeri, dall'alto) |
 | **Z / X** | guarda a sinistra / destra |
 | **T** | salta l'attesa in fermata (in anticipo l'attesa scorre comunque ×12) |
-| **M** | mappa grande · **I** aiuto · **U** audio on/off · **P / Esc** pausa |
+| **J** | teletrasporto: prossima fermata, fermata successiva o luoghi principali (tasti 1–9) |
+| **M** | mappa grande (clic su una strada per teletrasportarti) · **I** aiuto · **U** audio on/off · **P / Esc** pausa |
 
 ## Come si gioca
 

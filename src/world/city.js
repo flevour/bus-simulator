@@ -5,6 +5,7 @@ import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
 
 export const Y_ROAD = 0.14;
+export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie rosse e rotaia centrale)
 const Y_SIDEWALK = 0.1;
 const SIDEWALK = 4;
 
@@ -183,7 +184,7 @@ export class City {
     this.nightMats = [];
     this.lampPositions = [];
     this.timings = {};
-    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps', 'clearBusRoads']) {
+    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildTramway', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps', 'clearBusRoads']) {
       const t0 = performance.now();
       this[step]();
       this.timings[step] = Math.round(performance.now() - t0);
@@ -225,6 +226,7 @@ export class City {
     }
     for (const w of water) for (let i = 0; i < w.pts.length - 1; i++) this.addSeg(w.pts[i].x, w.pts[i].z, w.pts[i + 1].x, w.pts[i + 1].z, w.width / 2 + 6, 'water', w);
     for (const r of rails) if (!r.tunnel) for (let i = 0; i < r.pts.length - 1; i++) this.addSeg(r.pts[i].x, r.pts[i].z, r.pts[i + 1].x, r.pts[i + 1].z, 3.2, 'rail');
+    for (const t of this.net.tram || []) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, TRAM_HW, 'tram');
   }
   // distanza libera (positiva = fuori) dalle feature
   clearance(x, z, kinds = null, r = 40) {
@@ -449,6 +451,57 @@ export class City {
     if (par.length) this.group.add(new THREE.Mesh(mergeGeometries(par), new THREE.MeshLambertMaterial({ color: 0xcfc6b4 })));
   }
 
+  // sede del tram: due corsie rosse, cordoli e la rotaia di guida centrale (Translohr), con le banchine alle fermate
+  buildTramway() {
+    const tram = this.net.tram || [];
+    if (!tram.length) return;
+    const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
+    for (const t of tram) {
+      for (let i = 0; i < t.length - 1; i++) {
+        const a = t[i], b = t[i + 1];
+        red.ribbon(a.x, a.z, b.x, b.z, TRAM_HW * 2, Y_ROAD + 0.03, 8);
+        rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8);
+        const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, nx = -(b.z - a.z) / l, nz = (b.x - a.x) / l;
+        for (const sd of [-1, 1]) kerb.ribbon(a.x + nx * sd * TRAM_HW, a.z + nz * sd * TRAM_HW, b.x + nx * sd * TRAM_HW, b.z + nz * sd * TRAM_HW, 0.3, Y_ROAD + 0.06, 8);
+        red.disc(b.x, b.z, TRAM_HW, Y_ROAD + 0.029, 12, 8);
+      }
+    }
+    const tex = TX.tramLaneTexture();
+    const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
+    rm.receiveShadow = true;
+    this.group.add(rm, new THREE.Mesh(rail.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)), new THREE.Mesh(kerb.build(), layer(new THREE.MeshLambertMaterial({ color: 0xd8d4cc }), 6)));
+    // banchine delle fermate del tram, lungo la sede
+    const plat = [], roofs = [];
+    for (const st of this.net.tramStops || []) {
+      let best = null, bd = 40;
+      for (const t of tram) for (let i = 0; i < t.length - 1; i++) {
+        const r = distToSeg(st.x, st.z, t[i].x, t[i].z, t[i + 1].x, t[i + 1].z);
+        if (r.d < bd) { bd = r.d; best = { a: t[i], b: t[i + 1], t: r.t }; }
+      }
+      if (!best) continue;
+      const { a, b } = best;
+      const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, dx = (b.x - a.x) / l, dz = (b.z - a.z) / l;
+      const cx = a.x + (b.x - a.x) * best.t, cz = a.z + (b.z - a.z) * best.t;
+      const ang = Math.atan2(dx, dz);
+      for (const sd of [-1, 1]) {
+        const ox = -dz * sd * (TRAM_HW + 1.5), oz = dx * sd * (TRAM_HW + 1.5);
+        if (this.clearance(cx + ox, cz + oz, ['road'], 20) < 0.3) continue;
+        plat.push(new THREE.BoxGeometry(2.8, 0.3, 30).rotateY(ang).translate(cx + ox, Y_ROAD + 0.15, cz + oz));
+        roofs.push(new THREE.BoxGeometry(2.4, 0.15, 12).rotateY(ang).translate(cx + ox, 3.1, cz + oz));
+        for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(cx + ox + dx * k - dz * sd * 0.9, 1.6, cz + oz + dz * k + dx * sd * 0.9));
+      }
+    }
+    if (plat.length) this.group.add(new THREE.Mesh(mergeGeometries(plat), new THREE.MeshLambertMaterial({ color: 0xc9c3b8 })));
+    if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
+  }
+
+  // la sede del tram sotto un punto?
+  onTramway(x, z) {
+    const arr = this.segGrid.query(x, z, 6, this._qt || (this._qt = []));
+    for (const it of arr) if (it.kind === 'tram' && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw - 0.4) return true;
+    return false;
+  }
+
   buildRailway() {
     // un nastro per ogni binario OSM (i fasci di stazione sono binari paralleli)
     const t = TX.railTexture1();
@@ -579,7 +632,7 @@ export class City {
 
   // ---- fermate (scenografia per tutte le linee) ----
   buildStops() {
-    this.stopPlacements = allStopPlacements(this.net, (x, z) => this.snapToRoad(x, z), (x, z) => this.clearance(x, z, ['road'], 20));
+    this.stopPlacements = allStopPlacements(this.net, (x, z) => this.snapToRoad(x, z), (x, z) => this.clearance(x, z, ['road', 'tram'], 20));
     const glass = new THREE.MeshLambertMaterial({ color: 0x9fc4d6, transparent: true, opacity: 0.35 });
     const frame = new THREE.MeshLambertMaterial({ color: 0x2b3a4a });
     const yellow = new THREE.MeshLambertMaterial({ color: 0xf2c200 });
@@ -644,13 +697,15 @@ export class City {
   // ---- edifici ----
   // sulle strade percorse dai bus nessun ostacolo può invadere la carreggiata
   // (piccole imprecisioni di allineamento tra strade ed edifici OSM)
-  clearBusRoads() {
+  clearBusRoads(tile = null) {
     const { nodes, edges } = this.net;
     let removed = 0;
     const q = [];
+    const T = (this.tileSize || 400) / 2 + 80;
     for (const e of edges) {
       if (!e.routes) continue;
       const A = nodes[e.a];
+      if (tile) { const B = nodes[e.b]; if (Math.abs((A.x + B.x) / 2 - tile.cx) > T || Math.abs((A.z + B.z) / 2 - tile.cz) > T) continue; }
       // corsia del bus: mezzeria (sensi unici) o metà destra, più la mezza larghezza del bus
       const r = Math.max(e.width / 2 - 0.3, (e.oneway ? 0 : e.width / 4) + 1.5);
       for (let s = 0; s <= e.len; s += 2) {
@@ -662,7 +717,8 @@ export class City {
         }
       }
     }
-    this.clearedObstacles = removed;
+    this.clearedObstacles = (this.clearedObstacles || 0) + removed;
+    if (!tile) this.busRoadsCleared = true;
   }
 
   // dentro l'area coperta dagli edifici OSM non si generano edifici procedurali
@@ -675,40 +731,77 @@ export class City {
   buildRealBuildings() {
     const list = this.net.buildings;
     if (!list || !list.length) return;
+    this.realBuildingCount = list.length;
+    // gli edifici sono divisi in riquadri da 400 m costruiti a richiesta (prima quelli vicini al bus)
+    const T = (this.tileSize = 400);
+    this.tiles = new Map();
+    for (const b of list) {
+      let cx = 0, cz = 0;
+      for (const p of b.pts) { cx += p.x; cz += p.z; }
+      b.cx = cx / b.pts.length; b.cz = cz / b.pts.length;
+      const ix = Math.floor(b.cx / T), iz = Math.floor(b.cz / T), key = ix + ',' + iz;
+      let t = this.tiles.get(key);
+      if (!t) this.tiles.set(key, (t = { key, cx: (ix + 0.5) * T, cz: (iz + 0.5) * T, list: [], built: false, meshes: [] }));
+      t.list.push(b);
+    }
+    this.bMat = makeBuildingMaterial(this.uniforms, true);
+    this.rMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.tilesBuilt = 0;
+    const p = this.net.landmarks.prato;
+    if (p) this.ensureTiles(p.x, p.z, 700);
+  }
+
+  // costruisce subito i riquadri entro r metri (es. all'avvio o dopo un teletrasporto)
+  ensureTiles(x, z, r) {
+    if (!this.tiles) return;
+    for (const t of this.tiles.values()) if (!t.built && Math.hypot(t.cx - x, t.cz - z) < r + this.tileSize * 0.71) this.buildTile(t);
+  }
+
+  // a ogni fotogramma: costruisce qualche riquadro in sottofondo e nasconde quelli lontani
+  streamTiles(x, z, budgetMs = 6) {
+    if (!this.tiles) return;
+    const t0 = performance.now();
+    if (!this._order || performance.now() - (this._orderT || 0) > 1500) {
+      this._order = [...this.tiles.values()].filter((t) => !t.built).sort((a, b) => Math.hypot(a.cx - x, a.cz - z) - Math.hypot(b.cx - x, b.cz - z));
+      this._orderT = performance.now();
+    }
+    while (this._order.length && performance.now() - t0 < budgetMs) {
+      const t = this._order.shift();
+      if (!t.built) this.buildTile(t);
+    }
+    for (const t of this.tiles.values()) {
+      if (!t.built) continue;
+      const vis = Math.hypot(t.cx - x, t.cz - z) < 2600;
+      for (const m of t.meshes) m.visible = vis;
+    }
+  }
+
+  buildTile(tile) {
+    tile.built = true;
+    this.tilesBuilt++;
     const W = { pos: [], nrm: [], col: [], seed: [], h: [] };
     const R = { pos: [], col: [] };
     const hash = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
     const C = new THREE.Color();
-    this.specials = [];
-    for (const b of list) {
+    const specials = [];
+    const ringArea2 = (r) => { let a = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; a += p.x * q.z - q.x * p.z; } return a; };
+    for (const b of tile.list) {
       const pts = b.pts;
       if (pts.length < 3) continue;
-      let cx = 0, cz = 0, area2 = 0;
-      for (let i = 0; i < pts.length; i++) {
-        const p = pts[i], q = pts[(i + 1) % pts.length];
-        cx += p.x; cz += p.z;
-        area2 += p.x * q.z - q.x * p.z;
-      }
-      cx /= pts.length; cz /= pts.length;
-      const area = Math.abs(area2) / 2;
-      if (area < 6) continue;
+      const holes = b.holes || [];
+      const area2 = ringArea2(pts);
+      const area = Math.abs(area2) / 2 - holes.reduce((s, h) => s + Math.abs(ringArea2(h)) / 2, 0);
+      if (area < 4) continue;
+      const cx = b.cx, cz = b.cz;
       const r = hash(cx, cz);
       const zone = zoneOf(cx, cz);
       const nm = b.name || '';
-      const church = /church|cathedral|chapel|basilica/.test(b.kind) || /^(Chiesa|Basilica|Duomo|Cattedrale|Oratorio)/i.test(nm);
-      let h = b.h;
-      if (!h) {
-        if (b.kind === 'garage' || b.kind === 'garages') h = 3;
-        else if (b.kind === 'roof') h = 4.5;
-        else if (b.kind === 'house') h = 6.5 + r * 3;
-        else if (b.kind === 'industrial' || b.kind === 'warehouse') h = 8 + r * 4;
-        else if (church) h = 14 + r * 6;
-        else if (area < 40) h = 3.5 + r * 2;
-        else h = zone === 0 ? 10 + Math.floor(r * 4) * 3.1 : 9 + Math.floor(r * 5) * 3.1;
-      }
+      const church = b.kind === 'church' || /church|cathedral|chapel|basilica/.test(b.kind) || /^(Chiesa|Basilica|Duomo|Cattedrale|Oratorio)/i.test(nm);
+      let h = b.h || 9;
       let col;
       if (church) col = C.set(r < 0.5 ? 0xa45a3c : 0xd8c4a4);
       else if (b.kind === 'hospital') col = C.set(0xeeeeea);
+      else if (b.kind === 'garage' || b.kind === 'garages' || b.kind === 'industrial' || b.kind === 'warehouse') col = C.set(0xb8b4ac).offsetHSL(0, 0, (r - 0.5) * 0.1);
       else { const pal = zone === 0 ? PAL_CENTRO : zone === 1 ? PAL_MID : PAL_OUT; col = C.set(pal[Math.floor(r * pal.length)]); }
       const special = /Sant'Antonio/i.test(nm) ? 'santo' : /Palazzo della Ragione/i.test(nm) ? 'ragione' : /Duomo|Cattedrale|Santa Maria Assunta/i.test(nm) && church ? 'duomo' : /Specola/i.test(nm) ? 'specola' : /Scrovegni/i.test(nm) ? 'scrovegni' : b.kind === 'train_station' || /Stazione di Padova/i.test(nm) ? 'stazione' : null;
       if (special === 'santo') { h = 24; col = C.set(0xa45a3c); }
@@ -716,71 +809,84 @@ export class City {
       if (special === 'specola') { h = 40; col = C.set(0xa45a3c); }
       if (special === 'scrovegni') { h = 12; col = C.set(0xa45a3c); }
       if (special === 'stazione') { h = Math.max(h, 13); col = C.set(0xe6dfcf); }
-      if (special) this.specials.push({ kind: special, pts, cx, cz, h, area });
-      const ccw = area2 > 0; // con z verso sud
-      const seed = r;
-      for (let i = 0; i < pts.length; i++) {
-        const p = pts[i], q = pts[(i + 1) % pts.length];
-        const ex = q.x - p.x, ez = q.z - p.z, l = Math.hypot(ex, ez);
-        if (l < 0.05) continue;
-        // normale verso l'esterno
-        let nx = ez / l, nz = -ex / l;
-        if (!ccw) { nx = -nx; nz = -nz; }
-        const v = [[p.x, 0, p.z], [q.x, 0, q.z], [q.x, h, q.z], [p.x, 0, p.z], [q.x, h, q.z], [p.x, h, p.z]];
-        const order = ccw ? [0, 2, 1, 3, 5, 4] : [0, 1, 2, 3, 4, 5];
-        for (const k of order) {
-          W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(seed); W.h.push(h);
+      if (special) specials.push({ kind: special, pts, cx, cz, h, area });
+      // muri: anello esterno con normali verso fuori, cortili con normali verso il cortile
+      const rings = [[pts, false], ...holes.map((hr) => [hr, true])];
+      for (const [ring, isHole] of rings) {
+        const ccw = ringArea2(ring) > 0;
+        const outwardFlip = ccw !== isHole; // vero se la normale (ez,-ex) va invertita
+        for (let i = 0; i < ring.length; i++) {
+          const p = ring[i], q = ring[(i + 1) % ring.length];
+          const ex = q.x - p.x, ez = q.z - p.z, l = Math.hypot(ex, ez);
+          if (l < 0.05) continue;
+          let nx = ez / l, nz = -ex / l;
+          if (!outwardFlip) { nx = -nx; nz = -nz; }
+          const v = [[p.x, 0, p.z], [q.x, 0, q.z], [q.x, h, q.z], [p.x, 0, p.z], [q.x, h, q.z], [p.x, h, p.z]];
+          // ordine dei vertici coerente con la normale (faccia visibile dall'esterno del muro)
+          const cr = (v[1][2] - v[0][2]) * 0 + ((v[1][0] - v[0][0]) * nz - (v[1][2] - v[0][2]) * nx);
+          const order = cr > 0 ? [0, 1, 2, 3, 4, 5] : [0, 2, 1, 3, 5, 4];
+          for (const k of order) { W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(r); W.h.push(h); }
+          this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
         }
-        // muro come ostacolo (solo per i poligoni complessi; i semplici hanno un box unico)
-        this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
       }
-      // tetto a padiglione in coppi sugli edifici di pianta quasi rettangolare
+      // tetto a padiglione sugli edifici quasi rettangolari senza cortile
       const flatKind = b.kind === 'industrial' || b.kind === 'warehouse' || b.kind === 'roof' || b.kind === 'garage' || b.kind === 'garages' || b.kind === 'commercial' || b.kind === 'retail';
-      if (!special && !flatKind && pts.length <= 14 && area < 1600 && area > 25 && h < 24) {
+      if (!special && !flatKind && !holes.length && pts.length <= 14 && area < 1600 && area > 25 && h < 24) {
         const o = minRect(pts);
         if (area / (o.L * o.Wd) > 0.8 && o.Wd > 4) {
-          const tile = zone === 0 || r < 0.75;
-          hipRoof(o, h, tile ? C.set([0xa4553a, 0xb0603f, 0x94503a, 0xb86d4b, 0x9c5a40][Math.floor(r * 5)]) : C.set(0x6f6a64), R);
+          const tile2 = zone === 0 || r < 0.75;
+          hipRoof(o, h, tile2 ? C.set([0xa4553a, 0xb0603f, 0x94503a, 0xb86d4b, 0x9c5a40][Math.floor(r * 5)]) : C.set(0x6f6a64), R);
           continue;
         }
       }
-      // tetto piano
+      // tetto piano (con i cortili)
       const contour = pts.map((p) => new THREE.Vector2(p.x, p.z));
+      const hv = holes.map((hr) => hr.map((p) => new THREE.Vector2(p.x, p.z)));
       let tris;
-      try { tris = THREE.ShapeUtils.triangulateShape(contour, []); } catch (e) { tris = []; }
+      try { tris = THREE.ShapeUtils.triangulateShape(contour, hv); } catch (e) { tris = []; }
+      const all = [...contour, ...hv.flat()];
       const rc = zone === 0 && !church ? C.set([0xa4553a, 0xb0603f, 0x94503a, 0xb86d4b][Math.floor(r * 4)]) : church ? C.set(0x8c4a33) : C.set(0x77736c).offsetHSL(0, 0, (r - 0.5) * 0.1);
       for (const t of tris) {
-        const [a, bb, c] = t;
-        // faccia verso l'alto
-        const s = (contour[bb].x - contour[a].x) * (contour[c].y - contour[a].y) - (contour[bb].y - contour[a].y) * (contour[c].x - contour[a].x);
-        const ids = s > 0 ? [a, c, bb] : [a, bb, c];
-        for (const k of ids) { R.pos.push(contour[k].x, h, contour[k].y); R.col.push(rc.r, rc.g, rc.b); }
+        const [i0, i1, i2] = t;
+        const A = all[i0], B = all[i1], Cc = all[i2];
+        const sgn = (B.x - A.x) * (Cc.y - A.y) - (B.y - A.y) * (Cc.x - A.x);
+        const ids = sgn > 0 ? [A, Cc, B] : [A, B, Cc];
+        for (const P of ids) { R.pos.push(P.x, h, P.y); R.col.push(rc.r, rc.g, rc.b); }
       }
     }
-    const wg = new THREE.BufferGeometry();
-    wg.setAttribute('position', new THREE.Float32BufferAttribute(W.pos, 3));
-    wg.setAttribute('normal', new THREE.Float32BufferAttribute(W.nrm, 3));
-    wg.setAttribute('color', new THREE.Float32BufferAttribute(W.col, 3));
-    wg.setAttribute('aSeed', new THREE.Float32BufferAttribute(W.seed, 1));
-    wg.setAttribute('aH', new THREE.Float32BufferAttribute(W.h, 1));
-    const wm = new THREE.Mesh(wg, makeBuildingMaterial(this.uniforms, true));
-    wm.castShadow = wm.receiveShadow = true;
-    const rg = new THREE.BufferGeometry();
-    rg.setAttribute('position', new THREE.Float32BufferAttribute(R.pos, 3));
-    rg.setAttribute('color', new THREE.Float32BufferAttribute(R.col, 3));
-    rg.computeVertexNormals();
-    const rm = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ vertexColors: true }));
-    rm.castShadow = rm.receiveShadow = true;
-    this.group.add(wm, rm);
-    this.realBuildingCount = list.length;
-    this.buildSpecials();
+    if (W.pos.length) {
+      const wg = new THREE.BufferGeometry();
+      wg.setAttribute('position', new THREE.Float32BufferAttribute(W.pos, 3));
+      wg.setAttribute('normal', new THREE.Float32BufferAttribute(W.nrm, 3));
+      wg.setAttribute('color', new THREE.Float32BufferAttribute(W.col, 3));
+      wg.setAttribute('aSeed', new THREE.Float32BufferAttribute(W.seed, 1));
+      wg.setAttribute('aH', new THREE.Float32BufferAttribute(W.h, 1));
+      const wm = new THREE.Mesh(wg, this.bMat);
+      wm.castShadow = wm.receiveShadow = true;
+      this.group.add(wm);
+      tile.meshes.push(wm);
+    }
+    if (R.pos.length) {
+      const rg = new THREE.BufferGeometry();
+      rg.setAttribute('position', new THREE.Float32BufferAttribute(R.pos, 3));
+      rg.setAttribute('color', new THREE.Float32BufferAttribute(R.col, 3));
+      rg.computeVertexNormals();
+      const rm = new THREE.Mesh(rg, this.rMat);
+      rm.castShadow = rm.receiveShadow = true;
+      this.group.add(rm);
+      tile.meshes.push(rm);
+    }
+    if (specials.length) tile.meshes.push(...this.buildSpecials(specials));
+    // le strade dei bus restano libere anche dagli edifici di questo riquadro
+    if (this.busRoadsCleared) this.clearBusRoads(tile);
   }
 
   // decorazioni dei monumenti sulle piante reali
-  buildSpecials() {
+  buildSpecials(list) {
     const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
     const lead = lam(0x7d8a86), brick = lam(0xa45a3c);
-    const add = (m) => { m.castShadow = true; this.group.add(m); return m; };
+    const made = [];
+    const add = (m) => { m.castShadow = true; this.group.add(m); made.push(m); return m; };
     // rettangolo orientato minimo (asse lungo) di un poligono
     const obb = (pts) => {
       let best = null;
@@ -799,7 +905,7 @@ export class City {
       return best;
     };
     const at = (o, u, w) => ({ x: o.x + u * o.c - w * o.s, z: o.z + u * o.s + w * o.c });
-    for (const sp of this.specials) {
+    for (const sp of list) {
       const o = obb(sp.pts);
       if (sp.kind === 'santo') {
         const domeG = new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -838,8 +944,10 @@ export class City {
         sign.position.set(o.x + n.x * sgn * (o.Wd / 2 + 0.2), sp.h - 2, o.z + n.z * sgn * (o.Wd / 2 + 0.2));
         sign.rotation.y = Math.atan2(n.x * sgn, n.z * sgn);
         this.group.add(sign);
+        made.push(sign);
       }
     }
+    return made;
   }
 
   buildBuildings() {
@@ -1008,7 +1116,7 @@ export class City {
         const side = k % 2 ? 1 : -1;
         const off = e.width / 2 + 1.9;
         const x = A.x + e.dx * s + -e.dz * side * off, z = A.z + e.dz * s + e.dx * side * off;
-        if (this.clearance(x, z, ['road']) < 1.6) continue;
+        if (this.clearance(x, z, ['road', 'tram']) < 1.6) continue;
         lamps.push({ x, z, ang: Math.atan2(e.dx, e.dz), side });
         this.addObstacle(x, z, 0.18, 0.18, 0, 'pole');
       }
@@ -1021,7 +1129,7 @@ export class City {
         const side = rnd() < 0.5 ? -1 : 1;
         const off = e.width / 2 + 2.4;
         const x = mx + -e.dz * side * off, z = mz + e.dx * side * off;
-        if (this.clearance(x, z, ['road']) < 1.8) continue;
+        if (this.clearance(x, z, ['road', 'tram']) < 1.8) continue;
         if (Math.hypot(...lamps.length ? [lamps[lamps.length - 1].x - x, lamps[lamps.length - 1].z - z] : [99, 99]) < 4) continue;
         trees.push({ x, z });
         this.addObstacle(x, z, 0.35, 0.35, 0, 'tree');

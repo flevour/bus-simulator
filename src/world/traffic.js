@@ -469,3 +469,88 @@ export class Walkers {
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 }
+
+// ------------------------------------------------------------------
+// Tram SIR1 (Translohr): due convogli che percorrono la sede tranviaria e si fermano alle fermate
+// ------------------------------------------------------------------
+export class TramSim {
+  constructor(scene, net) {
+    this.line = (net.tram || [])[0] || [];
+    this.trams = [];
+    if (this.line.length < 2) return;
+    const cum = [0];
+    for (let i = 1; i < this.line.length; i++) cum.push(cum[i - 1] + Math.hypot(this.line[i].x - this.line[i - 1].x, this.line[i].z - this.line[i - 1].z));
+    this.cum = cum;
+    this.len = cum[cum.length - 1];
+    // fermate proiettate sul tracciato
+    this.stopS = [];
+    for (const st of net.tramStops || []) {
+      let best = 1e9, bs = 0;
+      for (let i = 0; i < this.line.length - 1; i++) {
+        const a = this.line[i], b = this.line[i + 1];
+        const ex = b.x - a.x, ez = b.z - a.z, l2 = ex * ex + ez * ez || 1;
+        const t = Math.max(0, Math.min(1, ((st.x - a.x) * ex + (st.z - a.z) * ez) / l2));
+        const d = Math.hypot(st.x - a.x - ex * t, st.z - a.z - ez * t);
+        if (d < best) { best = d; bs = cum[i] + Math.sqrt(l2) * t; }
+      }
+      if (best < 40) this.stopS.push(bs);
+    }
+    this.stopS.sort((a, b) => a - b);
+    const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+    const body = lam(0xf2f2ee), red = lam(0xc8102e), glass = lam(0x1d2a33), roof = lam(0xb5b9bd);
+    const modG = [new THREE.BoxGeometry(2.6, 2.1, 10.2).translate(0, 1.55, 0), new THREE.BoxGeometry(2.62, 0.5, 10.22).translate(0, 0.65, 0), new THREE.BoxGeometry(2.64, 1.1, 9.6).translate(0, 1.9, 0), new THREE.BoxGeometry(2.0, 0.35, 8).translate(0, 2.75, 0)];
+    const mats = [body, red, glass, roof];
+    for (const [s0, dir] of [[this.len * 0.25, 1], [this.len * 0.7, -1]]) {
+      const modules = [];
+      for (let k = 0; k < 3; k++) {
+        const g = new THREE.Group();
+        modG.forEach((geo, i) => { const m = new THREE.Mesh(geo, mats[i]); m.castShadow = true; g.add(m); });
+        scene.add(g);
+        modules.push(g);
+      }
+      this.trams.push({ s: s0, dir, v: 0, wait: 0, modules, parts: [], nextStop: null });
+    }
+  }
+  at(s) {
+    s = Math.max(0, Math.min(this.len, s));
+    let i = 0;
+    while (i < this.cum.length - 2 && this.cum[i + 1] < s) i++;
+    const a = this.line[i], b = this.line[i + 1], l = this.cum[i + 1] - this.cum[i] || 1, t = (s - this.cum[i]) / l;
+    return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, h: Math.atan2(b.x - a.x, b.z - a.z) };
+  }
+  update(dt, bus) {
+    for (const tr of this.trams) {
+      // prossima fermata nella direzione di marcia
+      const ahead = tr.dir > 0 ? this.stopS.find((x) => x > tr.s + 0.5) : [...this.stopS].reverse().find((x) => x < tr.s - 0.5);
+      let vt = 8.5;
+      if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
+      else if (ahead != null) {
+        const d = Math.abs(ahead - tr.s);
+        vt = Math.min(vt, Math.sqrt(2 * 0.9 * d) + 0.3);
+        if (d < 1) { tr.wait = 18; tr.s = ahead + tr.dir * 1.2; }
+      }
+      // si ferma se il bus è sulla sede davanti
+      const head = this.at(tr.s + tr.dir * 5);
+      if (Math.hypot(bus.x - head.x, bus.z - head.z) < 14) {
+        const f = (bus.x - head.x) * Math.sin(head.h) * tr.dir + (bus.z - head.z) * Math.cos(head.h) * tr.dir;
+        if (f > -2) vt = 0;
+      }
+      tr.v += Math.max(-2.5, Math.min(1.0, vt - tr.v)) * dt * 2;
+      tr.v = Math.max(0, tr.v);
+      tr.s += tr.v * tr.dir * dt;
+      if (tr.s >= this.len - 2 || tr.s <= 2) { tr.dir *= -1; tr.wait = 30; tr.s = Math.max(2.1, Math.min(this.len - 2.1, tr.s)); }
+      tr.parts.length = 0;
+      tr.modules.forEach((g, k) => {
+        const p = this.at(tr.s - tr.dir * (5.3 + k * 10.7));
+        g.position.set(p.x, 0.14, p.z);
+        g.rotation.y = p.h + (tr.dir < 0 ? Math.PI : 0);
+        for (const o of [-3.4, 0, 3.4]) tr.parts.push({ x: p.x + Math.sin(p.h) * o, z: p.z + Math.cos(p.h) * o, h: p.h, isTram: true, bump: 0 });
+      });
+    }
+  }
+  near(x, z, r) {
+    const out = [];
+    for (const tr of this.trams) for (const p of tr.parts) if (Math.abs(p.x - x) < r + 6 && Math.abs(p.z - z) < r + 6) out.push(p);
+    return out;
+  }
+}

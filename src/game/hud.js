@@ -141,7 +141,7 @@ export class HUD {
     const cv = this.mm, c = this.mmx;
     const W = cv.width, H = cv.height;
     const big = this.big;
-    const scale = big ? 0.09 : 0.32;
+    const scale = big ? 0.12 : 0.32;
     c.clearRect(0, 0, W, H);
     c.save();
     c.beginPath();
@@ -152,8 +152,8 @@ export class HUD {
     c.translate(W / 2, H / 2);
     if (!big) c.rotate(-(Math.PI - bus.h)); // il bus punta verso l'alto
     c.scale(scale, scale);
-    const cxw = big ? m.route.pts.reduce((a, p) => a + p.x, 0) / m.route.pts.length : bus.x;
-    const czw = big ? m.route.pts.reduce((a, p) => a + p.z, 0) / m.route.pts.length : bus.z;
+    const cxw = bus.x, czw = bus.z;
+    if (big) this.bigView = { cx: cxw, cz: czw, scale, W, H };
     c.translate(-cxw, -czw);
     // acqua
     c.lineCap = 'round'; c.lineJoin = 'round';
@@ -209,6 +209,11 @@ export class HUD {
     c.beginPath(); c.moveTo(0, -14); c.lineTo(10, 11); c.lineTo(0, 5); c.lineTo(-10, 11); c.closePath();
     c.stroke(); c.fill();
     c.restore();
+    if (big) {
+      c.fillStyle = 'rgba(8,12,18,0.8)'; c.fillRect(0, H - 30, W, 30);
+      c.fillStyle = '#fff'; c.font = 'bold 14px Arial'; c.textAlign = 'center';
+      c.fillText('Clicca su una strada per teletrasportarti · M per chiudere', W / 2, H - 10);
+    }
     if (!big) {
       c.fillStyle = '#fff'; c.font = 'bold 12px Arial'; c.textAlign = 'center';
       // indicatore del nord

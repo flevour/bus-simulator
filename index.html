@@ -67,7 +67,7 @@
         </section>
       </div>
       <div class="keys">
-        <b>Comandi:</b> W/↑ gas · S/↓ freno · A D/← → sterzo · Shift+W/S gas e freno a fondo · F porte · Q/E frecce · G emergenza · Spazio freno a mano · R marcia avanti/indietro · L fari · H clacson · K inginocchiamento · C visuale · Z/X guarda sx/dx · T salta l'attesa · M mappa · U audio · I aiuto · P pausa
+        <b>Comandi:</b> W/↑ gas · S/↓ freno · A D/← → sterzo · Shift+W/S gas e freno a fondo · F porte · Q/E frecce · G emergenza · Spazio freno a mano · R marcia avanti/indietro · L fari · H clacson · K inginocchiamento · C visuale · Z/X guarda sx/dx · T salta l'attesa · J teletrasporto · M mappa · U audio · I aiuto · P pausa
       </div>
       <div class="disclaimer">Mappa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL). Linee, fermate e orari: GTFS Busitalia Veneto (feed BusOne). Edifici estrusi dalle piante OSM con altezze stimate. Non è un prodotto ufficiale.</div>
     </div>
@@ -112,6 +112,11 @@
     </div>
     <div id="mirror-frame-l" class="mirror-frame"></div>
     <div id="mirror-frame-r" class="mirror-frame"></div>
+    <div id="teleport" class="card" hidden>
+      <h3>Teletrasporto</h3>
+      <ol id="teleport-list"></ol>
+      <div class="sub">Tasti 1–9 o clic · J o Esc per chiudere · nella mappa grande (M) puoi cliccare su qualsiasi strada</div>
+    </div>
     <div id="help" class="card">
       <h3>Come si guida</h3>
       <ul>
@@ -122,7 +127,7 @@
         <li><b>E</b> freccia a destra quando accosti, <b>Q</b> freccia a sinistra quando riparti: punti bonus!</li>
         <li>Rispetta <b>semafori</b>, limiti (<b>30</b> in centro, <b>50</b> fuori) e l'orario: non partire in anticipo.</li>
         <li><b>Spazio</b> freno a mano · <b>R</b> retromarcia (da fermo) · <b>L</b> fari · <b>H</b> clacson · <b>K</b> inginocchiamento · <b>G</b> quattro frecce</li>
-        <li><b>C</b> visuale (cabina, esterna, passeggeri, dall'alto) · <b>Z/X</b> guarda a sinistra/destra · <b>M</b> mappa grande · <b>T</b> salta l'attesa in fermata · <b>P</b> pausa</li>
+        <li><b>C</b> visuale (cabina, esterna, passeggeri, dall'alto) · <b>Z/X</b> guarda a sinistra/destra · <b>M</b> mappa grande · <b>T</b> salta l'attesa in fermata · <b>J</b> teletrasporto · <b>P</b> pausa</li>
         <li>Quando sei in anticipo e tutti sono saliti, l'attesa in fermata scorre accelerata.</li>
       </ul>
       <div class="sub">Premi I per chiudere</div>

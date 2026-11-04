@@ -435,7 +435,8 @@ export class Mission {
     }
     this.stats.crashes++;
     this.comfort = Math.max(0, this.comfort - 25);
-    const what = { car: 'un\'auto', building: 'un edificio', shelter: 'una pensilina', tree: 'un albero', pole: 'un palo', wall: 'il parapetto', landmark: 'un monumento!' }[hit.kind] || 'un ostacolo';
+    if (hit.car && hit.car.isTram) hit.kind = 'tram';
+    const what = { tram: 'il tram!', car: 'un\'auto', building: 'un edificio', shelter: 'una pensilina', tree: 'un albero', pole: 'un palo', wall: 'il parapetto', landmark: 'un monumento!' }[hit.kind] || 'un ostacolo';
     const pts = -Math.round(Math.min(250, 40 + hit.impact * 25));
     this.addScore(pts, `💥 Hai urtato ${what}`);
   }

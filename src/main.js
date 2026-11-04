@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { buildNetwork, LINES, fmtHM } from './data/padova.js';
 import { City, zoneOf } from './world/city.js';
-import { TrafficLights, Traffic, Walkers } from './world/traffic.js';
+import { TrafficLights, Traffic, Walkers, TramSim } from './world/traffic.js';
 import { Bus } from './bus/bus.js';
 import { Mission, scheduleFor } from './game/mission.js';
-import { pointAt } from './game/routes.js';
+import { pointAt, projectOnRoute } from './game/routes.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
 
@@ -77,7 +77,7 @@ scene.add(rain);
 // ------------------------------------------------------------------
 // Mondo
 // ------------------------------------------------------------------
-let net, city, lights;
+let net, city, lights, trams;
 const hud = new HUD();
 const audio = new Audio();
 
@@ -85,6 +85,7 @@ function buildWorld() {
   net = buildNetwork();
   city = new City(scene, net);
   lights = new TrafficLights(scene, net);
+  trams = new TramSim(scene, net);
 }
 
 // ------------------------------------------------------------------
@@ -153,6 +154,13 @@ let showHelp = false;
 
 function onKeyPress(code) {
   if (!running) return;
+  if (tpOpen) {
+    if (code === 'Escape' || code === 'KeyJ') { openTeleport(false); return; }
+    const m = code.match(/^(?:Digit|Numpad)([1-9])$/);
+    if (m && tpItems[Number(m[1]) - 1]) { const it = tpItems[Number(m[1]) - 1]; openTeleport(false); it.run(); }
+    return;
+  }
+  if (code === 'KeyJ' && !paused) { openTeleport(true); return; }
   if (code === 'KeyP' || code === 'Escape') { togglePause(); return; }
   if (paused) return;
   audio.resume();
@@ -182,6 +190,95 @@ function setIndicator(v) {
   bus.indicator = v;
   indAccum = 0;
   audio.tick(v !== 0);
+}
+
+// ------------------------------------------------------------------
+// Teletrasporto
+// ------------------------------------------------------------------
+const PLACES = [
+  ['Stazione FS', /^Ferrovia \(Ex Catasto\)/], ['Prato della Valle', /^Prato Valle/], ['Basilica del Santo', /Santo/],
+  ['Piazza Garibaldi', /Garibaldi/], ['Ospedale', /Giustiniani/], ['Arcella', /Aspetti|Arcella/],
+  ['Bassanello', /Bassanello|Vittorio Emanuele/], ['Stanga', /Stanga/], ['Guizza', /Guizza/], ['Ponte di Brenta', /Ponte di Brenta/],
+];
+let tpOpen = false, tpItems = [];
+function teleportItems() {
+  const items = [];
+  if (!mission.free) {
+    const ns = mission.stops[mission.nextStop];
+    if (ns) items.push({ label: 'Prossima fermata: ' + ns.name, run: () => teleportToStop(ns) });
+    const ns2 = mission.stops[mission.nextStop + 1];
+    if (ns2) items.push({ label: 'Fermata successiva: ' + ns2.name, run: () => teleportToStop(ns2) });
+  }
+  for (const [label, re] of PLACES) {
+    const st = net.stops.find((s) => re.test(s.name));
+    if (!st) continue;
+    const off = !mission.free && projectOnRoute(mission.route, st.x, st.z, mission.route.length / 2, 1e9, 1e9).d > 40;
+    items.push({ label: label + (off ? ' · fuori dalla tua linea' : ''), run: () => teleportTo(st.x, st.z) });
+  }
+  return items.slice(0, 9);
+}
+function openTeleport(v) {
+  tpOpen = v;
+  $('teleport').hidden = !v;
+  if (!v) return;
+  tpItems = teleportItems();
+  $('teleport-list').innerHTML = tpItems.map((it, i) => `<li><button data-i="${i}"><kbd>${i + 1}</kbd>${it.label}</button></li>`).join('');
+  document.querySelectorAll('#teleport-list button').forEach((b) => b.addEventListener('click', () => { const it = tpItems[Number(b.dataset.i)]; openTeleport(false); it.run(); }));
+}
+// porta il bus sulla corsia giusta della strada più vicina al punto
+function teleportTo(x, z, dirHint = null) {
+  const r = city.snapToRoad(x, z, 300);
+  if (!r) { hud.toast('Nessuna strada qui vicino', 'bad'); return; }
+  let dx = r.dx, dz = r.dz;
+  const e = r.edge;
+  if (e.oneway === -1) { dx = -dx; dz = -dz; }
+  else if (!e.oneway) {
+    const hx = dirHint ? dirHint.dx : bus.fx, hz = dirHint ? dirHint.dz : bus.fz;
+    if (dx * hx + dz * hz < 0) { dx = -dx; dz = -dz; }
+  }
+  const lat = e.oneway ? 0 : e.width / 4;
+  placeBusAt(r.cx - dz * lat, r.cz + dx * lat, Math.atan2(dx, dz));
+  hud.toast('🌀 Teletrasporto: ' + (e.name || 'strada senza nome'), 'info');
+}
+function teleportToStop(st) {
+  const s = Math.max(0, st.s - 60);
+  const p = pointAt(mission.route, s);
+  const lat = p.seg.edge && p.seg.edge.oneway ? 0 : p.seg.hw / 2;
+  placeBusAt(p.x - p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
+  // arrivi più o meno in orario alla fermata scelta
+  if (st.sched) mission.clock = Math.max(mission.clock, st.sched - 100);
+  hud.toast('🌀 Teletrasporto davanti a ' + st.name, 'info');
+}
+function placeBusAt(x, z, h) {
+  bus.place(x, z, h);
+  city.ensureTiles(x, z, 600);
+  bus.steerIn = 0; bus.steer = 0; bus.throttle = 0; bus.brake = 0;
+  bus.doorTarget = 0; bus.doorOpen = [0, 0, 0]; bus.parking = true; bus.dir = 1;
+  chase.init = false;
+  // via le auto troppo vicine
+  for (let i = traffic.cars.length - 1; i >= 0; i--) { const c = traffic.cars[i]; if (Math.hypot(c.x - x, c.z - z) < 35) traffic.cars.splice(i, 1); }
+  const m = mission;
+  m.lastSigDist.clear();
+  if (m.free) return;
+  // aggiorna la posizione lungo la linea; le fermate scavalcate non contano come saltate
+  const pr = projectOnRoute(m.route, x, z, m.route.length / 2, 1e9, 1e9);
+  if (pr.d > 40) return;
+  m.s = pr.s;
+  let k = m.nextStop;
+  while (k < m.stops.length - 1 && m.stops[k].s < pr.s + 6) {
+    const st = m.stops[k];
+    st.arrived = st.left = true;
+    m.onboard = m.onboard.filter((d) => d !== st.idx);
+    k++;
+  }
+  if (k !== m.nextStop) {
+    m.nextStop = k;
+    m.request = false;
+    m.leaveCheck = null;
+    bus.passengers = m.onboard.length;
+    bus.setPassengerVisuals(m.onboard.length);
+    bus.setInnerDisplay('Prossima: ' + m.stops[k].name);
+  }
 }
 
 function toggleDoors() {
@@ -361,6 +458,13 @@ function buildMenu() {
   $('start').addEventListener('click', () => startMission());
   $('resume').addEventListener('click', () => togglePause(false));
   $('pause-btn').addEventListener('click', () => togglePause(true));
+  $('minimap').addEventListener('click', (ev) => {
+    if (!running || !hud.big || !hud.bigView) return;
+    const rect = ev.currentTarget.getBoundingClientRect(), v = hud.bigView;
+    const px = ((ev.clientX - rect.left) / rect.width) * v.W, py = ((ev.clientY - rect.top) / rect.height) * v.H;
+    teleportTo(v.cx + (px - v.W / 2) / v.scale, v.cz + (py - v.H / 2) / v.scale);
+    hud.setBigMap(false);
+  });
   $('resume-save').addEventListener('click', resumeSaved);
   $('discard-save').addEventListener('click', clearSave);
   $('restart').addEventListener('click', () => { clearSave(); togglePause(false); startMission(); });
@@ -412,6 +516,7 @@ function startMission(resume = null) {
   mission.s = Math.max(0, st0.s - 6.5);
   bus.setInnerDisplay('Linea ' + L.id + ' – ' + destName);
   if (resume) applySave(resume);
+  city.ensureTiles(bus.x, bus.z, 650);
   lights.time = resume ? resume.mission.clock : settings.departure;
   const hour = (settings.departure / 3600) % 24;
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
@@ -587,9 +692,9 @@ function updateMirrors() {
 const world = {
   wet: false, offRoad: false, slope: 0,
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
-  carsNear: (x, z, r) => (traffic ? traffic.near(x, z, r) : []),
+  carsNear: (x, z, r) => { const a = traffic ? traffic.near(x, z, r) : []; return trams ? a.concat(trams.near(x, z, r)) : a; },
 };
-let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0;
+let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, tramLaneT = 0;
 let lastT = performance.now();
 
 function step(dt) {
@@ -628,6 +733,14 @@ function step(dt) {
     if (Math.abs(indAccum) > 0.9 && Math.abs(bus.steerIn) < 0.12) { bus.indicator = 0; indAccum = 0; }
   }
   lights.update(dt);
+  trams.update(dt, bus);
+  city.streamTiles(bus.x, bus.z, 5);
+  // corsia riservata del tram
+  const fr = bus.toWorld(0, 4);
+  if (city.onTramway(fr.x, fr.z) && Math.abs(bus.v) > 1.5) {
+    tramLaneT += dt;
+    if (tramLaneT > 2.5 && mission.cooldown('tram', 12)) mission.addScore(mission.free ? 0 : -25, '🚋 Corsia riservata al tram!', 'bad');
+  } else tramLaneT = 0;
   traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen });
   for (const c of traffic.honks) audio.carHorn(Math.hypot(c.x - bus.x, c.z - bus.z));
   walkers.update(dt, bus);
@@ -689,6 +802,7 @@ function renderMenuBackdrop(dt) {
   sun.position.set(c.x + 200, 300, c.z + 150);
   sun.target.position.set(c.x, 0, c.z);
   lights.update(dt);
+  city.streamTiles(camera.position.x, camera.position.z, 4);
   renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
 }
@@ -699,7 +813,7 @@ function loop() {
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   frame++;
-  if (running && !paused) {
+  if (running && !paused && !tpOpen) {
     // sotto-passi per una fisica stabile
     const n = dt > 0.025 ? 2 : 1;
     for (let i = 0; i < n; i++) step(dt / n);
@@ -738,6 +852,7 @@ setTimeout(() => {
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
   window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, setCam: (m) => (camMode = m),
+    teleport: (x, z) => teleportTo(x, z), get trams() { return trams; },
     sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
 }, 50);

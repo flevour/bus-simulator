@@ -157,6 +157,21 @@ export function railTexture() {
   return makeTex(c);
 }
 
+// corsie riservate del tram: asfalto rosso con le linee di bordo
+export function tramLaneTexture() {
+  const [c, x] = canvas(256, 256);
+  const rnd = mulberry32(23);
+  x.fillStyle = '#8a3a31';
+  x.fillRect(0, 0, 256, 256);
+  noise(x, 256, 256, 6000, rnd, 0.12);
+  x.fillStyle = 'rgba(40,10,8,0.25)';
+  for (const u of [0.22, 0.78]) x.fillRect(u * 256 - 14, 0, 28, 256);
+  x.fillStyle = '#e8e2d8';
+  x.fillRect(6, 0, 4, 256);
+  x.fillRect(246, 0, 4, 256);
+  return makeTex(c);
+}
+
 // singolo binario su massicciata (u attraverso, v lungo: 1 = 6 m)
 export function railTexture1() {
   const [c, x] = canvas(64, 256);
