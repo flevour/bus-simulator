@@ -107,6 +107,7 @@ export function makeBuildingMaterial(uniforms, merged = false) {
         vec3 nW = normalize(vWN);
         float isWall = 1.0 - step(0.5, abs(nW.y));
         float tw = dot(vWP.xz, vec2(-nW.z, nW.x));
+        float centro = 1.0 - step(950.0, length(vec2(vWP.x + 150.0, (vWP.z - 120.0) * 1.15)));
         float fyy = vWP.y / 3.1;
         float flo = floor(fyy);
         float fxx = tw / 3.4 + vSeed * 7.0;
@@ -115,17 +116,37 @@ export function makeBuildingMaterial(uniforms, merged = false) {
         float shop = step(0.06, ff.x) * step(ff.x, 0.94) * step(0.04, ff.y) * step(ff.y, 0.72);
         win = flo < 0.5 ? shop * step(0.45, vSeed) : win;
         win *= isWall * step(vWP.y, vH - 0.6);
-        // cornicione e marcapiano
-        float band = isWall * (1.0 - step(0.06, fract(fyy))) * 0.25;
+        // portici ad arco al piano terra (centro storico)
+        float portico = isWall * centro * step(vSeed, 0.42) * step(7.0, vH) * step(vWP.y, 3.9);
+        float fx4 = fract(tw / 4.2 + vSeed * 3.0);
+        float ax = (fx4 - 0.5) / 0.36;
+        float archTop = 2.5 + 1.0 * sqrt(max(0.0, 1.0 - ax * ax));
+        float arch = portico * step(abs(ax), 1.0) * step(vWP.y, archTop);
+        win *= 1.0 - portico;
+        // persiane accanto alle finestre (centro e case più vecchie)
+        float shut = isWall * step(0.5, flo) * step(vWP.y, vH - 0.6) * step(0.34, ff.y) * step(ff.y, 0.84)
+          * (step(0.1, ff.x) * step(ff.x, 0.235) + step(0.765, ff.x) * step(ff.x, 0.9)) * step(0.3, vSeed) * max(centro, step(vH, 11.0) * step(0.65, vSeed));
+        vec3 shutCol = mix(vec3(0.20, 0.33, 0.22), vec3(0.36, 0.24, 0.15), step(0.7, vSeed));
+        // zoccolo e cornicione
+        diffuseColor.rgb *= 1.0 - isWall * (1.0 - step(0.7, vWP.y)) * 0.28;
+        diffuseColor.rgb *= 1.0 - isWall * step(vH - 0.45, vWP.y) * 0.22;
+        // marcapiano
+        float band = isWall * (1.0 - step(0.06, fract(fyy))) * 0.25 * (1.0 - portico);
         diffuseColor.rgb *= 1.0 - band;
+        // balconi a fascia sui palazzi moderni
+        float balc = isWall * (1.0 - centro) * step(14.0, vH) * step(0.5, vSeed) * step(0.5, flo) * (1.0 - step(0.1, ff.y));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.25 + 0.05, balc);
         float roof = step(0.5, nW.y);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.45 + vec3(0.06), roof);
+        diffuseColor.rgb = mix(diffuseColor.rgb, shutCol, shut * (1.0 - win));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.065, 0.06), arch);
         float shade = h31(vec3(floor(fxx), flo, vSeed));
         vec3 glass = mix(vec3(0.10, 0.13, 0.17), vec3(0.30, 0.36, 0.42), shade * (1.0 - uNight));
         diffuseColor.rgb = mix(diffuseColor.rgb, glass, win * 0.92);
         float lit = step(0.52, shade) * uNight * win;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += lit * mix(vec3(1.0, 0.78, 0.42), vec3(0.75, 0.85, 1.0), step(0.85, shade)) * 0.85;`);
+        totalEmissiveRadiance += lit * mix(vec3(1.0, 0.78, 0.42), vec3(0.75, 0.85, 1.0), step(0.85, shade)) * 0.85;
+        totalEmissiveRadiance += arch * uNight * vec3(0.32, 0.22, 0.12);`);
   };
   return m;
 }
@@ -162,7 +183,7 @@ export class City {
     this.nightMats = [];
     this.lampPositions = [];
     this.timings = {};
-    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps']) {
+    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps', 'clearBusRoads']) {
       const t0 = performance.now();
       this[step]();
       this.timings[step] = Math.round(performance.now() - t0);
@@ -262,6 +283,7 @@ export class City {
     const { nodes, edges } = this.net;
     const road = new GeoBuilder();
     const plain = new GeoBuilder(); // residenziali e di servizio: asfalto senza segnaletica
+    const roadOw = new GeoBuilder(); // sensi unici: senza mezzeria
     const ped = new GeoBuilder(); // aree pedonali lastricate
     const walk = new GeoBuilder();
     const curb = [];
@@ -271,7 +293,7 @@ export class City {
       const ra = A.joint ? 0 : A.radius * 0.6, rb = B.joint ? 0 : B.radius * 0.6;
       const ax = A.x + e.dx * ra, az = A.z + e.dz * ra, bx = B.x - e.dx * rb, bz = B.z - e.dz * rb;
       const hFn = e.elev ? (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz) : null;
-      (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : road).ribbon(ax, az, bx, bz, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
+      (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : e.oneway ? roadOw : road).ribbon(ax, az, bx, bz, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
       if (!e.ped) walk.ribbon(A.x, A.z, B.x, B.z, e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2), Y_SIDEWALK, 6, 0, hFn);
       if (e.elev) { this.buildOverpass(e, A, curb); continue; }
       // strisce pedonali vicino agli incroci
@@ -307,6 +329,10 @@ export class City {
     im.receiveShadow = true;
     const swTex = TX.sidewalkTexture();
     const swMat = layer(new THREE.MeshLambertMaterial({ map: swTex }), 1);
+    const owM = new THREE.Mesh(roadOw.build(), layer(new THREE.MeshLambertMaterial({ map: TX.roadTextureOneway() }), 2));
+    owM.receiveShadow = true;
+    this.owMat = owM.material;
+    this.group.add(owM);
     const plainM = new THREE.Mesh(plain.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
     plainM.receiveShadow = true;
     const pedTex = TX.sidewalkTexture();
@@ -616,6 +642,29 @@ export class City {
   }
 
   // ---- edifici ----
+  // sulle strade percorse dai bus nessun ostacolo può invadere la carreggiata
+  // (piccole imprecisioni di allineamento tra strade ed edifici OSM)
+  clearBusRoads() {
+    const { nodes, edges } = this.net;
+    let removed = 0;
+    const q = [];
+    for (const e of edges) {
+      if (!e.routes) continue;
+      const A = nodes[e.a];
+      // corsia del bus: mezzeria (sensi unici) o metà destra, più la mezza larghezza del bus
+      const r = Math.max(e.width / 2 - 0.3, (e.oneway ? 0 : e.width / 4) + 1.5);
+      for (let s = 0; s <= e.len; s += 2) {
+        const x = A.x + e.dx * s, z = A.z + e.dz * s;
+        for (const b of this.obstacles.query(x, z, r + 2, q)) {
+          if (b.dead || b.kind === 'car') continue;
+          const lx = (x - b.x) * b.c + (z - b.z) * b.s, lz = -(x - b.x) * b.s + (z - b.z) * b.c;
+          if (Math.hypot(Math.max(Math.abs(lx) - b.hx, 0), Math.max(Math.abs(lz) - b.hz, 0)) < r) { b.dead = true; removed++; }
+        }
+      }
+    }
+    this.clearedObstacles = removed;
+  }
+
   // dentro l'area coperta dagli edifici OSM non si generano edifici procedurali
   inOsmArea(x, z) {
     const b = this.net.buildingBBox;
@@ -684,6 +733,16 @@ export class City {
         }
         // muro come ostacolo (solo per i poligoni complessi; i semplici hanno un box unico)
         this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
+      }
+      // tetto a padiglione in coppi sugli edifici di pianta quasi rettangolare
+      const flatKind = b.kind === 'industrial' || b.kind === 'warehouse' || b.kind === 'roof' || b.kind === 'garage' || b.kind === 'garages' || b.kind === 'commercial' || b.kind === 'retail';
+      if (!special && !flatKind && pts.length <= 14 && area < 1600 && area > 25 && h < 24) {
+        const o = minRect(pts);
+        if (area / (o.L * o.Wd) > 0.8 && o.Wd > 4) {
+          const tile = zone === 0 || r < 0.75;
+          hipRoof(o, h, tile ? C.set([0xa4553a, 0xb0603f, 0x94503a, 0xb86d4b, 0x9c5a40][Math.floor(r * 5)]) : C.set(0x6f6a64), R);
+          continue;
+        }
       }
       // tetto piano
       const contour = pts.map((p) => new THREE.Vector2(p.x, p.z));
@@ -1046,6 +1105,7 @@ export class City {
     this.poolMat.opacity = f * 0.55;
     this.poolMat.visible = f > 0.02;
     this.roadMat.color.setScalar(1 - wet * 0.35);
+    if (this.owMat) this.owMat.color.setScalar(1 - wet * 0.35);
   }
 
   update(dt) {
@@ -1067,6 +1127,44 @@ function drawSignCell(x, ox, oy, name, lines) {
   x.fillStyle = '#ffffff';
   fit(lines, 40, 240);
   x.fillText(lines, ox + 128, oy + 97);
+}
+
+// rettangolo orientato di area minima (asse lungo = L) di un poligono
+export function minRect(pts) {
+  let best = null;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    const a = Math.atan2(q.z - p.z, q.x - p.x), c = Math.cos(a), s = Math.sin(a);
+    let mnx = Infinity, mxx = -Infinity, mnz = Infinity, mxz = -Infinity;
+    for (const v of pts) { const u = v.x * c + v.z * s, w = -v.x * s + v.z * c; mnx = Math.min(mnx, u); mxx = Math.max(mxx, u); mnz = Math.min(mnz, w); mxz = Math.max(mxz, w); }
+    const ar = (mxx - mnx) * (mxz - mnz);
+    if (!best || ar < best.ar) {
+      const uc = (mnx + mxx) / 2, wc = (mnz + mxz) / 2;
+      best = { ar, a, c, s, L: mxx - mnx, Wd: mxz - mnz, x: uc * c - wc * s, z: uc * s + wc * c };
+    }
+  }
+  if (best.L < best.Wd) { best = { ...best, a: best.a + Math.PI / 2, L: best.Wd, Wd: best.L }; best.c = Math.cos(best.a); best.s = Math.sin(best.a); }
+  return best;
+}
+
+// tetto a padiglione (o a quattro falde) sopra un rettangolo orientato, con sporgenza
+function hipRoof(o, h, col, R, over = 0.35) {
+  const L = o.L / 2 + over, W = o.Wd / 2 + over;
+  const rh = Math.min(5, Math.max(1.6, o.Wd * 0.34));
+  const rl = Math.max(0, L - W);
+  const P = (u, w, y) => [o.x + u * o.c - w * o.s, y, o.z + u * o.s + w * o.c];
+  const c0 = P(-L, -W, h), c1 = P(L, -W, h), c2 = P(L, W, h), c3 = P(-L, W, h);
+  const r0 = P(-rl, 0, h + rh), r1 = P(rl, 0, h + rh);
+  // facce con normale verso l'alto/esterno (ordine antiorario visto dall'esterno)
+  const tris = [[c0, r1, c1], [c0, r0, r1], [c2, r0, c3], [c2, r1, r0], [c1, r1, c2], [c3, r0, c0]];
+  for (const t of tris) {
+    // assicura la normale verso l'alto
+    const ux = t[1][0] - t[0][0], uy = t[1][1] - t[0][1], uz = t[1][2] - t[0][2];
+    const vx = t[2][0] - t[0][0], vy = t[2][1] - t[0][1], vz = t[2][2] - t[0][2];
+    const ny = uz * vx - ux * vz;
+    const tt = ny >= 0 ? t : [t[0], t[2], t[1]];
+    for (const p of tt) { R.pos.push(p[0], p[1], p[2]); R.col.push(col.r, col.g, col.b); }
+  }
 }
 
 function segIntersect(a, b, c, d) {

@@ -143,11 +143,14 @@ def main(osm_path, gtfs_dir, out):
 
     # adiacenza per il map matching
     adj = defaultdict(list)
-    for k, (a, b, cls, *_r) in enumerate(edges):
+    for k, (a, b, cls, _w, _n, flags, *_r) in enumerate(edges):
         L = math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1])
         cost = L * (1.0 if cls <= 5 else 1.6 if cls == 6 else 2.5 if cls == 7 else 3.5)
-        adj[a].append((b, cost, k))
-        adj[b].append((a, cost, k))
+        # sensi unici: contromano molto penalizzato (restano possibili le corsie bus in controsenso)
+        fwd_pen = 1.6 if flags & 2 else 1.0
+        back_pen = 1.6 if flags & 1 else 1.0
+        adj[a].append((b, cost * fwd_pen, k))
+        adj[b].append((a, cost * back_pen, k))
 
     # griglia degli archi per gli agganci
     CELL = 40

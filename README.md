@@ -26,7 +26,9 @@ La mappa unisce due fonti aperte:
 `scripts/build_map.py` aggancia ogni tracciato GTFS alle strade OSM (map matching), così i bus percorrono le vie
 vere, e produce `src/data/padova-map.json` per il gioco.
 
-* Gli edifici del centro hanno la pianta reale, con l'altezza da OSM quando c'è, altrimenti stimata. Basilica del
+* Gli edifici del centro hanno la pianta reale, con l'altezza da OSM quando c'è, altrimenti stimata; quelli di pianta
+  rettangolare hanno il tetto a padiglione in coppi, le facciate hanno zoccolo, cornicione e persiane e nel centro
+  storico molti hanno i portici ad arco al piano terra. Basilica del
   Santo (cupole e campanili), Palazzo della Ragione (tetto a carena) e Duomo sono decorati sulla loro pianta.
   Fuori dall'area degli edifici OSM i palazzi sono generati lungo le strade.
 * Prato della Valle (isola Memmia, canale, statue) è modellato a parte e allineato alle strade reali.
@@ -56,7 +58,7 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 | **W / ↑** | acceleratore (progressivo) |
 | **S / ↓** | freno (progressivo: tenere premuto per frenare di più) |
 | **A D / ← →** | sterzo |
-| **Shift** | pedale "dolce" (metà corsa) |
+| **Shift** + W/S | gas a fondo / frenata forte (senza Shift i pedali sono dosati) |
 | **F** | apri / chiudi porte (con porte aperte è attivo il freno di fermata) |
 | **Q / E** | freccia sinistra / destra · **G** quattro frecce |
 | **Spazio** | freno di stazionamento |

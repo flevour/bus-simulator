@@ -24,6 +24,25 @@ export function makeTex(c, repeat = true, aniso = 8) {
 }
 
 // Asfalto con segnaletica: u attraverso la strada, v lungo (1 = 12 m)
+// asfalto per strade a senso unico: solo linee laterali, nessuna mezzeria
+export function roadTextureOneway() {
+  const [c, x] = canvas(256, 512);
+  const rnd = mulberry32(8);
+  x.fillStyle = '#3c3d40';
+  x.fillRect(0, 0, 256, 512);
+  noise(x, 256, 512, 9000, rnd, 0.12);
+  for (let i = 0; i < 6; i++) {
+    x.fillStyle = `rgba(20,20,22,${0.15 + rnd() * 0.15})`;
+    x.fillRect(rnd() * 200, rnd() * 480, 20 + rnd() * 60, 20 + rnd() * 50);
+  }
+  x.fillStyle = 'rgba(25,25,28,0.25)';
+  for (const u of [0.3, 0.7]) x.fillRect(u * 256 - 12, 0, 24, 512);
+  x.fillStyle = '#e8e8e0';
+  x.fillRect(8, 0, 5, 512);
+  x.fillRect(256 - 13, 0, 5, 512);
+  return makeTex(c);
+}
+
 export function roadTexture() {
   const [c, x] = canvas(256, 512);
   const rnd = mulberry32(7);

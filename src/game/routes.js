@@ -72,27 +72,36 @@ export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400) {
 
 // Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia
 export function allStopPlacements(net, snap, clear = () => 9) {
-  const served = new Map();
+  // per ogni fermata: la prima variante che la serve dà la direzione di marcia
+  const served = new Map(), dirVar = new Map();
   for (const L of LINES) for (const v of L.variants) for (const st of v.stops) {
     const set = served.get(st.id) || served.set(st.id, new Set()).get(st.id);
     set.add(L.id);
+    if (!dirVar.has(st.id)) dirVar.set(st.id, v);
   }
   const out = [];
   for (const st of net.stops) {
     if (!served.has(st.id)) continue;
-    const r = snap(st.x, st.z);
-    if (!r || r.d > 35 || r.edge.elev) continue;
-    let { dx, dz } = r;
-    // la palina sta sul lato destro della direzione di marcia
-    if ((st.x - r.cx) * -dz + (st.z - r.cz) * dx < 0) { dx = -dx; dz = -dz; }
-    const rx = -dz, rz = dx;
-    if (out.some((o) => Math.hypot(o.cx - r.cx, o.cz - r.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) continue;
+    const v = dirVar.get(st.id);
+    let best = null, bd = 60;
+    for (let i = 0; i < v.nodes.length - 1; i++) {
+      const A = net.nodes[v.nodes[i]], B = net.nodes[v.nodes[i + 1]];
+      const ex = B.x - A.x, ez = B.z - A.z, l2 = ex * ex + ez * ez;
+      if (l2 < 0.01) continue;
+      const t = Math.max(0, Math.min(1, ((st.x - A.x) * ex + (st.z - A.z) * ez) / l2));
+      const cx = A.x + ex * t, cz = A.z + ez * t, d = Math.hypot(st.x - cx, st.z - cz);
+      if (d < bd) { bd = d; best = { cx, cz, l: Math.sqrt(l2), ex, ez, e: net.edgeBetween(v.nodes[i], v.nodes[i + 1]) }; }
+    }
+    if (!best || !best.e || best.e.elev) continue;
+    const dx = best.ex / best.l, dz = best.ez / best.l, hw = best.e.width / 2;
+    const rx = -dz, rz = dx; // la palina sta a destra della direzione di marcia
+    if (out.some((o) => Math.hypot(o.cx - best.cx, o.cz - best.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) continue;
+    const px = best.cx + rx * (hw + 1.6), pz = best.cz + rz * (hw + 1.6);
     // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate)
-    const px = r.cx + rx * (r.hw + 1.6), pz = r.cz + rz * (r.hw + 1.6);
     if (clear(px, pz) < 0.6 || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < 0.6) continue;
     out.push({
       name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: r.cx + rx * (r.hw + 1.6), z: r.cz + rz * (r.hw + 1.6), cx: r.cx, cz: r.cz, dx, dz, rx, rz, hw: r.hw,
+      x: px, z: pz, cx: best.cx, cz: best.cz, dx, dz, rx, rz, hw,
     });
   }
   return out;

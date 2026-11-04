@@ -430,8 +430,9 @@ export class Bus {
   // ---------------- fisica ----------------
   update(dt, input, world) {
     // input da tastiera con rampe (pedali progressivi)
-    const thrTarget = input.throttle ? (input.shift ? 0.45 : 1) : 0;
-    const brkTarget = input.brake ? (input.shift ? 0.35 : 1) : 0;
+    // Shift = più forza: W accelera in modo moderato, Shift+W a fondo; S frena dolce, Shift+S frena forte
+    const thrTarget = input.throttle ? (input.shift ? 1 : 0.6) : 0;
+    const brkTarget = input.brake ? (input.shift ? 1 : 0.45) : 0;
     this.throttle += Math.sign(thrTarget - this.throttle) * Math.min(Math.abs(thrTarget - this.throttle), dt * (thrTarget > this.throttle ? 1.3 : 3.5));
     this.brake += Math.sign(brkTarget - this.brake) * Math.min(Math.abs(brkTarget - this.brake), dt * (brkTarget > this.brake ? 1.2 : 4));
     // sterzo
@@ -533,6 +534,7 @@ export class Bus {
         const cx = this.x + lz * s, cz = this.z + lz * c;
         const obs = world.obstaclesNear(cx, cz, 4);
         for (const b of obs) {
+          if (b.dead) continue;
           const p = circleVsOBB(cx, cz, HW + 0.05, b);
           if (p) {
             pushX += p.x; pushZ += p.z;
