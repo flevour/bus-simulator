@@ -2,10 +2,13 @@
 """Costruisce i dati del gioco unendo OpenStreetMap e GTFS Busitalia Veneto.
 
 Uso:
-    python3 scripts/build_map.py data/osm-padova.json <cartella_gtfs> src/data/padova-map.json
+    python3 scripts/build_map.py data/osm-padova.json <cartella_gtfs> src/data/padova-map.json \
+        [data/overture-buildings-padova.parquet] [data/osm-padova-nodes.json]
 
 * OSM (export Overpass in JSON con `out geom`): strade (con nomi, corsie, sensi unici,
   limiti, ponti), edifici (pianta e altezza), ferrovia, fiumi e canali.
+* Nodi OSM (facoltativi, scripts/overpass-nodes.ql): semafori, STOP, dare precedenza e
+  attraversamenti pedonali reali, agganciati agli incroci e ai tratti del grafo.
 * GTFS: linee urbane, varianti, fermate e orari. I tracciati GTFS vengono agganciati
   alla rete OSM (map matching) così che i bus percorrano le strade reali.
 
@@ -91,7 +94,7 @@ def in_focus(lat, lon, m=0.0):
     return any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES)
 
 
-def main(osm_path, gtfs_dir, out, overture_path=None):
+def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None):
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     # solo gli elementi che toccano l'area di gioco (con un piccolo margine)
     ways = [e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
@@ -130,13 +133,26 @@ def main(osm_path, gtfs_dir, out, overture_path=None):
             names.append(s)
         return name_idx[s]
 
+    sign_els = load_nodes(nodes_path) if nodes_path else []
+    ped_gap = ped_signal_gaps(sign_els)
+
     edges = []  # a, b, cls, width, name, flags, speed, layer
+    way_geo = []  # per ogni strada: id OSM dei nodi, punti, posizioni tenute, nodi del grafo, senso unico
     for w in roads:
         t = w['tags']
         cls, cw = DRIVE[t['highway']]
         pts = [xz(g['lat'], g['lon']) for g in w['geometry']]
         junc = {i for i, n in enumerate(w['nodes']) if use[n] > 1}
-        keep = rdp(pts, 1.2, junc)
+        # semafori pedonali lontani dagli incroci: il loro nodo resta nel grafo, così l'auto si ferma lì
+        fixed = set(junc)
+        if any(n in ped_gap for n in w['nodes']):
+            cum = [0.0]
+            for p, q in zip(pts, pts[1:]):
+                cum.append(cum[-1] + math.hypot(q[0] - p[0], q[1] - p[1]))
+            for i, n in enumerate(w['nodes']):
+                if n in ped_gap and min((abs(cum[i] - cum[j]) for j in junc), default=1e9) >= ped_gap[n]:
+                    fixed.add(i)
+        keep = rdp(pts, 1.2, fixed)
         ow = 1 if t.get('oneway') in ('yes', '1') or t.get('junction') == 'roundabout' else -1 if t.get('oneway') == '-1' else 0
         flags = (1 if ow == 1 else 0) | (2 if ow == -1 else 0) | (4 if t.get('bridge') not in (None, 'no') else 0) | (8 if t.get('tunnel') not in (None, 'no') else 0) | (16 if t.get('junction') == 'roundabout' else 0)
         try:
@@ -147,9 +163,12 @@ def main(osm_path, gtfs_dir, out, overture_path=None):
         nm = name_ref(t.get('name', ''))
         sp = speed_of(t)
         ids = [nid(w['nodes'][i], w['geometry'][i]['lat'], w['geometry'][i]['lon']) for i in keep]
+        way_geo.append((w['nodes'], pts, keep, ids, ow))
         for a, b in zip(ids, ids[1:]):
             if a != b:
                 edges.append([a, b, cls, wd, nm, flags, sp, layer])
+
+    signage = osm_signage(sign_els, ped_gap, way_geo, node_id, nodes, edges) if nodes_path else {}
 
     # adiacenza per il map matching
     adj = defaultdict(list)
@@ -529,10 +548,260 @@ def main(osm_path, gtfs_dir, out, overture_path=None):
         'stops': gt['stops'], 'lines': lines_out,
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramStops': tram_stops,
         'tramLines': [build_gtfs.load_tram(gtfs_dir, keep=tram_keep)],
+        **signage,
     }
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
     print(f'nodi {len(nodes)} archi {len(edges)} edifici {len(buildings)} binari {len(rails)} acque {len(water)} linee {len(lines_out)} varianti non agganciate {failed}')
+
+
+SIGNAL_SKIP = ('blinker', 'emergency', 'ramp_meter')  # lampeggianti e semafori dei vigili del fuoco: niente ciclo
+NO_MARKINGS = ('unmarked', 'no', 'informal')
+SIGNAL_GROUP = 25  # m: i semafori dei vari bracci dello stesso incrocio
+SIGNAL_REACH = 40  # m: distanza massima tra la lanterna (linea d'arresto) e l'incrocio, lungo la strada
+SIGN_REACH = 30  # m: lo stesso per STOP e dare precedenza
+SNAP = 15  # m: aggancio di un nodo OSM al nodo del grafo più vicino lungo la sua strada
+PED_GAP = 10  # m: un attraversamento semaforizzato più vicino di così all'incrocio fa parte dell'incrocio
+
+
+def load_nodes(path):
+    return [e for e in json.load(open(path, encoding='utf-8'))['elements'] if e['type'] == 'node' and e.get('tags')]
+
+
+def is_vehicle_signal(t):
+    return t.get('highway') == 'traffic_signals' and t.get('traffic_signals') not in SIGNAL_SKIP
+
+
+def ped_signal_gaps(els):
+    """Semafori che possono stare in mezzo a un tratto, con la distanza minima dall'incrocio (lungo la strada)
+    oltre la quale il loro nodo va tenuto nel grafo.
+
+    * highway=traffic_signals: oltre SIGNAL_REACH non regola nessun incrocio, è un semaforo pedonale;
+    * attraversamenti con crossing=traffic_signals senza un semaforo per i veicoli entro SIGNAL_REACH:
+      i veicoli hanno comunque il rosso (in OSM spesso è mappato solo l'attraversamento).
+    """
+    veh = [(e['id'], *xz(e['lat'], e['lon'])) for e in els if is_vehicle_signal(e['tags'])]
+    out = {i: SIGNAL_REACH for i, _x, _z in veh}
+    for e in els:
+        t = e['tags']
+        if is_vehicle_signal(t) or not (t.get('crossing') == 'traffic_signals' or t.get('crossing:signals') == 'yes'):
+            continue
+        x, z = xz(e['lat'], e['lon'])
+        if all(math.hypot(x - vx, z - vz) > SIGNAL_REACH for _i, vx, vz in veh):
+            out[e['id']] = PED_GAP
+    return out
+
+
+def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
+    """Semafori, STOP, dare precedenza e attraversamenti reali (nodi OSM) agganciati al grafo.
+
+    Restituisce le chiavi da aggiungere ai dati del gioco:
+    * signals: [pedonale, nodo, nodo, ...] per incrocio semaforizzato (più nodi del grafo se l'incrocio è grande);
+      pedonale = 1 per i semafori di un attraversamento lontano dagli incroci;
+    * signs: [incrocio, nodo da cui si arriva, tipo] con tipo 0 = STOP, 1 = dare precedenza;
+    * crossings: [a, b, metri da a] per le strisce pedonali lungo l'arco a-b.
+    """
+    # grado dei nodi come lo vede il gioco (padova.js scarta gli archi più corti di 0,3 m sulle coordinate arrotondate)
+    rn = [(round(x, 1), round(z, 1)) for x, z in nodes]
+    deg = defaultdict(int)
+    arm_cls = defaultdict(dict)  # nodo -> {vicino: classe della strada}
+    for a, b, cls, *_r in edges:
+        if math.hypot(rn[b][0] - rn[a][0], rn[b][1] - rn[a][1]) < 0.3:
+            continue
+        deg[a] += 1
+        deg[b] += 1
+        arm_cls[a][b] = min(cls, arm_cls[a].get(b, 9))
+        arm_cls[b][a] = min(cls, arm_cls[b].get(a, 9))
+    on_way = defaultdict(list)  # id OSM -> [(strada, posizione)]
+    cum = []  # distanza progressiva lungo ogni strada
+    for wi, (osm_ids, pts, _k, _i, _o) in enumerate(way_geo):
+        c = [0.0]
+        for p, q in zip(pts, pts[1:]):
+            c.append(c[-1] + math.hypot(q[0] - p[0], q[1] - p[1]))
+        cum.append(c)
+        for i, n in enumerate(osm_ids):
+            on_way[n].append((wi, i))
+
+    def walk(wi, i, step, maxd):
+        """Nodi del grafo lungo la strada wi a partire dalla posizione i, nel verso della way (step 1) o contrario (-1).
+        Dà (nodo, distanza, nodo precedente): l'arco precedente -> nodo è quello che si percorre arrivando."""
+        keep, ids = way_geo[wi][2], way_geo[wi][3]
+        prev = None
+        for j in (range(len(keep)) if step > 0 else range(len(keep) - 1, -1, -1)):
+            if (keep[j] - i) * step < 0:
+                prev = ids[j]  # alle spalle del nodo OSM: resta il più vicino
+                continue
+            d = abs(cum[wi][keep[j]] - cum[wi][i])
+            if d > maxd:
+                return
+            yield ids[j], d, prev
+            prev = ids[j]
+
+    def junction(osm, steps, maxd):
+        """Primo incrocio (3+ archi) lungo le strade del nodo OSM: (distanza, incrocio, nodo da cui si arriva)."""
+        best = None
+        for wi, i in on_way[osm]:
+            for step in steps(wi):
+                for g, d, prev in walk(wi, i, step, maxd):
+                    if deg[g] >= 3:
+                        if prev is not None and (best is None or d < best[0]):
+                            best = (d, g, prev)
+                        break
+        return best
+
+    def nearest(osm):
+        """Nodo del grafo per il nodo OSM: lo stesso se è tenuto, altrimenti il più vicino entro SNAP lungo la strada."""
+        if osm in node_id:
+            return node_id[osm]
+        best = None
+        for wi, i in on_way[osm]:
+            for step in (1, -1):
+                for g, d, _p in walk(wi, i, step, SNAP):
+                    if best is None or d < best[0]:
+                        best = (d, g)
+                    break
+        return best[1] if best else None
+
+    def steps_of(v, wi=None):
+        if v == 'forward':
+            return (1,)
+        if v == 'backward':
+            return (-1,)
+        ow = way_geo[wi][4] if wi is not None else 0
+        return (ow,) if ow else (1, -1)
+
+    # ---- semafori ----
+    sig = []  # [x, z, incrocio o None, id OSM]
+    for e in els:
+        t = e['tags']
+        if e['id'] not in ped_gap or e['id'] not in on_way:
+            continue
+        g = node_id.get(e['id'])
+        if g is not None and deg[g] >= 3:
+            j = g
+        elif not is_vehicle_signal(t):
+            j = None  # attraversamento semaforizzato lontano dai semafori dei veicoli
+        else:
+            dv = t.get('traffic_signals:direction', t.get('direction'))
+            r = junction(e['id'], lambda wi: steps_of(dv), SIGNAL_REACH)
+            j = r[1] if r else None
+        sig.append((*xz(e['lat'], e['lon']), j, e['id']))
+    # stesso incrocio: lanterne vicine o che portano allo stesso nodo
+    parent = list(range(len(sig)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    for i in range(len(sig)):
+        for k in range(i):
+            if math.hypot(sig[i][0] - sig[k][0], sig[i][1] - sig[k][1]) <= SIGNAL_GROUP or (sig[i][2] is not None and sig[i][2] == sig[k][2]):
+                parent[root(i)] = root(k)
+    groups = defaultdict(list)
+    for i in range(len(sig)):
+        groups[root(i)].append(sig[i])
+    signals, ped_lost = [], 0
+    owner = {}
+
+    def bridge(js):
+        """Aggiunge i vertici intermedi (due soli archi) dei tratti brevi tra due nodi dello stesso incrocio:
+        senza, chi attraversa l'incrocio troverebbe una lanterna a metà."""
+        inside, extra = set(js), set()
+        for j in js:
+            for nb in arm_cls[j]:
+                prev, cur, path = j, nb, []
+                length = math.hypot(nodes[nb][0] - nodes[j][0], nodes[nb][1] - nodes[j][1])
+                while cur not in inside and deg[cur] == 2 and len(arm_cls[cur]) == 2 and length <= 2 * SIGNAL_GROUP:
+                    path.append(cur)
+                    prev, cur = cur, next(v for v in arm_cls[cur] if v != prev)
+                    length += math.hypot(nodes[cur][0] - nodes[prev][0], nodes[cur][1] - nodes[prev][1])
+                if cur in inside and length <= 2 * SIGNAL_GROUP:
+                    extra.update(path)
+        return sorted(inside | extra)
+
+    for members in groups.values():
+        js = bridge(sorted({m[2] for m in members if m[2] is not None}))
+        ped = 0
+        if not js:
+            # semaforo pedonale in mezzo a un tratto: vale per il nodo del grafo più vicino (non per un incrocio),
+            # uno per carreggiata se la strada ne ha due
+            js = sorted({g for g in (nearest(m[3]) for m in members) if g is not None and deg[g] <= 2})
+            if not js:
+                ped_lost += 1
+                continue
+            ped = 1
+        js = [j for j in js if j not in owner]
+        if not js:
+            continue
+        for j in js:
+            owner[j] = len(signals)
+        signals.append([ped, *js])
+
+    # ---- STOP e dare precedenza ----
+    signs = {}  # (incrocio, nodo da cui si arriva) -> tipo; lo STOP prevale
+    on_junction = 0
+    for e in els:
+        t = e['tags']
+        kind = {'stop': 0, 'give_way': 1}.get(t.get('highway'))
+        if kind is None or e['id'] not in on_way:
+            continue
+        g = node_id.get(e['id'])
+        if g is not None and deg[g] >= 3:
+            # cartello messo sul nodo dell'incrocio: vale per le strade di classe inferiore (per tutte con stop=all)
+            on_junction += 1
+            arms = arm_cls[g]
+            best = min(arms.values())
+            hits = [(g, b) for b, c in arms.items() if c > best or t.get('stop') == 'all']
+        else:
+            r = junction(e['id'], lambda wi: steps_of(t.get('direction'), wi), SIGN_REACH)
+            if not r:
+                continue
+            hits = [(r[1], b) for b in arm_cls[r[1]]] if t.get('stop') == 'all' else [(r[1], r[2])]
+        for k in hits:
+            if k[0] not in owner:
+                signs[k] = min(kind, signs.get(k, 9))
+
+    # ---- attraversamenti pedonali ----
+    crossings = []
+    seen = defaultdict(list)
+    for e in els:
+        t = e['tags']
+        c = t.get('crossing', '')
+        if (t.get('highway') != 'crossing' and not c) or c in NO_MARKINGS or t.get('crossing:markings') == 'no' or e['id'] not in on_way:
+            continue
+        g = node_id.get(e['id'])
+        if g is not None and deg[g] >= 3:
+            continue  # sul nodo dell'incrocio non si sa su quale braccio
+        wi, i = on_way[e['id']][0]
+        keep, ids = way_geo[wi][2], way_geo[wi][3]
+        j = max(k for k in range(len(keep) - 1) if keep[k] <= i) if len(keep) > 1 else None
+        if j is None or ids[j] == ids[j + 1]:
+            continue
+        a, b = ids[j], ids[j + 1]
+        if arm_cls[a].get(b, 9) >= 8:
+            continue  # aree pedonali: niente strisce
+        (ax, az), (bx, bz) = nodes[a], nodes[b]
+        x, z = xz(e['lat'], e['lon'])
+        L = math.hypot(bx - ax, bz - az) or 1e-9
+        s = max(0.0, min(L, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / L))
+        key = (min(a, b), max(a, b))
+        sa = s if a < b else L - s
+        if any(abs(sa - o) < 3 for o in seen[key]):
+            continue  # stesso attraversamento mappato due volte
+        seen[key].append(sa)
+        crossings.append([a, b, round(s, 1)])
+
+    print(f'semafori OSM {len(sig)} -> incroci semaforizzati {sum(1 for s in signals if not s[0])} '
+          f'(nodi {sum(len(s) - 1 for s in signals if not s[0])}), pedonali {sum(1 for s in signals if s[0])}, '
+          f'non agganciati {ped_lost}')
+    print(f'cartelli: STOP {sum(1 for v in signs.values() if v == 0)}, dare precedenza {sum(1 for v in signs.values() if v == 1)} '
+          f'(sul nodo dell\'incrocio {on_junction}); strisce pedonali {len(crossings)}')
+    return {
+        'signals': signals,
+        'signs': [[a, b, k] for (a, b), k in sorted(signs.items())],
+        'crossings': crossings,
+    }
 
 
 # altezza Microsoft ML -> numero di piani (calibrata sugli edifici con building:levels OSM)
@@ -662,4 +931,6 @@ def overture_buildings(path):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else None)
+    extra = sys.argv[4:]
+    main(sys.argv[1], sys.argv[2], sys.argv[3],
+         next((a for a in extra if a.endswith('.parquet')), None), next((a for a in extra if a.endswith('.json')), None))

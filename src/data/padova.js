@@ -153,11 +153,25 @@ export function buildNetwork() {
   }
   for (const e of edges) if (e.routes >= 2) e.main = true;
   markOverpasses(nodes, edges, rails);
+  // segnaletica reale dai nodi OSM; null se la mappa è stata generata senza (il gioco la deduce dal tipo di strada)
+  const signals = MAP.signals ? MAP.signals.map(([ped, ...ids]) => ({ ped: !!ped, nodes: ids.map((i) => nodes[i]) })) : null;
+  const signs = MAP.signs ? new Map() : null; // `${incrocio}:${arco}` -> 0 STOP, 1 dare precedenza
+  for (const [j, from, kind] of MAP.signs || []) {
+    const e = edgeBetween(String(j), String(from));
+    if (e) signs.set(`${j}:${e.id}`, kind);
+  }
+  const crossings = MAP.crossings ? new Map() : null; // arco -> metri dal nodo a delle strisce pedonali
+  for (const [a, b, s] of MAP.crossings || []) {
+    const e = edgeBetween(String(a), String(b));
+    if (!e) continue;
+    if (!crossings.has(e)) crossings.set(e, []);
+    crossings.get(e).push(e.a === String(a) ? s : e.len - s);
+  }
   const expandSeq = (seq) => seq.filter((id, i) => i === 0 || id !== seq[i - 1]);
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramStops };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramStops, signals, signs, crossings };
 }
 
 // ponti stradali sopra la ferrovia: impalcato in quota con rampe di accesso

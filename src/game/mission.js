@@ -501,23 +501,26 @@ export class Mission {
   }
 
   checkRedLights(bus, front) {
-    for (const sig of this.lights.signals) {
-      const n = sig.node;
+    for (const sig of this.lights.signals) for (const n of sig.nodes) {
       const dx = front.x - n.x, dz = front.z - n.z;
       const d = Math.hypot(dx, dz);
       if (d > 45) { this.lastSigDist.delete(n.id); continue; }
       // arco di avvicinamento: quello più allineato con la posizione del muso
       let best = null, bd = -2;
-      for (const ap of n.signal.appr) {
-        const dot = (dx * ap.out.x + dz * ap.out.z) / (d || 1);
-        if (dot > bd) { bd = dot; best = ap; }
+      for (const e of n.edges) {
+        const o = e.a === n.id ? 1 : -1;
+        const dot = (dx * e.dx * o + dz * e.dz * o) / (d || 1);
+        if (dot > bd) { bd = dot; best = e; }
       }
       const line = n.radius + 1.2;
       const prev = this.lastSigDist.get(n.id);
       this.lastSigDist.set(n.id, d);
-      const movingIn = bus.fx * -best.out.x + bus.fz * -best.out.z > 0.5 && bus.v > 1;
+      // tratti interni all'incrocio e sensi unici in uscita non hanno lanterna
+      const ap = sig.appr.find((a) => a.node === n && a.edge === best);
+      if (!ap) continue;
+      const movingIn = bus.fx * -ap.out.x + bus.fz * -ap.out.z > 0.5 && bus.v > 1;
       if (prev != null && prev > line && d <= line && movingIn && bd > 0.6) {
-        const st = this.lights.lightFor(n, best.edge);
+        const st = this.lights.stateOf(sig, ap.phase);
         if (st === 'R' && this.cooldown('red' + n.id, 10)) { this.stats.redLights++; this.addScore(-150, '🚦 Passaggio con il rosso!'); }
         else if (st === 'Y' && this.cooldown('yel' + n.id, 10)) this.hud.toast('Giallo… al limite!', 'info');
       }

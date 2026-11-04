@@ -409,12 +409,22 @@ export class City {
       (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : e.oneway ? roadOw : road).ribbon(ax, az, bx, bz, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
       if (!e.ped) walk.ribbon(A.x, A.z, B.x, B.z, e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2), Y_SIDEWALK, 6, 0, hFn);
       if (e.elev) { this.buildOverpass(e, A, curb); continue; }
-      // strisce pedonali vicino agli incroci
-      for (const [N, dirSign] of [[A, 1], [B, -1]]) {
-        if (e.roundabout || N.edges.length < 3 || N.edges.filter((x) => x.main).length < 3) continue;
-        const base = (N.trim ? N.trim.get(e) - 1.2 : N.radius) + 1.2;
+      // strisce pedonali: dove sono in OSM (fuori dal poligono dell'incrocio), altrimenti vicino agli incroci principali
+      // e.cross: metri dal nodo a, servono anche per la linea d'arresto dei cartelli
+      e.cross = [];
+      if (this.net.crossings) {
+        const lo = A.trim ? A.trim.get(e) + 2 : 1.7, hi = e.len - (B.trim ? B.trim.get(e) + 2 : 1.7);
+        if (!e.roundabout && hi >= lo) for (const s of this.net.crossings.get(e) || []) e.cross.push(Math.min(hi, Math.max(lo, s)));
+      } else {
+        for (const [N, dirSign] of [[A, 1], [B, -1]]) {
+          if (e.roundabout || N.edges.length < 3 || N.edges.filter((x) => x.main).length < 3) continue;
+          const base = (N.trim ? N.trim.get(e) - 1.2 : N.radius) + 1.2;
+          e.cross.push(dirSign > 0 ? base + 2 : e.len - base - 2);
+        }
+      }
+      for (const s of e.cross) {
         for (let k = -e.width / 2 + 0.6; k < e.width / 2 - 0.4; k += 1.0) {
-          const cx = N.x + e.dx * dirSign * (base + 2) + -e.dz * k, cz = N.z + e.dz * dirSign * (base + 2) + e.dx * k;
+          const cx = A.x + e.dx * s + -e.dz * k, cz = A.z + e.dz * s + e.dx * k;
           const hx = e.dx * 1.7, hz = e.dz * 1.7, wx = -e.dz * 0.25, wz = e.dx * 0.25;
           marks.quad([cx - hx - wx, Y_ROAD + 0.02, cz - hz - wz], [cx - hx + wx, Y_ROAD + 0.02, cz - hz + wz], [cx + hx - wx, Y_ROAD + 0.02, cz + hz - wz], [cx + hx + wx, Y_ROAD + 0.02, cz + hz + wz], [0, 0, 1, 0, 0, 1, 1, 1]);
         }
@@ -927,8 +937,11 @@ export class City {
   }
 
   // ---- segnaletica verticale agli incroci (dopo i semafori: gli incroci semaforizzati non hanno cartelli) ----
+  // Con i nodi OSM: STOP e dare precedenza dove sono davvero, diritto di precedenza sulla strada principale degli
+  // incroci con un cartello sulle laterali. Senza: cartelli dedotti dal tipo di strada. Le rotatorie hanno sempre
+  // il dare precedenza agli ingressi.
   buildSigns() {
-    const { nodes } = this.net;
+    const { nodes, signs: real } = this.net;
     const fronts = [], backs = [], poles = [], lines = new GeoBuilder();
     this.stopSigns = [];
     this.signGrid = new Grid(60);
@@ -946,6 +959,29 @@ export class City {
         (back ? backs : fronts).push(g);
       }
     };
+    // il braccio e dell'incrocio n verso l'esterno, oltre i vertici intermedi della via (nodi con due soli archi):
+    // tratti { arc, from, o, d0 } fino a maxD metri; end = fin dove può stare la linea d'arresto
+    const armChain = (n, e, maxD) => {
+      const chain = [];
+      let from = n, arc = e, d0 = 0, to;
+      for (;;) {
+        const o = arc.a === from.id ? 1 : -1;
+        chain.push({ arc, from, o, d0 });
+        to = nodes[o > 0 ? arc.b : arc.a];
+        d0 += arc.len;
+        if (d0 >= maxD || to.edges.length !== 2) break;
+        arc = to.edges[0] === arc ? to.edges[1] : to.edges[0];
+        from = to;
+      }
+      chain.end = d0 - (to.edges.length >= 3 ? (to.trim ? to.trim.get(arc) : to.radius) + 1.5 : 0);
+      return chain;
+    };
+    // punto e direzione (verso l'esterno) a d metri dal centro dell'incrocio
+    const pointAt = (chain, d) => {
+      const c = chain.find((c) => d <= c.d0 + c.arc.len) || chain[chain.length - 1];
+      const dx = c.arc.dx * c.o, dz = c.arc.dz * c.o, t = d - c.d0;
+      return { x: c.from.x + dx * t, z: c.from.z + dz * t, dx, dz, arc: c.arc };
+    };
     const y0 = Y_SIDEWALK, yl = Y_ROAD + 0.022;
     for (const n of Object.values(nodes)) {
       const deg = n.edges.length;
@@ -953,22 +989,35 @@ export class City {
       const roundabout = n.edges.some((e) => e.roundabout);
       const best = Math.min(...n.edges.map(rank));
       const mainCls = Math.min(...n.edges.map((e) => e.cls));
-      const hasCross = !roundabout && n.edges.filter((x) => x.main).length >= 3;
+      const signed = real && n.edges.some((e) => real.has(`${n.id}:${e.id}`));
       n.edges.forEach((e, k) => {
-        if (e.ped || e.service && e.cls >= 7 && !roundabout || !arrives(e, n)) return;
+        if (e.ped || !arrives(e, n)) return;
+        const key = `${n.id}:${e.id}`;
         let kind = -1;
-        if (roundabout) { if (!e.roundabout) kind = 1; }
+        if (roundabout) { if (!e.roundabout) kind = real && real.has(key) ? real.get(key) : 1; }
+        else if (real) {
+          if (real.has(key)) kind = real.get(key);
+          else if (signed && e.cls <= 3 && rank(e) === best) kind = 3;
+        }
+        else if (e.service && e.cls >= 7) return;
         else if (e.cls > mainCls && rank(e) > best + 5) kind = mainCls <= 2 && e.cls >= 5 && rnd(n.id, k) < 0.5 ? 0 : 1;
         else if (e.cls <= 3 && rank(e) === best && rnd(n.id, k + 7) < 0.25) kind = 3;
         if (kind < 0) return;
-        const o = e.a === n.id ? 1 : -1, dx = e.dx * o, dz = e.dz * o; // verso l'esterno dell'incrocio
-        const hw = e.width / 2, trim = n.trim ? n.trim.get(e) : n.radius;
-        const at = trim + (hasCross ? 4.4 : 0.8);
-        if (at > e.len * 0.6) return;
+        const trim = n.trim ? n.trim.get(e) : n.radius;
+        const chain = armChain(n, e, trim + 14);
+        // linea d'arresto subito prima delle strisce pedonali vicine all'incrocio
+        const cross = [];
+        for (const c of chain) for (const s of c.arc.cross || []) {
+          const d = c.d0 + (c.o > 0 ? s : c.arc.len - s);
+          if (d < trim + 10) cross.push(d);
+        }
+        const at = cross.length ? Math.max(...cross) + 2.4 : trim + 0.8;
+        if (real ? at + 0.6 > chain.end : at > e.len * 0.6) return;
+        const q = pointAt(chain, at), dx = q.dx, dz = q.dz, hw = q.arc.width / 2;
         // a destra di chi arriva: (dz, -dx)
         let px = 0, pz = 0, ok = false;
         for (const off of [hw + 0.8, hw + 1.6]) {
-          px = n.x + dx * (at + 0.6) + dz * off; pz = n.z + dz * (at + 0.6) - dx * off;
+          px = q.x + dx * 0.6 + dz * off; pz = q.z + dz * 0.6 - dx * off;
           if (this.clearance(px, pz, ['road', 'tram'], 10) > 0.25) { ok = true; break; }
         }
         if (!ok) return;
@@ -978,14 +1027,14 @@ export class City {
         if (roundabout) plate(2, px, y0 + h + 1.65, pz, ang, 0.7);
         // linea di arresto (STOP) o tratteggio (precedenza) sulla corsia di chi arriva
         if (kind === 0 || kind === 1) {
-          const w0 = e.oneway ? -hw + 0.3 : 0.1, w1 = hw - 0.3, lw = kind === 0 ? 0.25 : 0.15;
-          const P = (a, w) => [n.x + dx * a + dz * w, yl + h, n.z + dz * a - dx * w];
+          const w0 = q.arc.oneway ? -hw + 0.3 : 0.1, w1 = hw - 0.3, lw = kind === 0 ? 0.25 : 0.15;
+          const P = (a, w) => [q.x + dx * a + dz * w, yl + h, q.z + dz * a - dx * w];
           const seg = (a0, a1, wa, wb) => lines.quad(P(a0, wa), P(a0, wb), P(a1, wa), P(a1, wb), [0, 0, 1, 0, 0, 1, 1, 1]);
-          if (kind === 0) seg(at - lw, at + lw, w1, w0);
-          else for (let w = w0; w < w1 - 0.3; w += 1.0) seg(at - lw, at + lw, Math.min(w + 0.5, w1), w);
+          if (kind === 0) seg(-lw, lw, w1, w0);
+          else for (let w = w0; w < w1 - 0.3; w += 1.0) seg(-lw, lw, Math.min(w + 0.5, w1), w);
         }
         if (kind === 0) {
-          const s = { x: n.x + dx * at + dz * hw / 2, z: n.z + dz * at - dx * hw / 2, dx: -dx, dz: -dz, hw };
+          const s = { x: q.x + dz * hw / 2, z: q.z - dx * hw / 2, dx: -dx, dz: -dz, hw };
           this.stopSigns.push(s);
           this.signGrid.insertAABB(s, s.x - 30, s.z - 30, s.x + 30, s.z + 30);
         }

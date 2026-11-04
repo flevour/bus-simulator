@@ -28,6 +28,8 @@ La mappa unisce due fonti aperte:
 * **OpenStreetMap** (`data/osm-padova.json`, export Overpass): tutte le strade carrabili con nome, corsie,
   sensi unici, limiti di velocità e ponti; le piante dei ~21.000 edifici del centro; i binari (anche i fasci di
   stazione e lo scalo); fiumi e canali (Brenta, Bacchiglione, Piovego, Tronco Maestro, Scaricatore…).
+* **Nodi OpenStreetMap** (`data/osm-padova-nodes.json`, query `scripts/overpass-nodes.ql`): semafori, STOP, dare
+  precedenza e attraversamenti pedonali reali.
 * **GTFS ufficiale di Busitalia Veneto** (feed BusOne, `https://proxy.busone.app/biv/gtfs.zip`): le 22 linee urbane
   con le varianti di percorso, le fermate reali e gli orari delle corse di un mercoledì (feriale) e di una domenica
   (festivo).
@@ -51,15 +53,28 @@ vere, e produce `src/data/padova-map.json` per il gioco.
 * Prato della Valle (isola Memmia, canale, statue) è modellato a parte e allineato alle strade reali.
 * I ponti stradali sopra la ferrovia diventano cavalcavia in quota, con le rampe.
 * I limiti di velocità vengono dai tag `maxspeed` di OSM quando presenti (altrimenti 30 in centro, 50 fuori).
+* **Semafori, STOP, dare precedenza e strisce pedonali dove sono in OSM.** Ogni nodo OSM viene agganciato al grafo
+  lungo la sua strada: il semaforo o il cartello (che in OSM sta sulla linea d'arresto, qualche metro prima
+  dell'incrocio) va all'incrocio che precede, rispettando `direction` e `traffic_signals:direction`. I semafori entro
+  25 m formano un solo impianto, anche quando l'incrocio occupa più nodi (strade a carreggiate separate). I semafori
+  pedonali lontani dagli incroci restano come nodo del grafo. Se la mappa è generata senza i nodi OSM, il gioco torna
+  a dedurre semafori e cartelli dal tipo di strada.
 * Il **tram SIR1** è guidabile sulla sua linea, da Guizza Capolinea a Pontevigodarzere (vedi sotto).
 * **Area di gioco** allargata a sud lungo il tram, fino al capolinea della Guizza.
 
 Per rigenerare i dati:
 
 ```bash
+# segnaletica reale (nodi OSM); se Overpass risponde 502 (server saturo) riprova dopo qualche decina di secondi
+curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-nodes.ql -o /tmp/osm-nodes.json https://overpass-api.de/api/interpreter
+python3 scripts/filter_osm_nodes.py /tmp/osm-nodes.json data/osm-padova-nodes.json
+# orari GTFS e mappa del gioco
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json
 ```
+
+`build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato. Gli ultimi due argomenti sono
+facoltativi: senza il file dei nodi il gioco deduce semafori e cartelli dal tipo di strada.
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).
 
@@ -144,10 +159,11 @@ future potranno averne 4.
 * **Bus** da 12 m con fisica a bicicletta sull'asse posteriore, cambio automatico a 6 marce con convertitore di coppia,
   retarder, freno di fermata, sospensioni (beccheggio/rollio), porte animate, display LED, specchietti retrovisori reali.
 * **Traffico** con modello IDM, semafori sincronizzati, auto che suonano il clacson e sorpassano il bus fermo, pedoni.
-* **Segnaletica verticale** agli incroci senza semaforo: dare precedenza con il cartello di rotatoria agli ingressi delle
-  rotonde, STOP o dare precedenza sulle strade secondarie che sboccano su quelle principali (con linea di arresto o
-  tratteggio), qualche diritto di precedenza. Allo STOP bisogna fermarsi prima della linea, altrimenti si perdono punti.
-  I cartelli seguono regole sul tipo di strada: l'export OSM non contiene i nodi con i cartelli reali.
+* **Segnaletica verticale** agli incroci senza semaforo: STOP e dare precedenza reali da OSM (con linea di arresto o
+  tratteggio, dietro le strisce pedonali), diritto di precedenza sulla strada principale degli incroci dove le
+  laterali hanno un cartello, dare precedenza con il cartello di rotatoria agli ingressi delle rotonde. Allo STOP
+  bisogna fermarsi prima della linea, altrimenti si perdono punti.
+* **Semafori reali** agli incroci e agli attraversamenti pedonali (questi con un verde lungo per i veicoli).
 * **Passeggeri** che aspettano, salgono, prenotano la fermata e scendono, con annunci vocali in italiano.
 * **Audio sintetizzato**: motore diesel, turbo, porte pneumatiche con cicalino, freni ad aria, campanello, frecce, pioggia.
 * **Meteo** (predefinito: variabile): sereno, pioggia (asfalto bagnato, frenata più lunga, tergicristalli), la classica **nebbia padana** oppure

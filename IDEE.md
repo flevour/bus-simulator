@@ -14,9 +14,12 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 2. [ ] **Nuovo piazzale della stazione** con gli anelli (ovali concentrici) del tram, per le linee future
    **SIR2, SIR3, SIR4, SIR5**. La geometria del tram dovrà gestire più linee, gli anelli e i deviatoi, non una sola
    sede: modellarla come grafo di binari (rami e scambi) su cui ogni linea ha il suo percorso.
-3. [ ] **Segnaletica reale da OpenStreetMap**: STOP, dare precedenza, semafori, strisce pedonali e fermate del tram nei
-   punti veri. Query e istruzioni: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md). Oggi i cartelli
-   seguono regole sul tipo di strada.
+3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
+   "Fatto"). Restano:
+   - fermate e sede del tram dai nodi e dalle way OSM (`railway=tram`, `tram_stop`);
+   - semafori pedonali solo nel verso indicato da `traffic_signals:direction`;
+   - dossi (`traffic_calming`) e corsie riservate (`highway=busway`);
+   - istruzioni: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
 4. [ ] **Segnaletica orizzontale dai tag OSM già presenti** (`lanes` su ~5400 strade, `lanes:forward/backward`,
    `overtaking`, `turn:lanes`, `lanes:psv`):
    - numero di corsie e linee divisorie;
@@ -117,3 +120,5 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [x] Palina spostata di qualche metro se cade su un'altra strada (es. Bramante Chiesa).
 - [x] Segnaletica gialla di fermata: zig-zag, tratteggio, scritta BUS.
 - [x] Cartelli verticali agli incroci (STOP, dare precedenza, rotatoria) e regola dello STOP.
+- [x] Semafori, STOP, dare precedenza e strisce pedonali reali dai nodi OSM (`scripts/overpass-nodes.ql`): un impianto
+  per incrocio anche su più nodi, semafori pedonali in mezzo ai tratti, linea d'arresto prima delle strisce.

@@ -7,32 +7,46 @@ import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.j
 // ------------------------------------------------------------------
 // Semafori
 // ------------------------------------------------------------------
+// Senza i nodi OSM: semafori agli incroci tra vie molto percorse (almeno tre bracci con 4+ linee),
+// a non meno di 90 m l'uno dall'altro
+function guessSignals(net) {
+  const weight = (n) => n.edges.reduce((s, e) => s + e.routes, 0);
+  const cand = Object.values(net.nodes)
+    .filter((n) => n.edges.length >= 3 && !n.edges.some((e) => e.roundabout) && n.edges.filter((e) => e.cls <= 2 || e.routes >= 2).length >= 3 && Math.hypot(n.x + 150, n.z - 120) < 4800)
+    .sort((a, b) => weight(b) - weight(a));
+  const chosen = [];
+  for (const n of cand) if (!chosen.some((k) => Math.hypot(k.x - n.x, k.z - n.z) < 90)) chosen.push(n);
+  return chosen.map((n) => ({ ped: false, nodes: [n] }));
+}
+
 export class TrafficLights {
   constructor(scene, net) {
     this.net = net;
     this.signals = [];
     const rnd = mulberry32(99);
-    // semafori agli incroci tra vie molto percorse (almeno tre bracci con 4+ linee), a non meno di 90 m l'uno dall'altro
-    const weight = (n) => n.edges.reduce((s, e) => s + e.routes, 0);
-    const cand = Object.values(net.nodes)
-      .filter((n) => n.edges.length >= 3 && !n.edges.some((e) => e.roundabout) && n.edges.filter((e) => e.cls <= 2 || e.routes >= 2).length >= 3 && Math.hypot(n.x + 150, n.z - 120) < 4800)
-      .sort((a, b) => weight(b) - weight(a));
-    const chosen = [];
-    for (const n of cand) if (!chosen.some((k) => Math.hypot(k.x - n.x, k.z - n.z) < 90)) chosen.push(n);
-    for (const n of chosen) {
-      const appr = n.edges.map((e) => {
-        const out = e.a === n.id ? { x: e.dx, z: e.dz } : { x: -e.dx, z: -e.dz };
-        return { edge: e, out, ang: Math.atan2(out.z, out.x) };
-      });
-      const a0 = appr[0].ang;
+    const rank = (e) => e.cls * 10 - Math.min(e.routes || 0, 9);
+    // un incrocio grande (strade a carreggiate separate) occupa più nodi del grafo: un solo impianto per tutti
+    for (const g of net.signals || guessSignals(net)) {
+      const inside = new Set(g.nodes);
+      const appr = [];
+      for (const n of g.nodes)
+        for (const e of n.edges) {
+          // niente lanterna sui tratti interni all'incrocio, sulle vie pedonali e sui sensi unici in uscita
+          if (e.ped || inside.has(net.nodes[e.a === n.id ? e.b : e.a]) || (e.oneway && (e.oneway === 1 ? e.b : e.a) !== n.id)) continue;
+          const out = e.a === n.id ? { x: e.dx, z: e.dz } : { x: -e.dx, z: -e.dz };
+          appr.push({ node: n, edge: e, out, ang: Math.atan2(out.z, out.x) });
+        }
+      if (!appr.length) continue;
+      // fase 0: la strada principale e quelle allineate; fase 1: le trasversali (i semafori pedonali hanno solo la 0)
+      const ref = appr.reduce((p, q) => (rank(q.edge) < rank(p.edge) ? q : p));
       for (const ap of appr) {
-        let d = Math.abs(((ap.ang - a0 + Math.PI * 3) % (Math.PI * 2)) - Math.PI); // 0 = opposto, PI = stesso
-        ap.phase = d < Math.PI / 4 || d > (Math.PI * 3) / 4 ? 0 : 1;
+        let d = Math.abs(((ap.ang - ref.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI); // 0 = opposto, PI = stesso
+        ap.phase = g.ped || d < Math.PI / 4 || d > (Math.PI * 3) / 4 ? 0 : 1;
       }
-      if (!appr.some((a) => a.phase === 1)) appr[appr.length - 1].phase = 1;
-      const sig = { node: n, appr, offset: rnd() * 50, cycle: [13, 3, 1, 10, 3, 1] };
+      // pedonale: verde lungo per i veicoli, poi il rosso mentre attraversano i pedoni
+      const sig = { nodes: g.nodes, ped: g.ped, appr, offset: rnd() * 50, cycle: g.ped ? [28, 3, 1, 12, 0, 1] : [13, 3, 1, 10, 3, 1] };
       sig.total = sig.cycle.reduce((a, b) => a + b, 0);
-      n.signal = sig;
+      for (const n of g.nodes) n.signal = sig;
       this.signals.push(sig);
     }
     // pali e lanterne (instanced)
@@ -48,7 +62,7 @@ export class TrafficLights {
     let i = 0, j = 0;
     for (const s of this.signals)
       for (const ap of s.appr) {
-        const n = s.node, e = ap.edge;
+        const n = ap.node, e = ap.edge;
         const r = n.radius + 3.5;
         const inc = { x: -ap.out.x, z: -ap.out.z };
         const right = { x: -inc.z, z: inc.x };
@@ -96,8 +110,8 @@ export class TrafficLights {
   lightFor(node, edge) {
     const sig = node.signal;
     if (!sig) return 'G';
-    const ap = sig.appr.find((a) => a.edge === edge);
-    return ap ? this.stateOf(sig, ap.phase) : 'G';
+    const ap = sig.appr.find((a) => a.edge === edge && a.node === node);
+    return ap ? this.stateOf(sig, ap.phase) : 'G'; // tratto interno all'incrocio: si libera l'incrocio
   }
 
   update(dt) {
@@ -643,7 +657,7 @@ export class TramSignals {
     this.sigs = new Set();
     for (const x of this.list) {
       let best = null, bd = 35;
-      for (const sg of (lights && lights.signals) || []) { const d = Math.hypot(sg.node.x - x.px, sg.node.z - x.pz); if (d < bd) { bd = d; best = sg; } }
+      for (const sg of (lights && lights.signals) || []) for (const n of sg.nodes) { const d = Math.hypot(n.x - x.px, n.z - x.pz); if (d < bd) { bd = d; best = sg; } }
       x.sig = best;
       if (best) this.sigs.add(best);
     }

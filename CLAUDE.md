@@ -19,7 +19,7 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
 * `IDEE.md`: elenco delle idee e dei prossimi passi. Aggiungi lì le nuove idee e spostale in "Fatto" quando sono
   realizzate.
 * `docs/prompt-tram.md`: specifica del tram SIR1 guidabile.
-* `docs/overpass-segnaletica.md`: query Overpass per la segnaletica reale (da esportare dal browser).
+* `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
 
 ## Comandi
 
@@ -31,12 +31,15 @@ npm run build:single  # dist-single/index.html autosufficiente
 python3 scripts/to_artifact.py dist-single/index.html <uscita>.html   # pagina per un artefatto claude.ai
 ```
 
-Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture):
+Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica OSM):
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json
 ```
+
+`data/osm-padova-nodes.json` (semafori, STOP, dare precedenza, attraversamenti) viene da `scripts/overpass-nodes.ql`
+filtrato con `scripts/filter_osm_nodes.py`: i comandi sono nel README.
 
 ## Verifiche
 
