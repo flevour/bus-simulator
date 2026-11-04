@@ -602,6 +602,9 @@ export class Tram {
         if (ahead > -0.5 && ahead < (c.isTram ? 3.2 : 2.4) && lat < 1.9) {
           const across = c.h != null && Math.abs(Math.sin(c.h) * fdx + Math.cos(c.h) * fdz) < 0.6;
           hit = { kind: c.isTram ? 'tram' : 'car', car: c, impact: this.v, x: fr.x, z: fr.z, lz: 1, crossing: !c.isTram && across };
+          // come con il bus: l'auto urtata frena e, se resta incastrata davanti al muso, sparisce (niente stallo col
+          // semaforo in fase tram, che tiene il rosso alle auto finché il tram non passa)
+          if (!c.isTram) c.bump = (c.bump || 0) + 1;
           this.v = 0;
           break;
         }

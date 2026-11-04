@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
-import { Y_ROAD, zoneOf } from './city.js';
+import { Y_ROAD, TRAM_HW, zoneOf } from './city.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 
 // ------------------------------------------------------------------
@@ -265,6 +265,32 @@ export class Traffic {
     car.turn = { p0, p1, p2, len: Math.max(2, len * 0.92), t: 0, next: nx, s0: g2.s0, vmax: cosA > 0.8 ? car.vmax : 5.5 };
   }
 
+  // la strada OSM e il tracciato GTFS del tram non sempre combaciano: un'auto che invaderebbe la sede si sposta di lato
+  // (lx, lz: verso sinistra) quanto basta per lasciare libero il binario, al massimo 3 m
+  tramShift(c, x, z, lx, lz) {
+    const e = c.edge, q = this._qt || (this._qt = []);
+    if (e.nearTram === undefined) {
+      e.nearTram = false;
+      const A = this.net.nodes[e.a];
+      for (let s = 0; s <= e.len + 8 && !e.nearTram; s += 8)
+        e.nearTram = this.city.segGrid.query(A.x + e.dx * Math.min(s, e.len), A.z + e.dz * Math.min(s, e.len), e.width / 2 + TRAM_HW + 3, q).some((it) => it.kind === 'tram');
+    }
+    if (!e.nearTram) return 0;
+    let best = null;
+    for (const it of this.city.segGrid.query(x, z, TRAM_HW + 3, q)) {
+      if (it.kind !== 'tram') continue;
+      // solo dove la strada corre accanto alla sede: chi la attraversa di traverso passa sui binari
+      const sx = it.bx - it.ax, sz = it.bz - it.az;
+      if (Math.abs(lx * sx + lz * sz) > 0.5 * (Math.hypot(sx, sz) || 1)) continue;
+      const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
+      if (!best || r.d < best.d) best = { d: r.d, t: r.t, it };
+    }
+    const need = best ? TRAM_HW + 1.0 - best.d : 0;
+    if (need <= 0) return 0;
+    const { it, t } = best, qx = it.ax + (it.bx - it.ax) * t, qz = it.az + (it.bz - it.az) * t;
+    return ((x - qx) * lx + (z - qz) * lz >= 0 ? 1 : -1) * Math.min(3, need);
+  }
+
   update(dt, bus, ctx) {
     // popolazione dinamica attorno al bus
     for (let i = this.cars.length - 1; i >= 0; i--) {
@@ -372,6 +398,11 @@ export class Traffic {
         // spostamento laterale per sorpasso (verso sinistra)
         x += g2.dz * c.latOff;
         z += -g2.dx * c.latOff;
+        // fuori dalla sede del tram
+        const ts = this.tramShift(c, x, z, g2.dz, -g2.dx);
+        c.tramOff = (c.tramOff || 0) + (ts - (c.tramOff || 0)) * Math.min(1, dt * 3);
+        x += g2.dz * c.tramOff;
+        z += -g2.dx * c.tramOff;
       } else {
         const { p0, p1, p2, t } = c.turn;
         const u = 1 - t;
