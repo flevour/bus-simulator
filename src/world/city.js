@@ -598,28 +598,43 @@ export class City {
     for (const dir of [1, -1]) {
       const P = track.path(dir);
       let lastPole = -1e9, prevWire = null;
-      for (let i = 0; i < P.pts.length - 1; i++) {
-        const a = P.pts[i], b = P.pts[i + 1], sa = P.cum[i], sb = P.cum[i + 1];
+      // tratto di binario da a a b (progressive sa, sb)
+      const piece = (a, b, sa, sb) => {
         const l = sb - sa;
-        if (l < 0.05) continue;
         const ha = track.heightAt(dir, sa), hb = track.heightAt(dir, sb);
         const ex = (b.x - a.x) / l, ez = (b.z - a.z) / l, nx = -ez, nz = ex;
         const hFn = ha || hb ? (x, z) => ha + (hb - ha) * Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l)) : null;
         const off = (o) => [a.x + nx * o, a.z + nz * o, b.x + nx * o, b.z + nz * o];
         // corsia rossa, rotaia di guida al centro, cordolo esterno (e interno dove il binario è singolo)
         red.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.03, 8, 0, hFn);
-        red.disc(b.x, b.z, L, Y_ROAD + 0.029 + hb, 8, 8);
+        // disco di raccordo nei giunti: solo in piano, in rampa sporgerebbe sopra la corsia
+        if (Math.abs(hb - ha) < 0.02) red.disc(b.x, b.z, L, Y_ROAD + 0.029 + hb, 8, 8);
         rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8, 0, hFn);
         kerb.ribbon(...off(L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
         if (track.doubleAt(dir, sa) < 0.5) kerb.ribbon(...off(-L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
-        // in quota (cavalcavia Borgomagno): impalcato con parapetti e pile
+        // in quota (cavalcavia Borgomagno): impalcato con parapetti e pile, inclinati come la rampa
         const hm = (ha + hb) / 2;
         if (hm > 0.4) {
           const ang = Math.atan2(ex, ez), mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-          deck.push(new THREE.BoxGeometry(L * 2 + 0.4, 0.6, l + 0.05).rotateY(ang).translate(mx, Y_ROAD + hm - 0.32, mz));
-          deck.push(new THREE.BoxGeometry(0.22, 1.0, l + 0.05).rotateY(ang).translate(mx + nx * (L + 0.1), Y_ROAD + hm + 0.45, mz + nz * (L + 0.1)));
-          if (track.doubleAt(dir, sa) < 0.5) deck.push(new THREE.BoxGeometry(0.22, 1.0, l + 0.05).rotateY(ang).translate(mx - nx * (L + 0.1), Y_ROAD + hm + 0.45, mz - nz * (L + 0.1)));
+          const tilt = -Math.atan2(hb - ha, l), l3 = Math.hypot(l, hb - ha) + 0.05;
+          const slab = (w, h, o, y) => new THREE.BoxGeometry(w, h, l3).rotateX(tilt).rotateY(ang).translate(mx + nx * o, Y_ROAD + hm + y, mz + nz * o);
+          deck.push(slab(L * 2 + 0.4, 0.6, 0, -0.32));
+          deck.push(slab(0.22, 1.0, L + 0.1, 0.45));
+          if (track.doubleAt(dir, sa) < 0.5) deck.push(slab(0.22, 1.0, -(L + 0.1), 0.45));
           if (hm > 1.5 && Math.floor(sb / 22) !== Math.floor(sa / 22)) piers.push(new THREE.BoxGeometry(0.9, hm - 0.6, 0.9).translate(b.x, Y_ROAD + (hm - 0.6) / 2, b.z));
+        }
+      };
+      for (let i = 0; i < P.pts.length - 1; i++) {
+        const a = P.pts[i], b = P.pts[i + 1], sa = P.cum[i], sb = P.cum[i + 1];
+        const l = sb - sa;
+        if (l < 0.05) continue;
+        // in quota i tratti lunghi vanno spezzati ogni 5 m: la rampa disegnata segue la quota su cui corre il tram
+        let up = false;
+        for (let s = sa; s < sb + 5 && !up; s += 5) up = track.heightAt(dir, Math.min(s, sb)) > 0.05;
+        const n = up ? Math.ceil(l / 5) : 1;
+        for (let k = 0; k < n; k++) {
+          const t0 = k / n, t1 = (k + 1) / n;
+          piece({ x: a.x + (b.x - a.x) * t0, z: a.z + (b.z - a.z) * t0 }, { x: a.x + (b.x - a.x) * t1, z: a.z + (b.z - a.z) * t1 }, sa + l * t0, sa + l * t1);
         }
       }
       // linea aerea: un filo sopra ogni binario; pali ogni 30 m (al centro della sede sul doppio binario, a lato sul singolo)
