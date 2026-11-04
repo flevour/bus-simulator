@@ -259,6 +259,7 @@ export class Mission {
       }
     } else this.speedT = 0;
     this.checkRedLights(bus, front);
+    this.checkStopSigns(bus);
     if (ctx.onSidewalk && Math.abs(bus.v) > 1 && this.cooldown('walk', 8)) { this.stats.sidewalk++; this.addScore(-20, 'Sul marciapiede!'); }
     if (ctx.night && !bus.lights && Math.abs(bus.v) > 2 && this.cooldown('lights', 25)) this.addScore(-10, 'Accendi i fari! (L)');
     // fuori percorso
@@ -285,9 +286,33 @@ export class Mission {
       if (this.speedT > 2.5 && this.cooldown('speed', 20)) { this.audio.camera(); this.stats.speeding++; this.addScore(-40, `📸 Autovelox! ${Math.round(bus.speedKmh)} km/h (limite ${limit})`); }
     } else this.speedT = 0;
     this.checkRedLights(bus, front);
+    this.checkStopSigns(bus);
     if (ctx.onSidewalk && Math.abs(bus.v) > 1 && this.cooldown('walk', 8)) { this.stats.sidewalk++; this.addScore(-20, 'Sul marciapiede!'); }
     if (ctx.night && !bus.lights && Math.abs(bus.v) > 2 && this.cooldown('lights', 25)) this.addScore(-10, 'Accendi i fari! (L)');
     this.crowd.update(dt);
+  }
+
+  // STOP: bisogna fermarsi (anche solo un attimo) prima della linea di arresto
+  checkStopSigns(bus) {
+    const grid = this.city && this.city.signGrid;
+    if (!grid) return;
+    const fx = bus.x + bus.fx * 6, fz = bus.z + bus.fz * 6; // muso del bus
+    const near = grid.query(fx, fz, 1, this._qss || (this._qss = []));
+    const mem = this._stopMem || (this._stopMem = new Map());
+    for (const sg of near) {
+      if (bus.fx * sg.dx + bus.fz * sg.dz < 0.6 || bus.dir < 0) continue;
+      const along = (fx - sg.x) * sg.dx + (fz - sg.z) * sg.dz; // < 0 prima della linea
+      const lat = (fx - sg.x) * -sg.dz + (fz - sg.z) * sg.dx;
+      if (Math.abs(lat) > sg.hw + 1.5 || along < -30 || along > 8) continue;
+      const m = mem.get(sg) || { stopped: false, prev: along };
+      if (along > -14 && along < 0.6 && Math.abs(bus.v) < 0.4) m.stopped = true;
+      if (m.prev < 0 && along >= 0) {
+        if (!m.stopped && this.cooldown('stopsign', 6)) this.addScore(-40, '🛑 Non ti sei fermato allo STOP!');
+        m.stopped = false;
+      }
+      m.prev = along;
+      mem.set(sg, m);
+    }
   }
 
   judgeArrival(st, delay, lat) {

@@ -101,7 +101,7 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 ### Punteggio
 
 * ✅ puntualità alla fermata, accostamento preciso, uso corretto delle frecce, comfort dei passeggeri
-* ❌ semaforo rosso, autovelox (30 km/h in centro, 50 fuori), incidenti, ruote sul marciapiede (la carrozzeria che sporge
+* ❌ semaforo rosso, STOP non rispettato, autovelox (30 km/h in centro, 50 fuori), incidenti, ruote sul marciapiede (la carrozzeria che sporge
   in curva non conta, e a incroci e rotonde la ruota posteriore può tagliare la curva), fermate saltate,
   partenze anticipate, porte aperte fuori fermata, passeggeri lasciati a terra, frenate e curve brusche
 
@@ -116,6 +116,10 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 * **Bus** da 12 m con fisica a bicicletta sull'asse posteriore, cambio automatico a 6 marce con convertitore di coppia,
   retarder, freno di fermata, sospensioni (beccheggio/rollio), porte animate, display LED, specchietti retrovisori reali.
 * **Traffico** con modello IDM, semafori sincronizzati, auto che suonano il clacson e sorpassano il bus fermo, pedoni.
+* **Segnaletica verticale** agli incroci senza semaforo: dare precedenza con il cartello di rotatoria agli ingressi delle
+  rotonde, STOP o dare precedenza sulle strade secondarie che sboccano su quelle principali (con linea di arresto o
+  tratteggio), qualche diritto di precedenza. Allo STOP bisogna fermarsi prima della linea, altrimenti si perdono punti.
+  I cartelli seguono regole sul tipo di strada: l'export OSM non contiene i nodi con i cartelli reali.
 * **Passeggeri** che aspettano, salgono, prenotano la fermata e scendono, con annunci vocali in italiano.
 * **Audio sintetizzato**: motore diesel, turbo, porte pneumatiche con cicalino, freni ad aria, campanello, frecce, pioggia.
 * **Meteo**: sereno, pioggia (asfalto bagnato, frenata più lunga, tergicristalli), la classica **nebbia padana** oppure

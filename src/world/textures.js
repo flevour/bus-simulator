@@ -233,3 +233,38 @@ export function ledTexture(line, dest, w = 1024, h = 128) {
   const t = makeTex(c, false);
   return t;
 }
+
+// Cartelli stradali (atlante 8 x 1 celle da 128 px): 0 STOP, 1 dare precedenza, 2 rotatoria, 3 diritto di precedenza;
+// 4-7 il retro grigio con la stessa sagoma
+export function signAtlas() {
+  const S = 128;
+  const [c, x] = canvas(S * 8, S);
+  const shape = (k, back) => {
+    const ox = (back ? k + 4 : k) * S, cx = ox + S / 2, cy = S / 2;
+    x.save();
+    x.beginPath();
+    if (k === 0) { for (let i = 0; i < 8; i++) { const a = Math.PI / 8 + (i * Math.PI) / 4; x.lineTo(cx + Math.cos(a) * 60, cy + Math.sin(a) * 60); } }
+    else if (k === 1) { x.moveTo(cx - 60, cy - 50); x.lineTo(cx + 60, cy - 50); x.lineTo(cx, cy + 56); }
+    else if (k === 2) x.arc(cx, cy, 60, 0, Math.PI * 2);
+    else { x.moveTo(cx, cy - 60); x.lineTo(cx + 60, cy); x.lineTo(cx, cy + 60); x.lineTo(cx - 60, cy); }
+    x.closePath();
+    if (back) { x.fillStyle = '#8a8d90'; x.fill(); x.restore(); return; }
+    if (k === 0) { x.fillStyle = '#c8102e'; x.fill(); x.lineWidth = 6; x.strokeStyle = '#fff'; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 40px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('STOP', cx, cy + 2); }
+    else if (k === 1) { x.fillStyle = '#c8102e'; x.fill(); x.beginPath(); x.moveTo(cx - 40, cy - 38); x.lineTo(cx + 40, cy - 38); x.lineTo(cx, cy + 32); x.closePath(); x.fillStyle = '#fff'; x.fill(); }
+    else if (k === 2) {
+      x.fillStyle = '#1f5fbf'; x.fill(); x.lineWidth = 4; x.strokeStyle = '#fff'; x.stroke();
+      // tre frecce in senso antiorario
+      x.strokeStyle = '#fff'; x.fillStyle = '#fff'; x.lineWidth = 9;
+      for (let i = 0; i < 3; i++) {
+        const a0 = (i * 2 * Math.PI) / 3 - 0.2, a1 = a0 - 1.45;
+        x.beginPath(); x.arc(cx, cy, 34, a0, a1, true); x.stroke();
+        const hx = cx + Math.cos(a1) * 34, hy = cy + Math.sin(a1) * 34, tx = Math.sin(a1), ty = -Math.cos(a1);
+        x.beginPath(); x.moveTo(hx - tx * 13, hy - ty * 13); x.lineTo(hx + Math.cos(a1) * 12, hy + Math.sin(a1) * 12); x.lineTo(hx - Math.cos(a1) * 12, hy - Math.sin(a1) * 12); x.closePath(); x.fill();
+      }
+    } else { x.fillStyle = '#fff'; x.fill(); x.beginPath(); x.moveTo(cx, cy - 42); x.lineTo(cx + 42, cy); x.lineTo(cx, cy + 42); x.lineTo(cx - 42, cy); x.closePath(); x.fillStyle = '#f2c200'; x.fill(); }
+    x.restore();
+  };
+  for (let k = 0; k < 4; k++) { shape(k, false); shape(k, true); }
+  const t = makeTex(c, false);
+  return t;
+}

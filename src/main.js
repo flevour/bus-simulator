@@ -85,6 +85,7 @@ function buildWorld() {
   net = buildNetwork();
   city = new City(scene, net);
   lights = new TrafficLights(scene, net);
+  city.buildSigns();
   trams = new TramSim(scene, net);
 }
 

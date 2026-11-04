@@ -839,6 +839,82 @@ export class City {
     this.group.add(bt);
   }
 
+  // ---- segnaletica verticale agli incroci (dopo i semafori: gli incroci semaforizzati non hanno cartelli) ----
+  buildSigns() {
+    const { nodes } = this.net;
+    const fronts = [], backs = [], poles = [], lines = new GeoBuilder();
+    this.stopSigns = [];
+    this.signGrid = new Grid(60);
+    const poleG = new THREE.CylinderGeometry(0.04, 0.04, 2.9, 6).translate(0, 1.45, 0);
+    const rnd = (id, k) => { const v = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+    const rank = (e) => e.cls * 10 - Math.min(e.routes || 0, 9);
+    const arrives = (e, n) => !e.oneway || (e.oneway === 1 ? e.b === n.id : e.a === n.id);
+    const plate = (kind, x, y, z, ang, size) => {
+      for (const back of [0, 1]) {
+        const g = new THREE.PlaneGeometry(size, size);
+        const u0 = ((back ? kind + 4 : kind) * 128) / 1024, u1 = u0 + 128 / 1024, uv = g.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) ? (back ? u0 : u1) : (back ? u1 : u0));
+        g.rotateY(ang + (back ? Math.PI : 0));
+        g.translate(x - Math.sin(ang) * (back ? 0.03 : -0.03), y, z - Math.cos(ang) * (back ? 0.03 : -0.03));
+        (back ? backs : fronts).push(g);
+      }
+    };
+    const y0 = Y_SIDEWALK, yl = Y_ROAD + 0.022;
+    for (const n of Object.values(nodes)) {
+      const deg = n.edges.length;
+      if (deg < 3 || n.signal || n.edges.some((e) => e.elev || e.tunnel) || n.edges.every((e) => e.ped)) continue;
+      const roundabout = n.edges.some((e) => e.roundabout);
+      const best = Math.min(...n.edges.map(rank));
+      const mainCls = Math.min(...n.edges.map((e) => e.cls));
+      const hasCross = !roundabout && n.edges.filter((x) => x.main).length >= 3;
+      n.edges.forEach((e, k) => {
+        if (e.ped || e.service && e.cls >= 7 && !roundabout || !arrives(e, n)) return;
+        let kind = -1;
+        if (roundabout) { if (!e.roundabout) kind = 1; }
+        else if (e.cls > mainCls && rank(e) > best + 5) kind = mainCls <= 2 && e.cls >= 5 && rnd(n.id, k) < 0.5 ? 0 : 1;
+        else if (e.cls <= 3 && rank(e) === best && rnd(n.id, k + 7) < 0.25) kind = 3;
+        if (kind < 0) return;
+        const o = e.a === n.id ? 1 : -1, dx = e.dx * o, dz = e.dz * o; // verso l'esterno dell'incrocio
+        const hw = e.width / 2, trim = n.trim ? n.trim.get(e) : n.radius;
+        const at = trim + (hasCross ? 4.4 : 0.8);
+        if (at > e.len * 0.6) return;
+        // a destra di chi arriva: (dz, -dx)
+        let px = 0, pz = 0, ok = false;
+        for (const off of [hw + 0.8, hw + 1.6]) {
+          px = n.x + dx * (at + 0.6) + dz * off; pz = n.z + dz * (at + 0.6) - dx * off;
+          if (this.clearance(px, pz, ['road', 'tram'], 10) > 0.25) { ok = true; break; }
+        }
+        if (!ok) return;
+        const ang = Math.atan2(dx, dz), h = (n.h || 0);
+        poles.push(poleG.clone().translate(px, y0 + h, pz));
+        plate(kind, px, y0 + h + (roundabout ? 2.45 : 2.3), pz, ang, 0.85);
+        if (roundabout) plate(2, px, y0 + h + 1.65, pz, ang, 0.7);
+        // linea di arresto (STOP) o tratteggio (precedenza) sulla corsia di chi arriva
+        if (kind === 0 || kind === 1) {
+          const w0 = e.oneway ? -hw + 0.3 : 0.1, w1 = hw - 0.3, lw = kind === 0 ? 0.25 : 0.15;
+          const P = (a, w) => [n.x + dx * a + dz * w, yl + h, n.z + dz * a - dx * w];
+          const seg = (a0, a1, wa, wb) => lines.quad(P(a0, wa), P(a0, wb), P(a1, wa), P(a1, wb), [0, 0, 1, 0, 0, 1, 1, 1]);
+          if (kind === 0) seg(at - lw, at + lw, w1, w0);
+          else for (let w = w0; w < w1 - 0.3; w += 1.0) seg(at - lw, at + lw, Math.min(w + 0.5, w1), w);
+        }
+        if (kind === 0) {
+          const s = { x: n.x + dx * at + dz * hw / 2, z: n.z + dz * at - dx * hw / 2, dx: -dx, dz: -dz, hw };
+          this.stopSigns.push(s);
+          this.signGrid.insertAABB(s, s.x - 30, s.z - 30, s.x + 30, s.z + 30);
+        }
+      });
+    }
+    if (!poles.length) return;
+    const tex = TX.signAtlas();
+    this.group.add(new THREE.Mesh(mergeGeometries(fronts), new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.5 })));
+    this.group.add(new THREE.Mesh(mergeGeometries(backs), new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.5 })));
+    const pm = new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x8f9497 }));
+    pm.castShadow = true;
+    this.group.add(pm);
+    if (lines.pos.length) this.group.add(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e0 }), 4)));
+    this.signCount = fronts.length;
+  }
+
   // ---- edifici ----
   // sulle strade percorse dai bus nessun ostacolo può invadere la carreggiata
   // (piccole imprecisioni di allineamento tra strade ed edifici OSM)
