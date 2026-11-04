@@ -2,3 +2,4 @@ node_modules
 dist
 dist-single
 __pycache__/
+.env

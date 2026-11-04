@@ -5,6 +5,11 @@ import { zoneOf } from '../world/city.js';
 import { fmtHM } from '../data/padova.js';
 import { mulberry32, angleDiff } from '../world/spatial.js';
 import { BUS } from '../bus/bus.js';
+import { posthog, isPostHogConfigured, posthogGameLogger } from '../posthog.js';
+
+const capture = (event, properties) => {
+  if (isPostHogConfigured) posthog.capture(event, properties);
+};
 
 // Persone alle fermate (in attesa / che salgono / che scendono)
 class Crowd {
@@ -193,6 +198,12 @@ export class Mission {
           st.arrived = true;
           const delay = this.clock - st.sched;
           st.delay = delay;
+          capture('stop_served', {
+            vehicle_type: this.tram ? 'tram' : 'bus',
+            line_id: this.line.id,
+            stop_index: st.idx,
+            arrival_status: delay < -60 ? 'early' : delay <= 90 ? 'on_time' : 'late',
+          });
           if (st.idx > 0) this.judgeArrival(st, delay, lat, along);
           if (!this.tram && st.idx === this.nextStop && bus.indicator === 1) { this.addScore(10, 'Freccia a destra in accostamento'); this.stats.indicatorsOk++; }
           this.request = false;
@@ -532,6 +543,11 @@ export class Mission {
     this.stats.crashes++;
     this.comfort = Math.max(0, this.comfort - 25);
     if (hit.car && hit.car.isTram) hit.kind = 'tram';
+    capture('player_collision_recorded', {
+      vehicle_type: this.tram ? 'tram' : 'bus',
+      collision_type: hit.kind,
+      impact_speed_kmh: Math.round(hit.impact * 3.6),
+    });
     const what = { tram: 'il tram!', car: 'un\'auto', building: 'un edificio', shelter: 'una pensilina', tree: 'un albero', pole: 'un palo', wall: 'il parapetto', landmark: 'un monumento!' }[hit.kind] || 'un ostacolo';
     const pts = -Math.round(Math.min(250, 40 + hit.impact * 25));
     this.addScore(pts, `💥 Hai urtato ${what}`);
@@ -565,6 +581,18 @@ export class Mission {
     this.addScore(comfortBonus, `Comfort medio ${Math.round(avgComfort)}%`, comfortBonus >= 0 ? 'good' : 'bad');
     this.addScore(200, `Capolinea ${this.dest} raggiunto!`);
     this.avgComfort = avgComfort;
+    const missionDetails = {
+      vehicle_type: this.tram ? 'tram' : 'bus',
+      line_id: this.line.id,
+      final_score: this.score,
+      average_comfort: Math.round(avgComfort),
+      on_time_stops: this.stats.onTime,
+      late_stops: this.stats.late,
+      skipped_stops: this.stats.skipped,
+      collisions: this.stats.crashes,
+    };
+    capture('mission_completed', missionDetails);
+    posthogGameLogger.info('mission completed', missionDetails);
     this.onFinish && this.onFinish();
   }
 

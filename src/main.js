@@ -8,8 +8,12 @@ import { Mission, scheduleFor } from './game/mission.js';
 import { pointAt, projectOnRoute } from './game/routes.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
+import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
 
 const $ = (id) => document.getElementById(id);
+const capture = (event, properties) => {
+  if (isPostHogConfigured) posthog.capture(event, properties);
+};
 
 // ------------------------------------------------------------------
 // Renderer e scena
@@ -308,6 +312,7 @@ function teleportTo(x, z, dirHint = null) {
   }
   const lat = e.oneway ? 0 : e.width / 4;
   placeBusAt(r.cx - dz * lat, r.cz + dx * lat, Math.atan2(dx, dz));
+  capture('teleport_used', { vehicle_type: bus.isTram ? 'tram' : 'bus', mission_mode: mission.free ? 'free' : 'service' });
   hud.toast('🌀 Teletrasporto: ' + (e.name || 'strada senza nome'), 'info');
 }
 function teleportToStop(st) {
@@ -315,6 +320,7 @@ function teleportToStop(st) {
   const p = pointAt(mission.route, s);
   const lat = p.seg.edge && p.seg.edge.oneway ? 0 : p.seg.hw / 2;
   placeBusAt(p.x - p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
+  capture('teleport_used', { vehicle_type: bus.isTram ? 'tram' : 'bus', mission_mode: 'service' });
   // arrivi più o meno in orario alla fermata scelta
   if (st.sched) mission.clock = Math.max(mission.clock, st.sched - 100);
   hud.toast('🌀 Teletrasporto davanti a ' + st.name, 'info');
@@ -573,6 +579,15 @@ function buildMenu() {
 }
 
 function backToMenu() {
+  if (mission && !mission.finished) {
+    const missionDetails = {
+      vehicle_type: bus.isTram ? 'tram' : 'bus',
+      mission_mode: mission.free ? 'free' : 'service',
+      stops_completed: mission.nextStop,
+    };
+    capture('mission_abandoned', missionDetails);
+    posthogGameLogger.warn('mission abandoned', missionDetails);
+  }
   saveGame();
   togglePause(false);
   refreshResumeBox();
@@ -656,6 +671,15 @@ function startMission(resume = null) {
   const night = mission._night || 0;
   if (!resume) bus.lights = night > 0.3 || wx.rain > 0.3 || wx.fog > 0.3;
   saveTimer = 0;
+  const missionDetails = {
+    vehicle_type: bus.isTram ? 'tram' : 'bus',
+    mission_mode: mission.free ? 'free' : 'service',
+    line_id: L.id,
+    service_day: settings.variant,
+    weather: settings.weather,
+  };
+  capture(resume ? 'mission_resumed' : 'mission_started', missionDetails);
+  posthogGameLogger.info(resume ? 'mission resumed' : 'mission started', missionDetails);
   if (resume) {
     hud.setLine(mission.free ? { id: L.id, color: L.color } : L, mission.free ? 'Giro libero' : destName);
     hud.toast(`Corsa ripresa alle ${fmtHM(mission.clock)}: ${resume.summary}`, 'info');
