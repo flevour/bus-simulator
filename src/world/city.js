@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
+import { LINES } from '../data/padova.js';
 
 export const Y_ROAD = 0.14;
 export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie rosse e rotaia centrale)
@@ -714,6 +715,21 @@ export class City {
           if (b.dead || b.kind === 'car') continue;
           const lx = (x - b.x) * b.c + (z - b.z) * b.s, lz = -(x - b.x) * b.s + (z - b.z) * b.c;
           if (Math.hypot(Math.max(Math.abs(lx) - b.hx, 0), Math.max(Math.abs(lz) - b.hz, 0)) < r) { b.dead = true; removed++; }
+        }
+      }
+    }
+    // tratti di linea senza strada (salti dell'aggancio al confine della mappa): liberali comunque
+    if (!tile) {
+      for (const L of LINES) for (const v of L.variants) for (let i = 0; i < v.nodes.length - 1; i++) {
+        if (this.net.edgeBetween(v.nodes[i], v.nodes[i + 1])) continue;
+        const A = nodes[v.nodes[i]], B = nodes[v.nodes[i + 1]];
+        const l = Math.hypot(B.x - A.x, B.z - A.z);
+        for (let s = 0; s <= l; s += 2) {
+          const x = A.x + ((B.x - A.x) * s) / l, z = A.z + ((B.z - A.z) * s) / l;
+          for (const b of this.obstacles.query(x, z, 5, q)) {
+            const lx = (x - b.x) * b.c + (z - b.z) * b.s, lz = -(x - b.x) * b.s + (z - b.z) * b.c;
+            if (!b.dead && Math.hypot(Math.max(Math.abs(lx) - b.hx, 0), Math.max(Math.abs(lz) - b.hz, 0)) < 3) { b.dead = true; removed++; }
+          }
         }
       }
     }

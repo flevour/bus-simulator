@@ -26,6 +26,14 @@ La mappa unisce due fonti aperte:
 `scripts/build_map.py` aggancia ogni tracciato GTFS alle strade OSM (map matching), così i bus percorrono le vie
 vere, e produce `src/data/padova-map.json` per il gioco.
 
+* **Area di gioco: Centro storico e Arcella.** Le linee che escono dall'area sono tagliate al confine
+  ("tratto in città").
+* **Edifici da Overture Maps** (`data/overture-buildings-padova.parquet`): piante OSM e Microsoft, compresi i
+  cortili interni. Altezza: piani da OSM se presenti, altrimenti altezza Microsoft ML (stimata da immagini
+  satellitari) convertita in piani con una calibrazione sugli edifici OSM, altrimenti stima per tipologia.
+  La geometria è costruita a riquadri da 400 m, prima quelli vicini al bus.
+* **Tram SIR1**: la sede tranviaria (corsie rosse e rotaia centrale) viene dal tracciato GTFS; due tram
+  circolano e si fermano alle fermate. Guidare sulla corsia riservata costa punti.
 * Gli edifici del centro hanno la pianta reale, con l'altezza da OSM quando c'è, altrimenti stimata; quelli di pianta
   rettangolare hanno il tetto a padiglione in coppi, le facciate hanno zoccolo, cornicione e persiane e nel centro
   storico molti hanno i portici ad arco al piano terra. Basilica del
@@ -40,7 +48,7 @@ Per rigenerare i dati:
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet
 ```
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).
