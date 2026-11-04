@@ -28,7 +28,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+      # statistiche PostHog: variabili del repository (Settings → Secrets and variables → Actions → Variables).
+      # Il token del progetto è pubblico per natura (finisce nel JavaScript del sito); senza variabili PostHog è spento.
       - run: npm run build
+        env:
+          VITE_POSTHOG_KEY: ${{ vars.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.VITE_POSTHOG_HOST }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
