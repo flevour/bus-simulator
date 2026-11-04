@@ -62,12 +62,19 @@ export class Mission {
     this.route = this.tram ? buildTramRoute(route.trackPath, route) : buildRoute(net, route);
     this.stops = this.route.stops;
     // la palina disegnata può essere spostata di qualche metro (vicino agli incroci): la zona di fermata la segue
+    // (una fermata può avere più paline, una per verso: vale quella sul percorso di questa corsa)
     if (!this.tram && city && city.stopPlacements) this.stops.forEach((st, k) => {
-      const pl = city.stopPlacements.find((p) => p.id === st.gtfs.id);
-      if (!pl) return;
-      const pr = projectOnRoute(this.route, pl.cx, pl.cz, st.s, 30, 30);
       const prev = this.stops[k - 1], next = this.stops[k + 1];
-      if (pr.d > 6 || Math.abs(pr.s - st.s) > 20 || (prev && pr.s < prev.s + 15) || (next && pr.s > next.s - 15) || pr.s > this.route.length - 15) return;
+      let pr = null;
+      for (const pl of city.stopPlacements) {
+        if (pl.id !== st.gtfs.id) continue;
+        const q = projectOnRoute(this.route, pl.cx, pl.cz, st.s, 30, 30);
+        if (q.d > 6 || Math.abs(q.s - st.s) > 20 || (prev && q.s < prev.s + 15) || (next && q.s > next.s - 15) || q.s > this.route.length - 15) continue;
+        const dir = pointAt(this.route, q.s);
+        if (dir.dx * pl.dx + dir.dz * pl.dz < 0.5) continue; // palina del verso opposto
+        if (!pr || q.d < pr.d) pr = q;
+      }
+      if (!pr) return;
       const p = pointAt(this.route, pr.s), hw = p.seg.hw, rx = -p.dz, rz = p.dx;
       Object.assign(st, { s: pr.s, x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw });
     });

@@ -97,19 +97,25 @@ export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400) {
   return best;
 }
 
-// Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia
+// Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia.
+// Una palina per ogni verso in cui la fermata è servita: ai capolinea la stessa fermata GTFS vale per l'arrivo e per
+// la partenza, spesso su lati o tratti diversi. Prima le partenze (lì si sale), poi le fermate intermedie, poi gli arrivi.
 export function allStopPlacements(net, snap, clear = () => 9) {
-  // per ogni fermata: la prima variante che la serve dà la direzione di marcia
-  const served = new Map(), dirVar = new Map();
-  for (const L of LINES) for (const v of L.variants) for (const st of v.stops) {
+  const served = new Map(), vars = new Map();
+  for (const L of LINES) for (const v of L.variants) v.stops.forEach((st, k) => {
     const set = served.get(st.id) || served.set(st.id, new Set()).get(st.id);
     set.add(L.id);
-    if (!dirVar.has(st.id)) dirVar.set(st.id, v);
-  }
+    const rank = k === 0 ? 0 : k === v.stops.length - 1 ? 2 : 1;
+    (vars.get(st.id) || vars.set(st.id, []).get(st.id)).push({ v, rank });
+  });
   const out = [];
   for (const st of net.stops) {
     if (!served.has(st.id)) continue;
-    const v = dirVar.get(st.id);
+    for (const { v } of vars.get(st.id).sort((p, q) => p.rank - q.rank)) placeFor(st, v);
+  }
+  return out;
+
+  function placeFor(st, v) {
     let best = null, bd = 60;
     for (let i = 0; i < v.nodes.length - 1; i++) {
       const A = net.nodes[v.nodes[i]], B = net.nodes[v.nodes[i + 1]];
@@ -119,10 +125,10 @@ export function allStopPlacements(net, snap, clear = () => 9) {
       const cx = A.x + ex * t, cz = A.z + ez * t, d = Math.hypot(st.x - cx, st.z - cz);
       if (d < bd) { bd = d; best = { cx, cz, l: Math.sqrt(l2), ex, ez, at: t * Math.sqrt(l2), e: net.edgeBetween(v.nodes[i], v.nodes[i + 1]) }; }
     }
-    if (!best || !best.e || best.e.elev) continue;
+    if (!best || !best.e || best.e.elev) return;
     const dx = best.ex / best.l, dz = best.ez / best.l, hw = best.e.width / 2;
     const rx = -dz, rz = dx; // la palina sta a destra della direzione di marcia
-    if (out.some((o) => Math.hypot(o.cx - best.cx, o.cz - best.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) continue;
+    if (out.some((o) => Math.hypot(o.cx - best.cx, o.cz - best.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) return;
     // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate, incroci):
     // se il punto esatto è occupato si sposta la fermata di qualche metro lungo la strada
     let spot = null;
@@ -134,11 +140,10 @@ export function allStopPlacements(net, snap, clear = () => 9) {
       spot = { cx, cz, px, pz };
       break;
     }
-    if (!spot) continue;
+    if (!spot) return;
     out.push({
       id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
       x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw,
     });
   }
-  return out;
 }
