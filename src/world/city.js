@@ -606,8 +606,10 @@ export class City {
     }
     const inter = new GeoBuilder(), joints = new GeoBuilder(), walkDisc = new GeoBuilder();
     for (const n of Object.values(nodes)) {
-      // i nodi interni a una catena sono già coperti dal nastro unico; con la pianta delle strade servono solo in quota
-      if (!n.edges.length || (n.joint && n.bend < 0.02) || n.inChain || (surf && !((n.h || 0) > 0.05))) continue;
+      // i nodi interni a una catena sono già coperti dal nastro unico; con la pianta delle strade servono solo in quota,
+      // e nemmeno lì se la pianta ha anche l'asfalto in quota (i ventagli degli incroci sulle rampe uscivano di decine di
+      // metri: lastricato sopra la Rotonda Rosetta Molinari dal piede del Cavalcavia Borgomagno)
+      if (!n.edges.length || (n.joint && n.bend < 0.02) || n.inChain || (surf && (this.net.surfaces.up || !((n.h || 0) > 0.05)))) continue;
       const seg = n.joint ? 10 : 18;
       // nelle curve il disco sta sotto l'asfalto e riempie solo lo spicchio tra i due tratti
       if (n.poly) {
