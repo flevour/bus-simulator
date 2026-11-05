@@ -792,20 +792,24 @@ export class City {
   }
 
   // quota della strada sotto un punto (cavalcavia), 0 altrove
-  // quota della strada in un punto. Con cur (quota attuale del veicolo) vale la superficie più vicina a quella, terra
-  // compresa: sulla rampa si sale con continuità, chi passa sotto un cavalcavia resta a terra
+  // quota della strada in un punto. Con cur (quota attuale del veicolo) vale, tra le superfici che ci sono lì, quella
+  // più vicina a cur: il piano terra conta solo dove sotto il cavalcavia passa davvero un'altra strada, così sulle
+  // rampe si sale e chi passa sotto resta a terra
   heightAt(x, z, cur = null) {
     const arr = this.segGrid.query(x, z, 12, this._qh || (this._qh = []));
-    let h = 0, best = cur == null ? 0 : Math.abs(cur);
+    let h = 0, best = Infinity, any = false, under = false;
     for (const it of arr) {
       const e = it.ref;
-      if (it.kind !== 'road' || !e || !e.elev) continue;
+      if (it.kind !== 'road' || !e) continue;
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
+      if (!e.elev) { if (r.d <= it.hw) under = true; continue; }
       if (r.d > it.hw + 1.5) continue;
       const he = edgeHeight(e, r.t * e.len);
+      any = true;
       if (cur == null) h = Math.max(h, he);
       else if (Math.abs(he - cur) < best) { best = Math.abs(he - cur); h = he; }
     }
+    if (any && cur != null && under && Math.abs(cur) < best) h = 0;
     return h;
   }
 
