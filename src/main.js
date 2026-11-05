@@ -4,7 +4,7 @@ import { Tram, tramRoute, TRAM } from './tram/tram.js';
 import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
 import { Bus } from './bus/bus.js';
-import { Mission, scheduleFor } from './game/mission.js';
+import { Mission, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
 import { pointAt, projectOnRoute } from './game/routes.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
@@ -88,6 +88,8 @@ const audio = new Audio();
 
 function buildWorld() {
   net = buildNetwork();
+  // orari tra le fermate a misura di guida (il tram ha già quelli della sua sede)
+  for (const L of LINES) for (const v of L.variants) paceVariant(net, v);
   city = new City(scene, net);
   lights = new TrafficLights(scene, net);
   city.buildSigns();
@@ -502,7 +504,7 @@ function refreshMenu() {
   deps.forEach((dp, i) => {
     const o = document.createElement('option');
     o.value = i;
-    o.textContent = `${fmtHM(dp.t)} → ${fmtHM(dp.t + dp.d)}${hourTag(dp.t)}`;
+    o.textContent = `${fmtHM(dp.t)} → ${fmtHM(dp.t + tripDuration(v, dp.d))}${hourTag(dp.t)}`;
     sel.appendChild(o);
     const d = Math.abs(dp.t - (prev || 8.25 * 3600));
     if (d < bestD) { bestD = d; best = i; }

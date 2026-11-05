@@ -32,7 +32,9 @@ La mappa unisce due fonti aperte:
   precedenza e attraversamenti pedonali reali.
 * **GTFS ufficiale di Busitalia Veneto** (feed BusOne, `https://proxy.busone.app/biv/gtfs.zip`): le 22 linee urbane
   con le varianti di percorso, le fermate reali e gli orari delle corse di un mercoledì (feriale) e di una domenica
-  (festivo).
+  (festivo). Partenza e arrivo sono quelli reali; i passaggi intermedi il gioco li ripartisce secondo il tempo di guida
+  (limite della via e un tempo fisso per fermata), perché il GTFS segue il traffico vero: sulla 13 chiede 36-46 km/h di
+  media in periferia e 10 km/h in centro. Una corsa non dura mai meno del 90% del tempo di guida stimato.
 
 `scripts/build_map.py` aggancia ogni tracciato GTFS alle strade OSM (map matching), così i bus percorrono le vie
 vere, e produce `src/data/padova-map.json` per il gioco.

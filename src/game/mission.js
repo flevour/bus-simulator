@@ -621,6 +621,41 @@ export function isPeak(hour) {
 // orario teorico di passaggio alle fermate
 // orari reali dal GTFS: tempi della corsa di riferimento scalati sulla durata della corsa scelta
 export function scheduleFor(variant, departure, dur) {
-  const k = (dur || variant.duration) / variant.duration;
+  const k = tripDuration(variant, dur) / variant.duration;
   return variant.offsets.map((o) => departure + o * k);
+}
+// durata della corsa: quella reale, ma mai meno del 90% del tempo di guida stimato (le linee tagliate al bordo della
+// mappa hanno durate ricavate in proporzione dal GTFS, a volte impossibili: 11B Taggi - Ferrovia 6 minuti invece di 15)
+export function tripDuration(variant, dur) {
+  return Math.max(dur || variant.duration, variant.minDur || 0);
+}
+
+// Tempi di passaggio a misura di guida. Il GTFS dà partenza e arrivo reali, ma tra le fermate segue il traffico vero:
+// sulla 13 in periferia chiede 36-46 km/h di media fermate comprese, in centro bastano 10 km/h. Qui si stima il tempo
+// di guida fino a ogni fermata: marcia all'85% del limite del tratto (maxspeed OSM, altrimenti 30 in centro e 50 fuori)
+// più un tempo fisso per ogni fermata (frenata, porte, ripartenza).
+const STOP_TIME = 22;
+export function drivingTimes(net, variant) {
+  const route = buildRoute(net, variant);
+  const { segs, cum, pts, stops } = route;
+  const T = [0];
+  for (const sg of segs) {
+    const p = pts[sg.i];
+    const lim = Math.min(50, sg.edge.speed || (zoneOf(p.x, p.z) === 0 ? 30 : 50));
+    T.push(T[T.length - 1] + sg.len / ((lim / 3.6) * 0.85));
+  }
+  const runAt = (s) => {
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+    const l = cum[hi] - cum[lo] || 1;
+    return T[lo] + (T[hi] - T[lo]) * Math.max(0, Math.min(1, (s - cum[lo]) / l));
+  };
+  const t0 = runAt(stops[0].s);
+  return stops.map((st, k) => runAt(st.s) - t0 + k * STOP_TIME);
+}
+// la durata reale della corsa resta quella del GTFS, ripartita tra le fermate come il tempo di guida stimato
+export function paceVariant(net, variant) {
+  const w = drivingTimes(net, variant), tot = w[w.length - 1] || 1;
+  variant.offsets = w.map((x) => Math.round((x / tot) * variant.duration));
+  variant.minDur = Math.round(tot * 0.9);
 }
