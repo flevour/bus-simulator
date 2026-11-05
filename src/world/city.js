@@ -105,8 +105,8 @@ class GeoBuilder {
   }
   // nastro lungo una spezzata (pts: [{x, z}]) con giunti a cuneo: i tratti consecutivi non si sovrappongono (niente
   // z-fighting) e le righe di bordo girano senza tacche. u: 0 sinistra -> 1 destra, v continua lungo la spezzata
-  strip(pts, w, y, vScale = 12) {
-    const n = pts.length, off = [];
+  strip(pts, w, y, vScale = 12, shift = 0) {
+    const n = pts.length, off = [], nrm = [];
     if (n < 2) return;
     const perp = (a, b) => { const l = Math.hypot(b.x - a.x, b.z - a.z) || 1; return [-(b.z - a.z) / l, (b.x - a.x) / l]; };
     for (let i = 0; i < n; i++) {
@@ -119,17 +119,33 @@ class GeoBuilder {
         k = 1 / Math.max(0.6, mx * p2[0] + mz * p2[1]);
       }
       off.push([(mx * k * w) / 2, (mz * k * w) / 2]);
+      nrm.push([mx * k * shift, mz * k * shift]);
     }
     let v = 0;
     for (let i = 0; i < n - 1; i++) {
       const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z), m = Math.max(1, Math.ceil(l / 40));
-      const at = (t) => [a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, off[i][0] + (off[i + 1][0] - off[i][0]) * t, off[i][1] + (off[i + 1][1] - off[i][1]) * t];
+      // shift: spostamento laterale dell'asse (righe di bordo), con lo stesso giunto a cuneo
+      const at = (t) => [a.x + (b.x - a.x) * t + nrm[i][0] + (nrm[i + 1][0] - nrm[i][0]) * t, a.z + (b.z - a.z) * t + nrm[i][1] + (nrm[i + 1][1] - nrm[i][1]) * t, off[i][0] + (off[i + 1][0] - off[i][0]) * t, off[i][1] + (off[i + 1][1] - off[i][1]) * t];
       for (let s = 0; s < m; s++) {
         const [x0, z0, ox0, oz0] = at(s / m), [x1, z1, ox1, oz1] = at((s + 1) / m);
         const va = v + (l * s) / m / vScale, vb = v + (l * (s + 1)) / m / vScale;
         this.quad([x0 - ox0, y, z0 - oz0], [x0 + ox0, y, z0 + oz0], [x1 - ox1, y, z1 - oz1], [x1 + ox1, y, z1 + oz1], [0, va, 1, va, 0, vb, 1, vb]);
       }
       v += l / vScale;
+    }
+  }
+  // poligono con buchi (anelli piatti [x0, z0, x1, z1, ...]) triangolato, faccia in su, uv in coordinate del mondo
+  polygon(rings, y, uvScale = 20) {
+    const V = (f) => { const out = []; for (let i = 0; i < f.length; i += 2) out.push(new THREE.Vector2(f[i], f[i + 1])); return out; };
+    const contour = V(rings[0]), holes = rings.slice(1).map(V);
+    let tris;
+    try { tris = THREE.ShapeUtils.triangulateShape(contour, holes); } catch (err) { return; }
+    const all = [contour, ...holes].flat(), b = this.pos.length / 3;
+    for (const p of all) { this.pos.push(p.x, y, p.y); this.uv.push(p.x / uvScale, p.y / uvScale); }
+    for (const [i0, i1, i2] of tris) {
+      const A = all[i0], B = all[i1], C = all[i2];
+      const sgn = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
+      if (sgn > 0) this.idx.push(b + i0, b + i2, b + i1); else this.idx.push(b + i0, b + i1, b + i2);
     }
   }
   // corona circolare (rotatorie): u 0 bordo esterno -> 1 interno, v lungo la circonferenza (stesso verso dei nastri)
@@ -412,6 +428,13 @@ export class City {
       const d = distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d - it.hw;
       if (d < best.off) best = { off: d, edge: it.ref };
     }
+    if (this.asphRings) {
+      // con la pianta delle strade conta il bordo vero dell'asfalto; vie pedonali e impalcati in quota restano a nastro
+      let off = this.surfaceOff(x, z);
+      for (const it of arr) if (it.kind === 'road' && it.ref && (it.ref.ped || it.ref.elev)) off = Math.min(off, distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d - it.hw);
+      best.off = off;
+      return best;
+    }
     if (best.off > -0.3 && this.jctGrid) {
       const jq = this.jctGrid.query(x, z, 1, this._qj || (this._qj = []));
       for (const it of jq) if (pointInPoly(x, z, it.pts)) { best.off = -0.3; break; }
@@ -443,6 +466,24 @@ export class City {
     const style = (e) => (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : e.oneway ? roadOw : road);
     const trimAt = (N, e) => (N.joint ? 0 : N.trim ? N.trim.get(e) : N.radius * 0.6);
     const walkW = (e) => e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2);
+    // con la pianta delle strade (net.surfaces) asfalto, marciapiedi e isole sono aree: qui restano le righe e i
+    // tratti in quota; senza, il vecchio disegno a nastri, dischi e ventagli
+    const surf = !!this.net.surfaces;
+    const lines = new GeoBuilder();
+    const dashes = (pts, on, period) => {
+      const out = [];
+      let s = 0, cur = null;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z);
+        for (let t = 0; t < l; ) {
+          const ph = s % period, inDash = ph < on, step = Math.min(l - t, inDash ? on - ph : period - ph);
+          const p0 = { x: a.x + ((b.x - a.x) * t) / l, z: a.z + ((b.z - a.z) * t) / l }, p1 = { x: a.x + ((b.x - a.x) * (t + step)) / l, z: a.z + ((b.z - a.z) * (t + step)) / l };
+          if (inDash) { if (!cur) { cur = [p0]; out.push(cur); } cur.push(p1); } else cur = null;
+          t += step; s += step;
+        }
+      }
+      return out.filter((d) => d.length > 1);
+    };
     // rotatorie ad anello chiuso e quasi circolari: corona d'asfalto, marciapiede solo fuori, isola al centro
     const rings = this.findRoundabouts();
     // Catene: i tratti consecutivi della stessa via (nodo intermedio con due archi, stesso tipo e larghezza, curva
@@ -477,14 +518,32 @@ export class City {
       const road2 = pts.slice();
       road2[0] = trim(pts[0], pts[1], trimAt(back.end, back.edge));
       road2[road2.length - 1] = trim(pts[pts.length - 1], pts[pts.length - 2], trimAt(fwd.end, fwd.edge));
+      if (surf) {
+        // righe di bordo sulle vie con segnaletica, mezzeria tratteggiata sul doppio senso
+        const st = style(e0);
+        if (!e0.roundabout && (st === road || st === roadOw)) {
+          const o = e0.width / 2 - 0.35;
+          lines.strip(road2, 0.14, Y_ROAD + 0.012, 1, -o);
+          lines.strip(road2, 0.14, Y_ROAD + 0.012, 1, o);
+          if (st === road) for (const d of dashes(road2, 3, 7.5)) lines.strip(d, 0.13, Y_ROAD + 0.012, 1, 0);
+        }
+        continue;
+      }
       style(e0).strip(road2, e0.width, Y_ROAD, e0.ped ? 6 : 12);
       if (!e0.ped && !e0.roundabout) walk.strip(pts, walkW(e0), Y_SIDEWALK, 6);
     }
-    for (const g of rings) {
-      roadOw.annulus(g.cx, g.cz, g.r - g.w / 2, g.r + g.w / 2, Y_ROAD + 0.004, 56);
-      walk.annulus(g.cx, g.cz, g.r + g.w / 2 - 0.5, g.r + g.w / 2 + SIDEWALK, Y_SIDEWALK - 0.003, 56, 6);
+    if (surf) {
+      // rotatorie: le righe sui due bordi della corona (l'asfalto e l'isola vengono dalla pianta)
+      for (const g of rings) for (const R of [g.r + g.w / 2 - 0.35, g.r - g.w / 2 + 0.35]) lines.annulus(g.cx, g.cz, R - 0.07, R + 0.07, Y_ROAD + 0.012, 56);
+      this.roundabouts = rings;
+      this.buildSurfaces();
+    } else {
+      for (const g of rings) {
+        roadOw.annulus(g.cx, g.cz, g.r - g.w / 2, g.r + g.w / 2, Y_ROAD + 0.004, 56);
+        walk.annulus(g.cx, g.cz, g.r + g.w / 2 - 0.5, g.r + g.w / 2 + SIDEWALK, Y_SIDEWALK - 0.003, 56, 6);
+      }
+      this.buildRoundaboutIslands(rings);
     }
-    this.buildRoundaboutIslands(rings);
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
       if (e.elev) {
@@ -492,7 +551,8 @@ export class City {
         if (ra + rb > e.len - 0.2) { const k = Math.max(0, e.len - 0.2) / (ra + rb); ra *= k; rb *= k; }
         const hFn = (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz);
         style(e).ribbon(A.x + e.dx * ra, A.z + e.dz * ra, B.x - e.dx * rb, B.z - e.dz * rb, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
-        if (!e.ped) walk.ribbon(A.x, A.z, B.x, B.z, walkW(e), Y_SIDEWALK, 6, 0, hFn);
+        // con la pianta delle strade niente marciapiede sui tratti in quota: sulle rampe sembrava un'ala lastricata
+        if (!e.ped && !surf) walk.ribbon(A.x, A.z, B.x, B.z, walkW(e), Y_SIDEWALK, 6, 0, hFn);
         this.buildOverpass(e, A, curb);
         continue;
       }
@@ -519,8 +579,8 @@ export class City {
     }
     const inter = new GeoBuilder(), joints = new GeoBuilder(), walkDisc = new GeoBuilder();
     for (const n of Object.values(nodes)) {
-      // i nodi interni a una catena sono già coperti dal nastro unico
-      if (!n.edges.length || (n.joint && n.bend < 0.02) || n.inChain) continue;
+      // i nodi interni a una catena sono già coperti dal nastro unico; con la pianta delle strade servono solo in quota
+      if (!n.edges.length || (n.joint && n.bend < 0.02) || n.inChain || (surf && !((n.h || 0) > 0.05))) continue;
       const seg = n.joint ? 10 : 18;
       // nelle curve il disco sta sotto l'asfalto e riempie solo lo spicchio tra i due tratti
       if (n.poly) {
@@ -560,6 +620,65 @@ export class City {
     const cm = new THREE.Mesh(curb.length ? mergeGeometries(curb) : new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ color: 0xbdb8ae }));
     const mk = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4));
     this.group.add(rm, im, wm, cm, mk);
+    if (lines.pos.length) this.group.add(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4)));
+  }
+
+  // pianta delle strade (scripts/street_surfaces.py): carreggiate, marciapiedi e isole a riquadri, triangolate qui.
+  // Il bordo dell'asfalto (senza i tagli tra un riquadro e l'altro) dice anche se le ruote sono in strada
+  buildSurfaces() {
+    const S = this.net.surfaces, T = S.tile;
+    const asph = new GeoBuilder(), walk = new GeoBuilder(), isl = new GeoBuilder(), kerb = new GeoBuilder(), side = new GeoBuilder();
+    this.asphRings = new Map();
+    this.asphEdges = new Grid(20);
+    const onBorder = (ax, az, bx, bz, ix, iz) => (Math.abs(ax - bx) < 0.05 && [ix * T, (ix + 1) * T].some((v) => Math.abs(ax - v) < 0.06)) || (Math.abs(az - bz) < 0.05 && [iz * T, (iz + 1) * T].some((v) => Math.abs(az - v) < 0.06));
+    const eachEdge = (poly, ix, iz, fn) => {
+      for (const r of poly) for (let i = 0; i < r.length; i += 2) {
+        const j = (i + 2) % r.length;
+        if (!onBorder(r[i], r[i + 1], r[j], r[j + 1], ix, iz)) fn(r[i], r[i + 1], r[j], r[j + 1]);
+      }
+    };
+    for (const [ix, iz, A, W, I] of S.cells) {
+      const rings = [];
+      for (const poly of A) {
+        asph.polygon(poly, Y_ROAD, 20);
+        rings.push(...poly);
+        eachEdge(poly, ix, iz, (ax, az, bx, bz) => {
+          this.asphEdges.insertAABB({ ax, az, bx, bz }, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz));
+          kerb.ribbon(ax, az, bx, bz, 0.22, Y_ROAD + 0.003, 4);
+        });
+      }
+      this.asphRings.set(ix + ',' + iz, rings);
+      for (const poly of W) walk.polygon(poly, Y_SIDEWALK, 6);
+      // isole: prato rialzato con il cordolo
+      for (const poly of I) {
+        isl.polygon(poly, Y_ROAD + 0.12, 5);
+        eachEdge(poly, ix, iz, (ax, az, bx, bz) => side.quad([ax, Y_ROAD, az], [bx, Y_ROAD, bz], [ax, Y_ROAD + 0.125, az], [bx, Y_ROAD + 0.125, bz], [0, 0, 1, 0, 0, 1, 1, 1]));
+      }
+    }
+    const am = new THREE.Mesh(asph.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
+    am.receiveShadow = true;
+    this.asphMat = am.material;
+    const wm = new THREE.Mesh(walk.build(), layer(new THREE.MeshLambertMaterial({ map: TX.sidewalkTexture() }), 1));
+    wm.receiveShadow = true;
+    const gt = TX.grassTexture();
+    const im = new THREE.Mesh(isl.build(), layer(new THREE.MeshLambertMaterial({ map: gt, color: 0xb8d8a0 }), 8));
+    im.receiveShadow = true;
+    const kMat = new THREE.MeshLambertMaterial({ color: 0xc9c4ba, side: THREE.DoubleSide });
+    this.group.add(am, wm, im, new THREE.Mesh(kerb.build(), layer(kMat.clone(), 3)), new THREE.Mesh(side.build(), layer(kMat, 8)));
+  }
+  // distanza (m) dal bordo dell'asfalto: negativa dentro la carreggiata, al più 8
+  surfaceOff(x, z) {
+    const T = this.net.surfaces.tile, rings = this.asphRings.get(Math.floor(x / T) + ',' + Math.floor(z / T));
+    let inside = false;
+    if (rings) for (const r of rings) {
+      for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+        const zi = r[i + 1], zj = r[j + 1];
+        if (zi > z !== zj > z && x < ((r[j] - r[i]) * (z - zi)) / (zj - zi) + r[i]) inside = !inside;
+      }
+    }
+    let d = 8;
+    for (const sg of this.asphEdges.query(x, z, 8, this._qa || (this._qa = []))) { const q = distToSeg(x, z, sg.ax, sg.az, sg.bx, sg.bz).d; if (q < d) d = q; }
+    return inside ? -d : d;
   }
 
   // rotatorie: anelli chiusi di archi junction=roundabout, quasi circolari (centro, raggio della mezzeria, larghezza)
@@ -712,7 +831,8 @@ export class City {
           const span = s1 - s0, sm = (s0 + s1) / 2;
           const cx = A.x + e.dx * sm, cz = A.z + e.dz * sm;
           for (const side of [-1, 1]) {
-            const ox = -e.dz * side * (e.width / 2 + 0.6), oz = e.dx * side * (e.width / 2 + 0.6);
+            const po = e.width / 2 + (this.net.surfaces ? 2.25 : 0.6); // oltre il marciapiede del ponte (2 m)
+            const ox = -e.dz * side * po, oz = e.dx * side * po;
             // non mettere il parapetto sopra un'altra carreggiata (doppie carreggiate, svincoli)
             if ([-0.45, 0, 0.45].some((f) => this.clearance(cx + ox + e.dx * span * f, cz + oz + e.dz * span * f, ['road'], 20) < 0.2)) continue;
             const g = new THREE.BoxGeometry(0.45, 1.1, span);
@@ -1827,6 +1947,7 @@ export class City {
     this.poolMat.visible = f > 0.02;
     this.roadMat.color.setScalar(1 - wet * 0.35);
     if (this.owMat) this.owMat.color.setScalar(1 - wet * 0.35);
+    if (this.asphMat) this.asphMat.color.setScalar(1 - wet * 0.35);
   }
 
   update(dt) {

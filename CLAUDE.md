@@ -31,7 +31,8 @@ npm run build:single  # dist-single/index.html autosufficiente
 python3 scripts/to_artifact.py dist-single/index.html <uscita>.html   # pagina per un artefatto claude.ai
 ```
 
-Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica OSM):
+Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e binari OSM; servono `shapely` e
+`pyarrow`):
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
@@ -39,8 +40,9 @@ python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.j
 ```
 
 `data/osm-padova-nodes.json` (semafori, STOP, dare precedenza, attraversamenti) viene da `scripts/overpass-nodes.ql`
-filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari del tram) da `scripts/overpass-tram.ql`
-filtrato con `scripts/filter_osm_tram.py`: i comandi sono nel README.
+filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari del tram) da
+`scripts/overpass-tram.ql` filtrato con `scripts/filter_osm_tram.py`: i comandi sono nel README. La pianta delle strade
+(carreggiate, marciapiedi, isole, edifici ritagliati) la calcola `scripts/street_surfaces.py`.
 
 ## Verifiche
 

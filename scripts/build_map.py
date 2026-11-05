@@ -23,6 +23,7 @@ from collections import defaultdict
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import build_gtfs  # noqa: E402  (riusa lettura GTFS e conversioni)
+import street_surfaces  # noqa: E402  (pianta delle strade con Shapely)
 
 ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
@@ -86,6 +87,24 @@ def width_of(tags, cls_w):
     if 'opposite_lane' in (tags.get('psv', ''), tags.get('busway', ''), tags.get('bus', '')):
         w += 3.3
     return round(max(5.0, min(16, w)), 1)
+
+
+def sidewalk_sides(tags):
+    """Lati con il marciapiede (1 sinistra, 2 destra, rispetto al verso della way): dai tag sidewalk quando ci sono;
+    senza tag sulle vie urbane sì, su tangenziali, rampe di svincolo e strade di servizio no."""
+    no = (None, 'no', 'none')
+    left, right, both = tags.get('sidewalk:left'), tags.get('sidewalk:right'), tags.get('sidewalk:both')
+    if left or right:
+        return (0 if left in no else 1) | (0 if right in no else 2)
+    v = tags.get('sidewalk') or both
+    if v in ('no', 'none'):
+        return 0
+    if v in ('left', 'right'):
+        return 1 if v == 'left' else 2
+    if v:
+        return 3
+    hw = tags['highway']
+    return 0 if hw in ('trunk', 'service') or hw.endswith('_link') else 3
 
 
 def psv_lane(tags):
@@ -163,7 +182,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     fixed.add(i)
         keep = rdp(pts, 1.2, fixed)
         ow = 1 if t.get('oneway') in ('yes', '1') or t.get('junction') == 'roundabout' else -1 if t.get('oneway') == '-1' else 0
-        flags = (1 if ow == 1 else 0) | (2 if ow == -1 else 0) | (4 if t.get('bridge') not in (None, 'no') else 0) | (8 if t.get('tunnel') not in (None, 'no') else 0) | (16 if t.get('junction') == 'roundabout' else 0) | (32 if psv_lane(t) else 0)
+        flags = (1 if ow == 1 else 0) | (2 if ow == -1 else 0) | (4 if t.get('bridge') not in (None, 'no') else 0) | (8 if t.get('tunnel') not in (None, 'no') else 0) | (16 if t.get('junction') == 'roundabout' else 0) | (32 if psv_lane(t) else 0) | (sidewalk_sides(t) << 6)
         try:
             layer = int(t.get('layer', '0').split(';')[0])
         except ValueError:
@@ -553,17 +572,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         tram_stops.append([round(x, 1), round(z, 1), build_gtfs.clean_name(s['stop_desc'] or s['stop_name'])])
     print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops))
 
-    # facciate fuori dalle carreggiate (con un marciapiede sui percorsi dei bus) e dalla sede del tram
-    corridors = []
-    for a, b, cls, wd, _n, flags, _sp, layer in edges:
-        if cls == 8 or flags & 8 or (flags & 4 and layer >= 1):
-            continue
-        bus = (min(a, b), max(a, b)) in bus_edges
-        corridors.append((*nodes[a], *nodes[b], wd / 2 + (BUS_KERB if bus else 0.3)))
-    for t in (tram if tram_lanes else []):
-        for i in range(0, len(t) - 2, 2):
-            corridors.append((t[i], t[i + 1], t[i + 2], t[i + 3], TRAM_CLEAR))
-    buildings = clear_facades(buildings, corridors)
+    # pianta delle strade: quote dei cavalcavia, carreggiate, marciapiedi, isole; edifici ritagliati fuori
+    heights = street_surfaces.overpass_heights(nodes, edges, rails)
+    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges)
+    print('pianta delle strade:', st)
 
     nodes_flat = []
     for x, z in nodes:
@@ -578,6 +590,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'nodes': nodes_flat, 'edges': [v for e in edges for v in e], 'names': names,
         'stops': gt['stops'], 'lines': lines_out,
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramStops': tram_stops,
+        'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
         'tramLines': [build_gtfs.load_tram(gtfs_dir, keep=tram_keep)],
         **signage,
     }

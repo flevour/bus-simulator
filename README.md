@@ -42,6 +42,19 @@ La mappa unisce due fonti aperte:
 `scripts/build_map.py` aggancia ogni tracciato GTFS alle strade OSM (map matching), così i bus percorrono le vie
 vere, e produce `src/data/padova-map.json` per il gioco.
 
+**Pianta delle strade** (`scripts/street_surfaces.py`, con Shapely): carreggiate, marciapiedi e isole sono aree vere,
+calcolate una volta sola invece di nastri sovrapposti disegnati dal gioco:
+
+* la carreggiata è l'unione dei tratti allargati alla loro larghezza, con i raccordi agli incroci (7 m sui percorsi
+  dei bus, 3,5 altrove);
+* le rotatorie quasi circolari diventano corone esatte con l'isola al centro;
+* gli spartitraffico chiusi senza edifici diventano isole, tranne la sede del tram e l'acqua;
+* il marciapiede è una fascia di 3,5 m attorno alla carreggiata (2 m sui ponti);
+* gli edifici sono ritagliati fuori da carreggiate, marciapiede minimo (1,5 m sui percorsi dei bus) e sede del tram;
+* i tratti in quota (cavalcavia e rampe) restano fuori dal piano a terra.
+
+Il gioco disegna le aree a riquadri da 200 m e usa il bordo dell'asfalto per dire se le ruote sono in strada.
+
 * **Area di gioco: Centro storico e Arcella.** Le linee che escono dall'area sono tagliate al confine
   ("tratto in città").
 * **Edifici da Overture Maps** (`data/overture-buildings-padova.parquet`): piante OSM e Microsoft, compresi i
@@ -81,13 +94,13 @@ python3 scripts/filter_osm_nodes.py /tmp/osm-nodes.json data/osm-padova-nodes.js
 # binari del tram
 curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tram.ql -o /tmp/osm-tram.json https://overpass-api.de/api/interpreter
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
-# orari GTFS e mappa del gioco
+# orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
 python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json
 ```
 
 `build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato, quanti campioni del tram sono finiti
-sui binari OSM e quante facciate ha spostato. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
+sui binari OSM e i numeri della pianta delle strade. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
 gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la sede segue lo shape GTFS.
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).

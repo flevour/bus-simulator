@@ -205,7 +205,14 @@ export function buildNetwork() {
     for (const e of used) e.routes++;
   }
   for (const e of edges) if (e.routes >= 2) e.main = true;
-  markOverpasses(nodes, edges, rails);
+  // quote dei cavalcavia: calcolate con la pianta delle strade (stessa regola), altrimenti qui
+  if (MAP.nodeH) {
+    for (const [i, h] of MAP.nodeH) if (nodes[i]) nodes[i].h = h;
+    for (const e of edges) {
+      const ha = nodes[e.a].h || 0, hb = nodes[e.b].h || 0;
+      if (ha > 0.05 || hb > 0.05) { e.elev = true; e.ha = ha; e.hb = hb; }
+    }
+  } else markOverpasses(nodes, edges, rails);
   // segnaletica reale dai nodi OSM; null se la mappa è stata generata senza (il gioco la deduce dal tipo di strada)
   const signals = MAP.signals ? MAP.signals.map(([ped, ...ids]) => ({ ped: !!ped, nodes: ids.map((i) => nodes[i]) })) : null;
   const signs = MAP.signs ? new Map() : null; // `${incrocio}:${arco}` -> 0 STOP, 1 dare precedenza
@@ -224,7 +231,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, tramStops, signals, signs, crossings };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, surfaces: MAP.surfaces || null, tramStops, signals, signs, crossings };
 }
 
 // ponti stradali sopra la ferrovia o sopra un'altra strada: impalcato in quota con rampe di accesso
