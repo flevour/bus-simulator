@@ -504,8 +504,11 @@ export class City {
       deck.push(sk);
       if (hm > 2.5 && Math.round(s) % 30 === 0) {
         for (const side of [-1, 1]) {
+          const px = cx - e.dz * side * (e.width / 2 - 1), pz = cz + e.dx * side * (e.width / 2 - 1);
+          // niente pile sulla carreggiata che passa sotto
+          if (this.segGrid.query(px, pz, 20, this._qp || (this._qp = [])).some((it) => it.kind === 'road' && it.ref && !it.ref.elev && distToSeg(px, pz, it.ax, it.az, it.bx, it.bz).d < it.hw + 1.5)) continue;
           const pl = new THREE.BoxGeometry(1.2, hm - 0.6, 1.2);
-          pl.translate(cx - e.dz * side * (e.width / 2 - 1), (hm - 0.6) / 2, cz + e.dx * side * (e.width / 2 - 1));
+          pl.translate(px, (hm - 0.6) / 2, pz);
           deck.push(pl);
         }
       }
@@ -525,15 +528,19 @@ export class City {
   }
 
   // quota della strada sotto un punto (cavalcavia), 0 altrove
-  heightAt(x, z) {
+  // quota della strada in un punto. Con cur (quota attuale del veicolo) vale la superficie più vicina a quella, terra
+  // compresa: sulla rampa si sale con continuità, chi passa sotto un cavalcavia resta a terra
+  heightAt(x, z, cur = null) {
     const arr = this.segGrid.query(x, z, 12, this._qh || (this._qh = []));
-    let h = 0;
+    let h = 0, best = cur == null ? 0 : Math.abs(cur);
     for (const it of arr) {
       const e = it.ref;
       if (it.kind !== 'road' || !e || !e.elev) continue;
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
       if (r.d > it.hw + 1.5) continue;
-      h = Math.max(h, edgeHeight(e, r.t * e.len));
+      const he = edgeHeight(e, r.t * e.len);
+      if (cur == null) h = Math.max(h, he);
+      else if (Math.abs(he - cur) < best) { best = Math.abs(he - cur); h = he; }
     }
     return h;
   }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
-import { Y_ROAD, TRAM_HW, zoneOf } from './city.js';
+import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight } from './city.js';
 import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 
@@ -216,6 +216,7 @@ export class Traffic {
       const g = this.laneGeom(car);
       if (g.s1 - g.s0 < 3) continue;
       car.s = g.s0 + this.rnd() * (g.s1 - g.s0);
+      car.y = e.elev ? edgeHeight(e, car.fwd ? car.s : e.len - car.s) : 0; // quota iniziale (sul cavalcavia o sotto)
       const x = g.sx + g.dx * car.s, z = g.sz + g.dz * car.s;
       const d = Math.hypot(x - bus.x, z - bus.z);
       if (d < minD || d > maxD) continue;
@@ -424,7 +425,8 @@ export class Traffic {
     const { M, Q, Y, S, P } = this;
     this.cars.forEach((c, i) => {
       Q.setFromAxisAngle(Y, c.h);
-      M.compose(P.set(c.x, Y_ROAD + this.city.heightAt(c.x, c.z), c.z), Q, S);
+      c.y = this.city.heightAt(c.x, c.z, c.y);
+      M.compose(P.set(c.x, Y_ROAD + c.y, c.z), Q, S);
       this.mesh.setMatrixAt(i, M);
       this.mesh.setColorAt(i, c.color);
       this.lightMesh.setMatrixAt(i, M);

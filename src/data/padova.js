@@ -227,7 +227,7 @@ export function buildNetwork() {
   return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, tramStops, signals, signs, crossings };
 }
 
-// ponti stradali sopra la ferrovia: impalcato in quota con rampe di accesso
+// ponti stradali sopra la ferrovia o sopra un'altra strada: impalcato in quota con rampe di accesso
 function markOverpasses(nodes, edges, rails) {
   const crosses = (A, B) => {
     for (const r of rails) {
@@ -243,9 +243,37 @@ function markOverpasses(nodes, edges, rails) {
     }
     return false;
   };
+  // strade di sotto attraversate da un ponte (senza nodi in comune): Corso Tredici Giugno sopra Via Sacro Cuore
+  const C = 100, grid = new Map();
+  for (const f of edges) {
+    if (f.bridge || f.tunnel || f.ped) continue;
+    const A = nodes[f.a], B = nodes[f.b];
+    for (let gx = Math.floor(Math.min(A.x, B.x) / C); gx <= Math.floor(Math.max(A.x, B.x) / C); gx++)
+      for (let gz = Math.floor(Math.min(A.z, B.z) / C); gz <= Math.floor(Math.max(A.z, B.z) / C); gz++) {
+        const k = gx + ',' + gz;
+        if (!grid.has(k)) grid.set(k, []);
+        grid.get(k).push(f);
+      }
+  }
+  const under = new Set();
+  const overRoad = (e) => {
+    const A = nodes[e.a], B = nodes[e.b];
+    let hit = false;
+    for (let gx = Math.floor(Math.min(A.x, B.x) / C); gx <= Math.floor(Math.max(A.x, B.x) / C); gx++)
+      for (let gz = Math.floor(Math.min(A.z, B.z) / C); gz <= Math.floor(Math.max(A.z, B.z) / C); gz++)
+        for (const f of grid.get(gx + ',' + gz) || []) {
+          if (f.layer >= e.layer || f.a === e.a || f.a === e.b || f.b === e.a || f.b === e.b) continue;
+          const c = nodes[f.a], d = nodes[f.b];
+          const rx = B.x - A.x, rz = B.z - A.z, sx = d.x - c.x, sz = d.z - c.z, den = rx * sz - rz * sx;
+          if (Math.abs(den) < 1e-9) continue;
+          const t = ((c.x - A.x) * sz - (c.z - A.z) * sx) / den, u = ((c.x - A.x) * rz - (c.z - A.z) * rx) / den;
+          if (t >= 0 && t <= 1 && u >= 0 && u <= 1) { hit = true; under.add(f.a); under.add(f.b); }
+        }
+    return hit;
+  };
   const H = 7, R = 130, PSV_DECK = 0.92;
   const deck = new Set();
-  for (const e of edges) if (e.bridge && e.layer >= 1 && crosses(nodes[e.a], nodes[e.b])) deck.add(e);
+  for (const e of edges) if (e.bridge && e.layer >= 1 && (crosses(nodes[e.a], nodes[e.b]) | overRoad(e))) deck.add(e);
   // tutto il ponte (catena di tratti con bridge) sta in quota
   const stack = [...deck];
   while (stack.length) {
@@ -262,7 +290,8 @@ function markOverpasses(nodes, edges, rails) {
       if (deck.has(f)) continue;
       const o = f.a === id ? f.b : f.a;
       const d = d0 + f.len;
-      if (d < R && (!dist.has(o) || dist.get(o) > d)) { dist.set(o, d); queue.push(o); }
+      // la rampa non sale sulla strada che passa sotto
+      if (d < R && !under.has(o) && (!dist.has(o) || dist.get(o) > d)) { dist.set(o, d); queue.push(o); }
     }
   }
   // le corsie riservate ai bus in quota (Borgomagno: verso nord, sulla sede del tram) stanno poco più in basso della

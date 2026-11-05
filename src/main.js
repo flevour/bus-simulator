@@ -329,6 +329,7 @@ function teleportToStop(st) {
 }
 function placeBusAt(x, z, h) {
   bus.place(x, z, h);
+  bus.elev = undefined; // dopo un salto vale la strada più alta sotto il bus (sopra un cavalcavia si resta sopra)
   city.ensureTiles(x, z, 600);
   bus.steerIn = 0; bus.steer = 0; bus.throttle = 0; bus.brake = 0;
   bus.doorTarget = 0; bus.doorOpen = bus.doorOpen.map(() => 0); bus.parking = true; bus.dir = 1;
@@ -936,7 +937,7 @@ function step(dt) {
   kerbT = kerb ? kerbT + dt : 0;
   onSidewalk = kerbT > 0.3;
   const pf = bus.toWorld(0, 3.3), pr = bus.toWorld(0, -2.6);
-  const hF = city.heightAt(pf.x, pf.z), hR = city.heightAt(pr.x, pr.z);
+  const hF = city.heightAt(pf.x, pf.z, bus.elev), hR = city.heightAt(pr.x, pr.z, bus.elev);
   world.slope = bus.isTram ? 0 : (hF - hR) / 5.9;
   bus.elev = bus.isTram ? 0 : (hF + hR) / 2 + (hF - hR) * (0.3 / 5.9);
   const hit = bus.update(dt, { ...input, wipers: wx.rain > 0.08 }, world);
