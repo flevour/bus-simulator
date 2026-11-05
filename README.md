@@ -153,6 +153,8 @@ future potranno averne 4.
 3. Segui la **navigazione** in alto e la minimappa. Il bus è lungo 12 m: allarga le curve e attento alla coda che sporge!
 4. Quando un passeggero prenota la fermata suona il campanello. Accosta (**freccia a destra E**) e fermati con il muso
    sulla **palina gialla**, dentro il riquadro giallo *BUS*, vicino al marciapiede.
+   Le fermate sono a richiesta, anche col tram: ci si ferma se qualcuno ha prenotato o aspetta a terra, altrimenti si
+   passa dritti. Il riquadro della prossima fermata dice quale dei tre casi vale.
 5. Arrivato al capolinea finale fai scendere tutti: ricevi il resoconto con stelle e punteggio.
 
 ### Punteggio

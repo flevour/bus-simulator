@@ -59,6 +59,8 @@ button.primary:hover { filter: brightness(1.08); }
 #panel-line.free .row2, #panel-line.free #request { display: none; }
 #request { margin-top: 8px; text-align: center; padding: 6px; border-radius: 8px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.25); font-weight: 800; font-size: 13px; }
 #request.on { background: #d50000; color: #fff; animation: pulse 1s infinite; }
+#request.wait { background: rgba(255, 179, 0, .18); color: #ffd54f; }
+#request.pass { background: rgba(76, 175, 80, .16); color: #a5d6a7; }
 @keyframes pulse { 50% { filter: brightness(1.4); } }
 
 #nav { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; background: rgba(8, 12, 18, .78); padding: 8px 18px 8px 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); }

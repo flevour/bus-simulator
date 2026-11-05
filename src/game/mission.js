@@ -115,12 +115,16 @@ export class Mission {
     this.timetable = this.stops.map((s) => ({ name: s.name, time: fmtHM(s.sched) }));
   }
 
-  // numero di persone in attesa a una fermata
+  // bisogna fermarsi? qualcuno aspetta alla fermata o qualcuno a bordo deve scendere (prenotazione)
+  needsStop(st) {
+    return st.waiting.length > 0 || this.onboard.some((d) => d === st.idx);
+  }
+  // numero di persone in attesa a una fermata: le fermate secondarie restano vuote più spesso (si passa dritti)
   rollWaiting(st) {
     if (st.idx === this.stops.length - 1) return 0;
     const base = [0, 0.8, 2.2, 4.5][st.importance] || 1;
     let n = Math.round((base + this.rnd() * 3) * this.demand + (st.idx === 0 ? 3 : 0));
-    if (this.rnd() < 0.18) n = 0;
+    if (st.idx > 0 && this.rnd() < ([0, 0.4, 0.22, 0.1][st.importance] ?? 0.3)) n = 0;
     return Math.max(0, Math.min(18, n));
   }
 
@@ -225,8 +229,8 @@ export class Mission {
       }
       // fermata saltata
       if (!st.arrived && along > 25 && st.idx < this.stops.length - 1) {
-        // il tram si ferma a tutte le fermate; il bus solo se qualcuno sale o scende
-        const wanted = this.tram || st.waiting.length > 0 || this.onboard.some((d) => d === st.idx);
+        // fermata a richiesta (bus e tram): ci si ferma solo se qualcuno aspetta o deve scendere
+        const wanted = this.needsStop(st);
         if (wanted) {
           this.addScore(-120, `Fermata saltata: ${st.name}!`);
           this.stats.skipped++;
@@ -241,7 +245,7 @@ export class Mission {
 
     // ---- prenotazione fermata ----
     const ns = this.stops[this.nextStop];
-    if (ns && !this.tram && !this.request && !ns.arrived && this.onboard.some((d) => d === ns.idx) && ns.s - this.s < 320 && this.rnd() < dt * 0.6) {
+    if (ns && !this.request && !ns.arrived && this.onboard.some((d) => d === ns.idx) && ns.s - this.s < 320 && this.rnd() < dt * 0.6) {
       this.request = true;
       this.audio.bell();
       this.hud.toast('🔔 Fermata prenotata', 'info');

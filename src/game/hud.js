@@ -56,8 +56,15 @@ export class HUD {
       $('next-dist').textContent = Math.max(0, Math.round(st.s - m.s)) + ' m';
     }
     if (!m.free) $('stops-progress').textContent = `Fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length}`;
-    $('request').classList.toggle('on', m.request);
-    $('request').hidden = !!m.tram; // sul tram non si prenota: ferma sempre
+    // fermata a richiesta: prenotata, qualcuno in attesa, oppure si può passare dritti
+    const rq = $('request');
+    const ahead = st && !st.arrived && st.idx < m.stops.length - 1 && st.spawned;
+    const nWait = ahead ? st.waiting.length : 0;
+    const txt = m.request ? '🔔 FERMATA PRENOTATA' : nWait ? `👥 ${nWait} IN ATTESA: FERMATI` : ahead ? '⏩ NESSUNO: SI PUÒ PASSARE' : '🔔 FERMATA PRENOTATA';
+    if (rq.textContent !== txt) rq.textContent = txt;
+    rq.classList.toggle('on', m.request);
+    rq.classList.toggle('wait', !m.request && nWait > 0);
+    rq.classList.toggle('pass', !m.request && ahead && !nWait);
     $('pax').textContent = m.onboard.length;
     $('score').textContent = m.score;
     const cb = $('comfort-bar');
