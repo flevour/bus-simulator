@@ -257,7 +257,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         if edges[k][5] & 16:
             ring_at[edges[k][0]].append(k)
             ring_at[edges[k][1]].append(k)
-    seen, ring_islands, ring_roads, ring_lines = set(), [], [], []
+    seen, ring_islands, ring_roads = set(), [], []
     for k0 in ground:
         if not edges[k0][5] & 16 or k0 in seen:
             continue
@@ -286,8 +286,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         if len(order) != len(ids):
             continue
         w = sum(edges[k][3] for k in comp) / len(comp)
-        # quasi circolare (stessa prova del gioco, City.findRoundabouts): corona circolare esatta, così le righe
-        # tracciate dal gioco ci cadono sopra; altrimenti la mezzeria rientrata di metà carreggiata
+        # quasi circolare (stessa prova del gioco, City.findRoundabouts): corona circolare esatta; altrimenti la mezzeria
+        # rientrata di metà carreggiata
         L = sum(math.dist(nodes[edges[k][0]], nodes[edges[k][1]]) for k in comp)
         cx = sum((nodes[edges[k][0]][0] + nodes[edges[k][1]][0]) / 2 * math.dist(nodes[edges[k][0]], nodes[edges[k][1]]) for k in comp) / L
         cz = sum((nodes[edges[k][0]][1] + nodes[edges[k][1]][1]) / 2 * math.dist(nodes[edges[k][0]], nodes[edges[k][1]]) for k in comp) / L
@@ -295,7 +295,6 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         r = sum(ds) / len(ds)
         if r >= 4 and all(abs(d - r) <= 0.25 * r + 1 for d in ds):
             ring_roads.append(Point(cx, cz).buffer(r + w / 2, quad_segs=16))
-            ring_lines.append([[round(v, 1) for i in range(64) for v in (cx + r * math.cos(i * math.pi / 32), cz + r * math.sin(i * math.pi / 32))], round(w, 1)])
             if r - w / 2 > 0.5:
                 ring_islands.append(Point(cx, cz).buffer(r - w / 2, quad_segs=16))
             continue
@@ -306,12 +305,14 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         poly = Polygon(pts)
         if poly.is_valid and poly.area > 1:
             ring_roads.append(poly.buffer(w / 2, quad_segs=4).difference(poly.buffer(-w / 2, quad_segs=4)))
-            ring_lines.append([[round(v, 1) for xy in pts for v in xy], round(w, 1)])
             isl = poly.buffer(-w / 2)
             if not isl.is_empty and isl.area > 1:
                 ring_islands.append(isl)
     ring_islands = unary_union(ring_islands) if ring_islands else Polygon()
     U = unary_union([U, *ring_roads])
+    # buchi prima dei raccordi: la chiusura agli incroci riempirebbe anche le isole vere tra due rami vicini (il
+    # triangolo di prato tra i due rami di Via Toti all'ingresso del Rondò Borgomagno diventava asfalto)
+    pre_holes = [Polygon(r) for p in _polys(U) for r in p.interiors]
     # raccordi agli incroci: chiusura morfologica locale (si riempiono gli angoli rientranti tra due strade)
     # contano anche le rampe che arrivano a un incrocio a terra (piede della rampa), non gli incroci in quota
     tree_keys = drive
@@ -332,7 +333,6 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         local = unary_union([pieces[tree_keys[i]] for i in tree.query(disc)]).intersection(disc)
         closed = local.buffer(rf, quad_segs=4).buffer(-rf, quad_segs=4)
         fillets.append(closed.intersection(Point(nodes[n]).buffer(rad - rf * 0.6, quad_segs=8)))
-    U = unary_union([U, *fillets]).difference(ring_islands).buffer(0)
     # isole: buchi piccoli della carreggiata senza edifici dentro (spartitraffico, isole delle rotatorie)
     bpolys = []
     flat2 = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
@@ -340,11 +340,22 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         p = Polygon(flat2(b[3]), [flat2(h) for h in (b[4] if len(b) > 4 else []) if len(h) >= 6]) if len(b[3]) >= 6 else Polygon()
         bpolys.append(p if p.is_valid else p.buffer(0))
     btree = STRtree(bpolys)
+    free = lambda h: h.area < ISLAND_MAX and not any(bpolys[i].intersects(h) for i in btree.query(h))
+    # si salvano solo le isole all'ingresso delle rotatorie (toccano l'anello) che i raccordi cancellerebbero quasi del
+    # tutto, larghe almeno 2 m. Negli incroci normali i buchi tra le corsie di svolta OSM restano asfalto (spesso sono
+    # zebrature, e il bus ci passava in mezzo); le isole che i raccordi solo accorciano restano accorciate
+    ftree = STRtree(fillets)
+    erased = lambda h: unary_union([fillets[i] for i in ftree.query(h)]).intersection(h).area
+    rb = [pieces[k] for k in ground if edges[k][5] & 16]
+    rtree = STRtree(rb)
+    at_ring = lambda h: any(rb[i].distance(h) < 0.5 for i in rtree.query(h.buffer(0.5)))
+    kept = [h for h in pre_holes if free(h) and not h.buffer(-1.0).is_empty and at_ring(h) and erased(h) > 0.8 * h.area]
+    U = unary_union([U, *fillets]).difference(unary_union([ring_islands, *kept])).buffer(0)
     islands = [ring_islands] if not ring_islands.is_empty else []
     for p in ([U] if isinstance(U, Polygon) else list(U.geoms)):
         for r in p.interiors:
             h = Polygon(r)
-            if h.area < ISLAND_MAX and not any(bpolys[i].intersects(h) for i in btree.query(h)):
+            if free(h):
                 islands.append(h)
     islands = unary_union(islands) if islands else Polygon()
     # forma delle isole: le quasi rotonde (rotatorie non segnate come tali in OSM, come il Rondò Borgomagno) levigate,
@@ -432,4 +443,4 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
     # carreggiate in quota (cavalcavia e rampe): un'area sola anche loro, la quota la mette il gioco vertice per vertice
     up_area = up.simplify(0.1).segmentize(4.0)
     return {'tile': TILE, 'cells': cells, 'decks': [r for p in _polys(D.simplify(0.1)) for r in _rings(p)],
-            'up': [r for p in _polys(up_area) for r in _rings(p)], 'rings': ring_lines}, out_b, stats
+            'up': [r for p in _polys(up_area) for r in _rings(p)]}, out_b, stats

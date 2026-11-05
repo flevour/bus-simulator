@@ -50,7 +50,8 @@ calcolate una volta sola invece di nastri sovrapposti disegnati dal gioco:
 * le rotatorie quasi circolari diventano corone esatte con l'isola al centro, le altre (anche quelle non segnate come
   rotatoria in OSM, come il Rondò Borgomagno) hanno anello e isola levigati;
 * gli spartitraffico chiusi senza edifici diventano isole con gli spigoli arrotondati e la riga tutt'intorno, tranne la
-  sede del tram e l'acqua;
+  sede del tram e l'acqua; le isole all'ingresso delle rotatorie (come il triangolo tra i due rami di Via Toti al Rondò
+  Borgomagno) restano anche dove i raccordi le avrebbero riempite;
 * il marciapiede è una fascia di 3,5 m attorno alla carreggiata (2 m sui ponti);
 * gli edifici sono ritagliati fuori da carreggiate, marciapiede minimo (1,5 m sui percorsi dei bus) e sede del tram;
 * le rampe scendono solo lungo la prosecuzione del ponte (stessa via, o il ramo più dritto) fino al primo incrocio o
