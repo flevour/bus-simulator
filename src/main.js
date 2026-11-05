@@ -897,7 +897,7 @@ const world = {
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
   carsNear: (x, z, r) => { const a = traffic ? traffic.near(x, z, r) : []; return trams ? a.concat(trams.near(x, z, r)) : a; },
 };
-let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, tramLaneT = 0, kerbT = 0;
+let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, kerbT = 0;
 let lastT = performance.now();
 
 // posizione dei tram lungo la sede (per gli incroci): automatici e, se c'è, quello del giocatore
@@ -918,14 +918,15 @@ function step(dt) {
   // superficie
   let onSidewalk = false;
   const mid = city.roadInfo(bus.x, bus.z);
-  world.offRoad = mid.off > 5;
+  // la sede del tram è percorribile anche dal bus: dove la strada non basta si passa sui binari
+  world.offRoad = mid.off > 5 && !city.onTramway(bus.x, bus.z, 0.3);
   // marciapiede: contano le ruote, non la carrozzeria che in curva sporge sopra il cordolo.
   // Le ruote posteriori tagliano le curve: più margine, e ancora di più a incroci, curve strette e rotonde.
   let kerb = false;
   if (!bus.isTram) for (const [lx, lz, rear] of [[1.05, 3.3, 0], [-1.05, 3.3, 0], [1.05, -2.6, 1], [-1.05, -2.6, 1]]) {
     const p = bus.toWorld(lx, lz);
     const ri = city.roadInfo(p.x, p.z);
-    if (ri.off < 0.5 || ri.off > 6) continue;
+    if (ri.off < 0.5 || ri.off > 6 || city.onTramway(p.x, p.z, 0.3)) continue;
     const tol = rear ? 1.0 : 0.5;
     if (ri.off > tol && (ri.off > tol + (rear ? 0.9 : 0.5) || !city.kerbAllowance(p.x, p.z))) kerb = true;
   }
@@ -963,12 +964,6 @@ function step(dt) {
   tramSignals.update(dt, tramOccupancy(), traffic);
   if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
   city.streamTiles(bus.x, bus.z, 5);
-  // corsia riservata del tram
-  const fr = bus.toWorld(0, 4);
-  if (!bus.isTram && city.onTramway(fr.x, fr.z) && Math.abs(bus.v) > 1.5) {
-    tramLaneT += dt;
-    if (tramLaneT > 2.5 && mission.cooldown('tram', 12)) mission.addScore(mission.free ? 0 : -25, '🚋 Corsia riservata al tram!', 'bad');
-  } else tramLaneT = 0;
   traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals });
   for (const c of traffic.honks) audio.carHorn(Math.hypot(c.x - bus.x, c.z - bus.z));
   walkers.update(dt, bus);

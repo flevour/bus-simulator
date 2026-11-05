@@ -47,7 +47,9 @@ vere, e produce `src/data/padova-map.json` per il gioco.
   quelli in servizio a quell'ora secondo l'orario GTFS: nei feriali 12-13 per quasi tutto il giorno, nei festivi 7-12.
   Ognuno segue la sua corsa, regola la velocità sull'orario e al capolinea cambia cabina e prende la corsa successiva.
   Il GTFS pubblica ogni viaggio anche spezzato in tratti (Guizza → Cavalletto, Stazione → Pontevigodarzere…): i tratti
-  coperti da una corsa più lunga entro 3 minuti sono lo stesso tram e non si contano. Guidare sulla corsia riservata costa punti.
+  coperti da una corsa più lunga entro 3 minuti sono lo stesso tram e non si contano.
+  Il bus può percorrere la sede del tram senza penalità: nel centro e lungo Corso Vittorio Emanuele spesso è l'unico
+  spazio libero.
 * Gli edifici del centro hanno la pianta reale, con l'altezza da OSM quando c'è, altrimenti stimata; quelli di pianta
   rettangolare hanno il tetto a padiglione in coppi, le facciate hanno zoccolo, cornicione e persiane e nel centro
   storico molti hanno i portici ad arco al piano terra. Basilica del
