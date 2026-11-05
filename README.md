@@ -158,10 +158,10 @@ future potranno averne 4.
 * A **Prato della Valle** non c'è la linea aerea: il pantografo va abbassato prima, in entrambi i sensi, e rialzato
   subito dopo. Nel tratto il tram va a batteria. Pantografo alzato senza filo: −150 punti.
 * **Precedenza al tram**: quando un tram si avvicina a un incrocio con la sede, le auto si fermano prima della linea.
-* **Semafori del tram** (segnali a barre bianche):
-  * **barra orizzontale**: via impedita;
-  * **barra verticale**: via libera, a incrocio sgombro dopo la chiamata;
-  * **triangolo**: attenzione.
+* **Semafori del tram**: lanterna a tre luci in colonna, una sola accesa (le altre si vedono spente):
+  * in alto la **barra orizzontale** bianca: via impedita;
+  * al centro il **triangolo** arancione: attenzione;
+  * in basso la **barra verticale** bianca: via libera, a incrocio sgombro dopo la chiamata.
   * Passare con la barra orizzontale costa punti.
 * **Curve troppo veloci fanno deragliare il tram**: arrivano i soccorsi (−300 punti) e dopo qualche secondo si riparte.
 * Il tram non ha la retromarcia; un'auto che taglia la sede di traverso fa frenare il tram senza colpa.

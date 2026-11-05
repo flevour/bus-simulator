@@ -838,46 +838,59 @@ export class TramSignals {
     }
     this.buildHeads(scene, T);
   }
-  // un segnale per incrocio, a destra del binario, prima della strada
+  // un segnale per incrocio, a destra del binario, prima della strada: lanterna a tre luci in colonna (dall'alto barra
+  // orizzontale bianca = via impedita, triangolo arancione = attenzione, barra verticale bianca = via libera); ne è
+  // accesa una sola, le altre si vedono spente (lente scura, simbolo appena visibile, visiera)
   buildHeads(scene, T) {
     const n = this.list.length;
     if (!n) return;
-    const statics = [];
+    const statics = [], lenses = [];
     const mk = (geo) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), n); m.count = n; m.frustumCulled = false; scene.add(m); return m; };
-    this.hBar = mk(new THREE.PlaneGeometry(0.3, 0.07));
-    this.vBar = mk(new THREE.PlaneGeometry(0.07, 0.3));
+    this.hBar = mk(new THREE.PlaneGeometry(0.24, 0.065));
+    this.vBar = mk(new THREE.PlaneGeometry(0.065, 0.24));
     const tri = new THREE.Shape();
-    tri.moveTo(-0.13, -0.1); tri.lineTo(0.13, -0.1); tri.lineTo(0, 0.12); tri.closePath();
+    tri.moveTo(-0.12, -0.09); tri.lineTo(0.12, -0.09); tri.lineTo(0, 0.11); tri.closePath();
     this.tri = mk(new THREE.ShapeGeometry(tri));
     this.heads = [];
+    const Y0 = 3.25, DY = 0.36;
     for (const x of this.list) {
       const s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s);
       const px = p.x - p.dz * (TRAM.lane + 0.35), pz = p.z + p.dx * (TRAM.lane + 0.35), ang = Math.atan2(-p.dx, -p.dz);
-      statics.push(new THREE.CylinderGeometry(0.05, 0.06, 3.0, 6).translate(px, Y_ROAD + h + 1.5, pz));
-      statics.push(new THREE.BoxGeometry(0.5, 0.62, 0.16).rotateY(ang).translate(px, Y_ROAD + h + 3.1, pz));
-      const fx = Math.sin(ang), fz = Math.cos(ang);
-      this.heads.push({ x, pos: new THREE.Vector3(px + fx * 0.085, Y_ROAD + h + 3.1, pz + fz * 0.085), ang, shown: null });
+      const fx = Math.sin(ang), fz = Math.cos(ang), y = Y_ROAD + h + Y0;
+      statics.push(new THREE.CylinderGeometry(0.05, 0.06, y - DY * 1.5 - Y_ROAD - h, 6).translate(px, (y - DY * 1.5 + Y_ROAD + h) / 2, pz));
+      statics.push(new THREE.BoxGeometry(0.42, DY * 3 + 0.1, 0.18).rotateY(ang).translate(px, y, pz));
+      const pos = [];
+      for (const k of [1, 0, -1]) {
+        const ly = y + k * DY;
+        lenses.push(new THREE.CircleGeometry(0.155, 20).rotateY(ang).translate(px + fx * 0.092, ly, pz + fz * 0.092));
+        // visiera sopra ogni luce
+        statics.push(new THREE.BoxGeometry(0.36, 0.025, 0.16).rotateY(ang).translate(px + fx * 0.16, ly + 0.17, pz + fz * 0.16));
+        pos.push(new THREE.Vector3(px + fx * 0.096, ly, pz + fz * 0.096));
+      }
+      this.heads.push({ x, pos, ang, shown: null });
     }
     const box = new THREE.Mesh(mergeGeometries(statics), new THREE.MeshLambertMaterial({ color: 0x1b1d1f }));
-    scene.add(box);
+    const lens = new THREE.Mesh(mergeGeometries(lenses), new THREE.MeshBasicMaterial({ color: 0x0b0c0d }));
+    scene.add(box, lens);
     this.box = box;
-    this.M = new THREE.Matrix4(); this.Q = new THREE.Quaternion(); this.Z = new THREE.Vector3(0, 0, 0); this.O = new THREE.Vector3(1, 1, 1);
+    this.M = new THREE.Matrix4(); this.Q = new THREE.Quaternion(); this.O = new THREE.Vector3(1, 1, 1); this.C = new THREE.Color();
     this.drawHeads(true);
   }
   drawHeads(force) {
     if (!this.heads) return;
     let dirty = false;
+    const ON = { w: 0xfff6dc, o: 0xff9a1a }, OFF = { w: 0x34342f, o: 0x3d2709 };
     this.heads.forEach((hd, i) => {
       const st = hd.x.state;
       if (!force && hd.shown === st) return;
       hd.shown = st; dirty = true;
       this.Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), hd.ang);
-      for (const [mesh, on] of [[this.hBar, st === 'H'], [this.vBar, st === 'V'], [this.tri, st === 'T']]) {
-        this.M.compose(hd.pos, this.Q, on ? this.O : this.Z);
-        mesh.setMatrixAt(i, this.M);
-      }
+      [[this.hBar, 'H', 'w', 0], [this.tri, 'T', 'o', 1], [this.vBar, 'V', 'w', 2]].forEach(([mesh, key, c, k]) => {
+        if (force) { this.M.compose(hd.pos[k], this.Q, this.O); mesh.setMatrixAt(i, this.M); }
+        mesh.setColorAt(i, this.C.set(st === key ? ON[c] : OFF[c]));
+      });
     });
-    if (dirty) for (const m of [this.hBar, this.vBar, this.tri]) m.instanceMatrix.needsUpdate = true;
+    if (dirty) for (const m of [this.hBar, this.vBar, this.tri]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
   // occ: tram presenti [{ front (s lungo la sede), dir, len, v, dwell, player }]; cars: auto vicine per sapere se l'incrocio è sgombro
   update(dt, occ, traffic) {
