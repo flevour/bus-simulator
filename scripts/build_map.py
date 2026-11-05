@@ -509,7 +509,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             free = min(free, min(2 * min(dl, dr) + 0.5, dl + dr - 1.0))
         if (min(a, b), max(a, b)) in bus_edges:
             # percorsi dei bus: mai più stretti di così (in gioco, dalla cabina, gli spazi sembrano più stretti);
-            # se le facciate sono più vicine si spostano loro (clear_facades)
+            # se le facciate sono più vicine si ritagliano gli edifici (street_surfaces.surfaces)
             e[3] = max(wd, BUS_MIN_RING if e[5] & 16 else BUS_MIN_1 if e[5] & 3 else BUS_MIN_2)
             continue
         if free < wd:
@@ -603,90 +603,6 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
 
 BUS_MIN_2, BUS_MIN_1, BUS_MIN_RING = 7.5, 5.5, 7.0  # m: carreggiata minima sui percorsi dei bus (doppio senso, senso unico, rotatoria)
-BUS_KERB = 1.5  # m: marciapiede minimo tra carreggiata dei bus e facciate
-TRAM_CLEAR = 3.2  # m: dal binario alle facciate (il tram è largo 2,2 m)
-FACADE_MAX = 6.0  # m: un edificio che andrebbe spostato più di così sta in mezzo alla strada e si toglie
-
-
-def clear_facades(buildings, corridors):
-    """Le piante reali (Overture) e le strade OSM non combaciano sempre, e le carreggiate del gioco sono più larghe del
-    vero: ogni vertice che cade in una fascia (mezzeria ± metà carreggiata + marciapiede, binario ± TRAM_CLEAR) viene
-    spinto fuori perpendicolarmente. Gli edifici che la mezzeria attraversa (tettoie dei distributori, piante sbagliate)
-    o che si dovrebbero spostare troppo vengono tolti."""
-    C = 25
-    grid = defaultdict(list)
-    for k, (ax, az, bx, bz, c) in enumerate(corridors):
-        for gx in range(int((min(ax, bx) - c) // C), int((max(ax, bx) + c) // C) + 1):
-            for gz in range(int((min(az, bz) - c) // C), int((max(az, bz) + c) // C) + 1):
-                grid[(gx, gz)].append(k)
-
-    def near(x, z):
-        ks = set()
-        for k in grid.get((int(x // C), int(z // C)), ()):
-            ks.add(k)
-        return ks
-
-    def crosses(p, q, k):
-        ax, az, bx, bz, _c = corridors[k]
-        d1 = (bx - ax) * (p[1] - az) - (bz - az) * (p[0] - ax)
-        d2 = (bx - ax) * (q[1] - az) - (bz - az) * (q[0] - ax)
-        d3 = (q[0] - p[0]) * (az - p[1]) - (q[1] - p[1]) * (ax - p[0])
-        d4 = (q[0] - p[0]) * (bz - p[1]) - (q[1] - p[1]) * (bx - p[0])
-        return d1 * d2 < 0 and d3 * d4 < 0
-
-    out, moved, dropped = [], 0, 0
-    for b in buildings:
-        f = b[3]
-        pts = [[f[i], f[i + 1]] for i in range(0, len(f), 2)]
-        area0 = abs(ring_area(pts))
-        shift = [0.0] * len(pts)
-        bad = False
-        # la mezzeria attraversa l'edificio
-        for i in range(len(pts)):
-            p, q = pts[i], pts[(i + 1) % len(pts)]
-            if any(crosses(p, q, k) for k in near(p[0], p[1]) | near(q[0], q[1])):
-                bad = True
-                break
-        for _ in range(3):
-            if bad:
-                break
-            any_move = False
-            for i, p in enumerate(pts):
-                for k in near(p[0], p[1]):
-                    ax, az, bx, bz, c = corridors[k]
-                    ux, uz = bx - ax, bz - az
-                    l2 = ux * ux + uz * uz or 1e-9
-                    t = max(0.0, min(1.0, ((p[0] - ax) * ux + (p[1] - az) * uz) / l2))
-                    qx, qz = ax + ux * t, az + uz * t
-                    d = math.hypot(p[0] - qx, p[1] - qz)
-                    if d >= c:
-                        continue
-                    if d < 0.05:
-                        bad = True
-                        break
-                    m = c - d
-                    p[0] += (p[0] - qx) / d * m
-                    p[1] += (p[1] - qz) / d * m
-                    shift[i] += m
-                    any_move = True
-            if not any_move:
-                break
-        if bad or max(shift) > FACADE_MAX:
-            dropped += 1
-            continue
-        if max(shift) > 0:
-            area1 = abs(ring_area(pts))
-            if area1 < 0.5 * area0 or area1 < 12:
-                dropped += 1
-                continue
-            moved += 1
-            b = list(b)
-            b[3] = [round(v, 1) for p in pts for v in p]
-        out.append(b)
-    print(f'facciate spostate fuori dalle carreggiate: {moved} edifici, tolti {dropped}')
-    return out
-
-
 TRAM_SNAP = 9  # m: distanza massima tra lo shape GTFS e un binario OSM
 TRAM_PAIR = (2.2, 6.0)  # m: interasse dei due binari affiancati
 

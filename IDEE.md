@@ -29,6 +29,11 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Mappa e dati
 
+- [ ] **Modalità di esplorazione senza mezzo**, per controllare com'è fatta la mappa:
+  - *panoramica*: vista dall'alto con trascinamento (pan) e zoom, come una mappa;
+  - *giro libero*: telecamera che vola ovunque, WASD per muoversi (e mouse per guardarsi intorno), senza bus né
+    regole di guida.
+
 - [ ] Fonti open data per un gioco più realistico (semafori e cartelli reali, domanda di passeggeri da ISTAT e poli OSM,
   meteo reale da Open-Meteo, altezze dalla CTR del Veneto): ricerca in [`docs/OPEN_DATA.md`](docs/OPEN_DATA.md).
 
@@ -92,6 +97,13 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Pianta delle strade calcolata con Shapely (`scripts/street_surfaces.py`): carreggiate con i raccordi agli
+  incroci, rotatorie circolari con l'isola, spartitraffico, marciapiedi solo dove la via li ha, edifici ritagliati;
+  il gioco disegna le aree e usa il bordo dell'asfalto per le ruote.
+- [x] Banchine centrali del tram comuni ai due versi (dalle banchine OSM), porte aperte dal lato della banchina.
+- [x] Tram con la cassa bombata in due blu; linea aerea con tiranti dalle facciate al posto dei pali centrali.
+- [x] Fermate a richiesta anche col tram; cavalcavia anche sopra le strade (Corso Tredici Giugno sopra Via Sacro
+  Cuore).
 - [x] Sede del tram sui binari OSM (`railway=tram`), un tracciato per verso: lo shape GTFS correva su un binario ma il
   gioco lo usava come asse, e la sede finiva 1,7 m di lato (in Corso Vittorio Emanuele sopra la carreggiata).
 - [x] Strade più larghe sui percorsi dei bus (minimo 7,5 m a doppio senso, 5,5 a senso unico, 7 in rotatoria) e
