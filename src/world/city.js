@@ -739,6 +739,34 @@ export class City {
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
     const deck = [], piers = [], poles = [], wires = [];
     const L = TRAM.lane;
+    // Facciate vicine alla sede: i tiranti della linea aerea si agganciano lì (le piante reali, gli ostacoli dei muri
+    // si costruiscono dopo). spanAnchor: dal centro (cx, cz) verso (nx, nz), oltre half metri, la prima facciata entro
+    // 14 m; se non c'è, un palo sul bordo della strada
+    const FC = 20, fac = new Map(), nearTrack = new Set(), ck = (x, z) => Math.floor(x / FC) + ',' + Math.floor(z / FC);
+    for (const d of [1, -1]) { const P = track.path(d); for (let s = 0; s <= P.len; s += 10) { const p = P.at(s); for (const ox of [-1, 0, 1]) for (const oz of [-1, 0, 1]) nearTrack.add(ck(p.x + ox * FC, p.z + oz * FC)); } }
+    for (const b of this.net.buildings) {
+      if (!b.pts.some((p) => nearTrack.has(ck(p.x, p.z)))) continue;
+      for (let i = 0; i < b.pts.length; i++) {
+        const a = b.pts[i], c = b.pts[(i + 1) % b.pts.length], seg = [a.x, a.z, c.x, c.z];
+        for (const k of new Set([ck(a.x, a.z), ck(c.x, c.z), ck((a.x + c.x) / 2, (a.z + c.z) / 2)])) { if (!fac.has(k)) fac.set(k, []); fac.get(k).push(seg); }
+      }
+    }
+    const spanAnchor = (cx, cz, nx, nz, half) => {
+      let best = 14;
+      const cells = new Set();
+      for (let k = half; k < 14 + 5; k += 5) cells.add(ck(cx + nx * Math.min(k, 14), cz + nz * Math.min(k, 14)));
+      for (const key of cells) for (const sg of fac.get(key) || []) {
+        const [ax, az, bx, bz] = sg, ex = bx - ax, ez = bz - az, den = nx * ez - nz * ex;
+        if (Math.abs(den) < 1e-9) continue;
+        const t = ((ax - cx) * ez - (az - cz) * ex) / den, u = ((ax - cx) * nz - (az - cz) * nx) / den;
+        if (t >= half && t < best && u >= 0 && u <= 1) best = t;
+      }
+      if (best < 14) return { x: cx + nx * best, z: cz + nz * best, pole: false };
+      // nessuna facciata: palo dove finisce la strada (sul marciapiede), al più a 9 m
+      let k = half;
+      while (k < 9 && this.clearance(cx + nx * k, cz + nz * k, ['road', 'tram'], 12) < 0.6) k += 0.5;
+      return { x: cx + nx * k, z: cz + nz * k, pole: true };
+    };
     for (const dir of [1, -1]) {
       const P = track.path(dir);
       let lastPole = -1e9, prevWire = null;
@@ -781,7 +809,7 @@ export class City {
           piece({ x: a.x + (b.x - a.x) * t0, z: a.z + (b.z - a.z) * t0 }, { x: a.x + (b.x - a.x) * t1, z: a.z + (b.z - a.z) * t1 }, sa + l * t0, sa + l * t1);
         }
       }
-      // linea aerea: un filo sopra ogni binario; pali ogni 30 m (al centro della sede sul doppio binario, a lato sul singolo)
+      // linea aerea: un filo sopra ogni binario, retto ogni 30 m da un tirante trasversale (facciate o pali a lato)
       for (let sp = 0; sp <= P.len; sp += 6) {
         const p = P.at(sp), h = track.heightAt(dir, sp);
         if (!track.wireAt(dir, sp)) { prevWire = null; continue; }
@@ -793,13 +821,15 @@ export class City {
         if (sp - lastPole < 30) continue;
         lastPole = sp;
         const dbl = track.doubleAt(dir, sp) > 0.5;
-        if (dbl && dir < 0) continue; // sul doppio binario i pali centrali li mette il verso nord
-        // palo al centro della sede (tra i due binari) o a destra del binario
-        const ang = Math.atan2(p.dx, p.dz), O = track.path(-dir), q = dbl ? O.at(O.project(p.x, p.z).s) : null;
-        const px = q ? (p.x + q.x) / 2 : p.x - p.dz * (L + 0.9), pz = q ? (p.z + q.z) / 2 : p.z + p.dx * (L + 0.9);
-        poles.push(new THREE.CylinderGeometry(0.09, 0.12, CATENARY_HEIGHT + 0.7, 6).translate(px, Y_ROAD + h + (CATENARY_HEIGHT + 0.7) / 2, pz));
-        const armLen = dbl ? L * 2 + 0.8 : L + 1.4, ac = dbl ? 0 : -(L + 0.9) / 2;
-        poles.push(new THREE.BoxGeometry(armLen, 0.1, 0.1).rotateY(ang).translate(px - p.dz * ac, Y_ROAD + h + CATENARY_HEIGHT + 0.35, pz + p.dx * ac));
+        if (dbl && dir < 0) continue; // sul doppio binario il tirante lo mette il verso nord, per tutti e due i fili
+        // tirante trasversale sopra i fili, agganciato alle facciate o a pali ai lati della strada
+        const O = track.path(-dir), q = dbl ? O.at(O.project(p.x, p.z).s) : null;
+        const cx = q ? (p.x + q.x) / 2 : p.x, cz = q ? (p.z + q.z) / 2 : p.z, half = (q ? Math.hypot(p.x - q.x, p.z - q.z) / 2 : 0) + L + 0.6;
+        const ends = [-1, 1].map((side) => spanAnchor(cx, cz, -p.dz * side, p.dx * side, half));
+        const y = Y_ROAD + h + CATENARY_HEIGHT + 0.3;
+        for (const a of ends) if (a.pole) poles.push(new THREE.CylinderGeometry(0.08, 0.11, y - Y_ROAD - h + 0.4, 6).translate(a.x, Y_ROAD + h + (y - Y_ROAD - h + 0.4) / 2, a.z));
+        const [a, b] = ends, sl = Math.hypot(b.x - a.x, b.z - a.z);
+        wires.push(new THREE.BoxGeometry(0.03, 0.03, sl).rotateY(Math.atan2(b.x - a.x, b.z - a.z)).translate((a.x + b.x) / 2, y, (a.z + b.z) / 2));
       }
     }
     const tex = TX.tramLaneTexture();
