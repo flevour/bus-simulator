@@ -6,9 +6,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 ## Prossimi passi
 
 1. [~] **Tram SIR1 guidabile**: fatto (vedi "Fatto"). Restano:
-   - la sede allineata ai binari OSM (`railway=tram`, da scaricare: l'export non li contiene): oggi segue lo shape
-     GTFS, levigato e spostato di lato dove i binari entrerebbero nelle facciate (Corso Vittorio Emanuele, Riviere);
-     resta da sistemare il binario tronco oltre il capolinea della Guizza, che entra in un edificio;
+   - il binario tronco oltre il capolinea della Guizza, che entra in un edificio;
    - i semafori del tram coordinati con quelli stradali agli incroci semaforizzati;
    - interni più curati;
    - pedoni che attraversano la sede e si fermano;
@@ -18,7 +16,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    sede: modellarla come grafo di binari (rami e scambi) su cui ogni linea ha il suo percorso.
 3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
    "Fatto"). Restano:
-   - fermate e sede del tram dai nodi e dalle way OSM (`railway=tram`, `tram_stop`);
+   - fermate del tram dai nodi OSM (`tram_stop`);
    - semafori pedonali solo nel verso indicato da `traffic_signals:direction`;
    - dossi (`traffic_calming`) e corsie riservate (`highway=busway`);
    - istruzioni: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
@@ -39,8 +37,6 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
   - licenza: Google e Bing non permettono di ricavarne dati; le ortofoto della Regione Veneto sono da verificare;
   - alberi, ombre e auto coprono le strisce;
   - dai container cloud i server della Regione sono bloccati.
-- [ ] Allineare la sede del tram ai binari OSM (`railway=tram`) invece che allo shape GTFS. Esempio: in Viale
-  Cavallotti la sede è attaccata al marciapiede del bus e i passeggeri hanno poco spazio.
 - [ ] 30 fermate servite su 403 non hanno palina (il posizionamento viene scartato): capire caso per caso.
 - [ ] Capolinea: tratti del percorso GTFS senza strada corrispondente (map matching). Aggiungere le strade di servizio
   e le aree dei capolinea.
@@ -96,6 +92,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Sede del tram sui binari OSM (`railway=tram`), un tracciato per verso: lo shape GTFS correva su un binario ma il
+  gioco lo usava come asse, e la sede finiva 1,7 m di lato (in Corso Vittorio Emanuele sopra la carreggiata).
 - [x] Tram SIR1 guidabile (3 moduli, numero di moduli come dato della linea):
   - corse reali GTFS (anche le limitate);
   - corsie e rotaie per senso, banchine a destra, fermata col muso a fine banchina;

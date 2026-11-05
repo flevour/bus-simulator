@@ -30,6 +30,9 @@ La mappa unisce due fonti aperte:
   stazione e lo scalo); fiumi e canali (Brenta, Bacchiglione, Piovego, Tronco Maestro, Scaricatore…).
 * **Nodi OpenStreetMap** (`data/osm-padova-nodes.json`, query `scripts/overpass-nodes.ql`): semafori, STOP, dare
   precedenza e attraversamenti pedonali reali.
+* **Binari del tram OpenStreetMap** (`data/osm-padova-tram.json`, query `scripts/overpass-tram.ql`): la sede del gioco
+  segue i binari veri, uno per verso. Lo shape GTFS corre su uno dei due binari e ha punti radi: viene campionato ogni
+  2 m e agganciato al binario OSM vicino e parallelo.
 * **GTFS ufficiale di Busitalia Veneto** (feed BusOne, `https://proxy.busone.app/biv/gtfs.zip`): le 22 linee urbane
   con le varianti di percorso, le fermate reali e gli orari delle corse di un mercoledì (feriale) e di una domenica
   (festivo). Partenza e arrivo sono quelli reali; i passaggi intermedi il gioco li ripartisce secondo il tempo di guida
@@ -75,13 +78,17 @@ Per rigenerare i dati:
 # segnaletica reale (nodi OSM); se Overpass risponde 502 (server saturo) riprova dopo qualche decina di secondi
 curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-nodes.ql -o /tmp/osm-nodes.json https://overpass-api.de/api/interpreter
 python3 scripts/filter_osm_nodes.py /tmp/osm-nodes.json data/osm-padova-nodes.json
+# binari del tram
+curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tram.ql -o /tmp/osm-tram.json https://overpass-api.de/api/interpreter
+python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json
 ```
 
-`build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato. Gli ultimi due argomenti sono
-facoltativi: senza il file dei nodi il gioco deduce semafori e cartelli dal tipo di strada.
+`build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato, quanti campioni del tram sono finiti
+sui binari OSM. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
+gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la sede segue lo shape GTFS.
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).
 

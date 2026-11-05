@@ -286,7 +286,7 @@ export class Traffic {
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
       if (!best || r.d < best.d) best = { d: r.d, t: r.t, it };
     }
-    const need = best ? TRAM_HW + 1.0 - best.d : 0;
+    const need = best ? best.it.hw + 1.0 - best.d : 0;
     if (need <= 0) return 0;
     const { it, t } = best, qx = it.ax + (it.bx - it.ax) * t, qz = it.az + (it.bz - it.az) * t;
     return ((x - qx) * lx + (z - qz) * lz >= 0 ? 1 : -1) * Math.min(3, need);

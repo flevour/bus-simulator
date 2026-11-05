@@ -167,13 +167,15 @@ export function buildNetwork() {
   const rails = MAP.rails.map(([bt, yard, f]) => ({ bridge: bt === 1, tunnel: bt === 2, yard: !!yard, pts: flat(f) })).filter((r) => r.pts.length > 1);
   const buildings = MAP.buildings.map(([h, kind, name, f, holes]) => ({ h, kind, name, pts: flat(f), holes: holes ? holes.map(flat) : null }));
   // tram SIR1: tracciato e fermate (sede tranviaria in mezzo a Via Aspetti, Via Reni, ecc.)
-  // sede del tram: inversione ai capolinea tagliata, curve raccordate, binario tronco di 40 m oltre i capolinea
-  // l'asse (verso nord) porta i due binari affiancati a ±1,7 m; il secondo tracciato è a binario singolo
+  // sede del tram: inversione ai capolinea tagliata, curve raccordate, binario tronco di 40 m oltre i capolinea.
+  // Con i binari OSM (tramLanes) c'è un tracciato per verso; con il solo GTFS il primo è l'asse dei due binari
+  // affiancati a ±1,7 m e il secondo il binario singolo dove i versi si separano
+  const lanes = !!MAP.tramLanes;
   const tram = (MAP.tram || []).map(flat).filter((t) => t.length > 1).map((t, k) => {
     t = cutReversal(cutReversal(t).reverse()).reverse();
     t = smoothTrack(t);
     const ext = (p, q) => { const l = Math.hypot(p.x - q.x, p.z - q.z) || 1; return { x: p.x + ((p.x - q.x) / l) * 40, z: p.z + ((p.z - q.z) / l) * 40 }; };
-    return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], buildings, k === 0 ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
+    return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], buildings, k === 0 && !lanes ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
   });
   const tramStops = (MAP.tramStops || []).map(([x, z, name]) => ({ x, z, name }));
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
@@ -222,7 +224,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramStops, signals, signs, crossings };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, tramStops, signals, signs, crossings };
 }
 
 // ponti stradali sopra la ferrovia: impalcato in quota con rampe di accesso

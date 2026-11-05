@@ -114,12 +114,16 @@ export class TramTrack {
     const raw = net.tram || [];
     const C = (this.C = new TrackPath(raw[0]));
     const S = raw[1] && raw[1].length > 1 ? new TrackPath(raw[1]) : null;
-    // verso nord: lungo l'asse, a destra di 1,7 m dove c'è l'altro verso
+    // verso nord: lungo l'asse, a destra di 1,7 m dove c'è l'altro verso (con i binari OSM: il suo binario)
     const ns = sampleS(C.len);
     const wN = rampWeights(ns.map((s) => { const p = C.at(s); return S && S.project(p.x, p.z).d < NEAR ? 1 : 0; }), STEP, 25);
-    const north = ns.map((s, i) => { const p = C.at(s), o = TRAM.lane * wN[i]; return { x: p.x - p.dz * o, z: p.z + p.dx * o }; });
+    const north = ns.map((s, i) => { const p = C.at(s), o = net.tramLanes ? 0 : TRAM.lane * wN[i]; return { x: p.x - p.dz * o, z: p.z + p.dx * o }; });
     let south, wS;
-    if (S) {
+    if (S && net.tramLanes) {
+      const ss = sampleS(S.len);
+      wS = rampWeights(ss.map((s) => { const p = S.at(s); return C.project(p.x, p.z).d < NEAR ? 1 : 0; }), STEP, 25);
+      south = ss.map((s) => { const p = S.at(s); return { x: p.x, z: p.z }; });
+    } else if (S) {
       const ss = sampleS(S.len), cs = [], flags = [];
       for (const s of ss) { const p = S.at(s), pr = C.project(p.x, p.z); cs.push(pr.s); flags.push(pr.d < NEAR ? 1 : 0); }
       wS = rampWeights(flags, STEP, 25);
@@ -167,13 +171,13 @@ export class TramTrack {
   // dalla strada e da solo resterebbe a terra)
   setHeights(fn) {
     for (const d of [1, -1]) {
-      const P = this.paths[d], raw = [];
+      const P = this.paths[d], O = this.paths[-d], raw = [];
       for (let s = 0; s <= P.len; s += 5) {
         const p = P.at(s);
         let h = fn(p.x, p.z, p.dx, p.dz);
         if (this.doubleAt(d, s) > 0.5) {
-          const c = this.C.at(this.C.project(p.x, p.z).s);
-          h = Math.max(h, fn(2 * c.x - p.x, 2 * c.z - p.z, p.dx, p.dz));
+          const q = O.at(O.project(p.x, p.z).s);
+          h = Math.max(h, fn(q.x, q.z, p.dx, p.dz));
         }
         raw.push(h);
       }

@@ -332,7 +332,9 @@ export class City {
     for (const e of edges) if (e.roundabout) { const A = nodes[e.a], B = nodes[e.b]; kz(A.x, A.z, B.x, B.z, e.width / 2 + 5); }
     for (const w of water) for (let i = 0; i < w.pts.length - 1; i++) this.addSeg(w.pts[i].x, w.pts[i].z, w.pts[i + 1].x, w.pts[i + 1].z, w.width / 2 + 6, 'water', w);
     for (const r of rails) if (!r.tunnel) for (let i = 0; i < r.pts.length - 1; i++) this.addSeg(r.pts[i].x, r.pts[i].z, r.pts[i + 1].x, r.pts[i + 1].z, 3.2, 'rail');
-    for (const t of this.net.tram || []) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, TRAM_HW, 'tram');
+    // sede del tram: attorno all'asse dei due binari, o attorno a ogni binario (binari OSM)
+    const thw = this.net.tramLanes ? TRAM.lane + 0.3 : TRAM_HW;
+    for (const t of this.net.tram || []) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, thw, 'tram');
   }
   // distanza libera (positiva = fuori) dalle feature
   clearance(x, z, kinds = null, r = 40) {
@@ -650,8 +652,9 @@ export class City {
         lastPole = sp;
         const dbl = track.doubleAt(dir, sp) > 0.5;
         if (dbl && dir < 0) continue; // sul doppio binario i pali centrali li mette il verso nord
-        const ang = Math.atan2(p.dx, p.dz), po = dbl ? -L : L + 0.9; // palo al centro della sede o a destra del binario
-        const px = p.x - p.dz * po, pz = p.z + p.dx * po;
+        // palo al centro della sede (tra i due binari) o a destra del binario
+        const ang = Math.atan2(p.dx, p.dz), O = track.path(-dir), q = dbl ? O.at(O.project(p.x, p.z).s) : null;
+        const px = q ? (p.x + q.x) / 2 : p.x - p.dz * (L + 0.9), pz = q ? (p.z + q.z) / 2 : p.z + p.dx * (L + 0.9);
         poles.push(new THREE.CylinderGeometry(0.09, 0.12, CATENARY_HEIGHT + 0.7, 6).translate(px, Y_ROAD + h + (CATENARY_HEIGHT + 0.7) / 2, pz));
         const armLen = dbl ? L * 2 + 0.8 : L + 1.4, ac = dbl ? 0 : -(L + 0.9) / 2;
         poles.push(new THREE.BoxGeometry(armLen, 0.1, 0.1).rotateY(ang).translate(px - p.dz * ac, Y_ROAD + h + CATENARY_HEIGHT + 0.35, pz + p.dx * ac));

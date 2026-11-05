@@ -94,7 +94,7 @@ def in_focus(lat, lon, m=0.0):
     return any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES)
 
 
-def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None):
+def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None):
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     # solo gli elementi che toccano l'area di gioco (con un piccolo margine)
     ways = [e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
@@ -494,6 +494,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None):
             tshapes[t['shape_id']] += 1
             ttrips.setdefault(t['shape_id'], t['trip_id'])
     tram = []
+    tram_lanes = False
     tram_stop_ids = set()
     if tshapes:
         main_shape = max(tshapes, key=tshapes.get)
@@ -522,6 +523,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None):
         if opp_shape:
             op = sorted((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])) for r in rd('shapes.txt') if r['shape_id'] == opp_shape)
             tram.append([round(v, 1) for _, la, lo in op for v in xz(la, lo)])
+        # binari veri: ogni shape (uno per verso) agganciato ai binari OSM
+        if tram_path:
+            tram = [tram_lane(t, *tram_grid(tram_path)) for t in tram]
+            tram_lanes = True
         trip = ttrips[main_shape]
         for r in rd('stop_times.txt'):
             if r['trip_id'] == trip:
@@ -546,13 +551,91 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None):
         'origin': [ORIGIN_LAT, ORIGIN_LON], 'ferDate': build_gtfs.FER_DATE, 'fesDate': build_gtfs.FES_DATE,
         'nodes': nodes_flat, 'edges': [v for e in edges for v in e], 'names': names,
         'stops': gt['stops'], 'lines': lines_out,
-        'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramStops': tram_stops,
+        'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramStops': tram_stops,
         'tramLines': [build_gtfs.load_tram(gtfs_dir, keep=tram_keep)],
         **signage,
     }
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
     print(f'nodi {len(nodes)} archi {len(edges)} edifici {len(buildings)} binari {len(rails)} acque {len(water)} linee {len(lines_out)} varianti non agganciate {failed}')
+
+
+TRAM_SNAP = 9  # m: distanza massima tra lo shape GTFS e un binario OSM
+TRAM_PAIR = (2.2, 6.0)  # m: interasse dei due binari affiancati
+
+
+def tram_grid(path, cell=20):
+    """Segmenti dei binari OSM (railway=tram) in una griglia."""
+    segs = []
+    for e in json.load(open(path, encoding='utf-8'))['elements']:
+        pts = [xz(g['lat'], g['lon']) for g in e['geometry']]
+        segs += [(a, b) for a, b in zip(pts, pts[1:]) if a != b]
+    grid = defaultdict(list)
+    for k, ((ax, az), (bx, bz)) in enumerate(segs):
+        for gx in range(int(min(ax, bx) // cell), int(max(ax, bx) // cell) + 1):
+            for gz in range(int(min(az, bz) // cell), int(max(az, bz) // cell) + 1):
+                grid[(gx, gz)].append(k)
+    return segs, grid, cell
+
+
+def tram_lane(flat, segs, grid, cell):
+    """Binario di un verso. Lo shape GTFS ha punti radi e corre su uno dei due binari (non in mezzo): campionato ogni
+    2 m, ogni punto va sul binario OSM vicino e parallelo; dove i binari sono due si tiene quello a destra di chi
+    percorre lo shape (si marcia a destra)."""
+    pts = [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+    smp = []
+    for (ax, az), (bx, bz) in zip(pts, pts[1:]):
+        n = max(1, int(math.hypot(bx - ax, bz - az) // 2))
+        smp += [(ax + (bx - ax) * k / n, az + (bz - az) * k / n) for k in range(n)]
+    smp.append(pts[-1])
+    out, snapped = [], 0
+    for i, (px, pz) in enumerate(smp):
+        a, b = smp[max(0, i - 3)], smp[min(len(smp) - 1, i + 3)]
+        L = math.hypot(b[0] - a[0], b[1] - a[1]) or 1
+        dx, dz = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+        rx, rz = -dz, dx
+        seen, cand = set(), []
+        for gx in range(int((px - TRAM_SNAP) // cell), int((px + TRAM_SNAP) // cell) + 1):
+            for gz in range(int((pz - TRAM_SNAP) // cell), int((pz + TRAM_SNAP) // cell) + 1):
+                for k in grid.get((gx, gz), ()):
+                    if k in seen:
+                        continue
+                    seen.add(k)
+                    (sx, sz), (ex, ez) = segs[k]
+                    ux, uz = ex - sx, ez - sz
+                    l2 = ux * ux + uz * uz
+                    if abs(ux * dx + uz * dz) < 0.8 * math.sqrt(l2):
+                        continue  # binario di traverso (scambi, altre linee)
+                    t = max(0.0, min(1.0, ((px - sx) * ux + (pz - sz) * uz) / l2))
+                    qx, qz = sx + ux * t, sz + uz * t
+                    d = math.hypot(qx - px, qz - pz)
+                    if d <= TRAM_SNAP:
+                        cand.append(((qx - px) * rx + (qz - pz) * rz, d, qx, qz))
+        # binari distinti: offset laterali che differiscono più di 1,2 m
+        cand.sort()
+        tracks = []
+        for c in cand:
+            if tracks and c[0] - tracks[-1][0] < 1.2:
+                if c[1] < tracks[-1][1]:
+                    tracks[-1] = c
+            else:
+                tracks.append(c)
+        pair = [(abs(t1[0] + t2[0]), t2) for t1, t2 in zip(tracks, tracks[1:]) if TRAM_PAIR[0] <= t2[0] - t1[0] <= TRAM_PAIR[1]]
+        pick = min(pair)[1] if pair else min(tracks, key=lambda c: c[1]) if tracks else None
+        if pick:
+            snapped += 1
+            out.append((pick[2], pick[3]))
+        else:
+            out.append((px, pz))
+    # media mobile su ±4 m contro i salti tra un segmento e l'altro, poi semplificazione
+    sm = []
+    for i in range(len(out)):
+        w = out[max(0, i - 2):i + 3]
+        sm.append((sum(p[0] for p in w) / len(w), sum(p[1] for p in w) / len(w)))
+    sm[0], sm[-1] = out[0], out[-1]
+    keep = rdp(sm, 0.15)
+    print(f'  binario agganciato ai binari OSM: {snapped}/{len(smp)} campioni, {len(keep)} punti')
+    return [round(v, 2) for i in keep for v in sm[i]]
 
 
 SIGNAL_SKIP = ('blinker', 'emergency', 'ramp_meter')  # lampeggianti e semafori dei vigili del fuoco: niente ciclo
@@ -932,5 +1015,6 @@ def overture_buildings(path):
 
 if __name__ == '__main__':
     extra = sys.argv[4:]
-    main(sys.argv[1], sys.argv[2], sys.argv[3],
-         next((a for a in extra if a.endswith('.parquet')), None), next((a for a in extra if a.endswith('.json')), None))
+    pick = lambda ok: next((a for a in extra if ok(a)), None)
+    main(sys.argv[1], sys.argv[2], sys.argv[3], pick(lambda a: a.endswith('.parquet')),
+         pick(lambda a: a.endswith('.json') and 'tram' not in a), pick(lambda a: a.endswith('.json') and 'tram' in a))
