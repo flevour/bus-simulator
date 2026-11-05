@@ -51,7 +51,9 @@ calcolate una volta sola invece di nastri sovrapposti disegnati dal gioco:
 * gli spartitraffico chiusi senza edifici diventano isole, tranne la sede del tram e l'acqua;
 * il marciapiede è una fascia di 3,5 m attorno alla carreggiata (2 m sui ponti);
 * gli edifici sono ritagliati fuori da carreggiate, marciapiede minimo (1,5 m sui percorsi dei bus) e sede del tram;
-* i tratti in quota (cavalcavia e rampe) restano fuori dal piano a terra.
+* gli impalcati in quota sono un'area sola anche loro: i tratti di strada e di tram da 0,6 m in su, uniti e con la
+  fascia tra impalcati vicini riempita (il Cavalcavia Borgomagno è un corpo unico con strada, tram e corsia bus); sotto
+  non restano isole né marciapiedi, i parapetti seguono il bordo e si fermano dove cominciano le rampe.
 
 Il gioco disegna le aree a riquadri da 200 m e usa il bordo dell'asfalto per dire se le ruote sono in strada.
 

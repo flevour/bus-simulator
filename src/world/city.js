@@ -148,6 +148,12 @@ class GeoBuilder {
       if (sgn > 0) this.idx.push(b + i0, b + i2, b + i1); else this.idx.push(b + i0, b + i1, b + i2);
     }
   }
+  // come polygon, con la quota di ogni vertice da yFn(x, z)
+  polygonH(rings, yFn, uvScale = 20) {
+    const b = this.pos.length / 3;
+    this.polygon(rings, 0, uvScale);
+    for (let i = b * 3; i < this.pos.length; i += 3) this.pos[i + 1] = yFn(this.pos[i], this.pos[i + 2]);
+  }
   // corona circolare (rotatorie): u 0 bordo esterno -> 1 interno, v lungo la circonferenza (stesso verso dei nastri)
   annulus(cx, cz, r0, r1, y, seg = 48, vScale = 12) {
     const L = 2 * Math.PI * ((r0 + r1) / 2);
@@ -325,7 +331,7 @@ export class City {
     this.nightMats = [];
     this.lampPositions = [];
     this.timings = {};
-    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildTramway', 'buildDeckJoins', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps', 'clearBusRoads']) {
+    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildTramway', 'buildDeckJoins', 'buildDecks', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps', 'clearBusRoads']) {
       const t0 = performance.now();
       this[step]();
       this.timings[step] = Math.round(performance.now() - t0);
@@ -740,7 +746,9 @@ export class City {
       if (hm < 0.3) continue;
       const cx = A.x + e.dx * (s + 5), cz = A.z + e.dz * (s + 5);
       const slope = Math.atan2(h1 - h0, 10);
-      for (const side of [-1, 1]) {
+      // con gli impalcati della pianta delle strade (buildDecks) qui restano solo le pile
+      const decks = !!(this.net.surfaces && this.net.surfaces.decks);
+      if (!decks) for (const side of [-1, 1]) {
         const off = e.width / 2 + 0.9;
         if (this.clearance(cx - e.dz * side * off, cz + e.dx * side * off, ['road'], 20) < 0.2) continue;
         const g = new THREE.BoxGeometry(0.35, 1.1, 10.2);
@@ -751,11 +759,13 @@ export class City {
         this.addObstacle(cx - e.dz * side * off, cz + e.dx * side * off, 5.2, 0.25, Math.atan2(-e.dz, e.dx), 'wall');
       }
       // fascia laterale dell'impalcato
-      const sk = new THREE.BoxGeometry(e.width + 2.4, 1.0, 10.2);
-      sk.rotateX(-slope);
-      sk.rotateY(ang);
-      sk.translate(cx, Y_ROAD + hm - 0.5, cz);
-      deck.push(sk);
+      if (!decks) {
+        const sk = new THREE.BoxGeometry(e.width + 2.4, 1.0, 10.2);
+        sk.rotateX(-slope);
+        sk.rotateY(ang);
+        sk.translate(cx, Y_ROAD + hm - 0.5, cz);
+        deck.push(sk);
+      }
       if (hm > 2.5 && Math.round(s) % 30 === 0) {
         for (const side of [-1, 1]) {
           const px = cx - e.dz * side * (e.width / 2 - 1), pz = cz + e.dx * side * (e.width / 2 - 1);
@@ -906,15 +916,15 @@ export class City {
         if (track.doubleAt(dir, sa) < 0.5) kerb.ribbon(...off(-L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
         // in quota (cavalcavia Borgomagno): impalcato con parapetti e pile, inclinati come la rampa
         const hm = (ha + hb) / 2;
-        if (hm > 0.4) {
+        if (hm > 0.4 && !(this.net.surfaces && this.net.surfaces.decks)) {
           const ang = Math.atan2(ex, ez), mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
           const tilt = -Math.atan2(hb - ha, l), l3 = Math.hypot(l, hb - ha) + 0.05;
           const slab = (w, h, o, y) => new THREE.BoxGeometry(w, h, l3).rotateX(tilt).rotateY(ang).translate(mx + nx * o, Y_ROAD + hm + y, mz + nz * o);
           deck.push(slab(L * 2 + 0.4, 0.6, 0, -0.32));
           deck.push(slab(0.22, 1.0, L + 0.1, 0.45));
           if (track.doubleAt(dir, sa) < 0.5) deck.push(slab(0.22, 1.0, -(L + 0.1), 0.45));
-          if (hm > 1.5 && Math.floor(sb / 22) !== Math.floor(sa / 22)) piers.push(new THREE.BoxGeometry(0.9, hm - 0.6, 0.9).translate(b.x, Y_ROAD + (hm - 0.6) / 2, b.z));
         }
+        if (hm > 1.5 && Math.floor(sb / 22) !== Math.floor(sa / 22)) piers.push(new THREE.BoxGeometry(0.9, hm - 0.6, 0.9).translate(b.x, Y_ROAD + (hm - 0.6) / 2, b.z));
       };
       for (let i = 0; i < P.pts.length - 1; i++) {
         const a = P.pts[i], b = P.pts[i + 1], sa = P.cum[i], sb = P.cum[i + 1];
@@ -1023,6 +1033,7 @@ export class City {
   // la corsia dei bus verso nord): la fascia vuota tra due impalcati in quota vicini diventa soletta, alla quota più
   // bassa dei due, così il cavalcavia è un corpo unico
   buildDeckJoins() {
+    if (this.net.surfaces && this.net.surfaces.decks) return; // corpo unico già nella pianta delle strade
     const items = [];
     for (const e of this.net.edges) {
       if (!e.elev) continue;
@@ -1065,6 +1076,51 @@ export class City {
     m.castShadow = m.receiveShadow = true;
     this.group.add(m);
     this.deckJoins = geos.length;
+  }
+
+  // Impalcati in quota della pianta delle strade (strade e tram uniti, come il Cavalcavia Borgomagno): piano superiore
+  // alla quota della strada o del binario più vicino, fascia laterale, parapetti lungo il bordo (non dove il bordo
+  // attraversa una carreggiata o un binario: lì l'impalcato finisce e comincia la rampa)
+  buildDecks() {
+    const D = this.net.surfaces && this.net.surfaces.decks;
+    if (!D || !D.length) return;
+    const track = this.tramTrack, q = [];
+    const near = (x, z) => {
+      let best = Infinity, h = 0, cross = false;
+      for (const it of this.segGrid.query(x, z, 16, q)) {
+        if (it.kind !== 'road' || !it.ref || !it.ref.elev) continue;
+        const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz), sc = Math.max(0, r.d - it.hw);
+        if (r.d < it.hw + 0.6) cross = true;
+        if (sc < best) { best = sc; h = edgeHeight(it.ref, r.t * it.ref.len); }
+      }
+      if (track) for (const d of [1, -1]) {
+        const P = track.path(d), pr = P.project(x, z);
+        if (pr.d > 16) continue;
+        const sc = Math.max(0, pr.d - TRAM.lane - 0.3);
+        if (pr.d < TRAM.lane + 0.9) cross = true;
+        if (sc < best) { best = sc; h = track.heightAt(d, pr.s); }
+      }
+      return { h, cross };
+    };
+    const top = new GeoBuilder(), side = new GeoBuilder(), par = new GeoBuilder();
+    const H = new Map(), at = (x, z) => { const k = x + ',' + z; if (!H.has(k)) H.set(k, near(x, z)); return H.get(k); };
+    for (const rings of D) {
+      top.polygonH(rings, (x, z) => Y_ROAD + at(x, z).h - 0.02, 8);
+      for (const r of rings) for (let i = 0; i < r.length; i += 2) {
+        const j = (i + 2) % r.length, ax = r[i], az = r[i + 1], bx = r[j], bz = r[j + 1];
+        const A = at(ax, az), B = at(bx, bz), ya = Y_ROAD + A.h - 0.02, yb = Y_ROAD + B.h - 0.02;
+        side.quad([ax, ya - 0.9, az], [bx, yb - 0.9, bz], [ax, ya, az], [bx, yb, bz], [0, 0, 1, 0, 0, 1, 1, 1]);
+        const mx = (ax + bx) / 2, mz = (az + bz) / 2, M = near(mx, mz);
+        if (A.h < 0.5 || B.h < 0.5 || M.cross) continue;
+        par.quad([ax, ya, az], [bx, yb, bz], [ax, ya + 1.0, az], [bx, yb + 1.0, bz], [0, 0, 1, 0, 0, 1, 1, 1]);
+        const l = Math.hypot(bx - ax, bz - az);
+        if (l > 0.3) this.addObstacle(mx, mz, l / 2, 0.25, Math.atan2(-(bz - az), bx - ax), 'wall');
+      }
+    }
+    const mat = (c) => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide });
+    const tm = new THREE.Mesh(top.build(), mat(0xb9b4aa)), sm = new THREE.Mesh(side.build(), mat(0xa9a397)), pm = new THREE.Mesh(par.build(), mat(0xcfc8bb));
+    tm.receiveShadow = true; sm.castShadow = pm.castShadow = true;
+    this.group.add(tm, sm, pm);
   }
 
   // quota della strada in quota più vicina (per il binario del tram che corre accanto al cavalcavia)

@@ -24,6 +24,10 @@ BUS_KERB = 1.5  # m: marciapiede minimo tra carreggiata dei bus e facciate
 TRAM_CLEAR = 3.2  # m: dal binario alle facciate
 TRAM_LANE = 2.1  # m: metà della corsia rossa di un binario, con il cordolo
 TILE = 200  # m: riquadri dell'export
+DECK_MIN = 0.6  # m: da questa quota in su la strada o il tram stanno su un impalcato (sotto è rampa a raso)
+DECK_EDGE = 1.0  # m: l'impalcato sporge oltre la carreggiata (cordolo e parapetto)
+DECK_JOIN = 4.5  # m: impalcati più vicini del doppio di così diventano un corpo unico (Cavalcavia Borgomagno)
+TRAM_HALF = 1.7 + 0.5  # m: metà della corsia di un binario più il cordolo
 
 
 def _cross(p, q, r, s):
@@ -112,6 +116,83 @@ def overpass_heights(nodes, edges, rails):
         if h > 0.001:
             heights[n] = round(h, 2)
     return heights
+
+
+def _tram_heights(pts, nodes, edges, heights):
+    """Quota di ogni punto di un binario: quella della strada in quota più vicina e quasi parallela (come
+    City.nearElevatedHeight nel gioco)."""
+    up = [e for e in edges if heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05]
+    out = []
+    for i, p in enumerate(pts):
+        q = pts[min(len(pts) - 1, i + 1)] if i < len(pts) - 1 else pts[i]
+        o = pts[max(0, i - 1)] if i == len(pts) - 1 else p
+        dx, dz = q[0] - o[0], q[1] - o[1]
+        L = math.hypot(dx, dz) or 1
+        dx, dz = dx / L, dz / L
+        best, h = 1e9, 0.0
+        for e in up:
+            (ax, az), (bx, bz) = nodes[e[0]], nodes[e[1]]
+            ux, uz = bx - ax, bz - az
+            l = math.hypot(ux, uz) or 1e-9
+            if abs(dx * uz / l - dz * ux / l) > 0.7:
+                continue  # di traverso: il tram ci passa sotto
+            t = max(0.0, min(1.0, ((p[0] - ax) * ux + (p[1] - az) * uz) / (l * l)))
+            d = math.hypot(ax + ux * t - p[0], az + uz * t - p[1])
+            if d < e[3] / 2 + 9 and d < best:
+                best = d
+                h = heights.get(e[0], 0) + (heights.get(e[1], 0) - heights.get(e[0], 0)) * t
+        out.append(h)
+    return out
+
+
+def decks(nodes, edges, heights, drive, tram):
+    """Impalcati in quota come un'area sola: i tratti di strada e di tram da DECK_MIN in su (carreggiata + 1 m, corsie
+    del tram + cordolo), uniti e con la fascia tra impalcati vicini riempita."""
+    m = DECK_MIN
+    parts = []
+    for k in drive:
+        a, b, _c, wd = edges[k][:4]
+        ha, hb = heights.get(a, 0), heights.get(b, 0)
+        if max(ha, hb) < m:
+            continue
+        t0 = 0.0 if ha >= m else (m - ha) / (hb - ha)
+        t1 = 1.0 if hb >= m else (ha - m) / (ha - hb)
+        A, B = nodes[a], nodes[b]
+        P = lambda t: (A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t)
+        if t1 - t0 > 1e-3:
+            parts.append(LineString([P(t0), P(t1)]).buffer(wd / 2 + DECK_EDGE, cap_style='flat'))
+        for n, h in ((a, ha), (b, hb)):
+            if h >= m:
+                parts.append(Point(nodes[n]).buffer(wd / 2 + DECK_EDGE, quad_segs=6))
+    for t in tram:
+        pts = [(t[i], t[i + 1]) for i in range(0, len(t), 2)]
+        dense = [pts[0]]
+        for p, q in zip(pts, pts[1:]):
+            n = max(1, int(math.dist(p, q) // 5))
+            dense += [(p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n) for k in range(1, n + 1)]
+        hs = _tram_heights(dense, nodes, edges, heights)
+        run = []
+        for p, h in zip(dense + [None], hs + [0]):
+            if p is not None and h >= m:
+                run.append(p)
+                continue
+            if len(run) >= 2:
+                parts.append(LineString(run).buffer(TRAM_HALF, cap_style='flat', join_style='round'))
+            run = []
+    if not parts:
+        return Polygon()
+    D = unary_union(parts)
+    return D.buffer(DECK_JOIN, quad_segs=4).buffer(-DECK_JOIN, quad_segs=4)
+
+
+def _polys(geom):
+    """Solo i poligoni di una geometria (le differenze possono lasciare linee e punti in una collezione)."""
+    if isinstance(geom, Polygon):
+        return [geom] if not geom.is_empty else []
+    out = []
+    for g in getattr(geom, 'geoms', []):
+        out += _polys(g)
+    return out
 
 
 def _rings(geom):
@@ -256,6 +337,10 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
     W = unary_union([LineString([(f[i], f[i + 1]) for i in range(0, len(f), 2)]).buffer(wd / 2 + 2) for _n, wd, f in water if len(f) >= 4])
     bridges = unary_union([pieces[k].buffer(BRIDGE_WALK) for k in ground if edges[k][5] & 4])
     islands = islands.difference(W)  # tra due ponti affiancati c'è l'acqua, non un'isola
+    # sotto rampe e impalcati niente isole né marciapiedi (la rampa del cavalcavia attraversava un'isola di prato)
+    D = decks(nodes, edges, heights, drive, tram)
+    up = unary_union([pieces[k] for k in drive if elev(edges[k])])
+    islands = islands.difference(up).difference(D)
     # la sede del tram nello spartitraffico (Via Aspetti, Via Guizza) resta libera: l'isola è solo il verde ai lati
     lanes = [LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE, quad_segs=2) for t in tram if len(t) >= 4]
     if lanes:
@@ -272,18 +357,19 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
             # z verso sud: per Shapely il piano è speculare, la sua sinistra è la nostra destra
             bands.append(seg(edges[k]).buffer(-d if sides == 1 else d, single_sided=True))
     walk = unary_union([*bands, ped]).difference(U).difference(islands)
-    up = unary_union([pieces[k] for k in drive if elev(edges[k])])
-    walk = walk.difference(W.difference(bridges)).difference(up)
-    # riquadri: contorni semplificati prima del taglio, così i bordi tra un riquadro e l'altro combaciano
-    U, walk, islands = U.simplify(0.15), walk.simplify(0.3), islands.simplify(0.1)
+    walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
+    # riquadri: contorni semplificati prima del taglio, così i bordi tra un riquadro e l'altro combaciano; si tagliano
+    # i singoli poligoni (indice spaziale) invece dell'intera geometria, che può essere una collezione mista
+    layers = [_polys(g.simplify(tol)) for g, tol in ((U, 0.15), (walk, 0.3), (islands, 0.1))]
+    trees = [STRtree(L) for L in layers]
     cells = []
-    x0, z0, x1, z1 = unary_union([U, walk]).bounds
+    x0, z0, x1, z1 = unary_union([p for L in layers[:2] for p in L]).bounds
     for ix in range(int(x0 // TILE), int(x1 // TILE) + 1):
         for iz in range(int(z0 // TILE), int(z1 // TILE) + 1):
             bx = box(ix * TILE, iz * TILE, (ix + 1) * TILE, (iz + 1) * TILE)
-            parts = [_rings(g.intersection(bx)) for g in (U, walk, islands)]
+            parts = [[r for i in tr.query(bx) for r in _rings(L[i].intersection(bx))] for L, tr in zip(layers, trees)]
             if any(parts):
                 cells.append([ix, iz, *parts])
     stats = {'carreggiata_m2': round(U.area), 'marciapiede_m2': round(walk.area), 'isole': len(getattr(islands, 'geoms', [islands])),
-             'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
-    return {'tile': TILE, 'cells': cells}, out_b, stats
+             'impalcati_m2': round(D.area), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
+    return {'tile': TILE, 'cells': cells, 'decks': [r for p in _polys(D.simplify(0.1)) for r in _rings(p)]}, out_b, stats
