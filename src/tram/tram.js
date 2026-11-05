@@ -248,7 +248,9 @@ export function tramMaterials() {
   if (MATS) return MATS;
   const lam = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o });
   MATS = {
-    blue: lam(0x1f4fae), silver: lam(0xc8cdd3), glass: lam(0x16222c), skirt: lam(0x17191b), roof: lam(0xd5d9dd),
+    // livrea SIR1: blu scuro in basso, blu chiaro dalla cintura dei finestrini al tetto, pannelli argento
+    navy: lam(0x233f8c, { side: THREE.DoubleSide }), light: lam(0x4a7ad0, { side: THREE.DoubleSide }),
+    silver: lam(0xc5cbd3, { side: THREE.DoubleSide }), glass: lam(0x17232e), skirt: lam(0x17191b),
     bellows: lam(0x2b2e32), door: lam(0x24384a), head: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xfff4d6, emissiveIntensity: 0 }),
     tail: new THREE.MeshLambertMaterial({ color: 0x550000, emissive: 0xff1a1a, emissiveIntensity: 0 }),
     console: lam(0xd9dcde), consoleBlue: lam(0x24476f), seat: lam(0x3a5e8c), floor: lam(0x5a5f63),
@@ -283,6 +285,44 @@ function box(w, h, d, mat, x, y, z, parent) {
   return m;
 }
 
+// Sezione della cassa, metà destra dal basso al colmo del tetto: fiancata bombata, finestrini rientranti, tetto
+// arrotondato. BAND: colore di ogni tratto (0 zoccolo, 1 blu scuro, 2 vetri, 3 blu chiaro).
+const PROFILE = [[1.03, 0.2], [1.07, 0.52], [1.1, 0.85], [1.1, 1.3], [1.08, 1.85], [1.03, 2.42], [0.98, 2.7], [0.88, 2.9], [0.65, 3.04], [0.3, 3.09], [0, 3.1]];
+const BAND = [0, 1, 1, 2, 2, 3, 3, 3, 3, 3];
+const NOSE = 1.6, RAKE = 0.5; // muso arrotondato: lunghezza (m) e inclinazione del parabrezza (m in avanti per m in alto)
+
+// Superficie della cassa tra anelli successivi. pt(j, r): punto destro j del profilo all'anello r (il sinistro è
+// speculare); j0..j1: tratto di profilo; mats[banda]. Le facce guardano fuori.
+function shell(nr, pt, mats, j0 = 0, j1 = PROFILE.length - 1) {
+  const pos = [], groups = mats.map(() => []);
+  for (const side of [-1, 1]) {
+    const base = pos.length / 3;
+    for (let r = 0; r < nr; r++) for (let j = j0; j <= j1; j++) { const p = pt(j, r); pos.push(p.x * side, p.y, p.z); }
+    const n = j1 - j0 + 1, V = (r, j) => base + r * n + (j - j0);
+    for (let r = 0; r < nr - 1; r++) for (let j = j0; j < j1; j++) {
+      const a = V(r, j), b = V(r, j + 1), c = V(r + 1, j + 1), d = V(r + 1, j), g = groups[BAND[j]];
+      if (side < 0) g.push(a, c, b, a, d, c); else g.push(a, b, c, a, c, d);
+    }
+  }
+  return meshOf(pos, groups, mats);
+}
+function meshOf(pos, groups, mats) {
+  const geo = new THREE.BufferGeometry(), idx = [];
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  groups.forEach((g, k) => { if (g.length) { geo.addGroup(idx.length, g.length, k); idx.push(...g); } });
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, mats);
+}
+// tappo piatto con la sagoma della sezione (estremità verso il soffietto)
+function endCap(z, mat) {
+  const pos = [0, 1.6, z], tri = [];
+  const ring = [...PROFILE.map(([x, y]) => [-x, y]), ...PROFILE.slice(0, -1).reverse().map(([x, y]) => [x, y])];
+  for (const [x, y] of ring) pos.push(x, y, z);
+  for (let i = 1; i < ring.length; i++) tri.push(0, i, i + 1);
+  return meshOf(pos, [tri], [mat]);
+}
+
 // Un modulo: gruppo con +z verso l'estremità A del convoglio. kind: 'cabA' | 'cabB' | 'mid'.
 function buildModule(kind, len, opts) {
   const M = tramMaterials(), W = TRAM.width;
@@ -291,18 +331,39 @@ function buildModule(kind, len, opts) {
   if (kind === 'cabB') inner.rotation.y = Math.PI;
   group.add(inner);
   const cab = kind !== 'mid';
-  box(W - 0.1, 0.42, len - 0.3, M.skirt, 0, 0.34, 0, inner);
-  // fiancata bassa come pannelli (senza coperchio): da dentro si vedono pavimento, sedili e banco di guida
-  for (const sx of [-1, 1]) box(0.06, 0.8, len, M.blue, sx * (W / 2 - 0.03), 0.95, 0, inner);
-  for (const ez of [-1, 1]) if (!(cab && ez === 1)) box(W, 0.8, 0.06, M.blue, 0, 0.95, ez * (len / 2 - 0.03), inner);
-  box(W + 0.02, 1.05, len - 0.6, M.glass, 0, 1.88, 0, inner);
-  box(W, 0.5, len, M.blue, 0, 2.65, 0, inner);
-  box(W - 0.5, 0.18, len - 1.2, M.roof, 0, 2.98, 0, inner);
+  // cassa bombata a due blu. Fiancate e tetto si vedono da entrambi i lati; i vetri solo da fuori, così da dentro
+  // si guarda attraverso. Il muso della cabina si stringe in pianta e il parabrezza è inclinato all'indietro.
+  const mats = [M.skirt, M.navy, M.glass, M.light];
+  const f = len / 2, z1 = cab ? f - NOSE + 0.1 : f;
+  // sottocassa: nella cabina si ferma dove comincia il muso, che si stringe
+  box(W - 0.1, 0.42, z1 + f - 0.3, M.skirt, 0, 0.34, (z1 - f) / 2, inner);
+  inner.add(shell(2, (j, r) => ({ x: PROFILE[j][0], y: PROFILE[j][1], z: r ? z1 : -f }), mats));
+  inner.add(endCap(-f, M.navy));
+  if (!cab) inner.add(endCap(f, M.navy));
+  // nel muso il parabrezza sale più in alto della cintura dei finestrini laterali
+  const nosePt = (j, r) => {
+    const t = r / 4, x = PROFILE[j][0], y = PROFILE[j][1] + (j === 5 ? 0.28 : j === 6 ? 0.12 : 0) * t * t;
+    return { x: x * (1 - 0.3 * t * t), y, z: z1 + NOSE * t - Math.max(0, y - 1.25) * RAKE * t ** 1.5 - Math.max(0, 0.55 - y) * 0.4 * t };
+  };
+  if (cab) {
+    inner.add(shell(5, nosePt, mats));
+    // testata: strisce orizzontali tra i due lati dell'ultimo anello (blu scuro, parabrezza, blu chiaro)
+    const pos = [], groups = mats.map(() => []);
+    PROFILE.forEach((_, j) => { const p = nosePt(j, 4); pos.push(-p.x, p.y, p.z, p.x, p.y, p.z); });
+    for (let j = 0; j < PROFILE.length - 1; j++) groups[BAND[j]].push(2 * j, 2 * j + 1, 2 * j + 3, 2 * j, 2 * j + 3, 2 * j + 2);
+    inner.add(meshOf(pos, groups, mats));
+    // pannello argento sul fianco, subito dietro il parabrezza
+    inner.add(shell(2, (j, r) => ({ x: PROFILE[j][0] * 1.012, y: PROFILE[j][1], z: r ? z1 : z1 - 1.3 }), [M.silver, M.silver, M.silver, M.silver], 3, 5));
+    // carenatura sul tetto
+    box(W - 0.9, 0.2, len - NOSE - 2.2, M.light, 0, 3.18, -0.9, inner);
+  }
+  // fasce argento alle estremità verso il soffietto
+  for (const ez of cab ? [-1] : [-1, 1]) inner.add(shell(2, (j, r) => ({ x: PROFILE[j][0] * 1.012, y: PROFILE[j][1], z: ez * (f - (r ? 0 : 0.5)) }), [M.silver, M.silver, M.silver, M.silver], 3, 5));
   // porte doppie sui due lati, con la cornice grigio argento
   const doorZ = kind === 'mid' ? [0] : [-len / 2 + 2.1];
   const doors = [];
   for (const dz of doorZ) {
-    box(W + 0.04, 2.3, 1.6, M.silver, 0, 1.45, dz, inner);
+    inner.add(shell(2, (j, r) => ({ x: PROFILE[j][0] * 1.012, y: PROFILE[j][1], z: dz + (r ? 0.8 : -0.8) }), [M.silver, M.silver, M.silver, M.silver], 1, 5));
     const leaves = [];
     for (const sd of [-1, 1]) for (const lr of [-1, 1]) {
       const leaf = box(0.05, 1.95, 0.66, M.door, sd * (W / 2 + 0.035), 1.32, dz + lr * 0.34, inner);
@@ -313,18 +374,15 @@ function buildModule(kind, len, opts) {
   }
   let eye = null, dash = null, led = null, headMat = null, tailMat = null;
   if (cab) {
-    // testata: parabrezza grande e inclinato, fanali bassi, display di linea
-    const f = len / 2;
-    box(W, 0.75, 0.5, M.blue, 0, 0.8, f - 0.05, inner); // il muso resta sotto il parabrezza
-    const ws = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.12, 1.5), M.glass);
-    ws.position.set(0, 1.95, f + 0.06); ws.rotation.x = -0.22; inner.add(ws);
+    // fanali bassi sul muso, display di linea sopra il parabrezza (inclinato come la testata)
+    const tip = z1 + NOSE;
     headMat = M.head.clone(); tailMat = M.tail.clone();
-    for (const sx of [-0.78, 0.78]) {
-      box(0.32, 0.14, 0.05, headMat, sx, 0.72, f + 0.24, inner);
-      box(0.18, 0.1, 0.05, tailMat, sx * 1.12, 0.95, f + 0.24, inner);
+    for (const sx of [-0.5, 0.5]) {
+      box(0.28, 0.13, 0.05, headMat, sx, 0.72, tip + 0.01, inner);
+      box(0.14, 0.09, 0.05, tailMat, sx * 1.3, 0.98, tip + 0.0, inner);
     }
-    led = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.3), new THREE.MeshBasicMaterial({ map: ledTexture(opts.line, opts.dest) }));
-    led.position.set(0, 2.72, f + 0.02); inner.add(led);
+    led = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.22), new THREE.MeshBasicMaterial({ map: ledTexture(opts.line, opts.dest) }));
+    led.position.set(0, 2.86, tip - (2.86 - 1.25) * RAKE + 0.03); led.rotation.x = -Math.atan(RAKE); inner.add(led);
     // posto di guida al centro (dalla foto): sotto il parabrezza il cruscotto grigio chiaro, davanti al guidatore il
     // banco inclinato con le file di pulsanti; a destra la plancia blu con lo schermo LCD e il pulsante a fungo rosso.
     // In locale -x è la destra del guidatore.
@@ -336,9 +394,8 @@ function buildModule(kind, len, opts) {
     box(0.09, 0.08, 0.09, M.tail, -0.9, 1.6, f - 0.95, inner);
     dash = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), new THREE.MeshBasicMaterial({ map: opts.dashTex }));
     dash.position.set(-0.7, 1.58, f - 1.07); dash.rotation.y = Math.PI; dash.rotation.x = 0.45; inner.add(dash);
-    // montanti e tetto della cabina visti da dentro
-    for (const sx of [-1, 1]) box(0.12, 1.5, 0.14, M.skirt, sx * (W / 2 - 0.08), 1.95, f - 0.05, inner);
-    box(W - 0.1, 0.05, 1.6, M.consoleBlue, 0, 2.42, f - 0.9, inner);
+    // cielo della cabina visto da dentro, chiaro come quello dei passeggeri (si ferma prima del parabrezza inclinato)
+    box(W - 0.3, 0.05, 1.5, M.cabin, 0, 2.42, f - 1.35, inner);
     // occhi del guidatore: telaio con +z verso il muso
     eye = new THREE.Object3D();
     inner.add(eye);
