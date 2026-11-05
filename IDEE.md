@@ -97,6 +97,10 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [x] Strade più larghe sui percorsi dei bus (minimo 7,5 m a doppio senso, 5,5 a senso unico, 7 in rotatoria) e
   facciate spostate fuori da carreggiate, marciapiedi e sede del tram invece di restringere le strade; tolti gli
   edifici che la mezzeria attraversa. Corsie riservate ai bus (`access=no` + `psv`) nel grafo, vietate alle auto.
+- [x] Cavalcavia Borgomagno come corpo unico: la strada verso sud e, 0,5 m più in basso, la sede del tram con la
+  corsia dei bus verso nord, unite da una soletta (vale per tutti gli impalcati in quota affiancati).
+- [x] Il bus può percorrere la sede del tram senza penalità.
+- [x] Orari intermedi ripartiti secondo il tempo di guida (il GTFS chiedeva medie impossibili in periferia).
 - [x] Tram SIR1 guidabile (3 moduli, numero di moduli come dato della linea):
   - corse reali GTFS (anche le limitate);
   - corsie e rotaie per senso, banchine a destra, fermata col muso a fine banchina;

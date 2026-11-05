@@ -271,7 +271,7 @@ export class City {
     this.nightMats = [];
     this.lampPositions = [];
     this.timings = {};
-    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildTramway', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps', 'clearBusRoads']) {
+    for (const step of ['indexFeatures', 'buildGround', 'buildRoads', 'buildWater', 'buildRailway', 'buildTramway', 'buildDeckJoins', 'buildLandmarks', 'buildStops', 'buildRealBuildings', 'buildBuildings', 'buildTreesAndLamps', 'clearBusRoads']) {
       const t0 = performance.now();
       this[step]();
       this.timings[step] = Math.round(performance.now() - t0);
@@ -714,6 +714,54 @@ export class City {
       if (Math.hypot(pb.x - pa.x, pb.z - pa.z) < 40) xo.ribbon(pa.x, pa.z, pb.x, pb.z, 0.22, Y_ROAD + 0.055, 8);
     }
     this.group.add(new THREE.Mesh(xo.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)));
+  }
+
+  // Cavalcavia a più impalcati affiancati (Borgomagno: la strada verso sud e, poco più in basso, la sede del tram con
+  // la corsia dei bus verso nord): la fascia vuota tra due impalcati in quota vicini diventa soletta, alla quota più
+  // bassa dei due, così il cavalcavia è un corpo unico
+  buildDeckJoins() {
+    const items = [];
+    for (const e of this.net.edges) {
+      if (!e.elev) continue;
+      const A = this.net.nodes[e.a];
+      for (let s = 2.5; s < e.len; s += 5) {
+        const h = edgeHeight(e, s);
+        if (h > 0.4) items.push({ x: A.x + e.dx * s, z: A.z + e.dz * s, dx: e.dx, dz: e.dz, h, hw: e.width / 2 + 1.2, slope: (edgeHeight(e, Math.min(e.len, s + 2.5)) - edgeHeight(e, Math.max(0, s - 2.5))) / 5, ref: e });
+      }
+    }
+    const track = this.tramTrack;
+    if (track) for (const dir of [1, -1]) {
+      const P = track.path(dir);
+      for (let s = 2.5; s < P.len; s += 5) {
+        const h = track.heightAt(dir, s);
+        if (h > 0.4) { const p = P.at(s); items.push({ x: p.x, z: p.z, dx: p.dx, dz: p.dz, h, hw: TRAM.lane + 0.2, slope: (track.heightAt(dir, s + 2.5) - track.heightAt(dir, s - 2.5)) / 5, ref: P }); }
+      }
+    }
+    if (!items.length) return;
+    const grid = new Grid(20);
+    for (const it of items) grid.insertAABB(it, it.x, it.z, it.x, it.z);
+    const geos = [], q = [];
+    for (const a of items) {
+      // solo verso destra: ogni coppia si considera una volta
+      const rx = -a.dz, rz = a.dx;
+      let best = null;
+      for (const b of grid.query(a.x, a.z, 16, q)) {
+        if (b.ref === a.ref || Math.abs(a.dx * b.dx + a.dz * b.dz) < 0.9) continue;
+        const ox = b.x - a.x, oz = b.z - a.z, lat = ox * rx + oz * rz;
+        if (lat <= 0 || Math.abs(ox * a.dx + oz * a.dz) > 3) continue;
+        if (!best || lat < best.lat) best = { b, lat };
+      }
+      if (!best) continue;
+      const { b, lat } = best, gap = lat - a.hw - b.hw;
+      if (gap < 0.05 || gap > 10 || Math.abs(a.h - b.h) > 1.5) continue;
+      const h = Math.min(a.h, b.h), off = a.hw + gap / 2;
+      geos.push(new THREE.BoxGeometry(gap + 0.3, 0.8, 5.2).rotateX(-Math.atan(a.slope)).rotateY(Math.atan2(a.dx, a.dz)).translate(a.x + rx * off, Y_ROAD + h - 0.43, a.z + rz * off));
+    }
+    if (!geos.length) return;
+    const m = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color: 0xb9b4aa }));
+    m.castShadow = m.receiveShadow = true;
+    this.group.add(m);
+    this.deckJoins = geos.length;
   }
 
   // quota della strada in quota più vicina (per il binario del tram che corre accanto al cavalcavia)

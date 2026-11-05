@@ -243,7 +243,7 @@ function markOverpasses(nodes, edges, rails) {
     }
     return false;
   };
-  const H = 7, R = 130;
+  const H = 7, R = 130, PSV_DECK = 0.92;
   const deck = new Set();
   for (const e of edges) if (e.bridge && e.layer >= 1 && crosses(nodes[e.a], nodes[e.b])) deck.add(e);
   // tutto il ponte (catena di tratti con bridge) sta in quota
@@ -265,9 +265,11 @@ function markOverpasses(nodes, edges, rails) {
       if (d < R && (!dist.has(o) || dist.get(o) > d)) { dist.set(o, d); queue.push(o); }
     }
   }
+  // le corsie riservate ai bus in quota (Borgomagno: verso nord, sulla sede del tram) stanno poco più in basso della
+  // strada accanto: il cavalcavia è un corpo unico su due livelli
   for (const [id, d] of dist) {
     const u = Math.max(0, Math.min(1, 1 - d / R));
-    nodes[id].h = H * u * u * (3 - 2 * u);
+    nodes[id].h = H * u * u * (3 - 2 * u) * (nodes[id].edges.every((e) => e.psv) ? PSV_DECK : 1);
   }
   for (const e of edges) {
     const ha = nodes[e.a].h || 0, hb = nodes[e.b].h || 0;
