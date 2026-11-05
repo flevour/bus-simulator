@@ -97,6 +97,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Modalità Esplorazione (nessuna regola, il tram non deraglia); meteo e ora della luce dal menu di pausa.
+- [x] Semafori del tram a tre luci (barra orizzontale, triangolo, barra verticale), le spente visibili.
 - [x] Pianta delle strade calcolata con Shapely (`scripts/street_surfaces.py`): carreggiate con i raccordi agli
   incroci, rotatorie circolari con l'isola, spartitraffico, marciapiedi solo dove la via li ha, edifici ritagliati;
   il gioco disegna le aree e usa il bordo dell'asfalto per le ruote.

@@ -56,7 +56,9 @@
           <div class="seg" id="mode">
             <button data-m="service" class="sel">🚏 Servizio di linea</button>
             <button data-m="free">🗺️ Giro libero</button>
+            <button data-m="roam">🧭 Esplorazione</button>
           </div>
+          <div class="note" id="mode-note"></div>
           <h3>7 · Meteo</h3>
           <div class="seg" id="weather">
             <button data-w="variable" class="sel">🌦️ Variabile</button>
@@ -152,6 +154,24 @@
     <div class="card center">
       <h2>Pausa</h2>
       <p id="pause-info" class="pause-info"></p>
+      <h3>Meteo</h3>
+      <div class="seg" id="pause-weather">
+        <button data-w="variable">🌦️ Variabile</button>
+        <button data-w="clear">☀️ Sereno</button>
+        <button data-w="rain">🌧️ Pioggia</button>
+        <button data-w="fog">🌫️ Nebbia</button>
+      </div>
+      <h3>Ora del giorno (luce)</h3>
+      <select id="pause-hour" aria-label="Ora del giorno">
+        <option value="">Segue l'orologio della corsa</option>
+        <option value="6.6">Alba · 6:35</option>
+        <option value="9">Mattina · 9:00</option>
+        <option value="12.5">Mezzogiorno · 12:30</option>
+        <option value="16">Pomeriggio · 16:00</option>
+        <option value="19">Tramonto · 19:00</option>
+        <option value="20.5">Sera · 20:30</option>
+        <option value="23.5">Notte · 23:30</option>
+      </select>
       <button id="resume" class="primary">▶ Riprendi</button>
       <button id="restart">↺ Ricomincia la corsa</button>
       <button id="quit">Salva e torna al menu</button>

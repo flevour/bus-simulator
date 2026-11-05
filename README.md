@@ -116,6 +116,11 @@ Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/
 
 * **Servizio di linea**: corsa con orario, fermate, passeggeri e punteggio.
 * **Giro libero**: niente orari né fermate, giri dove vuoi per tutta la città (valgono comunque semafori, limiti e marciapiedi).
+* **Esplorazione**: nessuna regola né punteggio; il bus non ha linea, limiti o semafori da rispettare e il tram non
+  deraglia nelle curve prese veloci.
+
+Meteo e ora del giorno si cambiano in ogni momento dal menu di pausa (**P**): l'ora sceglie la luce (alba, mattina,
+mezzogiorno, tramonto, sera, notte) oppure segue l'orologio della corsa, senza toccare l'orario.
 
 
 ## Comandi (tastiera)

@@ -53,8 +53,9 @@ class Crowd {
 
 export class Mission {
   // route: variante GTFS (nodi, fermate, tempi); day: 'feriale' | 'festivo'; departure: secondi; depDur: durata reale della corsa
-  constructor({ scene, net, line, route, day, departure, depDur, hud, audio, lights, city, free = false }) {
-    this.free = free;
+  constructor({ scene, net, line, route, day, departure, depDur, hud, audio, lights, city, free = false, roam = false }) {
+    this.free = free || roam;
+    this.roam = roam; // esplorazione: nessuna regola né punteggio
     const variant = day;
     this.net = net; this.line = line; this.variant = day; this.routeData = route; this.hud = hud; this.audio = audio; this.lights = lights; this.city = city;
     // il tram segue la sua corsia (route.trackPath); il bus le strade
@@ -171,6 +172,7 @@ export class Mission {
   }
 
   addScore(pts, msg, kind = pts >= 0 ? 'good' : 'bad') {
+    if (this.roam) return;
     this.score += pts;
     this.log.push({ pts, msg, t: this.clock });
     this.hud.toast((pts > 0 ? '+' : '') + (pts !== 0 ? pts + '  ' : '') + msg, kind);
@@ -309,6 +311,7 @@ export class Mission {
   updateFree(dt, bus, ctx, front) {
     this.atStop = false;
     this.stopInfo = null;
+    if (this.roam) { this.comfort = 100; this.crowd.update(dt); return; }
     const aL = Math.abs(bus.aLong), aT = Math.abs(bus.aLat);
     let disc = 0;
     if (aL > 1.7) disc += (aL - 1.7) * 14;
@@ -547,7 +550,7 @@ export class Mission {
   }
 
   onCrash(hit) {
-    if (hit.impact < 1.2) return;
+    if (hit.impact < 1.2 || this.roam) return;
     if (!this.cooldown('crash', 2.5)) return;
     if (hit.kind === 'derail') {
       this.stats.crashes++;

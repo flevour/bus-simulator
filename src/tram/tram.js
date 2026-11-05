@@ -668,7 +668,7 @@ export class Tram {
       if (this.derailT <= 0) { this.derailAmt = 0; this.syncTransform(); this.onRerail && this.onRerail(); }
     } else {
       const k = this.curvature(this.sFront - this.facing * 3, true);
-      if (this.v > 4 && this.v * this.v * Math.abs(k) > 3.0) {
+      if (!this.noDerail && this.v > 4 && this.v * this.v * Math.abs(k) > 3.0) {
         this.derailT = 10; this.derailAmt = 0; this.derailSide = (k > 0 ? 1 : -1) * this.facing;
         hit = { kind: 'derail', impact: 9, x: this.x, z: this.z, lz: 1 };
         this.v = 0;

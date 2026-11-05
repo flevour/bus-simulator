@@ -188,7 +188,13 @@ canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
 // linee bus e tram nel menu
 const ALL_LINES = [...LINES, ...TRAM_LINES];
-const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus' };
+const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus', lightHour: null };
+// modalità: servizio di linea, giro libero (regole della strada) o esplorazione (nessuna regola, il tram non deraglia)
+const MODE_NOTE = {
+  service: 'Corsa con orario, fermate, passeggeri e punteggio.',
+  free: 'Niente orari né fermate; valgono semafori, limiti e marciapiedi.',
+  roam: 'Nessuna regola né punteggio: niente linea, limiti o semafori da rispettare, e il tram non deraglia.',
+};
 let indAccum = 0, lastBlinkOn = false, wasMoving = false;
 let showHelp = false;
 
@@ -314,7 +320,7 @@ function teleportTo(x, z, dirHint = null) {
   }
   const lat = e.oneway ? 0 : e.width / 4;
   placeBusAt(r.cx - dz * lat, r.cz + dx * lat, Math.atan2(dx, dz));
-  capture('teleport_used', { vehicle_type: bus.isTram ? 'tram' : 'bus', mission_mode: mission.free ? 'free' : 'service' });
+  capture('teleport_used', { vehicle_type: bus.isTram ? 'tram' : 'bus', mission_mode: mission.roam ? 'roam' : mission.free ? 'free' : 'service' });
   hud.toast('🌀 Teletrasporto: ' + (e.name || 'strada senza nome'), 'info');
 }
 function teleportToStop(st) {
@@ -379,6 +385,8 @@ function togglePause(force) {
   paused = force != null ? force : !paused;
   $('pause').classList.toggle('hidden', !paused);
   if (paused) {
+    document.querySelectorAll('#pause-weather button').forEach((x) => x.classList.toggle('sel', x.dataset.w === settings.weather));
+    $('pause-hour').value = settings.lightHour == null ? '' : String(settings.lightHour);
     const ok = saveGame();
     $('pause-info').textContent = ok ? `Progressi salvati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: potrai riprendere da qui anche dopo aver chiuso la pagina.` : 'Salvataggio non disponibile in questo browser.';
     if ('speechSynthesis' in window) speechSynthesis.pause();
@@ -558,7 +566,18 @@ function buildMenu() {
   seg('direction', 'd', (d) => { settings.vIdx = settings.line.pair[d === '1' ? 0 : 1]; refreshMenu(); });
   $('route-variant').addEventListener('change', (e) => { settings.vIdx = Number(e.target.value); refreshMenu(); });
   seg('weather', 'w', (w) => { settings.weather = w; });
-  seg('mode', 'm', (m) => { settings.mode = m; });
+  seg('mode', 'm', (m) => { settings.mode = m; $('mode-note').textContent = MODE_NOTE[m]; });
+  $('mode-note').textContent = MODE_NOTE[settings.mode];
+  // meteo e ora della luce, sempre modificabili dalla pausa
+  document.querySelectorAll('#pause-weather button').forEach((b) => b.addEventListener('click', () => {
+    settings.weather = b.dataset.w;
+    setWeatherNow();
+    document.querySelectorAll('#pause-weather button, #weather button').forEach((x) => x.classList.toggle('sel', x.dataset.w === settings.weather));
+  }));
+  $('pause-hour').addEventListener('change', (e) => {
+    settings.lightHour = e.target.value === '' ? null : Number(e.target.value);
+    if (mission) setupWeatherAndTime();
+  });
   seg('livery', 'l', (l) => { settings.livery = l; });
   seg('vehicle', 'k', (k) => setVehicle(k));
   $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
@@ -585,7 +604,7 @@ function backToMenu() {
   if (mission && !mission.finished) {
     const missionDetails = {
       vehicle_type: bus.isTram ? 'tram' : 'bus',
-      mission_mode: mission.free ? 'free' : 'service',
+      mission_mode: mission.roam ? 'roam' : mission.free ? 'free' : 'service',
       stops_completed: mission.nextStop,
     };
     capture('mission_abandoned', missionDetails);
@@ -624,7 +643,7 @@ function startMission(resume = null) {
   if (L.tram) {
     // tram: la corsia del verso di marcia (in giro libero tutta la linea)
     const T = city.tramTrack;
-    const tr = tramRoute(T, V, L.modules, settings.mode === 'free');
+    const tr = tramRoute(T, V, L.modules, settings.mode !== 'service');
     V.trackPath = tr.path;
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
@@ -633,10 +652,11 @@ function startMission(resume = null) {
   }
   resetLook(false);
   bus.onShift = () => audio.shift();
-  mission = new Mission({ scene, net, line: L, route: V, day: settings.variant, departure: settings.departure, depDur: settings.depDur, hud, audio, lights, city, free: settings.mode === 'free' });
+  mission = new Mission({ scene, net, line: L, route: V, day: settings.variant, departure: settings.departure, depDur: settings.depDur, hud, audio, lights, city, free: settings.mode !== 'service', roam: settings.mode === 'roam' });
+  bus.noDerail = settings.mode === 'roam';
   // tram automatici: quelli in servizio all'ora della corsa secondo l'orario GTFS; la corsa che guida il giocatore
   // non ha un gemello automatico
-  trams.setService(TRAM_LINES, settings.variant, bus.isTram && settings.mode !== 'free' ? { v: V, t: settings.departure } : null);
+  trams.setService(TRAM_LINES, settings.variant, bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
   mission.dest = destName;
   const st0 = mission.stops[0];
   if (bus.isTram) {
@@ -676,7 +696,7 @@ function startMission(resume = null) {
   saveTimer = 0;
   const missionDetails = {
     vehicle_type: bus.isTram ? 'tram' : 'bus',
-    mission_mode: mission.free ? 'free' : 'service',
+    mission_mode: mission.roam ? 'roam' : mission.free ? 'free' : 'service',
     line_id: L.id,
     service_day: settings.variant,
     weather: settings.weather,
@@ -684,9 +704,12 @@ function startMission(resume = null) {
   capture(resume ? 'mission_resumed' : 'mission_started', missionDetails);
   posthogGameLogger.info(resume ? 'mission resumed' : 'mission started', missionDetails);
   if (resume) {
-    hud.setLine(mission.free ? { id: L.id, color: L.color } : L, mission.free ? 'Giro libero' : destName);
+    hud.setLine(mission.free ? { id: L.id, color: L.color } : L, mission.roam ? 'Esplorazione' : mission.free ? 'Giro libero' : destName);
     hud.toast(`Corsa ripresa alle ${fmtHM(mission.clock)}: ${resume.summary}`, 'info');
     setTimeout(() => running && hud.toast('Freno di stazionamento inserito: premi W per ripartire', 'info'), 1600);
+  } else if (mission.roam) {
+    hud.setLine({ id: L.id, color: L.color }, 'Esplorazione');
+    hud.toast('Esplorazione: vai dove vuoi, nessuna regola né punteggio', 'info');
   } else if (mission.free) {
     hud.setLine({ id: L.id, color: L.color }, 'Giro libero');
     hud.toast('Giro libero: esplora Padova, rispetta semafori e limiti', 'info');
@@ -735,6 +758,12 @@ function showResults() {
 const wx = { cloud: 0, rain: 0, fog: 0, wet: 0, target: { cloud: 0, rain: 0, fog: 0 }, phase: 'clear', next: 0 };
 const WX_PRESET = { clear: { cloud: 0, rain: 0, fog: 0 }, rain: { cloud: 1, rain: 1, fog: 0 }, fog: { cloud: 0.8, rain: 0, fog: 1 } };
 const rand = (a, b) => a + Math.random() * (b - a);
+// meteo scelto dalla pausa: subito, senza sfumare (con "Variabile" si riparte dal sereno)
+function setWeatherNow() {
+  const p = WX_PRESET[settings.weather] || WX_PRESET.clear;
+  Object.assign(wx, p, { wet: p.rain, target: { ...p }, phase: 'clear', next: rand(80, 160) });
+  if (mission) setupWeatherAndTime();
+}
 function initWeather(saved) {
   if (saved && saved.target) { Object.assign(wx, saved, { target: { ...saved.target } }); return; }
   const p = WX_PRESET[settings.weather] || WX_PRESET.clear;
@@ -774,7 +803,7 @@ function updateWeather(dt) {
 const tmpC = new THREE.Color(), tmpC2 = new THREE.Color();
 const lerp = THREE.MathUtils.lerp;
 function setupWeatherAndTime() {
-  const hour = ((mission.clock / 3600) % 24 + 24) % 24;
+  const hour = settings.lightHour != null ? settings.lightHour : ((mission.clock / 3600) % 24 + 24) % 24;
   const t = (hour - 6.6) / (18.9 - 6.6); // 0 alba, 1 tramonto
   const elev = Math.sin(Math.PI * t);
   const az = Math.PI * t;
