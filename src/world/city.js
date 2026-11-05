@@ -103,6 +103,44 @@ class GeoBuilder {
     this.uv.push(...uv);
     this.idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
   }
+  // nastro lungo una spezzata (pts: [{x, z}]) con giunti a cuneo: i tratti consecutivi non si sovrappongono (niente
+  // z-fighting) e le righe di bordo girano senza tacche. u: 0 sinistra -> 1 destra, v continua lungo la spezzata
+  strip(pts, w, y, vScale = 12) {
+    const n = pts.length, off = [];
+    if (n < 2) return;
+    const perp = (a, b) => { const l = Math.hypot(b.x - a.x, b.z - a.z) || 1; return [-(b.z - a.z) / l, (b.x - a.x) / l]; };
+    for (let i = 0; i < n; i++) {
+      const p1 = i > 0 ? perp(pts[i - 1], pts[i]) : null, p2 = i < n - 1 ? perp(pts[i], pts[i + 1]) : null;
+      let [mx, mz] = p1 || p2, k = 1;
+      if (p1 && p2) {
+        mx = p1[0] + p2[0]; mz = p1[1] + p2[1];
+        const l = Math.hypot(mx, mz) || 1;
+        mx /= l; mz /= l;
+        k = 1 / Math.max(0.6, mx * p2[0] + mz * p2[1]);
+      }
+      off.push([(mx * k * w) / 2, (mz * k * w) / 2]);
+    }
+    let v = 0;
+    for (let i = 0; i < n - 1; i++) {
+      const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z), m = Math.max(1, Math.ceil(l / 40));
+      const at = (t) => [a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, off[i][0] + (off[i + 1][0] - off[i][0]) * t, off[i][1] + (off[i + 1][1] - off[i][1]) * t];
+      for (let s = 0; s < m; s++) {
+        const [x0, z0, ox0, oz0] = at(s / m), [x1, z1, ox1, oz1] = at((s + 1) / m);
+        const va = v + (l * s) / m / vScale, vb = v + (l * (s + 1)) / m / vScale;
+        this.quad([x0 - ox0, y, z0 - oz0], [x0 + ox0, y, z0 + oz0], [x1 - ox1, y, z1 - oz1], [x1 + ox1, y, z1 + oz1], [0, va, 1, va, 0, vb, 1, vb]);
+      }
+      v += l / vScale;
+    }
+  }
+  // corona circolare (rotatorie): u 0 bordo esterno -> 1 interno, v lungo la circonferenza (stesso verso dei nastri)
+  annulus(cx, cz, r0, r1, y, seg = 48, vScale = 12) {
+    const L = 2 * Math.PI * ((r0 + r1) / 2);
+    for (let i = 0; i < seg; i++) {
+      const a0 = (i / seg) * Math.PI * 2, a1 = ((i + 1) / seg) * Math.PI * 2, va = (L * i) / seg / vScale, vb = (L * (i + 1)) / seg / vScale;
+      const P = (a, r) => [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r];
+      this.quad(P(a0, r1), P(a0, r0), P(a1, r1), P(a1, r0), [0, va, 1, va, 0, vb, 1, vb]);
+    }
+  }
   // nastro da A a B, larghezza w, quota y; v in metri / vScale (spezzato in tratti <= 40 m)
   ribbon(ax, az, bx, bz, w, y, vScale = 12, v0 = 0, hFn = null) {
     const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz);
@@ -402,15 +440,62 @@ export class City {
     const walk = new GeoBuilder();
     const curb = [];
     const marks = new GeoBuilder();
+    const style = (e) => (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : e.oneway ? roadOw : road);
+    const trimAt = (N, e) => (N.joint ? 0 : N.trim ? N.trim.get(e) : N.radius * 0.6);
+    const walkW = (e) => e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2);
+    // rotatorie ad anello chiuso e quasi circolari: corona d'asfalto, marciapiede solo fuori, isola al centro
+    const rings = this.findRoundabouts();
+    // Catene: i tratti consecutivi della stessa via (nodo intermedio con due archi, stesso tipo e larghezza, curva
+    // fino a ~100°) diventano un nastro unico con giunti a cuneo, al posto di nastri dritti sovrapposti
+    const chained = new Set();
+    const link = (n, e) => {
+      if (!n.joint || n.bend > 1.2) return null;
+      const f = n.edges[0] === e ? n.edges[1] : n.edges[0];
+      if (!f || f === e || f.elev || chained.has(f) || style(f) !== style(e) || Math.abs(f.width - e.width) > 0.05 || walkW(f) !== walkW(e) || f.roundabout !== e.roundabout) return null;
+      return f;
+    };
+    for (const e0 of edges) {
+      if (e0.elev || chained.has(e0)) continue;
+      chained.add(e0);
+      const walkFrom = (n0, e1) => {
+        const out = [];
+        let n = n0, e = e1;
+        for (;;) {
+          const f = link(n, e);
+          if (!f) return { out, end: n, edge: e };
+          chained.add(f);
+          n.inChain = true;
+          out.push(n);
+          n = nodes[f.a === n.id ? f.b : f.a];
+          e = f;
+        }
+      };
+      const back = walkFrom(nodes[e0.a], e0), fwd = walkFrom(nodes[e0.b], e0);
+      const pts = [back.end, ...back.out.reverse(), ...fwd.out, fwd.end].map((n) => ({ x: n.x, z: n.z }));
+      // accorciata agli incroci (raccordi dell'incrocio)
+      const trim = (p, q, r) => { const l = Math.hypot(q.x - p.x, q.z - p.z) || 1, t = Math.min(r, l - 0.1) / l; return { x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t }; };
+      const road2 = pts.slice();
+      road2[0] = trim(pts[0], pts[1], trimAt(back.end, back.edge));
+      road2[road2.length - 1] = trim(pts[pts.length - 1], pts[pts.length - 2], trimAt(fwd.end, fwd.edge));
+      style(e0).strip(road2, e0.width, Y_ROAD, e0.ped ? 6 : 12);
+      if (!e0.ped && !e0.roundabout) walk.strip(pts, walkW(e0), Y_SIDEWALK, 6);
+    }
+    for (const g of rings) {
+      roadOw.annulus(g.cx, g.cz, g.r - g.w / 2, g.r + g.w / 2, Y_ROAD + 0.004, 56);
+      walk.annulus(g.cx, g.cz, g.r + g.w / 2 - 0.5, g.r + g.w / 2 + SIDEWALK, Y_SIDEWALK - 0.003, 56, 6);
+    }
+    this.buildRoundaboutIslands(rings);
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
-      let ra = A.joint ? 0 : A.trim ? A.trim.get(e) : A.radius * 0.6, rb = B.joint ? 0 : B.trim ? B.trim.get(e) : B.radius * 0.6;
-      if (ra + rb > e.len - 0.2) { const k = Math.max(0, e.len - 0.2) / (ra + rb); ra *= k; rb *= k; }
-      const ax = A.x + e.dx * ra, az = A.z + e.dz * ra, bx = B.x - e.dx * rb, bz = B.z - e.dz * rb;
-      const hFn = e.elev ? (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz) : null;
-      (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : e.oneway ? roadOw : road).ribbon(ax, az, bx, bz, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
-      if (!e.ped) walk.ribbon(A.x, A.z, B.x, B.z, e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2), Y_SIDEWALK, 6, 0, hFn);
-      if (e.elev) { this.buildOverpass(e, A, curb); continue; }
+      if (e.elev) {
+        let ra = trimAt(A, e), rb = trimAt(B, e);
+        if (ra + rb > e.len - 0.2) { const k = Math.max(0, e.len - 0.2) / (ra + rb); ra *= k; rb *= k; }
+        const hFn = (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz);
+        style(e).ribbon(A.x + e.dx * ra, A.z + e.dz * ra, B.x - e.dx * rb, B.z - e.dz * rb, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
+        if (!e.ped) walk.ribbon(A.x, A.z, B.x, B.z, walkW(e), Y_SIDEWALK, 6, 0, hFn);
+        this.buildOverpass(e, A, curb);
+        continue;
+      }
       // strisce pedonali: dove sono in OSM (fuori dal poligono dell'incrocio), altrimenti vicino agli incroci principali
       // e.cross: metri dal nodo a, servono anche per la linea d'arresto dei cartelli
       e.cross = [];
@@ -434,7 +519,8 @@ export class City {
     }
     const inter = new GeoBuilder(), joints = new GeoBuilder(), walkDisc = new GeoBuilder();
     for (const n of Object.values(nodes)) {
-      if (!n.edges.length || (n.joint && n.bend < 0.02)) continue;
+      // i nodi interni a una catena sono già coperti dal nastro unico
+      if (!n.edges.length || (n.joint && n.bend < 0.02) || n.inChain) continue;
       const seg = n.joint ? 10 : 18;
       // nelle curve il disco sta sotto l'asfalto e riempie solo lo spicchio tra i due tratti
       if (n.poly) {
@@ -474,6 +560,55 @@ export class City {
     const cm = new THREE.Mesh(curb.length ? mergeGeometries(curb) : new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ color: 0xbdb8ae }));
     const mk = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4));
     this.group.add(rm, im, wm, cm, mk);
+  }
+
+  // rotatorie: anelli chiusi di archi junction=roundabout, quasi circolari (centro, raggio della mezzeria, larghezza)
+  findRoundabouts() {
+    const { nodes, edges } = this.net, seen = new Set(), rings = [];
+    for (const e of edges) {
+      if (!e.roundabout || seen.has(e)) continue;
+      const comp = [], st = [e];
+      while (st.length) {
+        const f = st.pop();
+        if (seen.has(f)) continue;
+        seen.add(f); comp.push(f);
+        for (const id of [f.a, f.b]) for (const g of nodes[id].edges) if (g.roundabout && !seen.has(g)) st.push(g);
+      }
+      const ids = [...new Set(comp.flatMap((f) => [f.a, f.b]))];
+      if (ids.length < 3 || comp.some((f) => f.elev) || ids.some((id) => nodes[id].edges.filter((g) => g.roundabout).length !== 2)) continue;
+      let cx = 0, cz = 0, L = 0;
+      for (const f of comp) { const A = nodes[f.a], B = nodes[f.b]; cx += ((A.x + B.x) / 2) * f.len; cz += ((A.z + B.z) / 2) * f.len; L += f.len; }
+      cx /= L; cz /= L;
+      const ds = ids.map((id) => Math.hypot(nodes[id].x - cx, nodes[id].z - cz)), r = ds.reduce((a, b) => a + b, 0) / ds.length;
+      if (r < 4 || ds.some((d) => Math.abs(d - r) > 0.25 * r + 1)) continue;
+      rings.push({ cx, cz, r, w: comp.reduce((a, f) => a + f.width, 0) / comp.length });
+    }
+    return rings;
+  }
+  // isola centrale: cordolo e prato; se è troppo piccola per un bus, rotatoria dipinta (sormontabile)
+  buildRoundaboutIslands(rings) {
+    const kerb = [], grass = [], paint = [];
+    for (const g of rings) {
+      const ri = g.r - g.w / 2 - 0.1;
+      if (ri >= 2) {
+        kerb.push(new THREE.CylinderGeometry(ri, ri, 0.16, 48, 1, true).translate(g.cx, Y_ROAD + 0.08, g.cz));
+        kerb.push(new THREE.RingGeometry(ri - 0.35, ri, 48).rotateX(-Math.PI / 2).translate(g.cx, Y_ROAD + 0.16, g.cz));
+        grass.push(new THREE.CircleGeometry(ri - 0.3, 48).rotateX(-Math.PI / 2).translate(g.cx, Y_ROAD + 0.155, g.cz));
+      } else {
+        paint.push(new THREE.CircleGeometry(Math.max(1, ri), 32).rotateX(-Math.PI / 2).translate(g.cx, Y_ROAD + 0.03, g.cz));
+      }
+    }
+    // davanti all'asfalto anche nel depth buffer (le strade hanno il loro polygonOffset)
+    if (kerb.length) this.group.add(new THREE.Mesh(mergeGeometries(kerb), layer(new THREE.MeshLambertMaterial({ color: 0xcfcac0, side: THREE.DoubleSide }), 8)));
+    if (grass.length) {
+      const gt = TX.grassTexture();
+      gt.repeat.set(2, 2);
+      const m = new THREE.Mesh(mergeGeometries(grass), layer(new THREE.MeshLambertMaterial({ map: gt, color: 0xb8d8a0 }), 8));
+      m.receiveShadow = true;
+      this.group.add(m);
+    }
+    if (paint.length) this.group.add(new THREE.Mesh(mergeGeometries(paint), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4)));
+    this.roundabouts = rings;
   }
 
   // cavalcavia: parapetti, impalcato e pile
