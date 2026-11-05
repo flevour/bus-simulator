@@ -201,10 +201,11 @@ export class Traffic {
   randomEdgeNear(x, z, minD, maxD) {
     const a = this.rnd() * Math.PI * 2, d = minD + this.rnd() * (maxD - minD);
     const arr = this.city.segGrid.query(x + Math.cos(a) * d, z + Math.sin(a) * d, 80, this._re || (this._re = []));
-    const cand = arr.filter((it) => it.kind === 'road' && it.ref && !it.ref.ped && (!it.ref.service || this.rnd() < 0.15));
+    const cand = arr.filter((it) => it.kind === 'road' && it.ref && !it.ref.ped && !it.ref.psv && (!it.ref.service || this.rnd() < 0.15));
     return cand.length ? cand[Math.floor(this.rnd() * cand.length)].ref : null;
   }
-  allowed(e, fwd) { return !e.ped && (!e.oneway || (e.oneway === 1) === fwd); }
+  // le auto non entrano nelle vie pedonali né nelle corsie riservate ai bus
+  allowed(e, fwd) { return !e.ped && !e.psv && (!e.oneway || (e.oneway === 1) === fwd); }
 
   spawn(bus, minD = 120, maxD = 1400, cars = this.cars) {
     for (let tries = 0; tries < 12; tries++) {
@@ -234,7 +235,7 @@ export class Traffic {
   chooseNext(car) {
     const to = car.fwd ? this.net.nodes[car.edge.b] : this.net.nodes[car.edge.a];
     let opts = to.edges.filter((e) => e !== car.edge && this.allowed(e, e.a === to.id));
-    if (!opts.length) opts = to.edges.filter((e) => !e.ped);
+    if (!opts.length) opts = to.edges.filter((e) => !e.ped && !e.psv);
     if (!opts.length) opts = [car.edge];
     // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio
     const w = opts.map((e) => (e.main ? 4 : e.service ? 0.08 : e.cls === 6 ? 0.3 : 1));

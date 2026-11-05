@@ -94,6 +94,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 - [x] Sede del tram sui binari OSM (`railway=tram`), un tracciato per verso: lo shape GTFS correva su un binario ma il
   gioco lo usava come asse, e la sede finiva 1,7 m di lato (in Corso Vittorio Emanuele sopra la carreggiata).
+- [x] Strade più larghe sui percorsi dei bus (minimo 7,5 m a doppio senso, 5,5 a senso unico, 7 in rotatoria) e
+  facciate spostate fuori da carreggiate, marciapiedi e sede del tram invece di restringere le strade; tolti gli
+  edifici che la mezzeria attraversa. Corsie riservate ai bus (`access=no` + `psv`) nel grafo, vietate alle auto.
 - [x] Tram SIR1 guidabile (3 moduli, numero di moduli come dato della linea):
   - corse reali GTFS (anche le limitate);
   - corsie e rotaie per senso, banchine a destra, fermata col muso a fine banchina;

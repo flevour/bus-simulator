@@ -87,7 +87,7 @@ python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.j
 ```
 
 `build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato, quanti campioni del tram sono finiti
-sui binari OSM. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
+sui binari OSM e quante facciate ha spostato. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
 gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la sede segue lo shape GTFS.
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).
