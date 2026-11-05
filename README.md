@@ -60,7 +60,9 @@ calcolate una volta sola invece di nastri sovrapposti disegnati dal gioco:
   fascia tra impalcati vicini riempita (il Cavalcavia Borgomagno è un corpo unico con strada, tram e corsia bus); sotto
   non restano isole né marciapiedi, i parapetti seguono il bordo e si fermano dove cominciano le rampe.
 
-Il gioco disegna le aree a riquadri da 200 m e usa il bordo dell'asfalto per dire se le ruote sono in strada.
+Il gioco disegna le aree a riquadri da 200 m e usa il bordo dell'asfalto per dire se le ruote sono in strada. Le righe
+di bordo seguono il bordo dell'asfalto, 0,35 m dentro, sulle strade con segnaletica (anche in quota): dove due rami si
+uniscono non si incrociano.
 
 * **Area di gioco: Centro storico e Arcella.** Le linee che escono dall'area sono tagliate al confine
   ("tratto in città").

@@ -525,32 +525,15 @@ export class City {
       road2[0] = trim(pts[0], pts[1], trimAt(back.end, back.edge));
       road2[road2.length - 1] = trim(pts[pts.length - 1], pts[pts.length - 2], trimAt(fwd.end, fwd.edge));
       if (surf) {
-        // righe di bordo sulle vie con segnaletica, mezzeria tratteggiata sul doppio senso
-        const st = style(e0);
-        if (!e0.roundabout && (st === road || st === roadOw)) {
-          const o = e0.width / 2 - 0.35;
-          lines.strip(road2, 0.14, Y_ROAD + 0.012, 1, -o);
-          lines.strip(road2, 0.14, Y_ROAD + 0.012, 1, o);
-          if (st === road) for (const d of dashes(road2, 3, 7.5)) lines.strip(d, 0.13, Y_ROAD + 0.012, 1, 0);
-        }
+        // mezzeria tratteggiata sul doppio senso; le righe di bordo seguono il bordo dell'asfalto (buildSurfaces)
+        if (!e0.roundabout && style(e0) === road) for (const d of dashes(road2, 3, 7.5)) lines.strip(d, 0.13, Y_ROAD + 0.012, 1, 0);
         continue;
       }
       style(e0).strip(road2, e0.width, Y_ROAD, e0.ped ? 6 : 12);
       if (!e0.ped && !e0.roundabout) walk.strip(pts, walkW(e0), Y_SIDEWALK, 6);
     }
     if (surf) {
-      // rotatorie: le righe sui due bordi dell'anello (l'asfalto e l'isola vengono dalla pianta, anche quelle ellittiche)
-      if (this.net.surfaces.rings) {
-        for (const [f, w] of this.net.surfaces.rings) {
-          const pts = [];
-          for (let i = 0; i < f.length; i += 2) pts.push({ x: f[i], z: f[i + 1] });
-          pts.push(pts[0], pts[1]);
-          // bordo esterno (quello interno è la riga dell'isola): il lato esterno dipende dal verso dell'anello
-          let a2 = 0;
-          for (let i = 0; i < f.length; i += 2) { const j = (i + 2) % f.length; a2 += f[i] * f[j + 1] - f[j] * f[i + 1]; }
-          lines.strip(pts, 0.14, Y_ROAD + 0.012, 1, (a2 > 0 ? -1 : 1) * (w / 2 - 0.35));
-        }
-      } else for (const g of rings) for (const R of [g.r + g.w / 2 - 0.35, g.r - g.w / 2 + 0.35]) lines.annulus(g.cx, g.cz, R - 0.07, R + 0.07, Y_ROAD + 0.012, 56);
+      // rotatorie: asfalto, isola e righe (bordo esterno e riga dell'isola) vengono dalla pianta, anche quelle ellittiche
       this.roundabouts = rings;
       this.buildSurfaces();
     } else {
@@ -567,13 +550,9 @@ export class City {
         if (ra + rb > e.len - 0.2) { const k = Math.max(0, e.len - 0.2) / (ra + rb); ra *= k; rb *= k; }
         const hFn = (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz);
         if (surf && this.net.surfaces.up) {
-          // asfalto in quota dalla pianta delle strade (buildSurfaces): qui le righe, alla quota della rampa, e le pile
-          const st = style(e);
-          if (st === road || st === roadOw) {
-            const o = e.width / 2 - 0.35, line = (k) => lines.ribbon(A.x - e.dz * k, A.z + e.dx * k, B.x - e.dz * k, B.z + e.dx * k, 0.14, Y_ROAD + 0.012, 1, 0, hFn);
-            line(-o); line(o);
-            if (st === road) for (const d of dashes([{ x: A.x, z: A.z }, { x: B.x, z: B.z }], 3, 7.5)) lines.ribbon(d[0].x, d[0].z, d[d.length - 1].x, d[d.length - 1].z, 0.13, Y_ROAD + 0.012, 1, 0, hFn);
-          }
+          // asfalto in quota e righe di bordo dalla pianta delle strade (buildSurfaces): qui la mezzeria, alla quota della
+          // rampa, e le pile
+          if (style(e) === road) for (const d of dashes([{ x: A.x, z: A.z }, { x: B.x, z: B.z }], 3, 7.5)) lines.ribbon(d[0].x, d[0].z, d[d.length - 1].x, d[d.length - 1].z, 0.13, Y_ROAD + 0.012, 1, 0, hFn);
           this.buildOverpass(e, A, curb);
           continue;
         }
@@ -666,8 +645,61 @@ export class City {
         if (!onBorder(r[i], r[i + 1], r[j], r[j + 1], ix, iz)) fn(r[i], r[i + 1], r[j], r[j + 1]);
       }
     };
+    // righe di bordo: lungo il bordo vero dell'asfalto, 0,35 m dentro, dove la strada più vicina ha la segnaletica e
+    // non c'è un'isola (che ha la sua riga). Prima ogni via aveva le sue righe a metà larghezza, e dove due rami si
+    // uniscono (Via Toti al Rondò Borgomagno) si incrociavano in mezzo all'asfalto
+    const edgeLines = new GeoBuilder(), q = [], rg = new Grid(12);
+    // griglia fitta solo delle strade: con quella generale (celle da 80 m) ogni tratto di bordo provava centinaia di archi
+    for (const e of this.net.edges) {
+      const A = this.net.nodes[e.a], B = this.net.nodes[e.b], hw = e.width / 2;
+      rg.insertAABB({ ax: A.x, az: A.z, bx: B.x, bz: B.z, hw, ref: e }, Math.min(A.x, B.x) - hw, Math.min(A.z, B.z) - hw, Math.max(A.x, B.x) + hw, Math.max(A.z, B.z) + hw);
+    }
+    const marked = (x, z, elev) => {
+      let best = null, bd = 3;
+      for (const it of rg.query(x, z, 3, q)) {
+        if (elev && !it.ref.elev) continue;
+        const d = distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d - it.hw;
+        if (d < bd) { bd = d; best = it.ref; }
+      }
+      return !!best && !best.ped && !best.elev === !elev && !(best.cls >= 5 && !best.routes);
+    };
+    const inside = (x, z, poly) => {
+      let c = false;
+      for (const r of poly) for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+        const zi = r[i + 1], zj = r[j + 1];
+        if (zi > z !== zj > z && x < ((r[j] - r[i]) * (z - zi)) / (zj - zi) + r[i]) c = !c;
+      }
+      return c;
+    };
+    // keep(a, b, dentro, fuori): il tratto a-b del bordo ha la riga (dentro/fuori: punti a 1,2 m nell'asfalto e a
+    // 0,5 m fuori); yFn: quota della riga (asfalto in quota)
+    const borderLines = (poly, keep, yFn) => poly.forEach((r, ri) => {
+      const n = r.length / 2, pt = (i) => ({ x: r[2 * (i % n)], z: r[2 * (i % n) + 1] });
+      let a2 = 0;
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; a2 += r[2 * i] * r[2 * j + 1] - r[2 * j] * r[2 * i + 1]; }
+      const sg = (ri === 0) === (a2 > 0) ? 1 : -1; // 1: l'asfalto è a sinistra del verso dell'anello
+      const ok = [];
+      for (let i = 0; i < n; i++) {
+        const a = pt(i), b = pt(i + 1);
+        const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, sx = (-(b.z - a.z) / l) * sg, sz = ((b.x - a.x) / l) * sg, mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+        ok.push(keep(a, b, mx + sx * 1.2, mz + sz * 1.2, mx - sx * 0.5, mz - sz * 0.5));
+      }
+      const draw = (pts) => {
+        const p0 = edgeLines.pos.length;
+        edgeLines.strip(pts, 0.14, Y_ROAD + 0.012, 1, 0.35 * sg);
+        if (yFn) for (let i = p0; i < edgeLines.pos.length; i += 3) edgeLines.pos[i + 1] = yFn(edgeLines.pos[i], edgeLines.pos[i + 2]);
+      };
+      if (ok.every(Boolean)) { const pts = []; for (let i = 0; i <= n + 1; i++) pts.push(pt(i)); draw(pts); return; }
+      let run = null;
+      for (let k = 1, s0 = ok.indexOf(false); k <= n; k++) {
+        const i = (s0 + k) % n;
+        if (ok[i]) { if (!run) run = [pt(i)]; run.push(pt(i + 1)); } else if (run) { draw(run); run = null; }
+      }
+    });
     for (const [ix, iz, A, W, I] of S.cells) {
       const rings = [];
+      const ib = I.map((p) => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; const r = p[0]; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); z0 = Math.min(z0, r[i + 1]); z1 = Math.max(z1, r[i + 1]); } return [x0, z0, x1, z1, p]; });
+      const onIsland = (x, z) => ib.some(([x0, z0, x1, z1, p]) => x >= x0 && x <= x1 && z >= z0 && z <= z1 && inside(x, z, p));
       for (const poly of A) {
         asph.polygon(poly, Y_ROAD, 20);
         rings.push(...poly);
@@ -675,6 +707,7 @@ export class City {
           this.asphEdges.insertAABB({ ax, az, bx, bz }, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz));
           kerb.ribbon(ax, az, bx, bz, 0.22, Y_ROAD + 0.003, 4);
         });
+        borderLines(poly, (a, b, inx, inz, outx, outz) => !onBorder(a.x, a.z, b.x, b.z, ix, iz) && marked(inx, inz, false) && !onIsland(outx, outz));
       }
       this.asphRings.set(ix + ',' + iz, rings);
       for (const poly of W) walk.polygon(poly, Y_SIDEWALK, 6);
@@ -695,6 +728,9 @@ export class City {
     // piedi delle rampe
     const upA = new GeoBuilder();
     for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.heightAt(x, z) + 0.004, 20);
+    // righe di bordo anche in quota, tranne dove la rampa si fonde con l'asfalto a terra (al piede)
+    const onGround = (x, z) => rg.query(x, z, 1, q).some((it) => !it.ref.elev && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw);
+    for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => marked(inx, inz, true) && !onGround(outx, outz), (x, z) => Y_ROAD + this.heightAt(x, z) + 0.012);
     if (upA.pos.length) { const um = new THREE.Mesh(upA.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3)); um.receiveShadow = true; this.upMat = um.material; this.group.add(um); }
     const am = new THREE.Mesh(asph.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
     am.receiveShadow = true;
@@ -706,7 +742,8 @@ export class City {
     im.receiveShadow = true;
     const kMat = new THREE.MeshLambertMaterial({ color: 0xc9c4ba, side: THREE.DoubleSide });
     this.group.add(am, wm, im, new THREE.Mesh(kerb.build(), layer(kMat.clone(), 3)), new THREE.Mesh(side.build(), layer(kMat, 8)));
-    if (islandLines.pos.length) this.group.add(new THREE.Mesh(islandLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4)));
+    const lineMat = layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4);
+    for (const g of [islandLines, edgeLines]) if (g.pos.length) this.group.add(new THREE.Mesh(g.build(), lineMat));
   }
   // distanza (m) dal bordo dell'asfalto: negativa dentro la carreggiata, al più 8
   surfaceOff(x, z) {
