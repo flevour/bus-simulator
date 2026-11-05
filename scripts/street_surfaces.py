@@ -88,34 +88,65 @@ def overpass_heights(nodes, edges, rails):
                 if j not in deck and edges[j][5] & 4 and edges[j][7] >= 1:
                     deck.add(j)
                     stack.append(j)
-    dist = {}
-    queue = []
-    for k in deck:
-        for n in edges[k][:2]:
-            if n not in dist:
-                dist[n] = 0.0
-                queue.append(n)
-    qi = 0
-    while qi < len(queue):
-        n = queue[qi]
-        qi += 1
-        for j in at[n]:
-            if j in deck:
-                continue
-            e = edges[j]
-            o = e[1] if e[0] == n else e[0]
-            d = dist[n] + math.dist(nodes[e[0]], nodes[e[1]])
-            if d < R_RAMP and o not in under and (o not in dist or dist[o] > d):
-                dist[o] = d
-                queue.append(o)
+    # Rampe: dalla fine dell'impalcato la quota scende solo lungo la prosecuzione della strada stessa (stessa via, o il
+    # ramo più dritto ai nodi intermedi) e arriva a zero al primo incrocio o a 130 m; le strade laterali restano a
+    # terra (prima la quota si spargeva su tutte le strade entro 130 m: incroci e rotatorie ai piedi sollevati)
+    deck_nodes = {n for k in deck for n in edges[k][:2]}
+    name_of = lambda k: edges[k][4]
     heights = {}
-    for n, d in dist.items():
-        u = max(0.0, min(1.0, 1 - d / R_RAMP))
+
+    def put(n, h):
+        if h > 0.001 and h > heights.get(n, 0):
+            heights[n] = h
+    for n in deck_nodes:
+        put(n, H_DECK)
+    for n0 in deck_nodes:
+        din = [k for k in at[n0] if k in deck]
+        for k0 in at[n0]:
+            if k0 in deck:
+                continue
+            nm = name_of(din[0]) if din else None
+            path, cur, k, dist = [(n0, 0.0)], n0, k0, 0.0
+            while True:
+                e = edges[k]
+                nxt = e[1] if e[0] == cur else e[0]
+                dx, dz = nodes[nxt][0] - nodes[cur][0], nodes[nxt][1] - nodes[cur][1]
+                L = math.hypot(dx, dz) or 1e-9
+                dist += L
+                if nxt in deck_nodes or nxt in under:
+                    break
+                path.append((nxt, dist))
+                if dist >= R_RAMP:
+                    break
+                outs = [j for j in at[nxt] if j != k and j not in deck]
+                ground_deg = len(at[nxt])
+                best, bd = None, 0.7
+                for j in outs:
+                    f = edges[j]
+                    o = f[1] if f[0] == nxt else f[0]
+                    ex, ez = nodes[o][0] - nodes[nxt][0], nodes[o][1] - nodes[nxt][1]
+                    c = (ex * dx + ez * dz) / ((math.hypot(ex, ez) or 1e-9) * L)
+                    # a un incrocio si prosegue solo sulla stessa via (o dritto se l'impalcato finisce a meno di 40 m)
+                    if ground_deg >= 3 and name_of(j) != nm and dist >= 40:
+                        continue
+                    if c > bd:
+                        best, bd = j, c
+                if best is None:
+                    break
+                cur, k = nxt, best
+            Lp = path[-1][1]
+            if Lp < 1:
+                continue
+            for n, d in path:
+                u = max(0.0, min(1.0, 1 - d / Lp))
+                put(n, H_DECK * u * u * (3 - 2 * u))
+    out = {}
+    for n, h in heights.items():
         psv = all(edges[j][5] & 32 for j in at[n])
-        h = H_DECK * u * u * (3 - 2 * u) * (PSV_DECK if psv else 1)
+        h = h * (PSV_DECK if psv else 1)
         if h > 0.001:
-            heights[n] = round(h, 2)
-    return heights
+            out[n] = round(h, 2)
+    return out
 
 
 def _tram_heights(pts, nodes, edges, heights):
@@ -226,7 +257,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         if edges[k][5] & 16:
             ring_at[edges[k][0]].append(k)
             ring_at[edges[k][1]].append(k)
-    seen, ring_islands, ring_roads = set(), [], []
+    seen, ring_islands, ring_roads, ring_lines = set(), [], [], []
     for k0 in ground:
         if not edges[k0][5] & 16 or k0 in seen:
             continue
@@ -264,23 +295,32 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         r = sum(ds) / len(ds)
         if r >= 4 and all(abs(d - r) <= 0.25 * r + 1 for d in ds):
             ring_roads.append(Point(cx, cz).buffer(r + w / 2, quad_segs=16))
+            ring_lines.append([[round(v, 1) for i in range(64) for v in (cx + r * math.cos(i * math.pi / 32), cz + r * math.sin(i * math.pi / 32))], round(w, 1)])
             if r - w / 2 > 0.5:
                 ring_islands.append(Point(cx, cz).buffer(r - w / 2, quad_segs=16))
             continue
-        poly = Polygon([nodes[n] for n in order])
+        # altrimenti (Rondò Borgomagno, ellittico) l'anello dei nodi levigato: niente isola a ottagono
+        pts = [nodes[n] for n in order]
+        for _ in range(3):
+            pts = [q for a, b in zip(pts, pts[1:] + pts[:1]) for q in ((0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]), (0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]))]
+        poly = Polygon(pts)
         if poly.is_valid and poly.area > 1:
+            ring_roads.append(poly.buffer(w / 2, quad_segs=4).difference(poly.buffer(-w / 2, quad_segs=4)))
+            ring_lines.append([[round(v, 1) for xy in pts for v in xy], round(w, 1)])
             isl = poly.buffer(-w / 2)
             if not isl.is_empty and isl.area > 1:
                 ring_islands.append(isl)
     ring_islands = unary_union(ring_islands) if ring_islands else Polygon()
     U = unary_union([U, *ring_roads])
     # raccordi agli incroci: chiusura morfologica locale (si riempiono gli angoli rientranti tra due strade)
-    tree_keys = ground
+    # contano anche le rampe che arrivano a un incrocio a terra (piede della rampa), non gli incroci in quota
+    tree_keys = drive
     tree = STRtree([pieces[k] for k in tree_keys])
     deg = defaultdict(list)
-    for k in ground:
-        deg[edges[k][0]].append(k)
-        deg[edges[k][1]].append(k)
+    for k in drive:
+        for n in edges[k][:2]:
+            if heights.get(n, 0) < 0.3:
+                deg[n].append(k)
     fillets = []
     for n, ks in deg.items():
         if len(ks) < 3:
@@ -307,6 +347,23 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
             if h.area < ISLAND_MAX and not any(bpolys[i].intersects(h) for i in btree.query(h)):
                 islands.append(h)
     islands = unary_union(islands) if islands else Polygon()
+    # forma delle isole: le quasi rotonde (rotatorie non segnate come tali in OSM, come il Rondò Borgomagno) levigate,
+    # gli spartitraffico con gli spigoli arrotondati; l'asfalto riempie quello che l'isola perde
+    shaped = []
+    for g in _polys(islands):
+        P = g.length or 1
+        if 4 * math.pi * g.area / (P * P) > 0.72 and g.area > 30:
+            pts = list(g.exterior.coords)[:-1]
+            for _ in range(3):
+                pts = [q for a, b in zip(pts, pts[1:] + pts[:1]) for q in ((0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]), (0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]))]
+            h = Polygon(pts)
+            h = h if h.is_valid else h.buffer(0)
+        else:
+            h = g.buffer(-0.8, quad_segs=4).buffer(0.8, quad_segs=4)
+        if not h.is_empty and h.area > 2:
+            shaped.append(h)
+    U = unary_union([U, islands.difference(unary_union(shaped) if shaped else Polygon())])
+    islands = unary_union(shaped) if shaped else Polygon()
     # edifici fuori da carreggiate (anche quelle in quota), marciapiede minimo e sede del tram
     clear = [unary_union([pieces[k] for k in drive]).buffer(0.8, quad_segs=2)]
     clear += [pieces[k].buffer(BUS_KERB, quad_segs=2) for k in drive if (min(edges[k][0], edges[k][1]), max(edges[k][0], edges[k][1])) in bus_edges]
@@ -372,4 +429,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
                 cells.append([ix, iz, *parts])
     stats = {'carreggiata_m2': round(U.area), 'marciapiede_m2': round(walk.area), 'isole': len(getattr(islands, 'geoms', [islands])),
              'impalcati_m2': round(D.area), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
-    return {'tile': TILE, 'cells': cells, 'decks': [r for p in _polys(D.simplify(0.1)) for r in _rings(p)]}, out_b, stats
+    # carreggiate in quota (cavalcavia e rampe): un'area sola anche loro, la quota la mette il gioco vertice per vertice
+    up_area = up.simplify(0.1).segmentize(4.0)
+    return {'tile': TILE, 'cells': cells, 'decks': [r for p in _polys(D.simplify(0.1)) for r in _rings(p)],
+            'up': [r for p in _polys(up_area) for r in _rings(p)], 'rings': ring_lines}, out_b, stats

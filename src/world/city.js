@@ -539,8 +539,18 @@ export class City {
       if (!e0.ped && !e0.roundabout) walk.strip(pts, walkW(e0), Y_SIDEWALK, 6);
     }
     if (surf) {
-      // rotatorie: le righe sui due bordi della corona (l'asfalto e l'isola vengono dalla pianta)
-      for (const g of rings) for (const R of [g.r + g.w / 2 - 0.35, g.r - g.w / 2 + 0.35]) lines.annulus(g.cx, g.cz, R - 0.07, R + 0.07, Y_ROAD + 0.012, 56);
+      // rotatorie: le righe sui due bordi dell'anello (l'asfalto e l'isola vengono dalla pianta, anche quelle ellittiche)
+      if (this.net.surfaces.rings) {
+        for (const [f, w] of this.net.surfaces.rings) {
+          const pts = [];
+          for (let i = 0; i < f.length; i += 2) pts.push({ x: f[i], z: f[i + 1] });
+          pts.push(pts[0], pts[1]);
+          // bordo esterno (quello interno è la riga dell'isola): il lato esterno dipende dal verso dell'anello
+          let a2 = 0;
+          for (let i = 0; i < f.length; i += 2) { const j = (i + 2) % f.length; a2 += f[i] * f[j + 1] - f[j] * f[i + 1]; }
+          lines.strip(pts, 0.14, Y_ROAD + 0.012, 1, (a2 > 0 ? -1 : 1) * (w / 2 - 0.35));
+        }
+      } else for (const g of rings) for (const R of [g.r + g.w / 2 - 0.35, g.r - g.w / 2 + 0.35]) lines.annulus(g.cx, g.cz, R - 0.07, R + 0.07, Y_ROAD + 0.012, 56);
       this.roundabouts = rings;
       this.buildSurfaces();
     } else {
@@ -556,6 +566,17 @@ export class City {
         let ra = trimAt(A, e), rb = trimAt(B, e);
         if (ra + rb > e.len - 0.2) { const k = Math.max(0, e.len - 0.2) / (ra + rb); ra *= k; rb *= k; }
         const hFn = (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz);
+        if (surf && this.net.surfaces.up) {
+          // asfalto in quota dalla pianta delle strade (buildSurfaces): qui le righe, alla quota della rampa, e le pile
+          const st = style(e);
+          if (st === road || st === roadOw) {
+            const o = e.width / 2 - 0.35, line = (k) => lines.ribbon(A.x - e.dz * k, A.z + e.dx * k, B.x - e.dz * k, B.z + e.dx * k, 0.14, Y_ROAD + 0.012, 1, 0, hFn);
+            line(-o); line(o);
+            if (st === road) for (const d of dashes([{ x: A.x, z: A.z }, { x: B.x, z: B.z }], 3, 7.5)) lines.ribbon(d[0].x, d[0].z, d[d.length - 1].x, d[d.length - 1].z, 0.13, Y_ROAD + 0.012, 1, 0, hFn);
+          }
+          this.buildOverpass(e, A, curb);
+          continue;
+        }
         style(e).ribbon(A.x + e.dx * ra, A.z + e.dz * ra, B.x - e.dx * rb, B.z - e.dz * rb, e.width, Y_ROAD, e.ped ? 6 : 12, 0, hFn);
         // con la pianta delle strade niente marciapiede sui tratti in quota: sulle rampe sembrava un'ala lastricata
         if (!e.ped && !surf) walk.ribbon(A.x, A.z, B.x, B.z, walkW(e), Y_SIDEWALK, 6, 0, hFn);
@@ -633,7 +654,7 @@ export class City {
   // Il bordo dell'asfalto (senza i tagli tra un riquadro e l'altro) dice anche se le ruote sono in strada
   buildSurfaces() {
     const S = this.net.surfaces, T = S.tile;
-    const asph = new GeoBuilder(), walk = new GeoBuilder(), isl = new GeoBuilder(), kerb = new GeoBuilder(), side = new GeoBuilder();
+    const asph = new GeoBuilder(), walk = new GeoBuilder(), isl = new GeoBuilder(), kerb = new GeoBuilder(), side = new GeoBuilder(), islandLines = new GeoBuilder();
     this.asphRings = new Map();
     this.asphEdges = new Grid(20);
     const onBorder = (ax, az, bx, bz, ix, iz) => (Math.abs(ax - bx) < 0.05 && [ix * T, (ix + 1) * T].some((v) => Math.abs(ax - v) < 0.06)) || (Math.abs(az - bz) < 0.05 && [iz * T, (iz + 1) * T].some((v) => Math.abs(az - v) < 0.06));
@@ -655,12 +676,24 @@ export class City {
       }
       this.asphRings.set(ix + ',' + iz, rings);
       for (const poly of W) walk.polygon(poly, Y_SIDEWALK, 6);
-      // isole: prato rialzato con il cordolo
+      // isole: prato rialzato con il cordolo e la riga bianca tutt'intorno sull'asfalto
       for (const poly of I) {
         isl.polygon(poly, Y_ROAD + 0.12, 5);
-        eachEdge(poly, ix, iz, (ax, az, bx, bz) => side.quad([ax, Y_ROAD, az], [bx, Y_ROAD, bz], [ax, Y_ROAD + 0.125, az], [bx, Y_ROAD + 0.125, bz], [0, 0, 1, 0, 0, 1, 1, 1]));
+        const outer = poly[0];
+        let a2 = 0;
+        for (let i = 0; i < outer.length; i += 2) { const j = (i + 2) % outer.length; a2 += outer[i] * outer[j + 1] - outer[j] * outer[i + 1]; }
+        eachEdge(poly, ix, iz, (ax, az, bx, bz) => {
+          side.quad([ax, Y_ROAD, az], [bx, Y_ROAD, bz], [ax, Y_ROAD + 0.125, az], [bx, Y_ROAD + 0.125, bz], [0, 0, 1, 0, 0, 1, 1, 1]);
+          const l = Math.hypot(bx - ax, bz - az) || 1, o = a2 > 0 ? 0.4 : -0.4, nx = ((bz - az) / l) * o, nz = (-(bx - ax) / l) * o;
+          islandLines.ribbon(ax + nx, az + nz, bx + nx, bz + nz, 0.12, Y_ROAD + 0.012, 1);
+        });
       }
     }
+    // carreggiate in quota: alla quota della strada (vertici ogni 4 m), sopra l'impalcato e sopra l'asfalto a terra ai
+    // piedi delle rampe
+    const upA = new GeoBuilder();
+    for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.heightAt(x, z) + 0.004, 20);
+    if (upA.pos.length) { const um = new THREE.Mesh(upA.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3)); um.receiveShadow = true; this.upMat = um.material; this.group.add(um); }
     const am = new THREE.Mesh(asph.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
     am.receiveShadow = true;
     this.asphMat = am.material;
@@ -671,6 +704,7 @@ export class City {
     im.receiveShadow = true;
     const kMat = new THREE.MeshLambertMaterial({ color: 0xc9c4ba, side: THREE.DoubleSide });
     this.group.add(am, wm, im, new THREE.Mesh(kerb.build(), layer(kMat.clone(), 3)), new THREE.Mesh(side.build(), layer(kMat, 8)));
+    if (islandLines.pos.length) this.group.add(new THREE.Mesh(islandLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4)));
   }
   // distanza (m) dal bordo dell'asfalto: negativa dentro la carreggiata, al più 8
   surfaceOff(x, z) {
@@ -2019,6 +2053,7 @@ export class City {
     this.roadMat.color.setScalar(1 - wet * 0.35);
     if (this.owMat) this.owMat.color.setScalar(1 - wet * 0.35);
     if (this.asphMat) this.asphMat.color.setScalar(1 - wet * 0.35);
+    if (this.upMat) this.upMat.color.setScalar(1 - wet * 0.35);
   }
 
   update(dt) {

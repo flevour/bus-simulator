@@ -47,10 +47,15 @@ calcolate una volta sola invece di nastri sovrapposti disegnati dal gioco:
 
 * la carreggiata è l'unione dei tratti allargati alla loro larghezza, con i raccordi agli incroci (7 m sui percorsi
   dei bus, 3,5 altrove);
-* le rotatorie quasi circolari diventano corone esatte con l'isola al centro;
-* gli spartitraffico chiusi senza edifici diventano isole, tranne la sede del tram e l'acqua;
+* le rotatorie quasi circolari diventano corone esatte con l'isola al centro, le altre (anche quelle non segnate come
+  rotatoria in OSM, come il Rondò Borgomagno) hanno anello e isola levigati;
+* gli spartitraffico chiusi senza edifici diventano isole con gli spigoli arrotondati e la riga tutt'intorno, tranne la
+  sede del tram e l'acqua;
 * il marciapiede è una fascia di 3,5 m attorno alla carreggiata (2 m sui ponti);
 * gli edifici sono ritagliati fuori da carreggiate, marciapiede minimo (1,5 m sui percorsi dei bus) e sede del tram;
+* le rampe scendono solo lungo la prosecuzione del ponte (stessa via, o il ramo più dritto) fino al primo incrocio o
+  a 130 m: le strade laterali e le rotatorie ai piedi restano a terra; anche l'asfalto in quota è un'area, con i
+  raccordi agli incroci dove la rampa arriva a terra;
 * gli impalcati in quota sono un'area sola anche loro: i tratti di strada e di tram da 0,6 m in su, uniti e con la
   fascia tra impalcati vicini riempita (il Cavalcavia Borgomagno è un corpo unico con strada, tram e corsia bus); sotto
   non restano isole né marciapiedi, i parapetti seguono il bordo e si fermano dove cominciano le rampe.
