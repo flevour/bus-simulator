@@ -112,6 +112,7 @@ const sampleS = (len) => { const out = []; for (let s = 0; s < len; s += STEP) o
 export class TramTrack {
   constructor(net) {
     const raw = net.tram || [];
+    this.tramStops = net.tramStops || [];
     const C = (this.C = new TrackPath(raw[0]));
     const S = raw[1] && raw[1].length > 1 ? new TrackPath(raw[1]) : null;
     // verso nord: lungo l'asse, a destra di 1,7 m dove c'è l'altro verso (con i binari OSM: il suo binario)
@@ -158,6 +159,12 @@ export class TramTrack {
     for (const d of [1, -1]) for (const st of this.stopsDir[d]) if (/prato/i.test(st.name)) this.gaps[d].push([st.s - CATENARY_GAP_HALF, st.s + CATENARY_GAP_HALF]);
   }
   path(dir) { return this.paths[dir > 0 ? 1 : -1]; }
+  // la fermata vicina a (x, z) ha una banchina centrale, tra i due binari e comune ai due versi (dalle banchine OSM)
+  centralAt(x, z) {
+    let best = null, bd = 50;
+    for (const st of this.tramStops) { const d = Math.hypot(st.x - x, st.z - z); if (d < bd) { bd = d; best = st; } }
+    return !!(best && best.central);
+  }
   // verso di una corsa: dalle sue fermate sul percorso verso nord
   dirOf(v) {
     const P = this.paths[1], a = P.project(v.stops[0].x, v.stops[0].z).s, b = P.project(v.stops[v.stops.length - 1].x, v.stops[v.stops.length - 1].z).s;
@@ -555,8 +562,9 @@ export class Tram {
     this.syncTransform();
     return true;
   }
-  // punto davanti a una porta, sul lato `side` (+1 destra del verso di marcia), a `out` metri dal fianco
-  doorPoint(i, out = 0.6, side = 1) {
+  // punto davanti a una porta, sul lato `side` (+1 destra del verso di marcia, di norma quello della banchina), a `out`
+  // metri dal fianco
+  doorPoint(i, out = 0.6, side = this.platformSide || 1) {
     const d = this.doors[i], m = d.module;
     const towardA = this.facing === this.aFwd;
     const zl = m.kind === 'cabB' ? -d.z : d.z;
@@ -708,11 +716,13 @@ export class Tram {
     this.animDoors();
     return hit;
   }
+  // si aprono solo le porte dal lato della banchina (a destra, o a sinistra alle banchine centrali)
   animDoors() {
+    const towardA = this.facing === this.aFwd;
     this.doors.forEach((d, i) => {
-      const o = this.doorOpen[i];
+      const want = (towardA ? -1 : 1) * (this.platformSide || 1) * (d.module && d.module.kind === 'cabB' ? -1 : 1);
       for (const leaf of d.leaves) {
-        const { sd, lr, z0 } = leaf.userData;
+        const { sd, lr, z0 } = leaf.userData, o = sd === want ? this.doorOpen[i] : 0;
         leaf.position.z = z0 + lr * 0.62 * o;
         leaf.position.x = sd * (TRAM.width / 2 + 0.035 + 0.06 * Math.min(1, o * 4));
       }

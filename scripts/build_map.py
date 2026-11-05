@@ -570,7 +570,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         s = stops_by_id[sid]
         x, z = xz(float(s['stop_lat']), float(s['stop_lon']))
         tram_stops.append([round(x, 1), round(z, 1), build_gtfs.clean_name(s['stop_desc'] or s['stop_name'])])
-    print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops))
+    if tram_path and tram_lanes:
+        for st, c in zip(tram_stops, central_platforms(tram_path, tram_stops, tram)):
+            st.append(c)
+    print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops), 'con banchina centrale', sum(st[3] for st in tram_stops if len(st) > 3))
 
     # pianta delle strade: quote dei cavalcavia, carreggiate, marciapiedi, isole; edifici ritagliati fuori
     heights = street_surfaces.overpass_heights(nodes, edges, rails)
@@ -692,6 +695,8 @@ def tram_grid(path, cell=20):
     """Segmenti dei binari OSM (railway=tram) in una griglia."""
     segs = []
     for e in json.load(open(path, encoding='utf-8'))['elements']:
+        if e['tags'].get('railway') != 'tram':
+            continue  # banchine
         pts = [xz(g['lat'], g['lon']) for g in e['geometry']]
         segs += [(a, b) for a, b in zip(pts, pts[1:]) if a != b]
     grid = defaultdict(list)
@@ -700,6 +705,41 @@ def tram_grid(path, cell=20):
             for gz in range(int(min(az, bz) // cell), int(max(az, bz) // cell) + 1):
                 grid[(gx, gz)].append(k)
     return segs, grid, cell
+
+
+def central_platforms(path, stops, lanes):
+    """Fermate del tram con la banchina centrale, comune ai due versi (Borgomagno, Arcella...): una banchina OSM entro
+    70 m dalla fermata sta tra i due binari, a meno di 4 m da ciascuno."""
+    plats = []
+    for e in json.load(open(path, encoding='utf-8'))['elements']:
+        if e['tags'].get('railway') == 'tram':
+            continue
+        pts = [xz(g['lat'], g['lon']) for g in e['geometry']]
+        plats.append((sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)))
+    L = [[(t[i], t[i + 1]) for i in range(0, len(t), 2)] for t in lanes]
+
+    def near(p, line):
+        best = (1e9, None)
+        for (ax, az), (bx, bz) in zip(line, line[1:]):
+            dx, dz = bx - ax, bz - az
+            l2 = dx * dx + dz * dz or 1e-9
+            t = max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - az) * dz) / l2))
+            c = (ax + dx * t, az + dz * t)
+            d = math.dist(p, c)
+            if d < best[0]:
+                best = (d, c)
+        return best
+    out = []
+    for x, z, _n in stops:
+        central = False
+        for c in plats:
+            if math.dist(c, (x, z)) > 70 or len(L) < 2:
+                continue
+            (da, ca), (db, cb) = near(c, L[0]), near(c, L[1])
+            if da < 4 and db < 4 and abs(da + db - math.dist(ca, cb)) < 1.0:
+                central = True
+        out.append(1 if central else 0)
+    return out
 
 
 def tram_lane(flat, segs, grid, cell):

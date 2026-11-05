@@ -91,7 +91,7 @@ Per rigenerare i dati:
 # segnaletica reale (nodi OSM); se Overpass risponde 502 (server saturo) riprova dopo qualche decina di secondi
 curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-nodes.ql -o /tmp/osm-nodes.json https://overpass-api.de/api/interpreter
 python3 scripts/filter_osm_nodes.py /tmp/osm-nodes.json data/osm-padova-nodes.json
-# binari del tram
+# binari e banchine del tram
 curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tram.ql -o /tmp/osm-tram.json https://overpass-api.de/api/interpreter
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
@@ -100,7 +100,7 @@ python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.j
 ```
 
 `build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato, quanti campioni del tram sono finiti
-sui binari OSM e i numeri della pianta delle strade. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
+sui binari OSM, quante fermate del tram hanno la banchina centrale e i numeri della pianta delle strade. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
 gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la sede segue lo shape GTFS.
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).

@@ -985,11 +985,22 @@ export class City {
       for (const st of track.stopsDir[dir]) {
         const p = P.at(st.s), dx = p.dx, dz = p.dz, rx = -dz, rz = dx, ang = Math.atan2(dx, dz), h = track.heightAt(dir, st.s);
         // banchina piena se c'è spazio, altrimenti più stretta e attaccata alla sede (dove la sede corre accanto alla strada)
-        const wide = this.clearance(p.x + rx * (L + 1.5), p.z + rz * (L + 1.5), ['road'], 20) >= 0.3;
-        const off = wide ? L + 1.5 : L + 1.1, ox = rx * off, oz = rz * off; // bordo verso il tram a 1,8 m dal binario
-        plat.push(new THREE.BoxGeometry(wide ? 2.8 : 2.0, 0.3, 30).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 0.15, p.z + oz));
-        roofs.push(new THREE.BoxGeometry(wide ? 2.4 : 1.8, 0.15, 12).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 2.96, p.z + oz));
-        for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(p.x + ox + dx * k + rx * (wide ? 0.9 : 0.6), Y_ROAD + h + 1.46, p.z + oz + dz * k + rz * (wide ? 0.9 : 0.6)));
+        if (track.centralAt(p.x, p.z)) {
+          // banchina centrale tra i due binari, comune ai due versi (la mette il verso nord), pensilina al centro
+          if (dir > 0) {
+            const O = track.path(-1), q = O.at(O.project(p.x, p.z).s), gap = Math.hypot(q.x - p.x, q.z - p.z);
+            const w = Math.max(1.6, Math.min(3, gap - TRAM.width - 0.3)), mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2;
+            plat.push(new THREE.BoxGeometry(w, 0.3, 30).rotateY(ang).translate(mx, Y_ROAD + h + 0.15, mz));
+            roofs.push(new THREE.BoxGeometry(Math.max(1.4, w - 0.2), 0.15, 12).rotateY(ang).translate(mx, Y_ROAD + h + 2.96, mz));
+            for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(mx + dx * k, Y_ROAD + h + 1.46, mz + dz * k));
+          }
+        } else {
+          const wide = this.clearance(p.x + rx * (L + 1.5), p.z + rz * (L + 1.5), ['road'], 20) >= 0.3;
+          const off = wide ? L + 1.5 : L + 1.1, ox = rx * off, oz = rz * off; // bordo verso il tram a 1,8 m dal binario
+          plat.push(new THREE.BoxGeometry(wide ? 2.8 : 2.0, 0.3, 30).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 0.15, p.z + oz));
+          roofs.push(new THREE.BoxGeometry(wide ? 2.4 : 1.8, 0.15, 12).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 2.96, p.z + oz));
+          for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(p.x + ox + dx * k + rx * (wide ? 0.9 : 0.6), Y_ROAD + h + 1.46, p.z + oz + dz * k + rz * (wide ? 0.9 : 0.6)));
+        }
         const q = P.at(st.s + TRAM_STOP_AHEAD), qr = [-q.dz, q.dx];
         const Q = (a, w) => [q.x + q.dx * a + qr[0] * w, Y_ROAD + h + 0.045, q.z + q.dz * a + qr[1] * w];
         stopLines.quad(Q(-0.2, -1.6), Q(-0.2, 1.6), Q(0.2, -1.6), Q(0.2, 1.6), [0, 0, 1, 0, 0, 1, 1, 1]);

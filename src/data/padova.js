@@ -177,7 +177,7 @@ export function buildNetwork() {
     const ext = (p, q) => { const l = Math.hypot(p.x - q.x, p.z - q.z) || 1; return { x: p.x + ((p.x - q.x) / l) * 40, z: p.z + ((p.z - q.z) / l) * 40 }; };
     return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], buildings, k === 0 && !lanes ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
   });
-  const tramStops = (MAP.tramStops || []).map(([x, z, name]) => ({ x, z, name }));
+  const tramStops = (MAP.tramStops || []).map(([x, z, name, central]) => ({ x, z, name, central: !!central }));
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
   const edges = [];
   const E = MAP.edges;

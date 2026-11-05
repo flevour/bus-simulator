@@ -61,6 +61,13 @@ export class Mission {
     this.tram = !!route.tram;
     this.route = this.tram ? buildTramRoute(route.trackPath, route) : buildRoute(net, route);
     this.stops = this.route.stops;
+    // tram: alle fermate con la banchina centrale (comune ai due versi) si sale e si scende a sinistra
+    if (this.tram && city && city.tramTrack) for (const st of this.stops) {
+      if (!city.tramTrack.centralAt(st.cx, st.cz)) continue;
+      const O = city.tramTrack.path(-city.tramTrack.dirOf(route)), q = O.at(O.project(st.cx, st.cz).s), half = Math.hypot(q.x - st.cx, q.z - st.cz) / 2 || 2.2;
+      Object.assign(st, { side: -1, rx: -st.rx, rz: -st.rz });
+      st.x = st.cx + st.rx * half; st.z = st.cz + st.rz * half;
+    }
     // la palina disegnata può essere spostata di qualche metro (vicino agli incroci): la zona di fermata la segue
     // (una fermata può avere più paline, una per verso: vale quella sul percorso di questa corsa)
     if (!this.tram && city && city.stopPlacements) this.stops.forEach((st, k) => {
@@ -196,6 +203,7 @@ export class Mission {
 
     // ---- fermata corrente ----
     const st = this.stops[this.nextStop];
+    if (this.tram) bus.platformSide = (st && st.side) || 1; // porte dal lato della banchina
     this.atStop = false;
     if (st) {
       const along = sFront - st.s; // 0 = muso del bus alla palina
