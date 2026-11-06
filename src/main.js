@@ -969,7 +969,7 @@ function step(dt) {
   const hF = city.heightAt(pf.x, pf.z, bus.elev), hR = city.heightAt(pr.x, pr.z, bus.elev);
   world.slope = bus.isTram ? 0 : (hF - hR) / 5.9;
   bus.elev = bus.isTram ? 0 : (hF + hR) / 2 + (hF - hR) * (0.3 / 5.9);
-  const hit = bus.update(dt, { ...input, wipers: wx.rain > 0.08 }, world);
+  const hit = bus.update(dt, { ...input, wipers: wx.rain > 0.08, rain: wx.rain }, world);
   // il tram non deve finire dentro l'auto davanti: dopo un urto resta fermo
   if (hit && bus.isTram) bus.parking = bus.parking || hit.impact > 1.2;
   if (hit && hit.impact > 1.2 && !bus._crashCd) {

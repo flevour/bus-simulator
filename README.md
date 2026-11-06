@@ -210,7 +210,7 @@ future potranno averne 4.
 * **Semafori reali** agli incroci e agli attraversamenti pedonali (questi con un verde lungo per i veicoli).
 * **Passeggeri** che aspettano, salgono, prenotano la fermata e scendono, con annunci vocali in italiano.
 * **Audio sintetizzato**: motore diesel, turbo, porte pneumatiche con cicalino, freni ad aria, campanello, frecce, pioggia.
-* **Meteo** (predefinito: variabile): sereno, pioggia (asfalto bagnato, frenata più lunga, tergicristalli), la classica **nebbia padana** oppure
+* **Meteo** (predefinito: variabile): sereno, pioggia (asfalto bagnato, frenata più lunga, gocce sul parabrezza di bus e tram che i tergicristalli tolgono), la classica **nebbia padana** oppure
   **variabile**: si parte col sereno, il cielo si copre e arriva la pioggia o la nebbia, con transizioni graduali; dopo la
   pioggia le strade restano bagnate per un po'.
 

@@ -97,6 +97,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Gocce di pioggia sul parabrezza di bus e tram, tolte dai tergicristalli contrapposti (quasi tutto il vetro);
+  tergicristalli anche sul tram; sterzo da tastiera progressivo.
 - [x] Modalità Esplorazione (nessuna regola, il tram non deraglia); meteo e ora della luce dal menu di pausa.
 - [x] Semafori del tram a tre luci (barra orizzontale, triangolo, barra verticale), le spente visibili.
 - [x] Pianta delle strade calcolata con Shapely (`scripts/street_surfaces.py`): carreggiate con i raccordi agli

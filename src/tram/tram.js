@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ledTexture } from '../world/textures.js';
 import { TRAM_LINES } from '../data/padova.js';
+import { RainGlass, WIPER_PARK, wiperPhase } from '../bus/rainglass.js';
 
 // Tram su gomma a guida vincolata (Translohr del SIR1): moduli articolati che seguono la rotaia centrale.
 // Misure in metri. Con 3 moduli ~25 m (STE3), con 4 moduli ~33 m (linee future).
@@ -296,7 +297,10 @@ function box(w, h, d, mat, x, y, z, parent) {
 // arrotondato. BAND: colore di ogni tratto (0 zoccolo, 1 blu scuro, 2 vetri, 3 blu chiaro).
 const PROFILE = [[1.03, 0.2], [1.07, 0.52], [1.1, 0.85], [1.1, 1.3], [1.08, 1.85], [1.03, 2.42], [0.98, 2.7], [0.88, 2.9], [0.65, 3.04], [0.3, 3.09], [0, 3.1]];
 const BAND = [0, 1, 1, 2, 2, 3, 3, 3, 3, 3];
-const NOSE = 1.6, RAKE = 0.5; // muso arrotondato: lunghezza (m) e inclinazione del parabrezza (m in avanti per m in alto)
+const NOSE = 1.6, RAKE = 0.5;
+// tergicristalli contrapposti come sul bus: perni negli angoli in basso del parabrezza (in metri nel piano del vetro
+// inclinato, dal centro del vetro), spazzole a riposo distese verso il centro
+const WIPER_X = 0.6, WIPER_LEN = 1.4, GLASS_H = 1.5, GLASS_Y = 1.99; // muso arrotondato: lunghezza (m) e inclinazione del parabrezza (m in avanti per m in alto)
 
 // Superficie della cassa tra anelli successivi. pt(j, r): punto destro j del profilo all'anello r (il sinistro è
 // speculare); j0..j1: tratto di profilo; mats[banda]. Le facce guardano fuori.
@@ -380,6 +384,7 @@ function buildModule(kind, len, opts) {
     doors.push({ z: dz, leaves, kind });
   }
   let eye = null, dash = null, led = null, headMat = null, tailMat = null;
+  const wipers = [];
   if (cab) {
     // fanali bassi sul muso, display di linea sopra il parabrezza (inclinato come la testata)
     const tip = z1 + NOSE;
@@ -390,6 +395,18 @@ function buildModule(kind, len, opts) {
     }
     led = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.22), new THREE.MeshBasicMaterial({ map: ledTexture(opts.line, opts.dest) }));
     led.position.set(0, 2.86, tip - (2.86 - 1.25) * RAKE + 0.03); led.rotation.x = -Math.atan(RAKE); inner.add(led);
+    // tergicristalli: la spazzola gira nel piano del vetro inclinato
+    const wp = new THREE.Group();
+    wp.position.set(0, 1.34, tip - (1.34 - 1.25) * RAKE + 0.03); wp.rotation.x = -Math.atan(RAKE); inner.add(wp);
+    for (const side of [1, -1]) {
+      const w = new THREE.Group();
+      w.position.set(side * WIPER_X, side < 0 ? 0.03 : 0, side < 0 ? 0.02 : 0);
+      w.rotation.z = (side * Math.PI) / 2;
+      w.userData.side = side;
+      box(0.035, WIPER_LEN, 0.025, M.skirt, 0, WIPER_LEN / 2, 0, w);
+      wp.add(w);
+      wipers.push(w);
+    }
     // posto di guida al centro (dalla foto): sotto il parabrezza il cruscotto grigio chiaro, davanti al guidatore il
     // banco inclinato con le file di pulsanti; a destra la plancia blu con lo schermo LCD e il pulsante a fungo rosso.
     // In locale -x è la destra del guidatore.
@@ -424,7 +441,7 @@ function buildModule(kind, len, opts) {
     if (doorZ.some((dz) => Math.abs(z - dz) < 1.2)) continue;
     for (const sx of [-0.62, 0.62]) box(0.48, 0.45, 0.45, M.seat, sx, 0.82, z, inner);
   }
-  return { group, inner, len, kind, doors, eye, dash, led, panto, headMat, tailMat };
+  return { group, inner, len, kind, doors, eye, dash, led, panto, headMat, tailMat, wipers };
 }
 
 // altezza del pantografo: 0 abbassato, 1 contro il filo di contatto
@@ -498,6 +515,16 @@ export class Tram {
     this.spot.position.set(0, 1.0, TRAM.cab / 2);
     this.spot.target.position.set(0, 0, TRAM.cab / 2 + 25);
     this.brakeMat = tramMaterials().tail;
+    // gocce di pioggia appena dietro il parabrezza di ogni cabina; il tergicristallo pulisce quello della cabina attiva
+    this.wiperT = WIPER_PARK;
+    const wy = (1.34 - GLASS_Y) / Math.cos(Math.atan(RAKE));
+    this.wiperArms = [1, -1].map((side) => ({ x: side * WIPER_X, y: wy + (side < 0 ? 0.03 : 0), len: WIPER_LEN, a: (side * Math.PI) / 2 }));
+    for (const m of [this.modules[0], this.modules[this.nMod - 1]]) {
+      m.rainGlass = new RainGlass(1.42, GLASS_H);
+      m.rainGlass.mesh.position.set(0, GLASS_Y, TRAM.cab / 2 + 0.1 - (GLASS_Y - 1.25) * RAKE - 0.05);
+      m.rainGlass.mesh.rotation.x = -Math.atan(RAKE);
+      m.inner.add(m.rainGlass.mesh);
+    }
     this._hPrev = null;
     this.syncTransform();
   }
@@ -713,6 +740,14 @@ export class Tram {
       m.tailMat.emissiveIntensity = front ? 0 : this.brake > 0.05 || doorHold ? 2.4 : this.lights ? 0.9 : 0.05;
     }
     this.spot.intensity = this.lights ? 120 : 0;
+    // tergicristallo della cabina attiva (quello dell'altra resta a riposo) e gocce sul parabrezza
+    this.wiperT = wiperPhase(this.wiperT, !!input.wipers, dt);
+    const up = Math.sin(this.wiperT) * 0.5 + 0.5; // 0 a riposo, 1 contro il bordo del vetro
+    for (const m of [this.modules[0], this.modules[this.nMod - 1]]) m.wipers.forEach((w, i) => {
+      w.rotation.z = (w.userData.side * Math.PI) / 2 * (m === this.activeCab ? 1 - up : 1);
+      if (m === this.activeCab) this.wiperArms[i].a = w.rotation.z;
+    });
+    if (dt > 0) this.activeCab.rainGlass.update(dt, input.rain || 0, sp, this.wiperArms);
     this.animDoors();
     return hit;
   }

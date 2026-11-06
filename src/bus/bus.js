@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ledTexture, labelTexture } from '../world/textures.js';
 import { circleVsOBB } from '../world/spatial.js';
 import { Y_ROAD } from '../world/city.js';
+import { RainGlass, WIPER_PARK, wiperPhase } from './rainglass.js';
 
 // Dimensioni (sistema locale: +z avanti, +x sinistra (lato autista), -x destra (porte))
 export const BUS = {
@@ -146,6 +147,11 @@ export class Bus {
     ws.position.set(0, 1.9, L2 - 0.02);
     ws.rotation.x = -0.04;
     B.add(ws);
+    // gocce di pioggia, appena dietro il parabrezza
+    this.rainGlass = new RainGlass(BUS.width - 0.1, 1.95);
+    this.rainGlass.mesh.position.set(0, 1.9, L2 - 0.035);
+    this.rainGlass.mesh.rotation.x = -0.04;
+    B.add(this.rainGlass.mesh);
     box(BUS.width, 0.26, 0.1, paint, 0, YT - 0.13, L2 - 0.05);
     // display LED frontale e laterale
     this.ledTex = ledTexture(lineInfo.id, lineInfo.dest);
@@ -366,19 +372,23 @@ export class Bus {
     // sedile autista
     box(0.5, 0.12, 0.5, lam(0x333333), 0.62, 0.95, 4.45, cab);
     box(0.5, 0.75, 0.1, lam(0x333333), 0.62, 1.4, 4.15, cab);
-    // tergicristalli
+    // tergicristalli contrapposti: perni negli angoli in basso, a riposo distesi lungo il bordo verso il centro, salgono
+    // fino ai montanti e puliscono quasi tutto il parabrezza (resta un triangolo in alto al centro)
     this.wipers = [];
-    for (const s of [0.55, -0.6]) {
+    this.wiperArms = []; // perni e spazzole nel piano del parabrezza (per pulire le gocce)
+    for (const [side, y, z] of [[1, 0.95, 0.03], [-1, 0.98, 0.05]]) {
       const p = new THREE.Group();
-      p.position.set(s, 0.95, L2 + 0.03);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.1, 0.02), dark);
-      arm.position.y = 0.55;
+      p.position.set(side * 1.1, y, L2 + z);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.8, 0.02), dark);
+      arm.position.y = 0.9;
       p.add(arm);
-      p.rotation.z = 1.35;
+      p.rotation.z = (side * Math.PI) / 2;
+      p.userData.side = side;
       B.add(p);
       this.wipers.push(p);
+      this.wiperArms.push({ x: side * 1.1, y: y - 1.9, len: 1.8, a: p.rotation.z });
     }
-    this.wiperT = 0;
+    this.wiperT = WIPER_PARK;
 
     // passeggeri a bordo (instanced)
     const pg = mergeGeometries([
@@ -655,12 +665,11 @@ export class Bus {
     this.brakeMat.emissiveIntensity = this.brake > 0.05 || this.doorsAnyOpen ? 2.5 : 0;
     this.revMat.emissiveIntensity = this.dir < 0 ? 2 : 0;
     for (const l of this.headLights) l.intensity = this.lights ? 75 : 0;
-    // tergicristalli
-    if (input.wipers) {
-      this.wiperT += dt * 2.4;
-      const a = 1.35 - (Math.sin(this.wiperT) * 0.5 + 0.5) * 1.6;
-      for (const w of this.wipers) w.rotation.z = a;
-    }
+    // tergicristalli e gocce sul parabrezza
+    this.wiperT = wiperPhase(this.wiperT, !!input.wipers, dt);
+    const up = Math.sin(this.wiperT) * 0.5 + 0.5; // 0 a riposo, 1 contro il montante
+    this.wipers.forEach((w, i) => (w.rotation.z = this.wiperArms[i].a = (w.userData.side * Math.PI) / 2 * (1 - up)));
+    if (dt > 0) this.rainGlass.update(dt, input.rain || 0, Math.abs(this.v), this.wiperArms);
   }
 
   drawDash(state) {
