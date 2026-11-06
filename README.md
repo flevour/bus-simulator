@@ -132,7 +132,7 @@ mezzogiorno, tramonto, sera, notte) oppure segue l'orologio della corsa, senza t
 |-------|--------|
 | **W / ↑** | acceleratore (progressivo) |
 | **S / ↓** | freno (progressivo: tenere premuto per frenare di più) |
-| **A D / ← →** | sterzo |
+| **A D / ← →** | sterzo: i tasti girano il volante (un colpetto corregge, tenendo premuto si gira di più); lasciato, torna al centro da solo, più in fretta in velocità |
 | **Shift** + W/S | gas a fondo / frenata forte (senza Shift i pedali sono dosati) |
 | **F** | apri / chiudi porte (con porte aperte è attivo il freno di fermata) |
 | **Q / E** | freccia sinistra / destra · **G** quattro frecce |

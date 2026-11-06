@@ -37,7 +37,7 @@ export class Bus {
     scene.add(this.group);
     // stato fisico
     this.x = 0; this.z = 0; this.h = 0;
-    this.v = 0; this.steer = 0; this.steerIn = 0;
+    this.v = 0; this.steer = 0; this.steerIn = 0; this.steerKey = 0; this.steerHold = 0;
     this.throttle = 0; this.brake = 0;
     this.gear = 1; this.dir = 1; // 1 = D, -1 = R
     this.rpm = IDLE; this.shiftTimer = 0; this.powerKw = 0;
@@ -458,13 +458,21 @@ export class Bus {
     const brkTarget = input.brake ? (input.shift ? 1 : 0.45) : 0;
     this.throttle += Math.sign(thrTarget - this.throttle) * Math.min(Math.abs(thrTarget - this.throttle), dt * (thrTarget > this.throttle ? 1.3 : 3.5));
     this.brake += Math.sign(brkTarget - this.brake) * Math.min(Math.abs(brkTarget - this.brake), dt * (brkTarget > this.brake ? 1.2 : 4));
-    // sterzo
-    const steerTarget = input.left ? 1 : input.right ? -1 : 0;
+    // sterzo: i tasti girano il volante, non lo mettono in una posizione. Un colpetto lo sposta di poco, tenendo premuto
+    // la mano accelera; lasciato, il volante torna al centro da solo tanto più in fretta quanto più si va veloci
+    // (autoallineamento delle ruote), da fermo resta quasi dov'è. Le ruote seguono il volante con un piccolo ritardo.
+    const steerKey = input.left ? 1 : input.right ? -1 : 0;
     const sp = Math.abs(this.v);
-    const rate = steerTarget !== 0 ? 0.85 : 1.25;
-    this.steerIn += Math.sign(steerTarget - this.steerIn) * Math.min(Math.abs(steerTarget - this.steerIn), dt * rate * (steerTarget !== 0 && Math.sign(steerTarget) !== Math.sign(this.steerIn) ? 1.8 : 1));
+    if (steerKey !== this.steerKey) { this.steerKey = steerKey; this.steerHold = 0; }
+    if (steerKey) {
+      this.steerHold += dt;
+      // controsterzo più svelto: si riporta il volante verso il centro
+      const back = this.steerIn * steerKey < 0 ? 1.6 : 1;
+      const rate = (0.22 + Math.min(1, this.steerHold / 0.6) * 0.75) * back;
+      this.steerIn = Math.max(-1, Math.min(1, this.steerIn + steerKey * rate * dt));
+    } else this.steerIn -= this.steerIn * Math.min(1, dt * (0.4 + 0.1 * sp));
     const maxSteer = 0.62 / (1 + sp * sp * 0.0045);
-    this.steer = this.steerIn * maxSteer;
+    this.steer += (this.steerIn * maxSteer - this.steer) * Math.min(1, dt * 7);
 
     // freno di fermata con porte aperte / freno di stazionamento
     const doorBrake = this.doorsAnyOpen || this.doorTarget > 0;
