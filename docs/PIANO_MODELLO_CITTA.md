@@ -54,6 +54,22 @@ Agenzia delle Entrate, Copernicus, Mapillary e Open-Meteo rispondono con un rifi
 
 Si raggiungono anche **GitHub** (quindi la copia della CTRN, sezione 2.2) e i bucket S3 pubblici.
 
+**Aggiornamento del 6 novembre, sera.** È stato creato l'ambiente cloud personale **`bus-simulator`**, con questi host
+in più:
+- Regione: `idt2`, `idt2-geoserver`, `repository`;
+- ARPAV;
+- Catasto: WFS e pagina del download in blocco;
+- MASE (LiDAR), Mapillary e Comune di Padova.
+
+Ora rispondono. Prime verifiche sul WFS regionale (1.071 strati):
+- **esiste il DBGT "LOTTO COMUNE DI PADOVA"**: volo del 2007, 9.326 ha, cioè tutto il Comune; licenza IODL 2.0;
+- **il DTM LiDAR a 5 m copre Padova** (quadro d'unione `rv:c0101071_lidar5m`, tessere `12_2K_…`); licenza IODL 2.0;
+- **gli Edifici del Veneto** (`rv:edifici_veneto_feb2022`, aggiornamento 2007 a Padova) hanno tipo, uso e stato,
+  **ma non le altezze**.
+
+Overpass e Geofabrik sono consentiti, ma chiudono la connessione agli indirizzi cloud: per OSM resta Overture
+(mensile) o l'export dal browser.
+
 **Overture Maps funziona già.** Ripubblica ogni mese i dati OSM (istantanea del 10 ottobre 2026) e li rende
 scaricabili da qui con `scripts/overture_layers.py`. Nell'area di gioco contiene:
 
@@ -80,13 +96,13 @@ Stato degli indirizzi:
 | # | Fonte | Cosa dà per il modello | Data e precisione | Formato | Licenza | Accesso |
 |---|---|---|---|---|---|---|
 | 1 | **CTRN 1:5000 della Regione del Veneto**, copia pubblica su GitHub `github.com/bettellam/CTRN_VENETO` [V] (originale sul downloader IDT2 [S]) | **Bordi delle carreggiate** (codici 0205/0206/0208), **cordoli di marciapiedi e isole** (0212, ~12.000 linee per foglio), spartitraffico (0211), ponti e cavalcavia, edifici con le **pensiline** (0104), **alberi isolati** (0506: 2.736 in un solo foglio) e filari, muri e siepi, **argini e scarpate**, punti quotati | **Rilievo 1997** per Padova (1992 ai margini nord): prima del SIR1 e di molte rotatorie; scala 1:5000 | GeoPackage per foglio, EPSG:3003 o ETRF2000 UTM32 | IODL 2.0 [S]; attribuzione "Regione del Veneto – L.R. n. 28/76" | **Raggiungibile ora** (GitHub) |
-| 2 | **DB Topografico (DBGT) della Regione** [S] | Se esiste un lotto per Padova: aree di circolazione veicolare e pedonale (carreggiata, marciapiede), edifici con le altezze | Gli strumenti urbanistici di Padova citano una "CTRN 2007 – DB topografico" [S]; copertura di Padova da verificare sulla mappa dei lotti `r_veneto:c0101101_LOTTI_DBGT` | Geodatabase | IODL 2.0 | Host bloccato; altrimenti richiesta alla Regione |
+| 2 | **DB Topografico (DBGT) della Regione** | **Lotto "COMUNE DI PADOVA" verificato [V]** (strato `rv:c0101101_lotti_dbgt`): volo 2007, 9.326 ha. Secondo le specifiche: aree di circolazione veicolare e pedonale (carreggiata, marciapiede), edifici e volumi | 2007: dieci anni più recente della CTRN, ma da controllare se c'è già il SIR1 (aperto nel 2007) | Geodatabase | IODL 2.0 [V] | Dal downloader IDT2 (da provare dall'ambiente `bus-simulator`), altrimenti richiesta alla Regione |
 | 3 | **Catasto, Agenzia delle Entrate** [S] | Particelle: lo spazio tra le particelle è la strada pubblica, un limite massimo per carreggiata più marciapiedi; sagome dei fabbricati | Aggiornato ogni 6 mesi; errori locali di qualche metro | GML in blocco per regione; WFS/WMS; DXF per foglio con SPID | CC BY 4.0 [S] | Download in blocco pubblico (`agenziaentrate.gov.it/portale/download-massivo-cartografia-catastale`), host bloccato |
 | 4 | **Overture Maps** (da OSM) [V] | Lo stato attuale: verde, zone pedonali, strisce come linee, marciapiedi mappati, semafori, fermate con pensilina (sezione 2.1) | Mensile, istantanea OSM del 10/10/2026 | GeoParquet WGS84 | ODbL | **Raggiungibile ora**, `scripts/overture_layers.py` |
 | 5 | **Mapillary API v4** [S] | Semafori, cartelli, strisce e linee d'arresto riconosciuti nelle foto | Copertura di Padova da verificare | JSON, tile vettoriali | Attribuzione Mapillary nel gioco | Token gratuito; host bloccato |
 | 6 | **Ortofoto AGEA 2024 a 20 cm, Regione** [S] | Verifica visiva di tutto | 2024, 20 cm | WMS/WMTS (`idt2-geoserver.regione.veneto.it`, layer `rv:ortofoto_agea_2024`) | **Solo consultazione**, con citazione AGEA: per controllare, non per ricavare dati | Host bloccato |
-| 7 | **LiDAR**: DTM/DSM nazionale a 1 m (MASE) [S]; DTM regionale a 5 m [S] | Cavalcavia, argini, profilo delle strade; altezze degli edifici come DSM − DTM | 1 m; copertura di Padova da verificare | GeoTIFF | CC BY 4.0 (MASE) | App "Download Banca Dati PST" o datipst@mase.gov.it |
-| 8 | **Edifici del Veneto** (Regione, 2022) [S] e mosaico ARPAV degli edifici CTRN con altezza, gronda e piani [S] | Sagome ed eventualmente altezze misurate (le altezze CTR a volte sono sbagliate) | 2022 | WFS (`idt2-geoserver…/rv:edifici_veneto_feb2022`) | IODL 2.0 | Host bloccato |
+| 7 | **LiDAR**: DTM regionale a 5 m, **copertura di Padova verificata [V]**; DTM/DSM nazionale a 1 m (MASE) [S] | Cavalcavia, argini, profilo delle strade; dal DSM a 1 m anche le altezze degli edifici (DSM − DTM) | 5 m regionale; 1 m MASE, copertura da verificare | GeoTIFF | IODL 2.0 [V]; CC BY 4.0 (MASE) | Tessere dal downloader IDT2; MASE con l'app "Download Banca Dati PST" |
+| 8 | **Edifici del Veneto** (Regione) [V] e mosaico ARPAV degli edifici CTRN con altezza, gronda e piani [S] | Sagome: a Padova sono aggiornate al 2007, **senza altezze** [V]. Le altezze vanno cercate nel mosaico ARPAV, a volte sbagliate | 2007 a Padova | WFS (`rv:edifici_veneto_feb2022`) [V] | IODL 2.0 | Raggiungibile dall'ambiente `bus-simulator` |
 | 9 | Copertura del suolo regionale 2018/2021; Copernicus Urban Atlas e Street Tree Layer [S] | Verde a grana grossa, chiome degli alberi | 1:10.000, minimo 0,25 ha; 500 m² | Shapefile, GPKG | IODL 2.0; Copernicus | Bloccati; Copernicus richiede login |
 | 10 | ISTAT basi territoriali 2021 [S] | Popolazione per sezione: domanda di passeggeri, non geometria | 2021 | Shapefile | CC BY | Bloccato |
 
@@ -374,9 +390,9 @@ una build e l'altra:
 |---|---|---|---|
 | **M0** | Strati Overture nella pipeline: parchi, prati, zone pedonali, piazze, alberi, geometria delle strisce, marciapiedi mappati, `width` OSM nella carreggiata, posizione delle paline e pensiline da OSM. Rapporto di verifica (6.1) | Niente: Overture è raggiungibile | 2 |
 | **M1** | Semafori rifatti (5.1): lanterna sulla linea d'arresto e sul marciapiede vero, ripetitrici, fasi e onda verde, controlli | Niente | 1–2 |
-| **M2** | **Carreggiate, cordoli e isole dalla CTRN** con la conflazione sulla rete OSM, nei passi seguenti | Niente: la CTRN è su GitHub | 2–3 |
+| **M2** | **Carreggiate, marciapiedi e isole misurati**, con la conflazione sulla rete OSM nei passi seguenti. Prima scelta il DBGT di Padova del 2007, se il downloader lo consegna; altrimenti la CTRN del 1997 (bordi e cordoli) | DBGT dal downloader IDT2; la CTRN è su GitHub | 2–3 |
 | **M3** | Altezze degli edifici misurate: DBT, Edifici del Veneto o LiDAR (DSM − DTM) | Host regionali o MASE, oppure scarico dal browser | 1–2 |
-| **M4** | Terreno e quote: argini e scarpate della CTRN, poi DTM LiDAR per rampe e sottopassi | CTRN subito; LiDAR come M3 | 1 |
+| **M4** | Terreno e quote: DTM LiDAR a 5 m (copre Padova) più argini e scarpate della CTRN, per rampe, sottopassi e profilo delle strade | Tessere LiDAR dal downloader IDT2 | 1 |
 | **M5** | Ortofoto AGEA 2024 per la verifica visiva in modalità Esplorazione. Solo consultazione, quindi caricata dal browser del giocatore, non dentro i dati | Host regionali consentiti dal browser (WMTS pubblico) | 1 |
 | **M6** | Catasto (spazio pubblico tra le particelle) come controllo delle larghezze; Mapillary per i semafori mancanti | Scarico in blocco del catasto; token Mapillary | 1–2 |
 | **M7** | Semafori, segnaletica, marciapiedi e LiDAR del Comune, se la richiesta di accesso civico va a buon fine | Richiesta formale al Comune | 1–2 |
@@ -393,15 +409,18 @@ Passi della conflazione della CTRN (M2):
 
 ### Cosa serve per partire
 
-- **M0, M1, M2 e la prima parte di M4 si possono fare subito**, da qui: Overture e la CTRN sono raggiungibili.
-- **Per M3, M5 e M6** servono host oggi bloccati. Due strade:
-  1. **aggiungerli all'ambiente cloud**, così ogni sessione scarica da sola:
+- **M0, M1 e M2 (con la CTRN) si possono fare subito**: Overture e la CTRN sono raggiungibili.
+- **L'ambiente `bus-simulator`** (creato il 6 novembre) permette di provare il downloader IDT2 per il DBGT e il LiDAR e
+  di scaricare il catasto. Mapillary richiede un token, da chiedere quando si arriva a M6.
+- Host che l'ambiente `bus-simulator` già consente. Per scaricare a mano, invece, si possono prendere i file dal
+  browser e metterli in `data/`:
+  1. host consentiti:
      - `idt2.regione.veneto.it`, `idt2-geoserver.regione.veneto.it`, `repository.regione.veneto.it` (Regione: DBGT,
        Edifici, ortofoto, specifiche);
      - `wfs.cartografia.agenziaentrate.gov.it`, `www.agenziaentrate.gov.it` (catasto);
      - `sim.mase.gov.it` (LiDAR);
      - `graph.mapillary.com`, `tiles.mapillary.com` (con un token);
-  2. oppure **scaricare i file dal browser** e metterli in `data/`, come per l'export Overpass.
+  2. in alternativa, **scaricare i file dal browser** e metterli in `data/`, come per l'export Overpass.
 - **M7** richiede una domanda di accesso civico generalizzato al Comune di Padova (Settore Mobilità e SIT) per:
   - gli strati del gemello digitale del 2023 (semafori, cartelli, marciapiedi);
   - l'elenco e i piani degli impianti semaforici;
