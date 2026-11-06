@@ -179,7 +179,7 @@ export class Mission {
     if (this.finished) { this.crowd.update(dt); return; }
     const front = bus.toWorld(0, 6);
     if (this.free) { this.updateFree(dt, bus, ctx, front); return; }
-    const proj = projectOnRoute(this.route, bus.x, bus.z, this.s);
+    const proj = projectOnRoute(this.route, bus.x, bus.z, this.s, 80, 400, bus.h);
     if (proj.d < 60) this.s = proj.s;
     this.proj = proj;
     const sFront = this.s + 6 * Math.cos(angleDiff(Math.atan2(this.route.segs[proj.segIndex].dx, this.route.segs[proj.segIndex].dz), bus.h));

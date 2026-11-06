@@ -98,9 +98,12 @@ export function pointAt(route, s) {
   return { x: route.pts[i].x + seg.dx * t, z: route.pts[i].z + seg.dz * t, dx: seg.dx, dz: seg.dz, seg, segIndex: i };
 }
 
-// Proiezione di un punto sul percorso cercando vicino a sHint
-export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400) {
-  let best = { d: Infinity, s: sHint, lat: 0, segIndex: 0 };
+// Proiezione di un punto sul percorso cercando vicino a sHint. Con h (direzione del mezzo) si segue chi guida: dove il
+// percorso ripassa vicino a sé stesso (incroci, rotonde, andata e ritorno nella stessa via) vince il tratto nel verso
+// di marcia e vicino a sHint, invece di saltare avanti di centinaia di metri e dare per saltate le fermate in mezzo.
+export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400, h) {
+  let best = { d: Infinity, s: sHint, lat: 0, segIndex: 0 }, bestCost = Infinity;
+  const hx = h === undefined ? 0 : Math.sin(h), hz = h === undefined ? 0 : Math.cos(h);
   for (let i = 0; i < route.segs.length; i++) {
     const s0 = route.cum[i], s1 = route.cum[i + 1];
     if (s1 < sHint - back || s0 > sHint + fwd) continue;
@@ -110,9 +113,12 @@ export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400) {
     t = Math.max(0, Math.min(seg.len, t));
     const cx = route.pts[i].x + seg.dx * t, cz = route.pts[i].z + seg.dz * t;
     const d = Math.hypot(x - cx, z - cz);
-    if (d < best.d) {
+    // costo in metri: di traverso +6, contromano +12; oltre 20 m da sHint, 8 cm per metro
+    const cost = h === undefined ? d : d + (1 - (seg.dx * hx + seg.dz * hz)) * 6 + Math.max(0, Math.abs(s0 + t - sHint) - 20) * 0.08;
+    if (cost < bestCost) {
       const lat = (x - cx) * -seg.dz + (z - cz) * seg.dx; // positivo = destra
       best = { d, s: s0 + t, lat, segIndex: i };
+      bestCost = cost;
     }
   }
   return best;

@@ -26,6 +26,13 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    - mezzeria continua dove `overtaking=no`;
    - frecce a terra da `turn:lanes`;
    - corsie preferenziali gialle con la scritta BUS da `lanes:psv` / `bus:lanes`.
+5. [~] **Segnalazioni dal gioco del 6 novembre** (modulo Richieste, linea 42 in Via Madonna della Salute):
+   - [x] fermate date per saltate prima di averle attraversate (vedi "Fatto");
+   - [ ] semafori in mezzo alla strada e orientati male; zone pedonali; profilo altimetrico delle strade;
+   - [ ] navigatore sulle linee 22, 13, 25 (in parte era lo stesso salto della posizione, da ricontrollare);
+   - [ ] zona Plebiscito: strade e fermate;
+   - [ ] cavalcavia da migliorare e posizione dei fiumi;
+   - [ ] mappa più grande.
 
 ## Mappa e dati
 
@@ -97,6 +104,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Posizione lungo il percorso che segue il verso di marcia: dove il percorso ripassa vicino a sé stesso non salta
+  più avanti (fermate date per saltate prima di arrivarci, navigatore avanti di centinaia di metri).
 - [x] Bus automatici di tutte le linee dall'orario GTFS (capolinea, fermate a richiesta, semafori, code, uscita fuori
   servizio) e saluto tra autisti con Y (punti bonus).
 - [x] Novità dall'ultima visita nel menu e modulo per richieste e segnalazioni (sondaggio PostHog).
