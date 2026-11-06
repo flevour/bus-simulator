@@ -49,6 +49,8 @@ Prova fatta il 6 novembre 2026. La policy di rete dell'ambiente nega tutti gli h
 **il bucket S3 di Overture Maps**. Overpass, Geofabrik, openstreetmap.fr, Regione Veneto (IDT2), Comune di Padova,
 Agenzia delle Entrate, Copernicus, Mapillary e Open-Meteo rispondono con un rifiuto del proxy (403 al CONNECT).
 
+Si raggiungono anche **GitHub** (quindi la copia della CTRN, sezione 2.2) e i bucket S3 pubblici.
+
 **Overture Maps funziona già.** Ripubblica ogni mese i dati OSM (istantanea del 10 ottobre 2026) e li rende
 scaricabili da qui con `scripts/overture_layers.py`. Nell'area di gioco contiene:
 
@@ -65,9 +67,60 @@ Rispetto all'export Overpass attuale, Overture dà **gratis e subito** proprio c
 piazze, alberi, la geometria degli attraversamenti, i marciapiedi mappati, le pensiline delle fermate. Inoltre
 permette di aggiornare la mappa senza export manuali.
 
-### 2.2 Fonti esterne
+### 2.2 Fonti esterne, in ordine di impatto
 
-*(da completare con la ricerca)*
+Stato degli indirizzi:
+- **[V]**: verificato dal container, scaricando o elencando il contenuto;
+- **[S]**: trovato nelle ricerche ma non aperto, perché l'host è bloccato;
+- **[U]**: dedotto o riferito da terzi, da verificare.
+
+| # | Fonte | Cosa dà per il modello | Data e precisione | Formato | Licenza | Accesso |
+|---|---|---|---|---|---|---|
+| 1 | **CTRN 1:5000 della Regione del Veneto**, copia pubblica su GitHub `github.com/bettellam/CTRN_VENETO` [V] (originale sul downloader IDT2 [S]) | **Bordi delle carreggiate** (codici 0205/0206/0208), **cordoli di marciapiedi e isole** (0212, ~12.000 linee per foglio), spartitraffico (0211), ponti e cavalcavia, edifici con le **pensiline** (0104), **alberi isolati** (0506: 2.736 in un solo foglio) e filari, muri e siepi, **argini e scarpate**, punti quotati | **Rilievo 1997** per Padova (1992 ai margini nord): prima del SIR1 e di molte rotatorie; scala 1:5000 | GeoPackage per foglio, EPSG:3003 o ETRF2000 UTM32 | IODL 2.0 [S]; attribuzione "Regione del Veneto – L.R. n. 28/76" | **Raggiungibile ora** (GitHub) |
+| 2 | **DB Topografico (DBGT) della Regione** [S] | Se esiste un lotto per Padova: aree di circolazione veicolare e pedonale (carreggiata, marciapiede), edifici con le altezze | Gli strumenti urbanistici di Padova citano una "CTRN 2007 – DB topografico" [S]; copertura di Padova da verificare sulla mappa dei lotti `r_veneto:c0101101_LOTTI_DBGT` | Geodatabase | IODL 2.0 | Host bloccato; altrimenti richiesta alla Regione |
+| 3 | **Catasto, Agenzia delle Entrate** [S] | Particelle: lo spazio tra le particelle è la strada pubblica, un limite massimo per carreggiata più marciapiedi; sagome dei fabbricati | Aggiornato ogni 6 mesi; errori locali di qualche metro | GML in blocco per regione; WFS/WMS; DXF per foglio con SPID | CC BY 4.0 [S] | Download in blocco pubblico (`agenziaentrate.gov.it/portale/download-massivo-cartografia-catastale`), host bloccato |
+| 4 | **Overture Maps** (da OSM) [V] | Lo stato attuale: verde, zone pedonali, strisce come linee, marciapiedi mappati, semafori, fermate con pensilina (sezione 2.1) | Mensile, istantanea OSM del 10/10/2026 | GeoParquet WGS84 | ODbL | **Raggiungibile ora**, `scripts/overture_layers.py` |
+| 5 | **Mapillary API v4** [S] | Semafori, cartelli, strisce e linee d'arresto riconosciuti nelle foto | Copertura di Padova da verificare | JSON, tile vettoriali | Attribuzione Mapillary nel gioco | Token gratuito; host bloccato |
+| 6 | **Ortofoto AGEA 2024 a 20 cm, Regione** [S] | Verifica visiva di tutto | 2024, 20 cm | WMS/WMTS (`idt2-geoserver.regione.veneto.it`, layer `rv:ortofoto_agea_2024`) | **Solo consultazione**, con citazione AGEA: per controllare, non per ricavare dati | Host bloccato |
+| 7 | **LiDAR**: DTM/DSM nazionale a 1 m (MASE) [S]; DTM regionale a 5 m [S] | Cavalcavia, argini, profilo delle strade; altezze degli edifici come DSM − DTM | 1 m; copertura di Padova da verificare | GeoTIFF | CC BY 4.0 (MASE) | App "Download Banca Dati PST" o datipst@mase.gov.it |
+| 8 | **Edifici del Veneto** (Regione, 2022) [S] e mosaico ARPAV degli edifici CTRN con altezza, gronda e piani [S] | Sagome ed eventualmente altezze misurate (le altezze CTR a volte sono sbagliate) | 2022 | WFS (`idt2-geoserver…/rv:edifici_veneto_feb2022`) | IODL 2.0 | Host bloccato |
+| 9 | Copertura del suolo regionale 2018/2021; Copernicus Urban Atlas e Street Tree Layer [S] | Verde a grana grossa, chiome degli alberi | 1:10.000, minimo 0,25 ha; 500 m² | Shapefile, GPKG | IODL 2.0; Copernicus | Bloccati; Copernicus richiede login |
+| 10 | ISTAT basi territoriali 2021 [S] | Popolazione per sezione: domanda di passeggeri, non geometria | 2021 | Shapefile | CC BY | Bloccato |
+
+**Comune di Padova.**
+- Nessun dato aperto su semafori, alberi, marciapiedi o ZTL. Su `dati.veneto.it` ci sono solo civici e panchine [S].
+- Ha però tre cose che valgono una richiesta formale (accesso civico generalizzato):
+  - il **gemello digitale del 2023** (CGR e Cyclomedia, 110 km di strade rilevate), consultabile ma non scaricabile [S];
+  - l'elenco e i piani semaforici degli impianti (manutenzione La Semaforica, determina 2021/62/0013) [S];
+  - il **LiDAR aereo** comunale [S].
+- Il censimento del verde contava 63.944 alberi a fine 2022, ma non è pubblicato [S].
+- Le postazioni dei rilevatori di passaggio col rosso, con le coordinate, servono per controllare alcuni semafori [S].
+
+**Tram.** OSM ha già **SIR3 e parte del SIR2** come `railway=tram`, nel nostro `data/osm-padova-tram.json`. I progetti del
+Comune sono solo PDF.
+
+**Fermate.** Busitalia non pubblica le paline. Le migliori restano le fermate GTFS più i nodi OSM `bus_stop` con
+`shelter`.
+
+#### La CTRN in pratica
+
+Prove della ricerca sui fogli 147031 e 147034:
+
+- **Allineamento.** Rispetto agli edifici Overture c'è uno **scarto costante di circa 2,4 m** (dx −1,15, dy +2,08,
+  probabilmente un effetto della trasformazione di datum della copia). Dopo averlo corretto, il 95% degli edifici
+  coincide (IoU > 0,5).
+- **Larghezze.** Lungo le strade OSM i bordi CTRN delimitano la carreggiata da entrambi i lati nel 91% dei campioni
+  delle `secondary` (mediana **10,1 m**), nell'86% delle `tertiary` (8,9 m) e nell'82% delle `unclassified` (7,8 m).
+  Sulle `residential` succede solo nel 48%, perché spesso il limite è la facciata.
+- **Altezze.** Nella copia gli edifici hanno le quote a 0: le altezze vanno prese altrove (fonti 2, 7, 8).
+- **Fogli dell'area di gioco (15):** 126112, 126113, 126123, 126151, 126152, 126153, 126154, 126163, 126164, 147031,
+  147032, 147033, 147034, 147043, 147044 (circa 300 MB).
+- **Scarico senza clonare tutto** (il repository intero pesa diversi GB):
+  `git clone --depth 1 --filter=blob:none --no-checkout https://github.com/bettellam/CTRN_VENETO`, poi
+  `git show HEAD:Bd_gpkg_GBO_ETRF2000U32/<foglio>/<elemento>o.gpkg > <elemento>.gpkg`.
+- **Lettura.** Con `sqlite3` e shapely: la geometria è un'intestazione GeoPackage seguita da WKB.
+- **Licenza.** La copia non ha un file di licenza; i dati sono della Regione (IODL 2.0, compatibile con la
+  redistribuzione con attribuzione). Da verificare sui termini del geoportale prima di pubblicare dati derivati.
 
 ---
 
@@ -197,7 +250,9 @@ elemento ricorda da quale fonte viene: un campo `src` nell'export, che serve per
 
 Regola di priorità, uguale per tutti gli strati:
 
-1. **dato misurato ufficiale**: Regione Veneto DBT/CTR, Comune di Padova, Catasto;
+1. **dato misurato ufficiale**: Regione Veneto DBT/CTRN, Comune di Padova, Catasto. La CTRN è del 1997: vale dove
+   coincide con la rete OSM di oggi; dove la strada è cambiata, cioè la strada OSM esce dalla carreggiata CTRN, vince
+   OSM;
 2. **dato OSM esplicito** (via Overture o export): `width`, `sidewalk:*:width`, vie `footway=sidewalk`, aree;
 3. **dato OSM indiretto**: `lanes`, `sidewalk=both`, `parking:*`, classe della strada;
 4. **regola dalle norme** (sezione 3), con i vincoli del luogo: facciate, acqua, binari.
@@ -206,14 +261,14 @@ Strati, dal basso:
 
 | # | Strato | Fonte (in ordine di priorità) | Cosa cambia rispetto a oggi |
 |---|---|---|---|
-| 0 | Terreno e quote | DTM LiDAR regionale → quote dei ponti OSM (`layer`, `bridge`) | Argini, rampe e cavalcavia alla quota vera; profilo delle strade |
+| 0 | Terreno e quote | DTM LiDAR → argini, scarpate e punti quotati della CTRN → quote dei ponti OSM (`layer`, `bridge`) | Argini, rampe e cavalcavia alla quota vera; profilo delle strade |
 | 1 | Rete (grafo) | OSM via Overture `segment` + `connector`, oppure export | Aggiornabile da qui ogni mese; stessi archi e nodi di oggi |
-| 2 | **Carreggiata** (asfalto) | DBT "area stradale", se ottenibile → OSM `width` / `est_width` → `lanes` × larghezza di corsia per classe + corsie bus e parcheggi (`parking:*`) → regola per classe | Larghezze vere dove ci sono; le facciate restano un vincolo, ma non più l'unica misura |
-| 3 | **Marciapiedi** | DBT "marciapiede" → vie OSM `footway=sidewalk` (distanza dall'asse = metà carreggiata) → `sidewalk:*:width` → `sidewalk=both/left/right` con larghezza dalle norme → nessuno se `sidewalk=no` | Niente più fascia fissa da 3,5 m; marciapiedi solo dove ci sono |
-| 4 | Isole e spartitraffico | DBT → OSM `area:highway`, `traffic_island`, `junction=roundabout` (isola centrale) → buchi della carreggiata (come oggi) | Isole misurate dove ci sono |
+| 2 | **Carreggiata** (asfalto) | DBT "area di circolazione veicolare" → **bordi CTRN** (0205/0206/0208), dove coincidono con la strada OSM → OSM `width` / `est_width` → `lanes` × corsia per classe (3,25/3,00/2,75) + corsie bus (3,50) e sosta (`parking:*`, 2,00) → regola per classe | Larghezze vere dove ci sono; le facciate restano un vincolo, ma non più l'unica misura |
+| 3 | **Marciapiedi** | DBT "area pedonale" → **cordoli CTRN** (0212) → vie OSM `footway=sidewalk` (distanza dall'asse = metà carreggiata) → `sidewalk:*:width` → `sidewalk=both/left/right` con 1,5–3 m dalle norme → nessuno se `sidewalk=no` | Niente più fascia fissa da 3,5 m; marciapiedi solo dove ci sono |
+| 4 | Isole e spartitraffico | DBT → **cordoli e spartitraffico CTRN** (0212, 0211) → OSM `area:highway`, `traffic_island`, `junction=roundabout` (isola centrale) → buchi della carreggiata (come oggi) | Isole misurate dove ci sono |
 | 5 | Attraversamenti | Linee `footway=crossing` (lunghezza e posizione vere) → nodi `crossing` (come oggi) | Strisce lunghe quanto la carreggiata, nel punto vero, inclinate come la via |
 | 6 | Zone pedonali e piazze | `land_use` pedestrian/plaza + `highway=pedestrian` area | Piazze lastricate senza carreggiata: Erbe, Frutti, Signori… |
-| 7 | Verde | `land_use` park/grass/garden/pitch, `land` tree/tree_row; poi il censimento del verde del Comune o lo Street Tree Layer di Copernicus | Parchi e alberi reali, filari lungo i viali |
+| 7 | Verde | `land_use` park/grass/garden/pitch, `land` tree/tree_row + **alberi isolati e filari CTRN** (0506) → censimento del verde del Comune o Street Tree Layer di Copernicus | Parchi e alberi reali, filari lungo i viali |
 | 8 | Acque | `base/water` (aree) + export attuale | Fiumi e canali con la sponda vera |
 | 9 | Edifici | Overture (pianta) + altezza: CTR/DBT (quota di gronda) → OSM `height`/`building:levels` → stima ML (come oggi) | Altezze misurate in centro storico |
 | 10 | Fermate | GTFS (identità, ordine, orari) + nodo OSM `bus_stop` per la posizione della palina + `shelter`/`bench` | Vedi sezione 5.2 |
@@ -316,15 +371,35 @@ una build e l'altra:
 |---|---|---|---|
 | **M0** | Strati Overture nella pipeline: parchi, prati, zone pedonali, piazze, alberi, geometria delle strisce, marciapiedi mappati, `width` OSM nella carreggiata, posizione delle paline e pensiline da OSM. Rapporto di verifica (6.1) | Niente: Overture è raggiungibile | 2 |
 | **M1** | Semafori rifatti (5.1): lanterna sulla linea d'arresto e sul marciapiede vero, ripetitrici, fasi e onda verde, controlli | Niente | 1–2 |
-| **M2** | Carreggiate e marciapiedi misurati dalla Regione (DBT), con la conflazione sulla rete OSM | Accesso ai dati regionali (2.2) | 2–3 |
-| **M3** | Altezze degli edifici misurate (CTR/DBT o LiDAR DSM) | Come M2 | 1–2 |
-| **M4** | Terreno e quote dal DTM: argini, rampe, sottopassi | Come M2 | 1 |
-| **M5** | Ortofoto per la verifica visiva (ed eventualmente come terreno) | Servizio WMS/WMTS regionale o AGEA | 1 |
-| **M6** | Semafori e segnaletica dal Comune (elenco degli impianti, fasi), se pubblicati | Dati del Comune | 1 |
+| **M2** | **Carreggiate, cordoli e isole dalla CTRN** con la conflazione sulla rete OSM, nei passi seguenti | Niente: la CTRN è su GitHub | 2–3 |
+| **M3** | Altezze degli edifici misurate: DBT, Edifici del Veneto o LiDAR (DSM − DTM) | Host regionali o MASE, oppure scarico dal browser | 1–2 |
+| **M4** | Terreno e quote: argini e scarpate della CTRN, poi DTM LiDAR per rampe e sottopassi | CTRN subito; LiDAR come M3 | 1 |
+| **M5** | Ortofoto AGEA 2024 per la verifica visiva in modalità Esplorazione. Solo consultazione, quindi caricata dal browser del giocatore, non dentro i dati | Host regionali consentiti dal browser (WMTS pubblico) | 1 |
+| **M6** | Catasto (spazio pubblico tra le particelle) come controllo delle larghezze; Mapillary per i semafori mancanti | Scarico in blocco del catasto; token Mapillary | 1–2 |
+| **M7** | Semafori, segnaletica, marciapiedi e LiDAR del Comune, se la richiesta di accesso civico va a buon fine | Richiesta formale al Comune | 1–2 |
+
+Passi della conflazione della CTRN (M2):
+
+1. Scaricare i 15 fogli e correggere lo scarto di circa 2,4 m, ricalcolandolo per foglio sugli edifici.
+2. Chiudere in facce la rete di linee (bordi delle carreggiate, cordoli, spartitraffico, sagome degli edifici) e
+   classificare ogni faccia come carreggiata, marciapiede o isola, usando gli assi OSM.
+3. Dove la strada OSM di oggi esce dalla carreggiata CTRN si segna "cambiato dopo il 1997" (sede del tram,
+   rotatorie) e vale la regola della sezione 4.
+4. Agganciare ai cordoli 0212 i pali dei semafori e le paline: risolve i 73 pali in carreggiata.
+5. Gli alberi isolati e i filari vanno uniti a quelli OSM, gli argini e le scarpate alle quote.
 
 ### Cosa serve per partire
 
-- **M0 e M1 si possono fare subito**, da qui.
-- **Per M2–M6** servono i dati regionali e comunali. Due strade:
-  1. **aggiungere all'ambiente cloud gli host** che li servono (elenco in 2.2), così ogni sessione li scarica da sola;
-  2. oppure **scaricarli dal browser** e mettere i file in `data/`, come per l'export Overpass.
+- **M0, M1, M2 e la prima parte di M4 si possono fare subito**, da qui: Overture e la CTRN sono raggiungibili.
+- **Per M3, M5 e M6** servono host oggi bloccati. Due strade:
+  1. **aggiungerli all'ambiente cloud**, così ogni sessione scarica da sola:
+     - `idt2.regione.veneto.it`, `idt2-geoserver.regione.veneto.it`, `repository.regione.veneto.it` (Regione: DBGT,
+       Edifici, ortofoto, specifiche);
+     - `wfs.cartografia.agenziaentrate.gov.it`, `www.agenziaentrate.gov.it` (catasto);
+     - `sim.mase.gov.it` (LiDAR);
+     - `graph.mapillary.com`, `tiles.mapillary.com` (con un token);
+  2. oppure **scaricare i file dal browser** e metterli in `data/`, come per l'export Overpass.
+- **M7** richiede una domanda di accesso civico generalizzato al Comune di Padova (Settore Mobilità e SIT) per:
+  - gli strati del gemello digitale del 2023 (semafori, cartelli, marciapiedi);
+  - l'elenco e i piani degli impianti semaforici;
+  - il LiDAR aereo.

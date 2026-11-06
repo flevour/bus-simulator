@@ -36,6 +36,10 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Mappa e dati
 
+- [ ] **Modello della città coerente con la realtà**: piano con fonti, misure dalle norme, pipeline a strati, semafori,
+  fermate, verifiche e tappe in [`docs/PIANO_MODELLO_CITTA.md`](docs/PIANO_MODELLO_CITTA.md). Si parte da M0
+  (strati Overture) e M2 (carreggiate e cordoli dalla CTRN 1:5000, raggiungibile da GitHub).
+
 - [ ] **Modalità di esplorazione senza mezzo**, per controllare com'è fatta la mappa:
   - *panoramica*: vista dall'alto con trascinamento (pan) e zoom, come una mappa;
   - *giro libero*: telecamera che vola ovunque, WASD per muoversi (e mouse per guardarsi intorno), senza bus né
