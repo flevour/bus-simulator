@@ -230,10 +230,11 @@ future potranno averne 4.
   aggiornamento le vede aperte all'avvio. L'ultima letta è ricordata nel browser (`localStorage`). Le righe stanno in
   [`src/data/novita.js`](src/data/novita.js): una per ogni modifica visibile, con `n` crescente.
 * **Richieste e segnalazioni** (dal menu e dalla pausa): idea, problema o altro, più un testo libero, inviati a PostHog
-  insieme a mezzo, linea, modalità, ora di gioco e punto della mappa se si è in corsa. Se nel progetto PostHog esiste
-  un sondaggio di tipo *API* chiamato **Richieste dal gioco** (una domanda a testo libero e, facoltativa, una a scelta
-  singola con le opzioni *Idea*, *Problema*, *Altro*), le risposte finiscono lì (`survey sent`); altrimenti arrivano
-  come evento `player_request_submitted` con il testo.
+  insieme a mezzo, linea, modalità, ora di gioco e punto della mappa se si è in corsa. Le risposte finiscono nel
+  sondaggio PostHog di tipo *API* **Richieste dal gioco** (Surveys → Richieste dal gioco → Results; il gioco lo cerca
+  per id, `SURVEY_ID` in `src/game/news.js`), con una domanda a scelta singola *Idea* / *Problema* / *Altro* e una a
+  testo libero. Se il sondaggio non è attivo o non si carica, arrivano come evento `player_request_submitted` con il
+  testo.
 
 ## Sviluppo
 
