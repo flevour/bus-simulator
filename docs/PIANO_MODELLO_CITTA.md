@@ -4,6 +4,9 @@ Obiettivo: smettere di correggere a mano la mappa un caso alla volta. Strade, ma
 fermate, semafori e tram devono venire da **dati misurati**. Le regole e le misure standard servono solo dove i
 dati mancano. Ogni build deve **controllare da sola** la coerenza.
 
+La ricerca precedente, [`OPEN_DATA.md`](OPEN_DATA.md), resta valida per la domanda di passeggeri (ISTAT, poli) e per il meteo
+reale (Open-Meteo).
+
 Questo documento contiene, in ordine:
 
 1. lo stato attuale, con i numeri misurati il 6 novembre 2026;
