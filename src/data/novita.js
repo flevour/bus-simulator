@@ -1,0 +1,27 @@
+// Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
+// n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
+export const NOVITA = [
+  { n: 23, d: '2026-11-06', t: 'Novità e richieste: da questo pannello vedi cosa è cambiato dall\'ultima visita, e dal menu (o dalla pausa) puoi mandarci idee e segnalazioni.' },
+  { n: 22, d: '2026-11-06', t: 'Con la pioggia il parabrezza di bus e tram si bagna; i tergicristalli, più lunghi, puliscono quasi tutto il vetro (ora li ha anche il tram).' },
+  { n: 21, d: '2026-11-06', t: 'Sterzo più morbido: un colpetto su A/D corregge di poco, tenendo premuto il volante gira sempre più svelto; lasciato, torna al centro da solo.' },
+  { n: 20, d: '2026-11-05', t: 'Rondò Borgomagno sistemato: niente più lastricato sulla carreggiata, e tra i due rami di Via Toti c\'è il triangolo di prato.' },
+  { n: 19, d: '2026-11-05', t: 'Le righe bianche di bordo seguono il cordolo vero e non si incrociano più dove due strade si uniscono.' },
+  { n: 18, d: '2026-11-05', t: 'Modalità Esplorazione: vai dove vuoi senza regole né punteggio. Meteo e ora del giorno si cambiano anche dalla pausa.' },
+  { n: 17, d: '2026-11-05', t: 'Semafori del tram a tre luci: barra orizzontale, triangolo e barra verticale, con le luci spente visibili.' },
+  { n: 16, d: '2026-11-05', t: 'Carreggiate, marciapiedi e spartitraffico disegnati come aree vere, con incroci raccordati e rotonde con l\'isola al centro.' },
+  { n: 15, d: '2026-11-05', t: 'Fermate a richiesta, anche col tram: ti fermi solo se qualcuno ha prenotato o aspetta alla palina.' },
+  { n: 14, d: '2026-11-05', t: 'Cavalcavia Borgomagno su due livelli; Corso Tredici Giugno passa sopra Via Sacro Cuore.' },
+  { n: 13, d: '2026-11-05', t: 'Tram con la cassa bombata in due blu, linea aerea appesa alle facciate e banchine centrali comuni ai due versi.' },
+  { n: 12, d: '2026-11-05', t: 'Strade più larghe sui percorsi dei bus; il bus può usare la sede del tram senza penalità; orari tra le fermate più realistici.' },
+  { n: 11, d: '2026-11-04', t: 'Limite di velocità accanto al tachimetro; i pedoni camminano solo sui marciapiedi.' },
+  { n: 10, d: '2026-11-04', t: 'Tram automatici in servizio secondo l\'orario reale.' },
+  { n: 9, d: '2026-11-04', t: 'Tram SIR1 guidabile dalla Guizza a Pontevigodarzere: manipolatore, pantografo, cambio cabina e precedenza agli incroci.' },
+  { n: 8, d: '2026-11-04', t: 'Semafori, STOP, dare precedenza e strisce pedonali dove sono davvero (da OpenStreetMap).' },
+  { n: 7, d: '2026-11-04', t: 'Meteo variabile con pioggia e nebbia; retromarcia ripremendo S da fermo.' },
+  { n: 6, d: '2026-11-04', t: 'Teletrasporto (J, oppure clic sulla mappa grande).' },
+  { n: 5, d: '2026-11-04', t: 'Livree moderna elettrica e storica arancione; ti guardi intorno trascinando col mouse.' },
+  { n: 4, d: '2026-11-04', t: 'Padova vera: strade, edifici, ferrovia e canali da OpenStreetMap, palazzi con le altezze reali.' },
+  { n: 3, d: '2026-11-03', t: 'Pausa, salvataggio automatico e ripresa della corsa.' },
+  { n: 2, d: '2026-11-03', t: 'Linee, fermate e orari reali di Busitalia Veneto, feriali e festivi.' },
+  { n: 1, d: '2026-11-03', t: 'Prima versione: guidi un autobus urbano in prima persona per le vie di Padova.' },
+];

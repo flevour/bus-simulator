@@ -214,6 +214,17 @@ future potranno averne 4.
   **variabile**: si parte col sereno, il cielo si copre e arriva la pioggia o la nebbia, con transizioni graduali; dopo la
   pioggia le strade restano bagnate per un po'.
 
+## Novità e richieste
+
+* **Novità**: il pulsante nel menu mostra le modifiche, con il numero di quelle non ancora lette; chi torna dopo un
+  aggiornamento le vede aperte all'avvio. L'ultima letta è ricordata nel browser (`localStorage`). Le righe stanno in
+  [`src/data/novita.js`](src/data/novita.js): una per ogni modifica visibile, con `n` crescente.
+* **Richieste e segnalazioni** (dal menu e dalla pausa): idea, problema o altro, più un testo libero, inviati a PostHog
+  insieme a mezzo, linea, modalità, ora di gioco e punto della mappa se si è in corsa. Se nel progetto PostHog esiste
+  un sondaggio di tipo *API* chiamato **Richieste dal gioco** (una domanda a testo libero e, facoltativa, una a scelta
+  singola con le opzioni *Idea*, *Problema*, *Altro*), le risposte finiscono lì (`survey sent`); altrimenti arrivano
+  come evento `player_request_submitted` con il testo.
+
 ## Sviluppo
 
 * Si lavora su `main` con push continuo: ogni push pubblica su GitHub Pages. Le regole di progetto sono in `CLAUDE.md`.
@@ -232,6 +243,8 @@ src/
   game/routes.js     percorsi e fermate
   game/mission.js    servizio, passeggeri, orari, punteggio
   game/hud.js        interfaccia, cruscotto, minimappa
+  game/news.js       novità dall'ultima visita e modulo per le richieste (PostHog)
+  data/novita.js     righe delle novità per chi gioca
   game/audio.js      audio WebAudio + sintesi vocale
   main.js            rendering, telecamere, meteo, ciclo di gioco
 ```

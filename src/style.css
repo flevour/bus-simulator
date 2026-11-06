@@ -13,7 +13,28 @@ button { font: inherit; cursor: pointer; }
 .overlay.hidden { display: none; }
 
 .menu-box { width: min(1180px, 96vw); max-height: 94vh; overflow: auto; background: rgba(18, 24, 32, .94); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; padding: 22px 26px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
-.menu-box header { margin-bottom: 14px; }
+.menu-box header { margin-bottom: 14px; display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.head-actions { display: flex; gap: 8px; }
+button.chip { position: relative; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: #eceff1; font-weight: 700; }
+button.chip:hover { background: rgba(255,255,255,.12); }
+button.chip:focus-visible { outline: 2px solid #ffca28; outline-offset: 2px; }
+#news-badge { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #ff5252; color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
+.overlay.top { z-index: 30; }
+.card.panel { width: min(620px, 94vw); max-height: 88vh; overflow: auto; box-sizing: border-box; }
+#news .card.panel { display: flex; flex-direction: column; overflow: hidden; }
+#news-list { overflow: auto; min-height: 0; padding-right: 6px; }
+#news-ok { flex: none; }
+.card.panel h2 { margin: 0 0 6px; }
+.card.panel .sub { opacity: .75; margin: 0 0 10px; }
+#news-list ul { margin: 0; padding-left: 18px; line-height: 1.5; }
+#news-list li { margin: 4px 0; opacity: .75; }
+#news-list li.new { opacity: 1; }
+#news-list .tag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: #ffb300; color: #1a1a1a; font-size: 11px; font-weight: 800; text-transform: uppercase; vertical-align: 1px; }
+#ask-text { width: 100%; margin: 12px 0 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.3); color: #eceff1; font: inherit; resize: vertical; box-sizing: border-box; }
+#ask-text:focus-visible { outline: 2px solid #ffca28; outline-offset: 1px; }
+#ask-status.good { color: #69f0ae; opacity: 1; }
+#ask-status.bad { color: #ff8a80; opacity: 1; }
+.panel-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .title { font-size: 30px; font-weight: 800; letter-spacing: .5px; }
 .title .bus-ico { display: inline-block; transform: scaleX(-1); }
 .subtitle { opacity: .7; margin-top: 4px; }

@@ -9,6 +9,7 @@ import { pointAt, projectOnRoute } from './game/routes.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
 import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
+import { initNews } from './game/news.js';
 
 const $ = (id) => document.getElementById(id);
 const capture = (event, properties) => {
@@ -135,6 +136,8 @@ function layoutMirrors() {
 const keys = new Set();
 const input = { throttle: false, brake: false, left: false, right: false, shift: false };
 window.addEventListener('keydown', (e) => {
+  // pannelli Novità e Richieste: i tasti vanno al modulo, Esc chiude
+  if (news && news.open) { if (e.code === 'Escape') news.close(); return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
   if (!e.repeat) onKeyPress(e.code);
   keys.add(e.code);
@@ -158,7 +161,7 @@ function readInput() {
 // ------------------------------------------------------------------
 // Stato di gioco
 // ------------------------------------------------------------------
-let bus = null, mission = null, traffic = null, walkers = null;
+let bus = null, mission = null, traffic = null, walkers = null, news = null;
 let running = false, paused = false;
 let camMode = 0; // 0 cabina, 1 esterna, 2 passeggeri, 3 dall'alto
 const CAM_NAMES = ['Cabina di guida', 'Esterna', 'Passeggeri', 'Dall\'alto'];
@@ -1109,6 +1112,15 @@ setTimeout(() => {
   }
   layoutMirrors();
   buildMenu();
+  // novità dall'ultima visita e modulo per le richieste (con il punto della mappa se si è in corsa)
+  const save = loadSave();
+  news = initNews({
+    savedAt: save && save.savedAt,
+    context: () => (running && mission ? {
+      vehicle_type: bus.isTram ? 'tram' : 'bus', line_id: settings.line.id, mission_mode: mission.roam ? 'roam' : mission.free ? 'free' : 'service',
+      game_clock: fmtHM(mission.clock), x: Math.round(bus.x), z: Math.round(bus.z), street: hudStreet,
+    } : { in_menu: true }),
+  });
   $('loading').style.display = 'none';
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);

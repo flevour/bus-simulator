@@ -18,6 +18,9 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
 
 * `IDEE.md`: elenco delle idee e dei prossimi passi. Aggiungi lì le nuove idee e spostale in "Fatto" quando sono
   realizzate.
+* `src/data/novita.js`: novità per chi gioca, mostrate nel menu a chi torna. Per ogni modifica che si vede in gioco
+  aggiungi in cima una riga in italiano semplice (cosa cambia per chi guida, non come è fatto), con `n` successivo e la
+  data del giorno, nello stesso commit della modifica.
 * `docs/prompt-tram.md`: specifica del tram SIR1 guidabile.
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
 
