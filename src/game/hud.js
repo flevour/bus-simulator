@@ -201,6 +201,13 @@ export class HUD {
       c.fillStyle = st.idx === m.nextStop ? '#ffeb3b' : st.left || st.arrived ? '#607d8b' : '#ffffff';
       c.beginPath(); c.arc(st.x, st.z, (big ? 40 : 9) * (st.idx === m.nextStop ? 1.5 : 1), 0, 7); c.fill();
     }
+    // bus automatici, col colore della linea (nella mappa grande tutti quelli in servizio)
+    if (ctx.buses) for (const b of ctx.buses.buses) {
+      if (!big && (Math.abs(b.x - bus.x) > 800 || Math.abs(b.z - bus.z) > 800)) continue;
+      c.fillStyle = b.run.L.color;
+      c.strokeStyle = '#fff'; c.lineWidth = big ? 8 : 1.5;
+      c.beginPath(); c.arc(b.x, b.z, big ? 30 : 6, 0, 7); c.fill(); c.stroke();
+    }
     // auto
     if (!big) {
       c.fillStyle = '#d0d0d0';

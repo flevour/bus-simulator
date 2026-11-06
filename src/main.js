@@ -3,6 +3,7 @@ import { buildNetwork, LINES, TRAM_LINES, fmtHM } from './data/padova.js';
 import { Tram, tramRoute, TRAM } from './tram/tram.js';
 import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
+import { BusSim } from './world/buses.js';
 import { Bus } from './bus/bus.js';
 import { Mission, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
 import { pointAt, projectOnRoute } from './game/routes.js';
@@ -10,6 +11,7 @@ import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
 import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
 import { initNews } from './game/news.js';
+import { Greetings } from './game/greetings.js';
 
 const $ = (id) => document.getElementById(id);
 const capture = (event, properties) => {
@@ -83,7 +85,7 @@ scene.add(rain);
 // ------------------------------------------------------------------
 // Mondo
 // ------------------------------------------------------------------
-let net, city, lights, trams, tramSignals;
+let net, city, lights, trams, tramSignals, buses, greet;
 const hud = new HUD();
 const audio = new Audio();
 
@@ -98,6 +100,8 @@ function buildWorld() {
   // incroci con la sede: precedenza al tram e semafori a barre
   tramSignals = new TramSignals(scene, city, lights);
   trams.signals = tramSignals;
+  // bus automatici delle linee urbane dall'orario
+  buses = new BusSim(scene, net, city, { tramSignals });
 }
 
 // ------------------------------------------------------------------
@@ -247,6 +251,7 @@ function onKeyPress(code) {
     case 'KeyM': hud.setBigMap(!hud.big); break;
     case 'KeyT': mission.skipWait(); break;
     case 'KeyU': audio.muted = !audio.muted; audio.setMuted(audio.muted); hud.toast(audio.muted ? 'Audio disattivato' : 'Audio attivo', 'info'); break;
+    case 'KeyY': greet.press(); break;
     case 'KeyI': showHelp = !showHelp; $('help').style.display = showHelp ? 'block' : 'none'; break;
   }
 }
@@ -345,6 +350,7 @@ function placeBusAt(x, z, h) {
   chase.init = false;
   // via le auto troppo vicine
   for (let i = traffic.cars.length - 1; i >= 0; i--) { const c = traffic.cars[i]; if (Math.hypot(c.x - x, c.z - z) < 35) traffic.cars.splice(i, 1); }
+  buses.clearAround(x, z, 25);
   const m = mission;
   m.lastSigDist.clear();
   if (m.free) return;
@@ -615,6 +621,7 @@ function backToMenu() {
   }
   saveGame();
   togglePause(false);
+  buses.clear();
   refreshResumeBox();
   $('results').classList.add('hidden');
   $('menu').classList.remove('hidden');
@@ -675,11 +682,17 @@ function startMission(resume = null) {
   bus.setInnerDisplay('Linea ' + L.id + ' – ' + destName);
   if (resume) applySave(resume);
   city.ensureTiles(bus.x, bus.z, 650);
+  // bus automatici: le corse in servizio a quell'ora (non quella del giocatore), prima delle auto che li evitano
+  buses.setService(LINES, settings.variant, settings.livery || 'moderna', !bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
+  buses.schedule(mission.clock, bus);
+  buses.updateParts();
+  greet = new Greetings(hud, mission);
   lights.time = resume ? resume.mission.clock : settings.departure;
   const hour = (settings.departure / 3600) % 24;
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
   const count = Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1));
   traffic = new Traffic(scene, net, city, lights, { count, seed: Math.floor(settings.departure) });
+  traffic.bigs = buses.buses;
   walkers = new Walkers(scene, net, Math.round(140 * (settings.variant === 'festivo' ? 1.2 : 1) * (hour > 21 || hour < 6.5 ? 0.3 : 1)), city);
   for (let i = 0; i < count; i++) traffic.spawn(bus, 60, 1400);
   for (let i = 0; i < walkers.target; i++) walkers.spawn(bus);
@@ -743,6 +756,7 @@ function showResults() {
     ['Fermate saltate', s.skipped],
     ['Comfort medio', Math.round(mission.avgComfort || 100) + '%'],
     ['Frecce usate correttamente', s.indicatorsOk],
+    ['Saluti ai colleghi', s.waves || 0],
     ['Incidenti', s.crashes],
     ['Semafori rossi', s.redLights],
     ['Multe per velocità', s.speeding],
@@ -847,6 +861,7 @@ function setupWeatherAndTime() {
   city.setNight(night, wx.wet);
   traffic && traffic.setNight(night);
   trams && trams.setNight(night);
+  buses && buses.setNight(night);
   if (bus) bus.cabinLightMat.emissiveIntensity = 0.2 + night * 0.8;
 }
 
@@ -994,12 +1009,15 @@ function step(dt) {
     if (Math.abs(indAccum) > 0.9 && Math.abs(bus.steerIn) < 0.12) { bus.indicator = 0; indAccum = 0; }
   }
   lights.update(dt);
-  trams.update(dt, bus, mission.clock);
+  trams.update(dt, [bus, ...buses.parts], mission.clock);
   // incroci col tram: chiamata dei tram in arrivo, segnali a barre, precedenza delle auto
   tramSignals.update(dt, tramOccupancy(), traffic);
   if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
   city.streamTiles(bus.x, bus.z, 5);
-  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals });
+  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals, bigs: buses.buses });
+  buses.update(dt, { player: bus, traffic, trams, lights, clock: mission.clock });
+  // colleghi da salutare: bus e tram automatici vicini
+  greet.update(dt, bus, trams.colleagues(buses.colleagues()));
   for (const c of traffic.honks) audio.carHorn(Math.hypot(c.x - bus.x, c.z - bus.z));
   walkers.update(dt, bus);
   // limite di velocità reale (OSM maxspeed) dove indicato, altrimenti 30 in centro e 50 fuori
@@ -1017,7 +1035,7 @@ function step(dt) {
   audio.update(dt, bus, { interior: camMode === 0 || camMode === 2, rain: wx.rain });
   const ri = frame % 6 === 0 ? city.roadInfo(bus.x, bus.z) : null;
   if (ri && ri.edge) hudStreet = ri.edge.name;
-  hud.update(bus, mission, { speedLimit, net, traffic, lights, street: hudStreet });
+  hud.update(bus, mission, { speedLimit, net, traffic, lights, buses, street: hudStreet });
   if (frame % 10 === 0) bus.drawDash({ doors: bus.doorsAnyOpen, request: mission.request });
 }
 
@@ -1112,6 +1130,7 @@ setTimeout(() => {
   }
   layoutMirrors();
   buildMenu();
+  buses.warm(LINES, settings.variant, settings.departure);
   // novità dall'ultima visita e modulo per le richieste (con il punto della mappa se si è in corsa)
   const save = loadSave();
   news = initNews({
@@ -1125,7 +1144,7 @@ setTimeout(() => {
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
   window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
-    teleport: (x, z) => teleportTo(x, z), get trams() { return trams; },
+    teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; },
     sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
 }, 50);

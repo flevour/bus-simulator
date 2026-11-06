@@ -208,28 +208,31 @@ export function labelTexture(text, opts = {}) {
 }
 
 // Display a LED arancione per il bus
+// w × h con proporzioni 8:1 (le misure del testo seguono h; 1024 × 128 per il bus del giocatore)
 export function ledTexture(line, dest, w = 1024, h = 128) {
   const [c, x] = canvas(w, h);
+  const k = h / 128;
   x.fillStyle = '#080808';
   x.fillRect(0, 0, w, h);
   const draw = () => {
     x.fillStyle = '#ffa31a';
     x.textBaseline = 'middle';
-    x.font = 'bold 92px "Courier New", monospace';
+    x.font = `bold ${92 * k}px "Courier New", monospace`;
     x.textAlign = 'left';
-    x.fillText(line, 20, h / 2 + 4);
-    let size = 72;
+    x.fillText(line, 20 * k, h / 2 + 4 * k);
+    let size = 72 * k;
     x.font = `bold ${size}px Arial`;
-    const avail = w - 260;
-    while (x.measureText(dest).width > avail && size > 20) { size -= 2; x.font = `bold ${size}px Arial`; }
+    const avail = w - 260 * k;
+    while (x.measureText(dest).width > avail && size > 20 * k) { size -= 2 * k; x.font = `bold ${size}px Arial`; }
     x.textAlign = 'center';
-    x.fillText(dest, 240 + avail / 2, h / 2 + 4);
+    x.fillText(dest, 240 * k + avail / 2, h / 2 + 4 * k);
   };
   draw();
   // griglia LED
   x.fillStyle = 'rgba(0,0,0,0.45)';
-  for (let i = 0; i < w; i += 6) x.fillRect(i, 0, 2, h);
-  for (let j = 0; j < h; j += 6) x.fillRect(0, j, w, 2);
+  const st = Math.max(3, Math.round(6 * k)), lw = Math.max(1, Math.round(2 * k));
+  for (let i = 0; i < w; i += st) x.fillRect(i, 0, lw, h);
+  for (let j = 0; j < h; j += st) x.fillRect(0, j, w, lw);
   const t = makeTex(c, false);
   return t;
 }

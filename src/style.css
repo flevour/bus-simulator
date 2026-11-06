@@ -166,3 +166,16 @@ button.primary:disabled { filter: grayscale(1); opacity: .5; cursor: default; }
 #pause .seg button.sel { background: #ffb300; color: #1a1a1a; border-color: #ffb300; }
 #pause h3 { text-align: left; }
 #pause select { margin-bottom: 6px; }
+
+/* saluto ai colleghi: la mano sale dal basso a sinistra e oscilla */
+#wave-hand { position: absolute; left: 22%; bottom: -140px; font-size: 120px; line-height: 1; opacity: 0; pointer-events: none; transform-origin: 50% 100%; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+#wave-hand.on { animation: wave-hand 1.5s ease-out; }
+@keyframes wave-hand {
+  0% { bottom: -140px; opacity: 0; transform: rotate(0deg); }
+  18% { bottom: 40px; opacity: 1; transform: rotate(-12deg); }
+  32% { transform: rotate(14deg); }
+  46% { transform: rotate(-12deg); }
+  60% { transform: rotate(14deg); }
+  76% { bottom: 40px; opacity: 1; transform: rotate(0deg); }
+  100% { bottom: -140px; opacity: 0; }
+}

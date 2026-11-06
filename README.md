@@ -140,6 +140,7 @@ mezzogiorno, tramonto, sera, notte) oppure segue l'orologio della corsa, senza t
 | **S** di nuovo, da fermo | retromarcia: poi **S** arretra e **W** frena; fermandosi con **W** si torna in marcia avanti |
 | **R** | marcia avanti / retromarcia (da fermo) |
 | **L** | fari · **H** clacson · **K** inginocchiamento |
+| **Y** | saluta il collega che incroci (bus o tram che viene incontro, entro ~45 m): +10 punti, +15 se è della tua linea; se saluta lui per primo, ricambia entro qualche secondo |
 | **C** | cambia visuale (cabina, esterna, passeggeri, dall'alto) |
 | **Z / X** | guarda a sinistra / destra (tenendo premuto) |
 | **Mouse** | trascina per guardarti intorno (nella visuale esterna ruota attorno al bus) · **V** o doppio clic: sguardo avanti |
@@ -203,6 +204,15 @@ future potranno averne 4.
 * **Bus** da 12 m con fisica a bicicletta sull'asse posteriore, cambio automatico a 6 marce con convertitore di coppia,
   retarder, freno di fermata, sospensioni (beccheggio/rollio), porte animate, display LED, specchietti retrovisori reali.
 * **Traffico** con modello IDM, semafori sincronizzati, auto che suonano il clacson e sorpassano il bus fermo, pedoni.
+* **Bus automatici** di tutte le linee urbane, dall'orario GTFS: per strada ci sono le corse in servizio a quell'ora
+  (nei feriali una settantina al mattino, pochi la sera e nei festivi), con la livrea scelta per il proprio bus. Arrivano
+  al capolinea qualche minuto prima della partenza e aspettano a porte aperte, fermano alle fermate (non sempre a quelle
+  secondarie), regolano la velocità sull'orario, rispettano semafori e incroci col tram, si mettono in coda e accostano
+  al marciapiede; dopo l'ultima fermata escono "fuori servizio". Le auto li seguono e li sorpassano in fermata. Si
+  vedono sulla minimappa e, tutti, sulla mappa grande col colore della linea. La corsa guidata dal giocatore non ha un
+  gemello automatico.
+* **Saluto tra autisti**: alla guida del bus o del tram si saluta con **Y** chi viene incontro; l'autista dell'altro
+  mezzo alza la mano (a volte saluta lui per primo).
 * **Segnaletica verticale** agli incroci senza semaforo: STOP e dare precedenza reali da OSM (con linea di arresto o
   tratteggio, dietro le strisce pedonali), diritto di precedenza sulla strada principale degli incroci dove le
   laterali hanno un cartello, dare precedenza con il cartello di rotatoria agli ingressi delle rotonde. Allo STOP
@@ -244,6 +254,10 @@ src/
   game/mission.js    servizio, passeggeri, orari, punteggio
   game/hud.js        interfaccia, cruscotto, minimappa
   game/news.js       novità dall'ultima visita e modulo per le richieste (PostHog)
+  game/greetings.js  saluto tra autisti
+  world/buses.js     bus automatici dall'orario GTFS
+  world/driver.js    autista dei mezzi automatici (con il braccio che saluta)
+  bus/rainglass.js   gocce di pioggia sul parabrezza
   data/novita.js     righe delle novità per chi gioca
   game/audio.js      audio WebAudio + sintesi vocale
   main.js            rendering, telecamere, meteo, ciclo di gioco

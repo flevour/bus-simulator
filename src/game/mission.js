@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRoute, buildTramRoute, pointAt, projectOnRoute } from './routes.js';
+import { buildRoute, buildTramRoute, pointAt, projectOnRoute, alignStops } from './routes.js';
 import { personGeometry } from '../world/traffic.js';
 import { zoneOf } from '../world/city.js';
 import { fmtHM } from '../data/padova.js';
@@ -69,23 +69,7 @@ export class Mission {
       Object.assign(st, { side: -1, rx: -st.rx, rz: -st.rz });
       st.x = st.cx + st.rx * half; st.z = st.cz + st.rz * half;
     }
-    // la palina disegnata può essere spostata di qualche metro (vicino agli incroci): la zona di fermata la segue
-    // (una fermata può avere più paline, una per verso: vale quella sul percorso di questa corsa)
-    if (!this.tram && city && city.stopPlacements) this.stops.forEach((st, k) => {
-      const prev = this.stops[k - 1], next = this.stops[k + 1];
-      let pr = null;
-      for (const pl of city.stopPlacements) {
-        if (pl.id !== st.gtfs.id) continue;
-        const q = projectOnRoute(this.route, pl.cx, pl.cz, st.s, 30, 30);
-        if (q.d > 6 || Math.abs(q.s - st.s) > 20 || (prev && q.s < prev.s + 15) || (next && q.s > next.s - 15) || q.s > this.route.length - 15) continue;
-        const dir = pointAt(this.route, q.s);
-        if (dir.dx * pl.dx + dir.dz * pl.dz < 0.5) continue; // palina del verso opposto
-        if (!pr || q.d < pr.d) pr = q;
-      }
-      if (!pr) return;
-      const p = pointAt(this.route, pr.s), hw = p.seg.hw, rx = -p.dz, rz = p.dx;
-      Object.assign(st, { s: pr.s, x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw });
-    });
+    if (!this.tram && city && city.stopPlacements) alignStops(this.route, city.stopPlacements);
     this.dest = this.stops[this.stops.length - 1].name;
     this.departure = departure;
     this.clock = departure - 25; // poco prima della partenza
@@ -94,7 +78,7 @@ export class Mission {
     this.onboard = []; // indici fermata di destinazione
     this.score = 0;
     this.log = [];
-    this.stats = { boarded: 0, alighted: 0, onTime: 0, late: 0, early: 0, skipped: 0, crashes: 0, redLights: 0, speeding: 0, sidewalk: 0, comfortSum: 0, comfortN: 0, indicatorsOk: 0 };
+    this.stats = { boarded: 0, alighted: 0, onTime: 0, late: 0, early: 0, skipped: 0, crashes: 0, redLights: 0, speeding: 0, sidewalk: 0, comfortSum: 0, comfortN: 0, indicatorsOk: 0, waves: 0 };
     this.comfort = 100;
     this.nextStop = 0; // la 0 è il capolinea di partenza
     this.s = 0;
@@ -568,12 +552,13 @@ export class Mission {
     this.stats.crashes++;
     this.comfort = Math.max(0, this.comfort - 25);
     if (hit.car && hit.car.isTram) hit.kind = 'tram';
+    if (hit.car && hit.car.isBus) hit.kind = 'bus';
     capture('player_collision_recorded', {
       vehicle_type: this.tram ? 'tram' : 'bus',
       collision_type: hit.kind,
       impact_speed_kmh: Math.round(hit.impact * 3.6),
     });
-    const what = { tram: 'il tram!', car: 'un\'auto', building: 'un edificio', shelter: 'una pensilina', tree: 'un albero', pole: 'un palo', wall: 'il parapetto', landmark: 'un monumento!' }[hit.kind] || 'un ostacolo';
+    const what = { tram: 'il tram!', bus: 'un autobus!', car: 'un\'auto', building: 'un edificio', shelter: 'una pensilina', tree: 'un albero', pole: 'un palo', wall: 'il parapetto', landmark: 'un monumento!' }[hit.kind] || 'un ostacolo';
     const pts = -Math.round(Math.min(250, 40 + hit.impact * 25));
     this.addScore(pts, `💥 Hai urtato ${what}`);
   }

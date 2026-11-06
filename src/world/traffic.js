@@ -4,6 +4,7 @@ import { Grid, distToSeg, mulberry32 } from './spatial.js';
 import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight } from './city.js';
 import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
+import { driverFigure, setWave } from './driver.js';
 
 // ------------------------------------------------------------------
 // Semafori
@@ -181,6 +182,7 @@ export class Traffic {
     this.S = new THREE.Vector3(1, 1, 1);
     this.P = new THREE.Vector3();
     this.honks = [];
+    this.bigs = []; // bus automatici: { x, z, h, v, atStop, circles, parts }
   }
 
   setNight(f) {
@@ -221,6 +223,7 @@ export class Traffic {
       const d = Math.hypot(x - bus.x, z - bus.z);
       if (d < minD || d > maxD) continue;
       if (cars.some((c) => Math.hypot(c.x - x, c.z - z) < 12)) continue;
+      if (this.bigs.some((b) => Math.hypot(b.x - x, b.z - z) < 16)) continue; // non sopra un bus automatico
       car.x = x; car.z = z; car.h = Math.atan2(g.dx, g.dz);
       const zone = zoneOf(x, z);
       car.vmax = (zone === 0 || !e.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
@@ -295,6 +298,8 @@ export class Traffic {
   }
 
   update(dt, bus, ctx) {
+    this.bigs = ctx.bigs || [];
+    const playerBig = { player: true, v: bus.v, atStop: ctx.busAtStop };
     // popolazione dinamica attorno al bus
     for (let i = this.cars.length - 1; i >= 0; i--) {
       const c = this.cars[i];
@@ -327,16 +332,21 @@ export class Traffic {
           gap = Math.min(gap, fwd - 4.4);
         }
       }
-      // il bus
-      let busBlock = false;
+      // il bus del giocatore e i bus automatici
+      let blocker = null;
       if (c.passT <= 0) {
-        for (const p of busCircles) {
+        const hit = (p, who) => {
           const dx = p.x - c.x, dz = p.z - c.z;
           const fwd = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
           if (fwd > 0 && fwd < 40 && lat < 2.6) {
             const g = fwd - 3.6;
-            if (g < gap) { gap = g; busBlock = true; }
+            if (g < gap) { gap = g; blocker = who; }
           }
+        };
+        for (const p of busCircles) hit(p, playerBig);
+        for (const B of this.bigs) {
+          if (!B.circles || Math.abs(B.x - c.x) > 50 || Math.abs(B.z - c.z) > 50) continue;
+          for (const p of B.circles) hit(p, B);
         }
       }
       // semaforo a fine arco
@@ -361,12 +371,13 @@ export class Traffic {
       c.v = Math.max(0, c.v + acc * dt);
       if (gap < 0.2) c.v = 0;
 
-      // bloccati dal bus fermo: clacson e sorpasso
-      if (busBlock && c.v < 0.3 && Math.abs(bus.v) < 0.5) {
+      // bloccati da un bus fermo: clacson (solo col giocatore) e sorpasso; un bus automatico si sorpassa in fermata
+      // o se resta fermo a lungo (al semaforo rosso si aspetta)
+      if (blocker && c.v < 0.3 && Math.abs(blocker.v) < 0.5) {
         c.blocked += dt;
         c.honkCd -= dt;
-        if (c.blocked > 6 && c.honkCd <= 0 && !ctx.busAtStop) { this.honks.push(c); c.honkCd = 5 + this.rnd() * 5; }
-        if (c.blocked > (ctx.busAtStop ? 1.5 : 5)) { c.passT = 9; c.blocked = 0; }
+        if (blocker.player && c.blocked > 6 && c.honkCd <= 0 && !ctx.busAtStop) { this.honks.push(c); c.honkCd = 5 + this.rnd() * 5; }
+        if (c.blocked > (blocker.atStop ? 1.5 : blocker.player ? 5 : 12)) { c.passT = 9; c.blocked = 0; }
       } else c.blocked = Math.max(0, c.blocked - dt);
       if (c.passT > 0) c.passT -= dt;
       const latTarget = c.passT > 1.5 ? 1 : 0;
@@ -435,9 +446,10 @@ export class Traffic {
     this.mesh.instanceMatrix.needsUpdate = true;
     this.lightMesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
-    // aggiorna griglia finale per collisioni con il bus
+    // aggiorna griglia finale per collisioni con il bus (anche i pezzi dei bus automatici)
     this.grid = new Grid(30);
     for (const c of this.cars) this.grid.insertAABB(c, c.x - 3, c.z - 3, c.x + 3, c.z + 3);
+    for (const B of this.bigs) for (const p of B.parts || []) this.grid.insertAABB(p, p.x - 3, p.z - 3, p.x + 3, p.z + 3);
   }
 
   near(x, z, r) {
@@ -604,7 +616,11 @@ export class TramSim {
   }
   add(s, dir, dest) {
     const c = buildTramConvoy(this.scene, this.modules, 'SIR1', dest);
-    const tr = { s, dir, v: 0, wait: 0, mods: c.mods, bellows: c.bellows, parts: [], served: null, panto: 1, run: null, k: 0 };
+    const tr = { s, dir, v: 0, wait: 0, mods: c.mods, bellows: c.bellows, parts: [], served: null, panto: 1, run: null, k: 0, waveT: 0 };
+    // il guidatore al centro della cabina di testa (il pavimento del tram è più alto di quello del bus)
+    tr.driver = driverFigure();
+    tr.driver.group.position.set(0.12, 0.2, TRAM.cab / 2 - 1.75);
+    c.mods[0].inner.add(tr.driver.group);
     this.trams.push(tr);
     return tr;
   }
@@ -717,7 +733,7 @@ export class TramSim {
       // chi è sulla stessa corsia davanti (bus, tram del giocatore, altri tram): ci si ferma a distanza
       const head = this.lanePoint(tr.s, tr.dir);
       const obst = [];
-      for (const o of others) if (o) obst.push(...(o.isTram && o.trackPoints ? o.trackPoints() : [{ x: o.x, z: o.z }]));
+      for (const o of others) if (o) { if (o.isTram && o.trackPoints) obst.push(...o.trackPoints()); else obst.push(o); }
       for (const t2 of this.trams) if (t2 !== tr) for (const p of t2.parts) obst.push(p);
       for (const o of obst) {
         const rx = o.x - head.x, rz = o.z - head.z;
@@ -736,6 +752,8 @@ export class TramSim {
           tr.dir *= -1; tr.s = this.track.path(tr.dir).project(tail.x, tail.z).s; tr.wait = 30; tr.v = 0; tr.served = null;
         }
       }
+      if (tr.waveT > 0) tr.waveT = Math.max(0, tr.waveT - dt);
+      setWave(tr.driver.arm, tr.waveT);
       // nel tratto senza linea aerea il pantografo si abbassa
       const pm = tr.mods[1];
       if (pm && pm.panto) {
@@ -776,6 +794,14 @@ export class TramSim {
       if (head.headMat) { head.headMat.emissiveIntensity = f > 0.3 ? 2 : 0.2; head.tailMat.emissiveIntensity = 0; }
       if (tail.tailMat) { tail.tailMat.emissiveIntensity = f > 0.3 ? 0.9 : 0.05; tail.headMat.emissiveIntensity = 0; }
     }
+  }
+  // colleghi da salutare: la cabina di testa di ogni tram
+  colleagues(out = []) {
+    for (const tr of this.trams) if (tr.parts.length) {
+      const p = this.lanePoint(tr.s - 2, tr.dir);
+      out.push({ ref: tr, x: p.x, z: p.z, h: tr.parts[0].h, line: 'SIR1', tram: true });
+    }
+    return out;
   }
   near(x, z, r) {
     const out = [];
