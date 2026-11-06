@@ -73,7 +73,119 @@ permette di aggiornare la mappa senza export manuali.
 
 ## 3. Misure di riferimento
 
-*(da completare con la ricerca)*
+Si usano solo dove mancano i dati. Legenda dello stato:
+- **V**: il testo dell'articolo è citato dalla fonte;
+- **S**: fonte secondaria che cita la norma (regolamenti comunali, progetti, cataloghi);
+- **T**: prassi tipica o stima.
+
+I testi ufficiali (Gazzetta Ufficiale, MIT, Normattiva) non si aprono dai container. Prima di fissare un valore V
+conviene ricontrollarlo sul testo.
+
+### 3.1 Sezioni stradali (DM 5/11/2001, Regolamento del Codice della Strada)
+
+| Elemento | Valore | Oggi nel gioco | Stato |
+|---|---|---|---|
+| Corsia | D (urbana di scorrimento) 3,25 · E (quartiere) 3,00 · F (locale) 2,75 m. Moduli da 2,75 a 3,75; fino a 2,50 negli approcci agli incroci urbani (art. 140) | 3,3 per corsia | S |
+| Corsia riservata ai bus | ≥ 3,50 m (Roma: 3,00 alle fermate) | +3,3 col bus in controsenso | V / S |
+| Banchina | E/F 0,50; D 1,00 a destra e 0,50 a sinistra; spartitraffico D ≥ 1,80 | non c'è | S |
+| Marciapiede | minimo **1,50**, tipico 2,0–3,0; cordolo ≤ 0,15 (DM 236/89, DPR 503/96) | **3,5 fisso** | S / V |
+| Sosta | in linea 2,00 × 5,00 (eccezionalmente 1,80); a pettine 2,30 di larghezza, profondità 4,80 (45°) o 5,00 (90°); corsia di manovra 3,50 o 6,00 (DM 2001 §3.4.7) | non c'è | S / V |
+| Ciclabile | 1,50 per senso, 2,50 a doppio senso; separatore ≥ 0,50 (DM 557/99 art. 7) | non c'è | V |
+| Centro storico | nessuna norma: 3–8 m tra le facciate | minimo 5 m | T |
+| Portici | rete di 12–25 km a Padova; profondità tipica 2,5–4 m, altezza libera 3–5 m (Regolamento Edilizio di Padova art. 66: misure non lette) | generati | T |
+
+### 3.2 Incroci e rotatorie (DM 19/4/2006)
+
+| Elemento | Valore | Stato |
+|---|---|---|
+| Rotatorie, per diametro esterno | mini 14–25 m · compatte 25–40 m · convenzionali 40–50 m | V |
+| Isola centrale | mini 14–18 m interamente sormontabile, 18–25 m parzialmente; compatte non sormontabile | V / S |
+| Anello, ingressi a una corsia | 7,00 m (6,00 se il diametro è ≥ 40 m); due corsie 8,5–9 m | S / T |
+| Bracci | ingresso 3,50 (6,00 a due corsie); uscita 4,50 (4,00 sotto i 25 m) | S / T |
+| Fascia sormontabile, isole spartitraffico | 1,5–2 m con cordolo basso; isole a goccia 1,5–3 × 10–20 m | T |
+| Raggio dei cordoli agli angoli | 5–8 m sulle vie locali, 10–15 m sulle vie dei bus | T (oggi 3,5 e 7) |
+| Ingombro in curva | ogni veicolo deve stare in una corona di raggio esterno 12,50 m e interno 5,30 m (art. 217) | V |
+| Triangolo di visibilità | lato corto 20 m (precedenza) o 3 m dietro la linea (STOP); lato lungo D = v·t, t = 12 s (precedenza) o 6 s (STOP) | S |
+
+### 3.3 Fermate dei bus
+
+| Elemento | Valore | Stato |
+|---|---|---|
+| Zona di fermata (art. 151) | 12 m d'ingresso + (bus più lungo + 2 m) + 12 m d'uscita: **38 m per il bus da 12 m, 44 m per lo snodato** | V |
+| Segnaletica (art. 151) | gialla, linee da 12 cm; linea tratteggiata a ≥ 2,70 m dal cordolo chiusa da linee trasversali; scritta BUS; zig-zag facoltativi nei tratti d'ingresso e d'uscita | V |
+| Zig-zag e scritta BUS | passo 1–1,5 m, ampiezza 0,5–1 m; lettere alte circa 1,6 m | T |
+| Posizione rispetto agli incroci (art. 352) | dopo l'incrocio, a ≥ 20 m; prima, a ≥ 10 m, se la coda dei bus lo bloccherebbe | S |
+| Golfo di fermata | largo 3,00 m (Roma) | S |
+| Cordolo d'accosto | 15–22 cm per i bus a pianale ribassato (nessun valore nazionale) | S / T |
+| Pensilina | 3–6 × 1,4–1,8 m, alta circa 2,5 m, con ≥ 1,5 m liberi davanti; non deve coprire le porte né la vista del bus | T / S |
+| Palina | in testa alla fermata (il bus si ferma con la porta anteriore alla palina), 0,3–0,5 m dal bordo | T |
+| Strisce pedonali | dietro il bus fermo | T |
+
+### 3.4 Segnaletica orizzontale e verticale (Regolamento CdS)
+
+| Elemento | Valore | Stato |
+|---|---|---|
+| Linee longitudinali (art. 138) | 12 cm su D ed E, 10 cm su F | V |
+| Linee di margine (art. 141) | 15 cm su D ed E, 12 cm su F | S |
+| Tratteggio urbano (art. 138) | 3,0 m pieno e 3,0 m vuoto; 4,5 e 1,5 prima di una linea continua | V / S |
+| Linea d'arresto (art. 144) | continua, larga ≥ 50 cm | V |
+| Denti di squalo (art. 144) | base 40–60 cm, altezza 60–70 cm | V |
+| Strisce pedonali (art. 145) | strisce da 50 cm con intervalli da 50 cm; profondità ≥ 2,50 m su E/F e ≥ 4,00 m sulle altre | V / S |
+| Attraversamento ciclabile (art. 146) | due tratteggi larghi 50 cm, distanti ≥ 1 m | S |
+| Frecce (art. 147) | punta ≥ 5 m prima della linea d'arresto; lunghe circa 4,5 m in città | S / T |
+| Scritta STOP (art. 148) | lettere alte 1,60 m in città, 1–3 m prima della linea | S |
+| Cartelli (art. 80) | normali: disco 60 cm, triangolo 90 cm, ottagono dello STOP 90 cm | S |
+| Altezza dei cartelli (art. 81) | bordo inferiore 0,60–2,20 m, ≥ 2,20 m sui marciapiedi, ≥ 5,10 m sopra la carreggiata | V |
+| Distanza dal bordo (art. 81) | bordo interno a 0,30–1,00 m dal cordolo | S |
+| Dare precedenza (art. 106) | ≤ 10 m dalla carreggiata con precedenza, in città | S |
+
+### 3.5 Semafori (art. 159–168 Regolamento CdS)
+
+| Elemento | Valore | Oggi nel gioco | Stato |
+|---|---|---|---|
+| Sequenza | verde → giallo → rosso; **non c'è il rosso+giallo** | uguale | V |
+| Lenti | 200 mm (300 mm ammesse, a volte solo per il rosso) | — | S |
+| **Palo** | sul margine destro, su marciapiede o isola, **subito oltre la linea d'arresto**, così il primo fermo vede le luci (art. 168 c. 1 e 8) | stimato, 21% in carreggiata | V |
+| Ripetitrice a sinistra | solo su isole o marciapiedi; **obbligatoria sui sensi unici con 2 o più corsie** (art. 168 c. 3) | non c'è | V |
+| Lanterne sopra la carreggiata | centrate sulle corsie, bordo inferiore a 5,10–6,00 m (art. 168) | non ci sono | V |
+| Altezza delle lanterne sul palo | bordo inferiore a 2,00–3,00 m | circa 3,3 m | S |
+| Giallo | 3 s a 50 km/h, 4 s a 60 km/h o con molti mezzi pesanti, 5 s a 70 km/h (Nota MIT 67906/2007) | 3 s | S |
+| Tutto rosso | 1–3 s | 1 s | T |
+| Ciclo | 60–120 s (piani fissi di solito 90 s); verde minimo 5–7 s | 31 s | T / S |
+| Pedonali (art. 162) | figura rossa in alto, gialla, verde in basso; segnale acustico | — | V / S |
+| **Semafori del tram** (art. 161) | fondo nero. **Barra orizzontale = fermo; triangolo giallo con la punta in alto = prepararsi a fermarsi; barra verticale = via** (inclinata per le svolte). Si accendono nell'ordine via → triangolo → fermo | come nelle norme | V |
+| Priorità al tram a Padova | il SIR1 ha il preferenziamento, con rilevatori lungo la rotaia (prova di La Semaforica in via Guido Reni); il Comune segnala chiamate perse | chiamata 25 + 6·v m prima | S |
+
+### 3.6 Tram (Translohr del SIR)
+
+| Elemento | Valore | Oggi nel gioco | Stato |
+|---|---|---|---|
+| Veicolo STE3 | 25,0 × **2,20** × 2,89 m; raggio minimo 10,5 m; pianale 25–35 cm | 25 × 2,2 | V / S |
+| Corsia | 3,50 m (dossier SIR2); due binari affiancati occupano 5,2–5,4 m | 3,4 | S |
+| Banchina | alta 23,5 cm (SIR3); lunga 33 m e larga 2,1 m (SIR2) | 30 × 2,0–2,8 | S |
+| Filo di contatto | nominale 5,60 m (4,40–6,00), CEI EN 50119 | 5,60 | S |
+
+### 3.7 Arredo e verde
+
+| Elemento | Valore | Stato |
+|---|---|---|
+| Lampioni (LR Veneto 17/2009) | interdistanza ≥ 3,7 × altezza: pali da 8–10 m ogni 30–37 m sulle vie D/E, da 6–8 m ogni 22–30 m sulle F; mensole a muro o tesate nel centro storico | S / T |
+| Alberi | filari ogni 8–12 m (specie grandi), 6–8 m (medie); buche ≥ 1,5 × 1,5 m; spartitraffico alberati del Piano del Verde di Padova larghi 4–9 m | T / S |
+| Viali dei parchi | 3–4 m i principali, 1,5–2,5 m i secondari (minimo 0,90 m) | T / V |
+| Dissuasori | alti 0,8–1,0 m ogni 1,2–1,5 m, passaggio ≥ 0,90 m | T |
+
+Fonti principali, con i link nella ricerca:
+- Regolamento CdS, art. 138–168, testi su patente.it e leggeinchiaro.it;
+- DM 5/11/2001 e DM 19/4/2006;
+- DM 557/1999 (ciclabili);
+- Nota MIT 67906/2007 (durata del giallo);
+- dossier del SIR2 e progetto definitivo del SIR3 (comune.padova.it);
+- Piano del Verde e Criteri progettuali dell'illuminazione del Comune di Padova.
+
+Restano da leggere sul testo originale:
+- la tabella delle rotatorie a più corsie;
+- le figure II.438 (frecce) e II.447 (zig-zag);
+- l'art. 66 del Regolamento Edilizio sui portici.
 
 ---
 
@@ -123,22 +235,25 @@ Dove: solo dove OSM (o il Comune) mette un semaforo. Le 135 installazioni attual
 tengono. Si corregge il **dove** e il **come**.
 
 1. **Approcci veri.** 152 semafori OSM su 228 hanno il verso (`traffic_signals:direction`): il nodo è sulla linea
-   d'arresto di quell'approccio. Lì la lanterna va alla posizione del nodo, non stimata. Senza verso: la linea
-   d'arresto è prima del primo attraversamento dell'approccio (le linee `footway=crossing`), altrimenti al bordo
+   d'arresto di quell'approccio, che si mette lì invece di stimarla. Senza verso: la linea d'arresto è 1 m prima del
+   primo attraversamento dell'approccio (le linee `footway=crossing`, profonde 2,5–4 m), altrimenti al bordo
    dell'incrocio della pianta delle strade.
-2. **Palo sul marciapiede.** Si parte dal punto della linea d'arresto, si va verso destra fino al **bordo vero
-   dell'asfalto** (`surfaceOff` della pianta delle strade) e ci si mette 0,5–1 m oltre. Mai in carreggiata: un palo che
-   cade nell'asfalto è un errore di build. Sulle carreggiate separate il palo può stare sullo spartitraffico, se è
-   un'isola della pianta.
-3. **Lanterne come nelle norme.** Una lanterna principale a destra prima della linea d'arresto. Una ripetitrice
-   oltre l'incrocio o sullo spartitraffico sulle vie con 2 o più corsie per verso. Uno sbraccio sopra la carreggiata
-   sulle vie larghe. Ogni lanterna è orientata sull'asse dell'approccio, non sull'arco del grafo: corregge "orientati
-   male".
+2. **Palo sul marciapiede, subito oltre la linea d'arresto** (art. 168: il primo fermo deve vedere le luci). Dal punto
+   della linea si va verso destra fino al **bordo vero dell'asfalto** (`surfaceOff` della pianta delle strade) e ci si
+   mette 0,3–1 m oltre. Mai in carreggiata: un palo che cade nell'asfalto è un errore di build. Sulle carreggiate
+   separate il palo può stare sullo spartitraffico, se è un'isola della pianta.
+3. **Lanterne come nelle norme** (sezione 3.5).
+   - Una lanterna principale a destra, con il bordo inferiore a 2–3 m.
+   - Una **ripetitrice a sinistra** sulle isole o sui marciapiedi: obbligatoria sui sensi unici con 2 o più corsie.
+   - Lanterne sopra la carreggiata (5,10–6,00 m) sulle vie larghe.
+   - Ogni lanterna è orientata sull'asse dell'approccio, non sull'arco del grafo: corregge "orientati male".
 4. **Fasi coerenti con il traffico.** Gruppi di movimenti compatibili: gli approcci opposti insieme, quelli che si
    incrociano mai insieme.
    - Le vie a senso unico in uscita non hanno lanterna.
    - Le svolte a sinistra protette si danno dove OSM ha `turn:lanes` con una corsia dedicata.
-   - Ciclo di 60–90 s con giallo e tutto rosso dalle norme, oppure accorciato per il gioco con le stesse proporzioni.
+   - Verde → giallo → rosso, senza rosso+giallo.
+   - Giallo 3 s (4 s sulle vie dei bus), tutto rosso 1–2 s, ciclo intorno ai 90 s. Il ciclo di oggi è 31 s: per il
+     gioco si può accorciare, ma tenendo le proporzioni.
 5. **Coordinamento.** Onda verde lungo gli assi principali percorsi dai bus: offset dei cicli secondo la distanza e la
    velocità. Il tram ha la sua fase con la chiamata, come oggi.
 6. **Pedonali.** I 41 impianti pedonali restano: verde lungo ai veicoli e chiamata pedonale. Lanterna solo nei versi
