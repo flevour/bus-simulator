@@ -16,6 +16,7 @@ import { initNews } from './game/news.js';
 import { Greetings } from './game/greetings.js';
 import { TouchControls, isTouchDevice } from './game/touch.js';
 import { liveryPreviews } from './game/liveryPreview.js';
+import { Terrain } from './world/terrain.js';
 
 const $ = (id) => document.getElementById(id);
 const capture = (event, properties) => {
@@ -36,6 +37,18 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
+// terreno: la scena del mondo si disegna con le quote del suolo (vertex shader); la telecamera e i fari si alzano della
+// quota del terreno nel loro punto, l'overlay del cruscotto resta piano
+const baseRender = renderer.render.bind(renderer);
+renderer.render = (sc, cam) => {
+  if (sc !== scene || !terrain.ok) { terrain.enable(false); baseRender(sc, cam); return; }
+  terrain.enable(true);
+  const lifted = [cam, ...((bus && (bus.headLights || (bus.spot ? [bus.spot] : []))) || [])].flatMap((o) => (o.target ? [o, o.target] : [o]));
+  const dys = lifted.map((o) => { const p = o.getWorldPosition(V3t); const dy = terrain.at(p.x, p.z); o.position.y += dy; o.updateMatrixWorld(); return dy; });
+  baseRender(sc, cam);
+  lifted.forEach((o, i) => { o.position.y -= dys[i]; o.updateMatrixWorld(); });
+};
+const V3t = new THREE.Vector3();
 scene.fog = new THREE.Fog(0xcfe0ea, 250, 2600);
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.35, 7000);
 
@@ -90,11 +103,13 @@ scene.add(rain);
 // Mondo
 // ------------------------------------------------------------------
 let net, city, lights, trams, tramSignals, buses, greet, depot, depotMesh;
+let terrain = new Terrain(null);
 const hud = new HUD();
 const audio = new Audio();
 
 function buildWorld() {
   net = buildNetwork();
+  terrain = new Terrain(net.terrain);
   // orari tra le fermate a misura di guida (il tram ha già quelli della sua sede)
   for (const L of LINES) for (const v of L.variants) paceVariant(net, v);
   // capolinea al bordo della mappa: la variante comincia o finisce dove l'export ha tagliato la strada (un solo arco)
@@ -1171,7 +1186,7 @@ function updateMirrors() {
 // Loop principale
 // ------------------------------------------------------------------
 const world = {
-  wet: false, offRoad: false, slope: 0,
+  wet: false, offRoad: false, slope: 0, grade: 0,
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
   carsNear: (x, z, r) => { const a = traffic ? traffic.near(x, z, r) : []; return trams ? a.concat(trams.near(x, z, r)) : a; },
 };
@@ -1215,6 +1230,7 @@ function step(dt) {
   const pf = bus.toWorld(0, 3.3), pr = bus.toWorld(0, -2.6);
   const hF = city.heightAt(pf.x, pf.z, bus.elev), hR = city.heightAt(pr.x, pr.z, bus.elev);
   world.slope = bus.isTram ? 0 : (hF - hR) / 5.9;
+  world.grade = bus.isTram ? 0 : (terrain.at(pf.x, pf.z) - terrain.at(pr.x, pr.z)) / 5.9;
   bus.elev = bus.isTram ? 0 : (hF + hR) / 2 + (hF - hR) * (0.3 / 5.9);
   const hit = bus.update(dt, { ...input, wipers: wx.rain > 0.08, rain: wx.rain }, world);
   // il tram non deve finire dentro l'auto davanti: dopo un urto resta fermo
@@ -1373,7 +1389,7 @@ setTimeout(() => {
   $('loading').style.display = 'none';
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
-  window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
+  window.__game = { get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot,
     sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();

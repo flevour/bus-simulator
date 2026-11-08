@@ -201,7 +201,8 @@ export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400, h) {
 // Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia.
 // Una palina per ogni verso in cui la fermata è servita: ai capolinea la stessa fermata GTFS vale per l'arrivo e per
 // la partenza, spesso su lati o tratti diversi. Prima le partenze (lì si sale), poi le fermate intermedie, poi gli arrivi.
-export function allStopPlacements(net, snap, clear = () => 9) {
+// kerb(x, z, rx, rz, hw): distanza dall'asse del bordo vero dell'asfalto verso (rx, rz), o null (senza pianta delle strade)
+export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
   const served = new Map(), vars = new Map();
   for (const L of LINES) for (const v of L.variants) v.stops.forEach((st, k) => {
     const set = served.get(st.id) || served.set(st.id, new Set()).get(st.id);
@@ -233,13 +234,19 @@ export function allStopPlacements(net, snap, clear = () => 9) {
     // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate, incroci):
     // se il punto esatto è occupato si sposta la fermata di qualche metro lungo la strada
     let spot = null;
-    for (const sh of [0, -4, 4, -8, 8, -12, 12, -16]) {
+    // prima al cordolo vero, poi (se lì non c'è posto) alla distanza fissa dall'asse come prima
+    for (const useKerb of kerb ? [true, false] : [false]) for (const sh of [0, -4, 4, -8, 8, -12, 12, -16]) {
+      if (spot) break;
       if (best.at + sh < 0 || best.at + sh > best.l) continue;
       const cx = best.cx + dx * sh, cz = best.cz + dz * sh;
-      const px = cx + rx * (hw + 1.6), pz = cz + rz * (hw + 1.6);
-      if (clear(px, pz) < 0.6 || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < 0.6) continue;
+      // palina 0,6 m oltre il cordolo vero (la carreggiata misurata può essere più larga o più stretta dell'arco)
+      const k = useKerb ? kerb(cx, cz, rx, rz, hw) : null;
+      // (anche in fondo a un golfo di fermata, dove l'asfalto misurato si allarga)
+      const atKerb = k != null && k > hw - 2.5 && k < hw + 8;
+      const off = atKerb ? k + 0.6 : hw + 1.6;
+      const px = cx + rx * off, pz = cz + rz * off;
+      if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6)) continue;
       spot = { cx, cz, px, pz };
-      break;
     }
     if (!spot) return;
     out.push({

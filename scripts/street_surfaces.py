@@ -243,7 +243,7 @@ def _rings(geom):
     return out
 
 
-def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
+def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None):
     elev = lambda e: heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
     drive = [k for k, e in enumerate(edges) if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3]
@@ -415,15 +415,23 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges):
         islands = islands.difference(unary_union(lanes))
     # marciapiede solo dove la via ce l'ha (flag 64 sinistra, 128 destra): su entrambi i lati una fascia intorno al
     # tratto, su un lato solo una fascia da quel lato
+    # larghezza: quella misurata (CTRN o DBGT) da quel lato, altrimenti SIDEWALK
     bands = []
     for k in ground:
         a, b, _c, wd, _n, flags = edges[k][:6]
-        sides, d = (flags >> 6) & 3, wd / 2 + SIDEWALK
+        sides = (flags >> 6) & 3
+        wl, wr = walk_w[k] if walk_w else (0, 0)
+        dl, dr = wd / 2 + (wl or SIDEWALK), wd / 2 + (wr or SIDEWALK)
+        if sides == 3 and abs(dl - dr) < 0.3:
+            bands.append(seg(edges[k]).buffer((dl + dr) / 2, quad_segs=4))
+            continue
+        # z verso sud: per Shapely il piano è speculare, la sua sinistra è la nostra destra
+        if sides & 1:
+            bands.append(seg(edges[k]).buffer(-dl, single_sided=True))
+        if sides & 2:
+            bands.append(seg(edges[k]).buffer(dr, single_sided=True))
         if sides == 3:
-            bands.append(seg(edges[k]).buffer(d, quad_segs=4))
-        elif sides:
-            # z verso sud: per Shapely il piano è speculare, la sua sinistra è la nostra destra
-            bands.append(seg(edges[k]).buffer(-d if sides == 1 else d, single_sided=True))
+            bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
     walk = unary_union([*bands, ped]).difference(U).difference(islands)
     walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
     # riquadri: contorni semplificati prima del taglio, così i bordi tra un riquadro e l'altro combaciano; si tagliano

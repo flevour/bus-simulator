@@ -239,7 +239,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, terrain: MAP.terrain || null };
 }
 
 // ponti stradali sopra la ferrovia o sopra un'altra strada: impalcato in quota con rampe di accesso

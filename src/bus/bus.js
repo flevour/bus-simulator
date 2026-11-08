@@ -724,7 +724,8 @@ export class Bus {
     // integrazione longitudinale (v con segno = direzione di marcia)
     const vPrev = this.v;
     const sgn = this.v !== 0 ? Math.sign(this.v) : this.dir;
-    let a = (Fdrive * this.dir) / m - 9.81 * (world.slope || 0);
+    // pendenza: rampe dei cavalcavia (slope) e terreno (grade, salite e discese su ponti e argini)
+    let a = (Fdrive * this.dir) / m - 9.81 * ((world.slope || 0) + (world.grade || 0));
     const resist = (Froll + Fdrag + Fbrake) / m;
     let vNew = this.v + a * dt;
     // le resistenze si oppongono al moto senza invertire il segno

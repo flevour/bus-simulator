@@ -122,8 +122,18 @@ def in_focus(lat, lon, m=0.0):
     return any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES)
 
 
-def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None):
+def measured_piece(meas, s):
+    """Tratto misurato (data/misure-strade.json) della via che contiene il punto a s metri dall'inizio."""
+    for p in meas or ():
+        if p[0] <= s < p[1]:
+            return p
+    return None
+
+
+def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None):
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
+    # larghezze misurate di carreggiate e marciapiedi (scripts/measure_streets.py), per via OSM
+    measures = json.load(open(measures_path, encoding='utf-8'))['vie'] if measures_path else {}
     # solo gli elementi che toccano l'area di gioco (con un piccolo margine)
     ways = [e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
 
@@ -165,6 +175,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     ped_gap = ped_signal_gaps(sign_els)
 
     edges = []  # a, b, cls, width, name, flags, speed, layer
+    edge_walk = []  # per ogni arco: marciapiede misurato a sinistra e a destra (0 = non misurato)
+    n_meas = 0
     way_geo = []  # per ogni strada: id OSM dei nodi, punti, posizioni tenute, nodi del grafo, senso unico, tag
     for w in roads:
         t = w['tags']
@@ -192,9 +204,23 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         sp = speed_of(t)
         ids = [nid(w['nodes'][i], w['geometry'][i]['lat'], w['geometry'][i]['lon']) for i in keep]
         way_geo.append((w['nodes'], pts, keep, ids, ow, t))
-        for a, b in zip(ids, ids[1:]):
+        meas = measures.get(str(w['id']))
+        if meas:
+            cum = [0.0]
+            for p, q in zip(pts, pts[1:]):
+                cum.append(cum[-1] + math.hypot(q[0] - p[0], q[1] - p[1]))
+        for k, (a, b) in enumerate(zip(ids, ids[1:])):
             if a != b:
-                edges.append([a, b, cls, wd, nm, flags, sp, layer])
+                # carreggiata misurata nel tratto che contiene il punto medio dell'arco
+                pc = measured_piece(meas, (cum[keep[k]] + cum[keep[k + 1]]) / 2) if meas else None
+                we = wd
+                if pc and pc[2] and cls != 8:
+                    we = round(max(3.0, min(25.0, pc[2])), 1)
+                    n_meas += 1
+                edges.append([a, b, cls, we, nm, flags, sp, layer])
+                edge_walk.append((pc[3], pc[4]) if pc else (0.0, 0.0))
+    if measures:
+        print(f'archi con la carreggiata misurata: {n_meas} su {len(edges)}')
 
     signage = osm_signage(sign_els, ped_gap, way_geo, node_id, nodes, edges) if nodes_path else {}
 
@@ -408,6 +434,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     buildings = []
     if overture_path:
         buildings = overture_buildings(overture_path)
+        if volumes_path:
+            print('edifici con l\'altezza misurata (DBGT):', measured_heights(buildings, volumes_path))
     for w in ([] if overture_path else ways):
         t = w.get('tags', {})
         if 'building' not in t or w['nodes'][0] != w['nodes'][-1]:
@@ -577,7 +605,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
     # pianta delle strade: quote dei cavalcavia, carreggiate, marciapiedi, isole; edifici ritagliati fuori
     heights = street_surfaces.overpass_heights(nodes, edges, rails)
-    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges)
+    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges, edge_walk)
     print('pianta delle strade:', st)
 
     nodes_flat = []
@@ -1066,6 +1094,43 @@ def ring_area(r):
     return a / 2
 
 
+def measured_heights(buildings, vol_path):
+    """Altezze misurate (DBGT, strato UN_VOL, scripts/dbgt_volumes.py) al posto di quelle stimate: per ogni edificio la
+    media dei volumi che ha dentro, pesata sull'area, se coprono almeno il 40% della pianta. Restituisce quanti."""
+    v = json.load(open(vol_path, encoding='utf-8'))['v']
+    C = 50
+    grid = defaultdict(list)
+    for i in range(0, len(v), 6):
+        grid[(int(v[i] // C), int(v[i + 1] // C))].append(i)
+
+    def inside(x, z, f):
+        c, n = False, len(f) // 2
+        for k in range(n):
+            ax, az, bx, bz = f[2 * k], f[2 * k + 1], f[2 * ((k + 1) % n)], f[2 * ((k + 1) % n) + 1]
+            if (az > z) != (bz > z) and x < (bx - ax) * (z - az) / (bz - az) + ax:
+                c = not c
+        return c
+    done = 0
+    for b in buildings:
+        f, holes = b[3], b[4] if len(b) > 4 else []
+        xs, zs = f[0::2], f[1::2]
+        area = abs(ring_area(list(zip(xs, zs)))) - sum(abs(ring_area(list(zip(h[0::2], h[1::2])))) for h in holes)
+        if area < 4:
+            continue
+        sw = sa = 0.0
+        for gx in range(int(min(xs) // C), int(max(xs) // C) + 1):
+            for gz in range(int(min(zs) // C), int(max(zs) // C) + 1):
+                for i in grid.get((gx, gz), ()):
+                    x, z, a, h = v[i:i + 4]
+                    if inside(x, z, f) and not any(inside(x, z, hh) for hh in holes):
+                        sw += a * h
+                        sa += a
+        if sa >= 0.4 * area:
+            b[0] = round(sw / sa, 1)
+            done += 1
+    return done
+
+
 def overture_buildings(path):
     """Edifici Overture (piante OSM + Microsoft, con cortili) con altezza stimata in modo realistico."""
     import struct
@@ -1178,4 +1243,5 @@ if __name__ == '__main__':
     extra = sys.argv[4:]
     pick = lambda ok: next((a for a in extra if ok(a)), None)
     main(sys.argv[1], sys.argv[2], sys.argv[3], pick(lambda a: a.endswith('.parquet')),
-         pick(lambda a: a.endswith('.json') and 'tram' not in a), pick(lambda a: a.endswith('.json') and 'tram' in a))
+         pick(lambda a: a.endswith('.json') and 'nodes' in a), pick(lambda a: a.endswith('.json') and 'tram' in a),
+         pick(lambda a: a.endswith('.json') and 'misure' in a), pick(lambda a: a.endswith('.json') and 'volumi' in a))

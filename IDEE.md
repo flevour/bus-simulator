@@ -70,7 +70,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
   e le aree dei capolinea.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
   `src/data/padova-map.json`.
-- [ ] Edifici: altezze reali dove mancano (centro storico), tetti più vari, portici dove mancano.
+- [~] Edifici: altezze misurate dal DBGT della Regione (fatto, vedi "Fatto"); restano tetti più vari e i portici veri
+  (nel DBGT ci sono i volumi sopra i portici, con l'altezza libera).
 - [ ] Piste ciclabili e ciclisti; sottopassi pedonali.
 - [ ] Ampliare l'area di gioco oltre Centro e Arcella (linee oggi tagliate "tratto in città").
 
@@ -120,6 +121,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Carreggiate, marciapiedi e altezze degli edifici misurati (tappe M2 e M3 del piano): larghezze dal DBGT della
+  Regione del Veneto (2007) lungo le vie OSM di oggi, marciapiedi veri (spesso sotto i 2 m), paline al bordo
+  dell'asfalto, altezze alla gronda dai volumi misurati per il 71% degli edifici. Restano isole e verde del DBGT.
 - [x] Turno del bus: le corse che fa lo stesso mezzo si ricavano dall'orario (dopo l'arrivo al capolinea, la prima
   corsa della linea che riparte da lì dopo 3-40 minuti; fino a 1,5 km e un'ora ai capolinea al bordo della mappa). La
   prima del turno esce dal deposito della Stanga (sbarra su Via Orlandini, dai dati OSM) fuori servizio, con il

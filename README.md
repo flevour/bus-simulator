@@ -81,8 +81,17 @@ uniscono non si incrociano.
 * **Area di gioco: Centro storico e Arcella.** Le linee che escono dall'area sono tagliate al confine
   ("tratto in città").
 * **Edifici da Overture Maps** (`data/overture-buildings-padova.parquet`): piante OSM e Microsoft, compresi i
-  cortili interni. Altezza: piani da OSM se presenti, altrimenti altezza Microsoft ML (stimata da immagini
-  satellitari) convertita in piani con una calibrazione sugli edifici OSM, altrimenti stima per tipologia.
+  cortili interni. Altezza: quella misurata dalla Regione del Veneto (DBGT del Comune di Padova, volo 2007: media dei
+  volumi `UN_VOL` dentro la pianta, pesata sull'area, se coprono almeno il 40%; `data/dbgt-volumi.json`), altrimenti
+  piani da OSM se presenti, altrimenti altezza Microsoft ML (stimata da immagini satellitari) convertita in piani con
+  una calibrazione sugli edifici OSM, altrimenti stima per tipologia.
+* **Carreggiate e marciapiedi misurati** (`data/misure-strade.json`, da `scripts/measure_streets.py`): dai poligoni
+  del DBGT (carreggiate `AC_VEI`, marciapiedi `AR_MARC`, edifici `EDIFC`), spostati di 2,4 m sugli edifici OSM. Lungo
+  ogni via OSM si tirano raggi perpendicolari ogni 4 m (non a meno di 12 m dagli incroci, e solo dove l'asse OSM cade
+  dentro la carreggiata misurata): il primo bordo dà la carreggiata, il bordo successivo il marciapiede; due vie
+  affiancate sulla stessa lastra d'asfalto si dividono la larghezza. Per ogni tratto di 40 m si tiene la mediana, se i
+  campioni sono abbastanza e concordi. Dove manca la misura valgono le regole di prima (corsie OSM, tipo di strada).
+  Le paline stanno 0,6 m oltre il bordo vero dell'asfalto.
   La geometria è costruita a riquadri da 400 m, prima quelli vicini al bus.
 * **Tram SIR1**: la sede tranviaria (corsie rosse e rotaia centrale) viene dal tracciato GTFS. I tram automatici sono
   quelli in servizio a quell'ora secondo l'orario GTFS: nei feriali 12-13 per quasi tutto il giorno, nei festivi 7-12.
@@ -119,14 +128,19 @@ curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tr
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json
+# misure dal DBGT della Regione (lotto Comune di Padova, shapefile ETRF2000 dal downloader IDT2; servono pyogrio e pyproj)
+curl -o aree.zip 'https://idt2.regione.veneto.it/idt/download/layerDownload/downloadGeoDBT?lotto=LOTTO%20COMUNE%20DI%20PADOVA&rif=ETRF2000&type=aree'
+python3 scripts/measure_streets.py dbgt <cartella aree> data/osm-padova.json data/misure-strade.json
+python3 scripts/dbgt_volumes.py <cartella aree> data/dbgt-volumi.json
 ```
 
 `build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato, quanti campioni del tram sono finiti
 sui binari OSM, quante fermate del tram hanno la banchina centrale e i numeri della pianta delle strade. Gli ultimi tre argomenti sono facoltativi: senza il file dei nodi il
 gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la sede segue lo shape GTFS.
 
-Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright).
+Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright). Contiene dati della
+Regione del Veneto (DBGT del Comune di Padova), licenza IODL 2.0.
 
 ## Modalità
 

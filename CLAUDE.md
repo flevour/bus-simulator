@@ -41,8 +41,12 @@ Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e b
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json
 ```
+
+`data/misure-strade.json` (larghezze misurate di carreggiate e marciapiedi) e `data/dbgt-volumi.json` (altezze degli
+edifici) vengono dal DBGT della Regione del Veneto con `scripts/measure_streets.py` e `scripts/dbgt_volumes.py`
+(comandi nel README).
 
 `data/osm-padova-nodes.json` (semafori, STOP, dare precedenza, attraversamenti) viene da `scripts/overpass-nodes.ql`
 filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari e banchine del tram) da
@@ -61,8 +65,8 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
 
 ## Note
 
-* Dati: © OpenStreetMap contributors (ODbL), Overture Maps, GTFS Busitalia Veneto (feed BusOne). Mantieni
-  l'attribuzione nel gioco e nel README.
+* Dati: © OpenStreetMap contributors (ODbL), Overture Maps, GTFS Busitalia Veneto (feed BusOne), Regione del Veneto
+  (DBGT e DTM, IODL 2.0). Mantieni l'attribuzione nel gioco e nel README.
 * Livree e marchi: riprendere colori e stile dei mezzi, non riprodurre loghi o marchi aziendali.
 * Dai container cloud alcuni servizi non sono raggiungibili (Overpass, Geofabrik, server della Regione Veneto). Il feed
   GTFS BusOne e Overture (S3) invece funzionano.

@@ -1,7 +1,8 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
-  { n: 32, d: '2026-11-08', t: 'Nel menu scegli l\'autobus guardandolo: al posto dei nomi ci sono le anteprime di ogni livrea (sulla linea 10 vedi lo snodato).' },
+  { n: 33, d: '2026-11-08', t: 'Nel menu scegli l\'autobus guardandolo: al posto dei nomi ci sono le anteprime di ogni livrea (sulla linea 10 vedi lo snodato).' },
+  { n: 32, d: '2026-11-08', t: 'Strade con le misure vere della Regione: carreggiate larghe come quelle reali, marciapiedi stretti dove lo sono davvero (spesso meno di 2 m) e le paline sul bordo del marciapiede. I palazzi hanno l\'altezza misurata: molti erano troppo alti.' },
   { n: 31, d: '2026-11-08', t: 'Sulla linea 10 guidi lo snodato da 18 metri: il rimorchio segue la motrice e in curva taglia di più, quindi allarga le svolte e occhio ai cordoli con le ruote di dietro. Quattro porte, e in retromarcia meglio andare diritti.' },
   { n: 30, d: '2026-11-08', t: 'Quattro livree nuove: rosso e bianco, elettrico blu (solo due porte: si sale davanti dalla porta verde, si scende da quella rossa in mezzo), elettrico verde lime con l\'onda e blu e argento. Le vedi anche sui bus automatici per strada.' },
   { n: 29, d: '2026-11-08', t: 'Si gioca anche dal telefono: tieni il telefono in orizzontale, volante a sinistra, pedali a destra (più in alto premi, più forza), pulsanti per porte, frecce e clacson, e ⋯ per gli altri comandi.' },
