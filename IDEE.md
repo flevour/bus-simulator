@@ -35,7 +35,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    - [ ] mappa più grande;
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
      - [ ] passeggeri anche sugli altri autobus;
-     - [ ] deposito per le prime corse del mattino e le ultime della sera, che partono dalla stazione o ci finiscono;
+     - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
+       deposito (oggi dietro la sbarra c'è prato), il tram (deposito della Guizza) e i turni che cambiano linea;
      - [ ] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
 
 ## Mappa e dati
@@ -89,7 +90,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [ ] Controllore e validazione dei biglietti.
 - [ ] Annunci di fermata più naturali; display interno con le prossime fermate.
 - [ ] Affollamento per fascia oraria e per fermata più realistico.
-- [ ] Turni di lavoro: più corse di fila con pausa al capolinea.
+- [~] Turni di lavoro: più corse di fila con sosta al capolinea (fatto per il bus, vedi "Fatto"); restano il tram, la
+  pausa dell'autista e il cambio turno.
 
 ## Meteo e ambiente
 
@@ -112,6 +114,11 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Turno del bus: le corse che fa lo stesso mezzo si ricavano dall'orario (dopo l'arrivo al capolinea, la prima
+  corsa della linea che riparte da lì dopo 3-40 minuti; fino a 1,5 km e un'ora ai capolinea al bordo della mappa). La
+  prima del turno esce dal deposito della Stanga (sbarra su Via Orlandini, dai dati OSM) fuori servizio, con il
+  navigatore che ricalcola se si sbaglia strada; al capolinea si sceglie tra la corsa dopo (dalla fermata di
+  partenza, fuori servizio se serve), il rientro in deposito e il menu, con il punteggio del turno.
 - [x] Semafori rifatti (tappa M1 del piano): linea d'arresto dal nodo OSM del semaforo o prima delle strisce, palo sul
   marciapiede vero subito oltre la linea (nessuno in carreggiata), ripetitrice a sinistra sui sensi unici a più corsie,
   sbracci sulle vie larghe, lanterne a muro dove il marciapiede è stretto, luci orientate sull'asse del braccio;

@@ -132,6 +132,9 @@ button.primary:hover { filter: brightness(1.08); }
 #res-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 #res-table td { padding: 5px 4px; border-bottom: 1px solid rgba(255,255,255,.06); text-align: left; }
 #res-table td:last-child { text-align: right; font-weight: 700; }
+#res-turno { margin-top: 12px; font-size: 13px; opacity: .85; }
+.card.center button[hidden], .seg[hidden] { display: none; }
+#from-depot { margin-top: 8px; }
 
 #pause-btn { position: absolute; right: 250px; top: 24px; width: 46px; height: 46px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(8,12,18,.8); color: #fff; font-size: 18px; pointer-events: auto; }
 #pause-btn:hover { background: rgba(40,50,64,.9); }

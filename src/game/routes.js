@@ -62,6 +62,80 @@ export function alignStops(route, placements) {
   });
 }
 
+// il bus può percorrere l'arco e partendo dal nodo from? (anche le corsie riservate, non le vie pedonali)
+export const busCan = (e, from) => !e.ped && (!e.oneway || (e.oneway === 1) === (e.a === from));
+
+// Percorso più breve per un bus tra due nodi della rete (Dijkstra), per le corse fuori servizio. Le vie piccole e le
+// strade di servizio costano di più: si va sulle strade principali come farebbe un autista. notFrom: nodo da non
+// prendere come primo (niente inversione a U in partenza); notInto: nodo da cui non arrivare alla meta (verso sbagliato).
+export function findPath(net, from, to, { notFrom = null, notInto = null } = {}) {
+  const dist = new Map([[from, 0]]), prev = new Map(), heap = [[0, from]];
+  const push = (it) => {
+    heap.push(it);
+    for (let i = heap.length - 1; i > 0;) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+      }
+    }
+    return top;
+  };
+  while (heap.length) {
+    const [d, u] = pop();
+    if (u === to) break;
+    if (d > dist.get(u)) continue;
+    for (const e of net.nodes[u].edges) {
+      if (!busCan(e, u)) continue;
+      const w = e.a === u ? e.b : e.a;
+      if ((u === from && w === notFrom) || (w === to && u === notInto)) continue;
+      const nd = d + e.len * (e.main ? 1 : e.service ? 3 : e.cls >= 5 ? 1.6 : 1.25);
+      if (nd < (dist.get(w) ?? Infinity)) { dist.set(w, nd); prev.set(w, u); push([nd, w]); }
+    }
+  }
+  if (from !== to && !prev.has(to)) return null;
+  const seq = [to];
+  while (seq[seq.length - 1] !== from) seq.push(prev.get(seq[seq.length - 1]));
+  return seq.reverse();
+}
+
+// Meta di una corsa fuori servizio che porta alla prima fermata di una variante: il nodo prima della fermata (da
+// raggiungere arrivando dal percorso, non dal nodo dopo), i nodi da percorrere dopo e dove sta la fermata (at: metri
+// dal nodo). Così chi arriva è sulla corsia giusta e nel verso giusto per partire.
+export function startGoal(net, city, v) {
+  const route = buildRoute(net, v);
+  if (city && city.stopPlacements) alignStops(route, city.stopPlacements);
+  const st = route.stops[0], seq = route.seq;
+  let i = 0;
+  while (i < route.cum.length - 2 && route.cum[i + 1] <= st.s) i++;
+  let j = i + 1;
+  while (j < seq.length - 1 && route.cum[j] < st.s + 30) j++;
+  return { node: seq[i], notInto: seq[i + 1], tail: seq.slice(i + 1, j + 1), at: st.s - route.cum[i], stop: { id: st.gtfs.id, name: st.name, x: st.cx, z: st.cz, importance: 1 }, route, s: st.s };
+}
+
+// Variante fuori servizio dal punto in cui si trova il bus (sulla strada più vicina, nel verso di marcia h) fino alla
+// meta; null se non c'è una strada qui o un percorso possibile
+export function planTransfer(net, city, x, z, h, goal) {
+  const r = city.snapToRoad(x, z, 60);
+  if (!r || r.edge.ped) return null;
+  const e = r.edge, fwd = Math.sin(h) * e.dx + Math.cos(h) * e.dz >= 0;
+  const A = fwd ? e.a : e.b, B = fwd ? e.b : e.a;
+  // senza inversione a U se si può; davanti a una strada chiusa (capolinea al bordo della mappa) si torna indietro
+  const path = findPath(net, B, goal.node, { notFrom: A, notInto: goal.notInto }) || findPath(net, B, goal.node, { notInto: goal.notInto });
+  if (!path) return null;
+  const nodes = net.expandSeq([A, ...path, ...goal.tail]);
+  if (nodes.length < 2) return null;
+  return { nodes, goalIdx: nodes.length - 1 - goal.tail.length, stops: [{ id: 'partenza', name: 'Partenza', x, z, importance: 1 }, goal.stop], offsets: [0, 1], duration: 1 };
+}
+
 // Percorso del tram: la corsia (TrackPath) è già nel verso di marcia; le fermate sono proiettate in ordine.
 // Il muso si ferma a fine banchina: la "palina" della missione è 12 m oltre il centro della banchina.
 export const TRAM_STOP_AHEAD = 12;

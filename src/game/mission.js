@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRoute, buildTramRoute, pointAt, projectOnRoute, alignStops } from './routes.js';
+import { buildRoute, buildTramRoute, pointAt, projectOnRoute, alignStops, planTransfer } from './routes.js';
 import { personGeometry } from '../world/traffic.js';
 import { zoneOf } from '../world/city.js';
 import { fmtHM } from '../data/padova.js';
@@ -610,6 +610,85 @@ export class Mission {
   posAt(s) { return pointAt(this.route, s); }
 }
 
+// Corsa fuori servizio: dal deposito al capolinea, tra una corsa e l'altra del turno, di rientro in deposito. Niente
+// passeggeri né fermate: il navigatore porta alla meta, e ricalcola la strada se si sbaglia; valgono le regole della
+// strada come nel giro libero. kind: 'uscita' | 'spostamento' | 'rientro'; goal: meta (vedi startGoal); plan: variante
+// fuori servizio (planTransfer); arriveBy: orario a cui arrivare (senza clock si parte in tempo per farcela)
+export class Transfer extends Mission {
+  constructor({ kind, goal, plan, clock = null, arriveBy = null, ...opts }) {
+    super({ ...opts, route: plan, departure: clock ?? arriveBy ?? 0, depDur: 1 });
+    this.transfer = kind;
+    this.goal = goal;
+    this.arriveBy = arriveBy;
+    this.setPlan(plan);
+    this.clock = clock ?? arriveBy - this.eta - 90;
+    this.stops[1].sched = arriveBy ?? this.clock + this.eta;
+    this.timetable = this.stops.map((st) => ({ name: st.name, time: fmtHM(st.sched) }));
+    capture('transfer_started', { kind, line_id: this.line.id });
+  }
+  // percorso fino alla meta: la fermata d'arrivo sta a goal.at metri dal nodo della meta
+  setPlan(plan) {
+    const route = buildRoute(this.net, plan);
+    const b = route.stops[1], s = Math.max(0, Math.min(route.length - 1, route.cum[plan.goalIdx] + this.goal.at));
+    const p = pointAt(route, s), hw = p.seg.hw, rx = -p.dz, rz = p.dx;
+    Object.assign(b, { s, x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw, sched: this.stops ? this.stops[1].sched : 0 });
+    this.route = route;
+    this.stops = route.stops;
+    for (const st of this.stops) st.waiting = [];
+    const a = this.stops[0];
+    a.arrived = a.left = a.spawned = b.spawned = true;
+    this.nextStop = 1;
+    this.s = 0;
+    this.offRouteT = 0;
+    this.dest = b.name;
+    // tempo di guida stimato, con un margine per incroci e semafori
+    this.eta = route.segs.reduce((t, sg) => t + segTime(sg, route.pts[sg.i]), 0) * 1.25;
+  }
+  update(dt, bus, ctx) {
+    this.clock += dt;
+    if (this.finished) { this.crowd.update(dt); return; }
+    const proj = projectOnRoute(this.route, bus.x, bus.z, this.s, 80, 400, bus.h);
+    if (proj.d < 60) this.s = proj.s;
+    this.proj = proj;
+    const sg = this.route.segs[proj.segIndex];
+    const st = this.stops[1], along = this.s + 6 * Math.cos(angleDiff(Math.atan2(sg.dx, sg.dz), bus.h)) - st.s;
+    const inZone = along > -14 && along < 10 && proj.d < st.hw + 3;
+    // strada sbagliata: il navigatore ricalcola da qui
+    if (proj.d > 30) {
+      this.offRouteT += dt;
+      if (this.offRouteT > 2.5) this.replan(bus);
+    } else this.offRouteT = 0;
+    this.updateFree(dt, bus, ctx, bus.toWorld(0, 6));
+    this.stopInfo = { st, along, inZone, lat: 0 };
+    if (inZone && Math.abs(bus.v) < 0.3) this.finish();
+  }
+  replan(bus) {
+    this.offRouteT = 0;
+    const plan = planTransfer(this.net, this.city, bus.x, bus.z, bus.h, this.goal);
+    if (!plan) return;
+    this.setPlan(plan);
+    this.hud.toast('🧭 Ricalcolo del percorso', 'info');
+  }
+  navInfo() {
+    const nav = super.navInfo();
+    // ultimi metri: dove fermarsi
+    const left = this.stops[1].s - this.s - 6;
+    if (left < 120) return { dist: Math.max(0, left), dir: 'straight', street: this.transfer === 'rientro' ? 'Fermati davanti alla sbarra' : 'Fermati alla palina di ' + this.dest };
+    return nav;
+  }
+  finish() {
+    if (this.finished) return;
+    this.finished = true;
+    const late = this.clock - (this.arriveBy ?? Infinity);
+    if (this.transfer === 'uscita') {
+      if (late <= 60) this.addScore(50, `Al capolinea ${this.dest} in tempo per la partenza`);
+      else this.addScore(-Math.min(100, Math.round(late / 6)), `Al capolinea con ${fmtDelay(late)} di ritardo sulla partenza`);
+    } else if (this.transfer === 'rientro') this.addScore(100, 'Bus in deposito: turno finito!');
+    capture('transfer_completed', { kind: this.transfer, line_id: this.line.id, final_score: this.score, late_s: Number.isFinite(late) ? Math.round(late) : null });
+    this.onFinish && this.onFinish();
+  }
+}
+
 export function fmtDelay(sec) {
   const s = Math.abs(sec);
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -635,15 +714,12 @@ export function tripDuration(variant, dur) {
 // di guida fino a ogni fermata: marcia all'85% del limite del tratto (maxspeed OSM, altrimenti 30 in centro e 50 fuori)
 // più un tempo fisso per ogni fermata (frenata, porte, ripartenza).
 const STOP_TIME = 22;
+const segTime = (sg, p) => sg.len / ((Math.min(50, sg.edge.speed || (zoneOf(p.x, p.z) === 0 ? 30 : 50)) / 3.6) * 0.85);
 export function drivingTimes(net, variant) {
   const route = buildRoute(net, variant);
   const { segs, cum, pts, stops } = route;
   const T = [0];
-  for (const sg of segs) {
-    const p = pts[sg.i];
-    const lim = Math.min(50, sg.edge.speed || (zoneOf(p.x, p.z) === 0 ? 30 : 50));
-    T.push(T[T.length - 1] + sg.len / ((lim / 3.6) * 0.85));
-  }
+  for (const sg of segs) T.push(T[T.length - 1] + segTime(sg, pts[sg.i]));
   const runAt = (s) => {
     let lo = 0, hi = cum.length - 1;
     while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }

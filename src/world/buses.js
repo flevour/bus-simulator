@@ -4,7 +4,7 @@ import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight } from './city.js';
 import { mulberry32, distToSeg } from './spatial.js';
 import { ledTexture } from './textures.js';
 import { TrackPath } from '../tram/tram.js';
-import { buildRoute, alignStops } from '../game/routes.js';
+import { buildRoute, alignStops, busCan } from '../game/routes.js';
 import { scheduleFor } from '../game/mission.js';
 import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
 
@@ -27,9 +27,6 @@ const DRIVER = [0.62, 0, 4.5]; // autista: seduto a sinistra, dietro al cruscott
 
 // corsia del bus: sui doppi sensi quella di destra, sui sensi unici stretti il centro
 const laneLat = (e) => (!e ? 1.8 : e.oneway ? (e.width < 8 ? 0 : e.width / 2 - 2) : Math.max(e.width / 4, e.width / 2 - 2.2));
-// il bus può percorrere l'arco e partendo dal nodo from? (anche le corsie riservate, non le vie pedonali)
-const busCan = (e, from) => !e.ped && (!e.oneway || (e.oneway === 1) === (e.a === from));
-
 // prosecuzione più dritta possibile lungo il grafo: avanti (uscita dall'ultima fermata, arrivando da prev) o indietro
 // (strada da cui si arriva al capolinea: prev è il nodo successivo sul percorso)
 function walk(net, from, prev, maxLen, back) {
@@ -330,6 +327,12 @@ export class BusSim {
     this.livery = livery; // le istanze si rifanno al prossimo modello se la livrea è cambiata
     this.runs = busRuns(lines, day).filter((r) => !mine || r.v !== mine.v || Math.abs(r.t - mine.t) > 120);
     this.lastClock = null;
+  }
+  // la corsa passa al giocatore (la successiva del suo turno): il gemello automatico, se c'è, esce di scena
+  exclude(mine) {
+    const same = (r) => r.v === mine.v && Math.abs(r.t - mine.t) <= 120;
+    for (const r of this.runs) if (same(r) && r.bus) this.remove(r.bus);
+    this.runs = this.runs.filter((r) => !same(r));
   }
   clear() {
     while (this.buses.length) this.remove(this.buses[0]);

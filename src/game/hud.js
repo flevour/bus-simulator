@@ -40,7 +40,7 @@ export class HUD {
     }
     const st = m.free ? null : m.stops[m.nextStop];
     if (st) {
-      $('next-stop').textContent = st.name + (st.terminal && st.idx > 0 ? ' (capolinea)' : '');
+      $('next-stop').textContent = st.name + (st.terminal && st.idx > 0 && !m.transfer ? ' (capolinea)' : '');
       $('next-sched').textContent = fmtHM(st.sched);
       const est = m.clock + Math.max(0, st.s - m.s) / 7;
       const delay = (st.arrived ? m.clock : est) - st.sched;
@@ -55,7 +55,9 @@ export class HUD {
       }
       $('next-dist').textContent = Math.max(0, Math.round(st.s - m.s)) + ' m';
     }
-    if (!m.free) $('stops-progress').textContent = `Fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length}`;
+    if (!m.free) $('stops-progress').textContent = m.transfer ? 'Fuori servizio' : `Fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length}`;
+    const lbl = m.transfer ? 'Destinazione' : 'Prossima fermata';
+    if ($('next-lbl').textContent !== lbl) $('next-lbl').textContent = lbl;
     // fermata a richiesta: prenotata, qualcuno in attesa, oppure si può passare dritti
     const rq = $('request');
     const ahead = st && !st.arrived && st.idx < m.stops.length - 1 && st.spawned;
@@ -193,7 +195,7 @@ export class HUD {
     }
     // percorso
     if (!m.free) {
-      c.strokeStyle = m.line.color; c.lineWidth = big ? 30 : 8;
+      c.strokeStyle = m.transfer ? '#90a4ae' : m.line.color; c.lineWidth = big ? 30 : 8;
       c.beginPath(); m.route.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.z) : c.moveTo(p.x, p.z))); c.stroke();
     }
     // fermate

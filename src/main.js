@@ -5,8 +5,10 @@ import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
 import { BusSim } from './world/buses.js';
 import { Bus } from './bus/bus.js';
-import { Mission, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
-import { pointAt, projectOnRoute } from './game/routes.js';
+import { Mission, Transfer, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
+import { pointAt, projectOnRoute, startGoal, planTransfer, findPath } from './game/routes.js';
+import { turnoOf } from './game/turni.js';
+import { DEPOT_NAME, depotGate, DepotGate } from './world/depot.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
 import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
@@ -85,7 +87,7 @@ scene.add(rain);
 // ------------------------------------------------------------------
 // Mondo
 // ------------------------------------------------------------------
-let net, city, lights, trams, tramSignals, buses, greet;
+let net, city, lights, trams, tramSignals, buses, greet, depot, depotMesh;
 const hud = new HUD();
 const audio = new Audio();
 
@@ -93,6 +95,11 @@ function buildWorld() {
   net = buildNetwork();
   // orari tra le fermate a misura di guida (il tram ha già quelli della sua sede)
   for (const L of LINES) for (const v of L.variants) paceVariant(net, v);
+  // capolinea al bordo della mappa: la variante comincia o finisce dove l'export ha tagliato la strada (un solo arco)
+  for (const L of LINES) for (const v of L.variants) {
+    v.cutStart = net.nodes[v.nodes[0]].edges.length === 1;
+    v.cutEnd = net.nodes[v.nodes[v.nodes.length - 1]].edges.length === 1;
+  }
   city = new City(scene, net);
   lights = new TrafficLights(scene, net, city);
   city.buildSigns();
@@ -102,6 +109,9 @@ function buildWorld() {
   trams.signals = tramSignals;
   // bus automatici delle linee urbane dall'orario
   buses = new BusSim(scene, net, city, { tramSignals });
+  // deposito: da qui escono le prime corse del turno, qui rientrano le ultime
+  depot = depotGate(net);
+  if (depot) depotMesh = new DepotGate(scene, depot);
 }
 
 // ------------------------------------------------------------------
@@ -195,7 +205,7 @@ canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
 // linee bus e tram nel menu
 const ALL_LINES = [...LINES, ...TRAM_LINES];
-const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus', lightHour: null };
+const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus', lightHour: null, fromDepot: true };
 // modalità: servizio di linea, giro libero (regole della strada) o esplorazione (nessuna regola, il tram non deraglia)
 const MODE_NOTE = {
   service: 'Corsa con orario, fermate, passeggeri e punteggio.',
@@ -411,7 +421,7 @@ function togglePause(force) {
 // ------------------------------------------------------------------
 const SAVE_KEY = 'padova-bus-sim-save-v2';
 function saveGame() {
-  if (!running || !mission || !bus || mission.finished) return false;
+  if (!running || !mission || !bus || mission.finished || mission.transfer) return false;
   const m = mission;
   const data = {
     v: 2,
@@ -522,7 +532,8 @@ function refreshMenu() {
   deps.forEach((dp, i) => {
     const o = document.createElement('option');
     o.value = i;
-    o.textContent = `${fmtHM(dp.t)} → ${fmtHM(dp.t + tripDuration(v, dp.d))}${hourTag(dp.t)}`;
+    const tn = L.tram ? null : turnoOf(L, settings.variant, v, dp.t);
+    o.textContent = `${fmtHM(dp.t)} → ${fmtHM(dp.t + tripDuration(v, dp.d))}${hourTag(dp.t)}${tn && tn.first && canLeaveDepot(v) ? ' · 🅿️ dal deposito' : tn && tn.last && depot ? ' · poi in deposito' : ''}`;
     sel.appendChild(o);
     const d = Math.abs(dp.t - (prev || 8.25 * 3600));
     if (d < bestD) { bestD = d; best = i; }
@@ -542,6 +553,20 @@ function refreshStops() {
   const v = curVariant();
   const times = scheduleFor(v, settings.departure, settings.depDur);
   $('stop-list').innerHTML = v.stops.map((s, i) => `<li class="${i === 0 || i === v.stops.length - 1 ? 'term' : ''}"><span>${s.name}</span><span class="t">${fmtHM(times[i])}</span></li>`).join('');
+  refreshTurno();
+}
+// posto della corsa nel turno del bus (ricavato dall'orario); la prima del turno può uscire dal deposito
+function refreshTurno() {
+  const L = settings.line, tn = L.tram || settings.mode !== 'service' ? null : turnoOf(L, settings.variant, curVariant(), settings.departure);
+  let txt = '';
+  if (tn) {
+    txt = tn.of === 1 ? 'Corsa unica del turno del bus' : `Corsa ${tn.n} di ${tn.of} del turno del bus`;
+    const out = tn.first && canLeaveDepot(curVariant());
+    if (out) txt += ' · esce dal deposito della Stanga';
+    if (tn.last && depot) txt += out ? ' e poi ci rientra' : ' · l\'ultima: poi si rientra in deposito';
+  }
+  $('turno-note').textContent = txt;
+  $('from-depot').hidden = !(tn && tn.first && canLeaveDepot(curVariant()));
 }
 
 // elenco delle linee del mezzo scelto (autobus o tram)
@@ -575,7 +600,8 @@ function buildMenu() {
   seg('direction', 'd', (d) => { settings.vIdx = settings.line.pair[d === '1' ? 0 : 1]; refreshMenu(); });
   $('route-variant').addEventListener('change', (e) => { settings.vIdx = Number(e.target.value); refreshMenu(); });
   seg('weather', 'w', (w) => { settings.weather = w; });
-  seg('mode', 'm', (m) => { settings.mode = m; $('mode-note').textContent = MODE_NOTE[m]; });
+  seg('mode', 'm', (m) => { settings.mode = m; $('mode-note').textContent = MODE_NOTE[m]; refreshTurno(); });
+  seg('from-depot', 'f', (f) => { settings.fromDepot = f === '1'; });
   $('mode-note').textContent = MODE_NOTE[settings.mode];
   // meteo e ora della luce, sempre modificabili dalla pausa
   document.querySelectorAll('#pause-weather button').forEach((b) => b.addEventListener('click', () => {
@@ -606,6 +632,8 @@ function buildMenu() {
   refreshResumeBox();
   $('quit').addEventListener('click', backToMenu);
   $('res-menu').addEventListener('click', backToMenu);
+  $('res-next').addEventListener('click', chainNext);
+  $('res-depot').addEventListener('click', toDepot);
   refreshMenu();
 }
 
@@ -613,7 +641,7 @@ function backToMenu() {
   if (mission && !mission.finished) {
     const missionDetails = {
       vehicle_type: bus.isTram ? 'tram' : 'bus',
-      mission_mode: mission.roam ? 'roam' : mission.free ? 'free' : 'service',
+      mission_mode: mission.transfer ? 'transfer' : mission.roam ? 'roam' : mission.free ? 'free' : 'service',
       stops_completed: mission.nextStop,
     };
     capture('mission_abandoned', missionDetails);
@@ -662,14 +690,20 @@ function startMission(resume = null) {
   }
   resetLook(false);
   bus.onShift = () => audio.shift();
-  mission = new Mission({ scene, net, line: L, route: V, day: settings.variant, departure: settings.departure, depDur: settings.depDur, hud, audio, lights, city, free: settings.mode !== 'service', roam: settings.mode === 'roam' });
+  // prima corsa del turno: si parte dal deposito, fuori servizio fino al capolinea
+  const tn = !resume && settings.mode === 'service' && !L.tram && depot ? turnoOf(L, settings.variant, V, settings.departure) : null;
+  mission = tn && tn.first && settings.fromDepot && canLeaveDepot(V) ? depotExit(V) : null;
+  if (!mission) mission = new Mission({ ...missionCommon(), route: V, departure: settings.departure, depDur: settings.depDur, free: settings.mode !== 'service', roam: settings.mode === 'roam' });
   bus.noDerail = settings.mode === 'roam';
   // tram automatici: quelli in servizio all'ora della corsa secondo l'orario GTFS; la corsa che guida il giocatore
   // non ha un gemello automatico
   trams.setService(TRAM_LINES, settings.variant, bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
-  mission.dest = destName;
+  if (!mission.transfer) mission.dest = destName;
   const st0 = mission.stops[0];
-  if (bus.isTram) {
+  if (mission.transfer) {
+    bus.setDestination('', 'Fuori servizio');
+    clearSave(); // il fuori servizio non si salva: niente corsa vecchia da riprendere
+  } else if (bus.isTram) {
     // il muso alla fine della banchina della prima fermata
     bus.setFront(st0.s - 0.5);
     mission.s = Math.max(0, st0.s - 0.5 - TRAM.ref);
@@ -679,15 +713,14 @@ function startMission(resume = null) {
     bus.place(p.x + -p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
     mission.s = Math.max(0, st0.s - 6.5);
   }
-  bus.setInnerDisplay('Linea ' + L.id + ' – ' + destName);
+  bus.setInnerDisplay(mission.transfer ? 'Fuori servizio' : 'Linea ' + L.id + ' – ' + destName);
   if (resume) applySave(resume);
   city.ensureTiles(bus.x, bus.z, 650);
   // bus automatici: le corse in servizio a quell'ora (non quella del giocatore), prima delle auto che li evitano
   buses.setService(LINES, settings.variant, settings.livery || 'moderna', !bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
   buses.schedule(mission.clock, bus);
   buses.updateParts();
-  greet = new Greetings(hud, mission);
-  lights.time = resume ? resume.mission.clock : settings.departure;
+  lights.time = mission.clock;
   const hour = (settings.departure / 3600) % 24;
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
   const count = Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1));
@@ -696,8 +729,9 @@ function startMission(resume = null) {
   walkers = new Walkers(scene, net, Math.round(140 * (settings.variant === 'festivo' ? 1.2 : 1) * (hour > 21 || hour < 6.5 ? 0.3 : 1)), city);
   for (let i = 0; i < count; i++) traffic.spawn(bus, 60, 1400);
   for (let i = 0; i < walkers.target; i++) walkers.spawn(bus);
-  mission.onFinish = () => setTimeout(showResults, 3500);
-  hud.setLine(L, destName);
+  wireMission();
+  turno = { corse: 0, score: 0, odo: bus.odometer, depot: !!mission.transfer };
+  hud.setLine(mission.transfer ? { id: L.id, color: OFF_COLOR } : L, mission.transfer ? 'Fuori servizio' : destName);
   hud.show(true);
   hud.setBigMap(false);
   $('menu').classList.add('hidden');
@@ -729,6 +763,9 @@ function startMission(resume = null) {
   } else if (mission.free) {
     hud.setLine({ id: L.id, color: L.color }, 'Giro libero');
     hud.toast('Giro libero: esplora Padova, rispetta semafori e limiti', 'info');
+  } else if (mission.transfer) {
+    hud.toast(`🅿️ Si esce dal deposito fuori servizio: al capolinea ${mission.dest} entro le ${fmtHM(mission.arriveBy)} (${(mission.route.length / 1000).toFixed(1).replace('.', ',')} km)`, 'info');
+    setTimeout(() => running && hud.toast(`Poi la linea ${L.id} per ${destName} parte alle ${fmtHM(settings.departure)}`, 'info'), 2400);
   } else {
     hud.toast(`Linea ${L.id} per ${destName} – partenza ${fmtHM(settings.departure)}`, 'info');
     setTimeout(() => running && hud.toast('Apri le porte (F) per far salire i passeggeri', 'info'), 1800);
@@ -738,9 +775,130 @@ function startMission(resume = null) {
   saveGame();
 }
 
+// ------------------------------------------------------------------
+// Turno: corse una dopo l'altra con lo stesso bus, dall'uscita dal deposito al rientro
+// ------------------------------------------------------------------
+const OFF_COLOR = '#607d8b'; // linea fuori servizio
+let turno = null; // { corse, score, odo, depot }
+function missionCommon() {
+  return { scene, net, line: settings.line, day: settings.variant, hud, audio, lights, city };
+}
+function wireMission() {
+  const m = mission;
+  greet = new Greetings(hud, m);
+  m.onFinish = m.transfer ? () => transferDone(m) : () => setTimeout(showResults, 3500);
+}
+function switchMission(m) {
+  scene.remove(mission.crowd.mesh);
+  mission = m;
+  wireMission();
+}
+// dal deposito si arriva alla prima fermata nel verso giusto? (no dove la variante parte da una strada chiusa al bordo
+// della mappa, come i "tratti in città" delle linee che escono da Padova)
+const depotReach = new Map();
+function canLeaveDepot(V) {
+  if (!depot || V.tram) return false;
+  if (!depotReach.has(V)) {
+    const goal = startGoal(net, city, V);
+    depotReach.set(V, !!findPath(net, depot.out, goal.node, { notFrom: depot.node, notInto: goal.notInto }));
+  }
+  return depotReach.get(V);
+}
+// il bus esce dalla sbarra del deposito, sulla corsia di destra, e va fuori servizio alla prima fermata della corsa
+function depotExit(V) {
+  const g = depot, lat = g.hw / 2;
+  bus.place(g.x + g.dx * 9 - g.dz * lat, g.z + g.dz * 9 + g.dx * lat, Math.atan2(g.dx, g.dz));
+  const goal = startGoal(net, city, V), plan = planTransfer(net, city, bus.x, bus.z, bus.h, goal);
+  return plan ? new Transfer({ ...missionCommon(), kind: 'uscita', goal, plan, arriveBy: settings.departure - 120 }) : null;
+}
+function transferDone(m) {
+  turno.score += m.score;
+  if (m.transfer === 'rientro') setTimeout(showShiftEnd, 2500);
+  else beginService();
+}
+// alla fermata di partenza (arrivando dal deposito o dalla corsa prima): comincia il servizio
+function beginService() {
+  const L = settings.line, V = curVariant(), dest = V.stops[V.stops.length - 1].name, clock = mission.clock;
+  const m = new Mission({ ...missionCommon(), route: V, departure: settings.departure, depDur: settings.depDur });
+  m.clock = clock;
+  m.s = projectOnRoute(m.route, bus.x, bus.z, m.stops[0].s, 400, 400, bus.h).s;
+  m.dest = dest;
+  switchMission(m);
+  buses.exclude({ v: V, t: settings.departure });
+  bus.setDestination(L.id, dest);
+  bus.setInnerDisplay('Linea ' + L.id + ' – ' + dest);
+  hud.setLine(L, dest);
+  hud.toast(`Linea ${L.id} per ${dest} – partenza ${fmtHM(settings.departure)}: apri le porte (F)`, 'info');
+  capture('mission_started', { vehicle_type: 'bus', mission_mode: 'service', line_id: L.id, service_day: settings.variant, weather: settings.weather, turno_run: turno.corse + 1 });
+  saveGame();
+}
+function nextOfTurno() {
+  if (bus.isTram || settings.mode !== 'service') return null;
+  const tn = turnoOf(settings.line, settings.variant, curVariant(), settings.departure);
+  return tn ? { tn, next: tn.run.next } : null;
+}
+// al capolinea: la corsa successiva del turno, dalla fermata di partenza (se il bus non c'è già, fuori servizio fin lì)
+function chainNext() {
+  const t = nextOfTurno(), next = t && t.next;
+  if (!next) return;
+  $('results').classList.add('hidden');
+  Object.assign(settings, { vIdx: next.v.idx, departure: next.t, depDur: next.d });
+  const L = settings.line, V = next.v, dest = V.stops[V.stops.length - 1].name, goal = startGoal(net, city, V);
+  const pr = projectOnRoute(goal.route, bus.x, bus.z, goal.s, 1e9, 1e9, bus.h);
+  const atStart = pr.d < 8 && pr.s < goal.s + 8 && goal.s - pr.s < 300;
+  const plan = atStart ? null : planTransfer(net, city, bus.x, bus.z, bus.h, goal);
+  if (!plan) {
+    // nessuna strada fin lì nel verso giusto (partenza al bordo della mappa: il giro fino al capolinea vero è fuori
+    // mappa): il bus va alla fermata di partenza
+    if (!atStart) {
+      const p = pointAt(goal.route, goal.s - 6.5), lat = goal.route.stops[0].hw - 1.7;
+      placeBusAt(p.x - p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
+      hud.toast(V.cutStart ? `🌀 Giro al capolinea fuori mappa: riparti da ${goal.stop.name}` : `🌀 Il bus è alla fermata di partenza ${goal.stop.name}`, 'info');
+    }
+    beginService();
+    return;
+  }
+  switchMission(new Transfer({ ...missionCommon(), kind: 'spostamento', goal, plan, clock: mission.clock, arriveBy: next.t - 60 }));
+  bus.setDestination(L.id, dest);
+  bus.setInnerDisplay('Linea ' + L.id + ' – ' + dest);
+  hud.setLine({ id: L.id, color: OFF_COLOR }, 'Verso la partenza');
+  hud.toast(`🚏 Raggiungi la fermata di partenza ${goal.stop.name}: la linea ${L.id} per ${dest} parte alle ${fmtHM(next.t)}`, 'info');
+}
+// fine turno: fuori servizio fino alla sbarra del deposito
+function toDepot() {
+  $('results').classList.add('hidden');
+  const g = depot, goal = { node: g.node, notInto: null, tail: [], at: -10, stop: { id: 'deposito', name: DEPOT_NAME, x: g.x, z: g.z, importance: 1 } };
+  const plan = planTransfer(net, city, bus.x, bus.z, bus.h, goal);
+  if (!plan) { hud.toast('Il navigatore non trova la strada per il deposito', 'bad'); showShiftEnd(); return; }
+  switchMission(new Transfer({ ...missionCommon(), kind: 'rientro', goal, plan, clock: mission.clock }));
+  bus.setDestination('', 'Fuori servizio');
+  bus.setInnerDisplay('Fuori servizio');
+  hud.setLine({ id: settings.line.id, color: OFF_COLOR }, 'Fuori servizio → ' + DEPOT_NAME);
+  hud.toast(`🅿️ Rientro in deposito: segui il navigatore fino alla sbarra (${(mission.route.length / 1000).toFixed(1).replace('.', ',')} km)`, 'info');
+  clearSave();
+}
+// riepilogo del turno, al rientro in deposito
+function showShiftEnd() {
+  clearSave();
+  const km = (bus.odometer - turno.odo) / 1000;
+  $('res-title').textContent = 'Turno finito: bus in deposito';
+  $('res-stars').textContent = '🅿️';
+  $('res-score').textContent = turno.score + ' punti';
+  const rows = [['Corse fatte', turno.corse], ['Chilometri percorsi', km.toFixed(1).replace('.', ',')], ['Rientro in deposito', fmtHM(mission.clock, true)]];
+  $('res-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  $('res-turno').textContent = '';
+  $('res-next').hidden = $('res-depot').hidden = true;
+  $('res-menu').textContent = 'Nuova corsa';
+  $('res-menu').classList.add('primary');
+  $('results').classList.remove('hidden');
+  capture('shift_completed', { line_id: settings.line.id, runs: turno.corse, final_score: turno.score, km: Math.round(km * 10) / 10 });
+}
+
 function showResults() {
   if (!mission) return;
   clearSave();
+  turno.corse++;
+  turno.score += mission.score;
   const s = mission.stats;
   const n = mission.stops.length;
   const maxPts = n * 130 + 400;
@@ -764,6 +922,22 @@ function showResults() {
     ['Arrivo al capolinea', fmtHM(mission.clock, true)],
   ];
   $('res-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  // al capolinea: la corsa dopo del turno, il rientro in deposito o il menu
+  const t = nextOfTurno(), next = t && t.next;
+  $('res-next').hidden = !next;
+  if (next) {
+    const wait = Math.round((next.t - mission.clock) / 60);
+    const fuori = curVariant().cutEnd || next.v.cutStart; // il giro fino al capolinea vero è fuori mappa
+    $('res-next').textContent = `▶ Prossima corsa: ${next.v.headsign} alle ${fmtHM(next.t)} (${wait > 0 ? `${fuori ? 'giro al capolinea fuori mappa e sosta' : 'sosta'}: ${wait} min` : 'sei in ritardo: si riparte subito'})`;
+  }
+  $('res-depot').hidden = !t || !depot;
+  $('res-depot').classList.toggle('primary', !next);
+  $('res-menu').classList.toggle('primary', !t);
+  $('res-menu').textContent = t ? 'Torna al menu' : 'Nuova corsa';
+  const parts = [];
+  if (turno.corse > 1 || turno.depot) parts.push(`Turno: ${turno.corse} ${turno.corse > 1 ? 'corse' : 'corsa'}, ${turno.score} punti in tutto`);
+  if (t && !next && depot) parts.push('Era l\'ultima corsa del turno: il bus torna in deposito.');
+  $('res-turno').textContent = parts.join(' · ');
   $('results').classList.remove('hidden');
 }
 
@@ -1028,6 +1202,7 @@ function step(dt) {
   const ctx = { speedLimit, onSidewalk, night: (mission._night || 0) > 0.5 || wx.fog > 0.6 || wx.rain > 0.6 };
   mission.update(dt, bus, ctx);
   city.update(dt);
+  if (depotMesh) depotMesh.update(dt, bus);
   envTimer -= dt;
   if (envTimer <= 0) { setupWeatherAndTime(); envTimer = wxChanging ? 0.2 : 2; }
   saveTimer += dt;
@@ -1144,7 +1319,7 @@ setTimeout(() => {
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
   window.__game = { get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
-    teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; },
+    teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot,
     sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
 }, 50);

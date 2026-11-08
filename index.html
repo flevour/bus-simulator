@@ -58,6 +58,11 @@
           <div class="note" id="dir-note"></div>
           <h3>5 · Corsa</h3>
           <select id="departure"></select>
+          <div class="note" id="turno-note"></div>
+          <div class="seg" id="from-depot" hidden>
+            <button data-f="1" class="sel">🅿️ Esci dal deposito</button>
+            <button data-f="0">🚏 Parti dal capolinea</button>
+          </div>
           <h3>6 · Modalità</h3>
           <div class="seg" id="mode">
             <button data-m="service" class="sel">🚏 Servizio di linea</button>
@@ -100,7 +105,7 @@
       <div class="row"><span id="line-badge">3</span><span id="line-dest">—</span></div>
       <div class="clock" id="clock">00:00:00</div>
       <div class="next">
-        <div class="lbl">Prossima fermata <span id="stops-progress"></span></div>
+        <div class="lbl"><span id="next-lbl">Prossima fermata</span> <span id="stops-progress"></span></div>
         <div id="next-stop">—</div>
         <div class="row2"><span>⏱ <span id="next-sched">--:--</span></span><span id="next-delay" class="ok">+0:00</span><span id="next-dist">0 m</span></div>
       </div>
@@ -193,6 +198,9 @@
       <div id="res-stars"></div>
       <div id="res-score"></div>
       <table id="res-table"></table>
+      <div class="note" id="res-turno"></div>
+      <button id="res-next" class="primary" hidden></button>
+      <button id="res-depot" hidden>🅿️ Fine turno: rientra in deposito</button>
       <button id="res-menu" class="primary">Nuova corsa</button>
     </div>
   </div>

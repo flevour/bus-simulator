@@ -162,6 +162,7 @@ export class Bus {
     ledS.position.set(-HW - 0.02, 2.35, 3.0);
     ledS.rotation.y = -Math.PI / 2;
     B.add(ledS);
+    this.ledMats = [led.material, ledS.material];
     const ledR = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.26), new THREE.MeshBasicMaterial({ map: labelTexture(lineInfo.id, { w: 128, h: 64, bg: '#080808', fg: '#ffa31a', font: 'bold 52px Courier New' }) }));
     ledR.position.set(0, 2.75, -L2 - 0.012);
     ledR.rotation.y = Math.PI;
@@ -403,6 +404,14 @@ export class Bus {
     this.standSpots = [];
     for (let z = 3.4; z > -5.0; z -= 0.55) for (const x of [0.05, -0.15]) this.standSpots.push({ x: x + (Math.random() - 0.5) * 0.2, z });
     for (const d of BUS.doors.slice(1)) for (let k = 0; k < 6; k++) this.standSpots.push({ x: -0.6 - Math.random() * 0.3, z: d.z0 + Math.random() * 1.2 });
+  }
+
+  // indicatore di linea frontale e laterale (fuori servizio senza numero)
+  setDestination(line, dest) {
+    const tex = ledTexture(line, dest);
+    for (const m of this.ledMats) { m.map = tex; m.needsUpdate = true; }
+    this.ledTex.dispose();
+    this.ledTex = tex;
   }
 
   setInnerDisplay(text) {
