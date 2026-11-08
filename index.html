@@ -39,7 +39,7 @@
           <div id="livery-box">
             <div class="note">Scegli l'autobus</div>
             <!-- anteprime disegnate dal modello 3D del gioco (src/game/liveryPreview.js) -->
-            <div class="seg" id="livery">
+            <div class="seg livery-pick" id="livery">
               <button data-l="moderna" class="sel" title="Moderno elettrico" aria-label="Moderno elettrico"><img alt=""></button>
               <button data-l="storica" title="Storico arancione" aria-label="Storico arancione"><img alt=""></button>
               <button data-l="aps" title="Rosso e bianco" aria-label="Rosso e bianco"><img alt=""></button>
@@ -221,6 +221,11 @@
     <div class="card center">
       <h2>Pausa</h2>
       <p id="pause-info" class="pause-info"></p>
+      <div id="pause-bus">
+        <h3>Autobus</h3>
+        <!-- stesso selettore del menu: i pulsanti si copiano da #livery all'avvio -->
+        <div class="seg livery-pick" id="pause-livery"></div>
+      </div>
       <h3>Meteo</h3>
       <div class="seg" id="pause-weather">
         <button data-w="variable">🌦️ Variabile</button>

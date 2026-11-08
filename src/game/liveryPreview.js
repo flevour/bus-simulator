@@ -5,7 +5,7 @@ import { Bus } from '../bus/bus.js';
 
 const cache = new Map();
 
-function disposeTree(obj) {
+export function disposeTree(obj) {
   obj.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];

@@ -228,6 +228,7 @@ export class Bus {
     box(BUS.width, 0.26, 0.1, paint, 0, YT - 0.13, L2 - 0.05);
     // display LED frontale e laterale
     this.ledTex = ledTexture(lineInfo.id, lineInfo.dest);
+    this.ledText = [lineInfo.id, lineInfo.dest]; // per ricostruire il bus con un'altra livrea
     const led = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.26), new THREE.MeshBasicMaterial({ map: this.ledTex }));
     led.position.set(0, YT - 0.14, L2 + 0.012);
     B.add(led);
@@ -524,6 +525,7 @@ export class Bus {
 
   // indicatore di linea frontale e laterale (fuori servizio senza numero)
   setDestination(line, dest) {
+    this.ledText = [line, dest];
     const tex = ledTexture(line, dest);
     for (const m of this.ledMats) { m.map = tex; m.needsUpdate = true; }
     this.ledTex.dispose();
@@ -531,6 +533,7 @@ export class Bus {
   }
 
   setInnerDisplay(text) {
+    this.innerText = text;
     const c = this.innerCanvas, x = c.getContext('2d');
     x.fillStyle = '#050505';
     x.fillRect(0, 0, c.width, c.height);

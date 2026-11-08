@@ -15,7 +15,7 @@ import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
 import { initNews } from './game/news.js';
 import { Greetings } from './game/greetings.js';
 import { TouchControls, isTouchDevice } from './game/touch.js';
-import { liveryPreviews } from './game/liveryPreview.js';
+import { liveryPreviews, disposeTree } from './game/liveryPreview.js';
 import { Terrain } from './world/terrain.js';
 
 const $ = (id) => document.getElementById(id);
@@ -448,6 +448,9 @@ function togglePause(force) {
   if (paused) {
     document.querySelectorAll('#pause-weather button').forEach((x) => x.classList.toggle('sel', x.dataset.w === settings.weather));
     $('pause-hour').value = settings.lightHour == null ? '' : String(settings.lightHour);
+    // cambio di autobus: solo col bus (con lo snodato le anteprime sono dello snodato)
+    $('pause-bus').hidden = !bus || bus.isTram;
+    if (bus && !bus.isTram) { markLivery(bus.livery); fillLiveryPreviews($('pause-livery'), !!bus.articulated); }
     touch.release();
     const ok = saveGame();
     $('pause-info').textContent = ok ? `Progressi salvati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: potrai riprendere da qui anche dopo aver chiuso la pagina.` : 'Salvataggio non disponibile in questo browser.';
@@ -551,15 +554,37 @@ function hourTag(t) {
 
 // anteprime dei bus nel menu: per la linea 10 si vede lo snodato. Si disegnano dopo il primo frame del menu
 let liveryT = 0;
+function fillLiveryPreviews(grid, art) {
+  const btns = [...grid.querySelectorAll('button')];
+  const imgs = liveryPreviews(btns.map((b) => b.dataset.l), art);
+  for (const b of btns) b.querySelector('img').src = imgs[b.dataset.l];
+}
 function refreshLiveryPreviews() {
   if ($('livery-box').hidden) return;
   const art = ARTICULATED_LINES.has(settings.line.id) && !settings.line.tram;
   clearTimeout(liveryT);
-  liveryT = setTimeout(() => {
-    const btns = [...document.querySelectorAll('#livery button')];
-    const imgs = liveryPreviews(btns.map((b) => b.dataset.l), art);
-    for (const b of btns) b.querySelector('img').src = imgs[b.dataset.l];
-  }, 30);
+  liveryT = setTimeout(() => fillLiveryPreviews($('livery'), art), 30);
+}
+// la livrea scelta, evidenziata in tutti e due i selettori
+function markLivery(l) {
+  document.querySelectorAll('.livery-pick button').forEach((b) => b.classList.toggle('sel', b.dataset.l === l));
+}
+// cambio di autobus a corsa avviata (dalla pausa): si ricostruisce il modello con la nuova livrea e si ricopia lo
+// stato di guida (posizione, velocità, porte, passeggeri, snodo, luci...), che è tutto fatto di numeri e booleani
+function swapBusLivery(l) {
+  if (!bus || bus.isTram || bus.livery === l) return;
+  const old = bus, L = settings.line;
+  const nb = new Bus(scene, { id: old.ledText[0], color: L.color, dest: old.ledText[1], livery: l, articulated: old.articulated });
+  for (const [k, v] of Object.entries(old)) if ((typeof v === 'number' || typeof v === 'boolean') && k !== 'electric' && k !== 'articulated') nb[k] = v;
+  // le livree possono avere un numero diverso di porte
+  nb.doorOpen = nb.doors.map((_, i) => old.doorOpen[Math.min(i, old.doorOpen.length - 1)]);
+  nb.onShift = old.onShift;
+  if (old.innerText) nb.setInnerDisplay(old.innerText);
+  nb.setPassengerVisuals(old.passengers);
+  nb.syncTransform();
+  scene.remove(old.group);
+  disposeTree(old.group);
+  bus = nb;
 }
 function refreshMenu() {
   const L = settings.line;
@@ -677,7 +702,15 @@ function buildMenu() {
     settings.lightHour = e.target.value === '' ? null : Number(e.target.value);
     if (mission) setupWeatherAndTime();
   });
-  seg('livery', 'l', (l) => { settings.livery = l; });
+  seg('livery', 'l', (l) => { settings.livery = l; markLivery(l); });
+  // pausa: stesso selettore del menu
+  $('pause-livery').innerHTML = $('livery').innerHTML;
+  document.querySelectorAll('#pause-livery button').forEach((b) => b.addEventListener('click', () => {
+    settings.livery = b.dataset.l;
+    markLivery(settings.livery);
+    swapBusLivery(settings.livery);
+    saveGame();
+  }));
   seg('vehicle', 'k', (k) => setVehicle(k));
   $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
   $('start').addEventListener('click', () => { if (touch.enabled) touch.goFullscreen(); startMission(); });
@@ -784,7 +817,7 @@ function startMission(resume = null) {
   if (resume) applySave(resume);
   city.ensureTiles(bus.x, bus.z, 650);
   // bus automatici: le corse in servizio a quell'ora (non quella del giocatore), prima delle auto che li evitano
-  buses.setService(LINES, settings.variant, settings.livery || 'moderna', !bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
+  buses.setService(LINES, settings.variant, !bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
   buses.schedule(mission.clock, bus);
   buses.updateParts();
   lights.time = mission.clock;
