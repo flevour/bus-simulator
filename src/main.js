@@ -43,6 +43,7 @@ const baseRender = renderer.render.bind(renderer);
 renderer.render = (sc, cam) => {
   if (sc !== scene || !terrain.ok) { terrain.enable(false); baseRender(sc, cam); return; }
   terrain.enable(true);
+  if (city) city.followGround(cam.position.x, cam.position.z);
   const lifted = [cam, ...((bus && (bus.headLights || (bus.spot ? [bus.spot] : []))) || [])].flatMap((o) => (o.target ? [o, o.target] : [o]));
   const dys = lifted.map((o) => { const p = o.getWorldPosition(V3t); const dy = terrain.at(p.x, p.z); o.position.y += dy; o.updateMatrixWorld(); return dy; });
   baseRender(sc, cam);

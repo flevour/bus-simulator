@@ -451,14 +451,42 @@ export class City {
   }
 
   // ---- terreno ----
+  // prato: una griglia che segue la telecamera, a maglie di 10 m fino a 1 km (le celle del terreno) e via via più
+  // larghe fino a 12 km, così le quote del terreno (vertex shader) si vedono anche sul suolo
   buildGround() {
     const tex = TX.groundTexture();
-    tex.repeat.set(220, 220);
-    const g = new THREE.PlaneGeometry(22000, 22000, 176, 176); // suddiviso: triangoli enormi danno problemi di profondità
-    g.rotateX(-Math.PI / 2);
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex }));
+    const D = [0];
+    for (let d = 10; D[D.length - 1] < 12000; ) { D.push(d); d += d < 1000 ? 10 : Math.max(10, Math.round(d * 0.06 / 10) * 10); }
+    const C = [...D.slice(1).reverse().map((d) => -d), ...D], n = C.length;
+    const pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2), idx = [];
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      pos[k * 3] = C[i]; pos[k * 3 + 2] = C[j];
+      uv[k * 2] = C[i] / 100; uv[k * 2 + 1] = -C[j] / 100;
+      if (i < n - 1 && j < n - 1) idx.push(k, k + n, k + 1, k + 1, k + n, k + n + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * n * 3).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+    g.setIndex(idx);
+    // il prato è lo sfondo di tutto: si disegna per primo e non nasconde niente (con il terreno le carreggiate, che
+    // hanno meno vertici, possono passare qualche centimetro sotto il prato)
+    const mat = new THREE.MeshLambertMaterial({ map: tex, depthWrite: false });
+    mat.userData.terrainGround = true;
+    const m = new THREE.Mesh(g, mat);
     m.receiveShadow = true;
+    m.frustumCulled = false;
+    m.renderOrder = -0.5;
+    this.ground = m;
     this.group.add(m);
+  }
+  // il prato segue la telecamera a passi di 10 m (i vertici restano sulle celle del terreno, la trama sul posto)
+  followGround(x, z) {
+    if (!this.ground) return;
+    const cx = Math.round(x / 10) * 10, cz = Math.round(z / 10) * 10;
+    this.ground.position.set(cx, 0, cz);
+    this.ground.material.map.offset.set((cx / 100) % 1, (-cz / 100) % 1);
   }
 
   // ---- strade ----
@@ -894,6 +922,7 @@ export class City {
     const wMat = layer(new THREE.MeshLambertMaterial({ map: wTex, color: 0xaaccd0 }), 2);
     this.waterTex = wTex;
     const bank = layer(new THREE.MeshLambertMaterial({ color: 0x7d8a5c }), 1);
+    wMat.userData.terrainGround = bank.userData.terrainGround = true; // seguono l'alveo, non la quota dei ponti
     const geos = [], banks = [];
     for (const w of this.net.water) {
       geos.push(polyRibbon(w.pts, w.width, 0.03, 30));

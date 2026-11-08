@@ -34,7 +34,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 5. [~] **Segnalazioni dal gioco** (modulo Richieste; il 6 novembre dalla linea 42 in Via Madonna della Salute):
    - [x] fermate date per saltate prima di averle attraversate (vedi "Fatto");
    - [x] semafori in mezzo alla strada e orientati male (vedi "Fatto");
-   - [ ] zone pedonali; profilo altimetrico delle strade;
+   - [x] profilo altimetrico delle strade (terreno dal DTM della Regione, vedi "Fatto");
+   - [ ] zone pedonali;
    - [ ] navigatore sulle linee 22, 13, 25 (in parte era lo stesso salto della posizione, da ricontrollare);
    - [ ] zona Plebiscito: strade e fermate;
    - [ ] cavalcavia da migliorare e posizione dei fiumi;
@@ -121,6 +122,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Terreno con le quote vere (tappa M4 del piano): DTM a 5 m della Regione del Veneto, griglia a 10 m applicata a
+  tutta la scena nel vertex shader; centro storico più alto, alvei e argini, ponti raccordati tra le sponde, cavalcavia
+  spianati sotto, pendenza nella guida del bus. Restano i sottopassi e il LiDAR (da chiedere alla Regione).
 - [x] Carreggiate, marciapiedi e altezze degli edifici misurati (tappe M2 e M3 del piano): larghezze dal DBGT della
   Regione del Veneto (2007) lungo le vie OSM di oggi, marciapiedi veri (spesso sotto i 2 m), paline al bordo
   dell'asfalto, altezze alla gronda dai volumi misurati per il 71% degli edifici. Restano isole e verde del DBGT.

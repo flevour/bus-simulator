@@ -130,7 +130,7 @@ def measured_piece(meas, s):
     return None
 
 
-def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None):
+def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None, dtm_path=None):
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     # larghezze misurate di carreggiate e marciapiedi (scripts/measure_streets.py), per via OSM
     measures = json.load(open(measures_path, encoding='utf-8'))['vie'] if measures_path else {}
@@ -605,7 +605,11 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
     # pianta delle strade: quote dei cavalcavia, carreggiate, marciapiedi, isole; edifici ritagliati fuori
     heights = street_surfaces.overpass_heights(nodes, edges, rails)
-    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges, edge_walk)
+    terrain = hfun = None
+    if dtm_path:
+        terrain, tst, hfun = street_surfaces.terrain_for_game(json.load(open(dtm_path)), nodes, edges, heights)
+        print('terreno:', tst)
+    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges, edge_walk, hfun)
     print('pianta delle strade:', st)
 
     nodes_flat = []
@@ -623,6 +627,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramStops': tram_stops,
         'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
         'tramLines': [build_gtfs.load_tram(gtfs_dir, keep=tram_keep)],
+        **({'terrain': terrain} if terrain else {}),
         **signage,
     }
     with open(out, 'w', encoding='utf-8') as f:
@@ -1244,4 +1249,5 @@ if __name__ == '__main__':
     pick = lambda ok: next((a for a in extra if ok(a)), None)
     main(sys.argv[1], sys.argv[2], sys.argv[3], pick(lambda a: a.endswith('.parquet')),
          pick(lambda a: a.endswith('.json') and 'nodes' in a), pick(lambda a: a.endswith('.json') and 'tram' in a),
-         pick(lambda a: a.endswith('.json') and 'misure' in a), pick(lambda a: a.endswith('.json') and 'volumi' in a))
+         pick(lambda a: a.endswith('.json') and 'misure' in a), pick(lambda a: a.endswith('.json') and 'volumi' in a),
+         pick(lambda a: a.endswith('.json') and 'dtm' in a))

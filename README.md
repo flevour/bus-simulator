@@ -92,6 +92,13 @@ uniscono non si incrociano.
   affiancate sulla stessa lastra d'asfalto si dividono la larghezza. Per ogni tratto di 40 m si tiene la mediana, se i
   campioni sono abbastanza e concordi. Dove manca la misura valgono le regole di prima (corsie OSM, tipo di strada).
   Le paline stanno 0,6 m oltre il bordo vero dell'asfalto.
+* **Terreno** (`data/dtm-padova.json`, da `scripts/dtm_grid.py`): le quote del DTM a 5 m della Regione del Veneto in
+  una griglia a 10 m. Il gioco resta piano e alza ogni vertice della quota del suo punto (vertex shader,
+  `src/world/terrain.js`), con la telecamera e i fari: si vedono il centro storico più alto di 4 m, gli alvei dei
+  fiumi e gli argini. Sotto i cavalcavia (che il gioco alza da sé) il terreno è spianato; i ponti sui fiumi hanno la
+  quota raccordata tra le sponde (asfalto ed edifici), mentre prato, acqua e argini seguono l'alveo. Il prato è una
+  griglia che segue la telecamera; carreggiate e marciapiedi sono infittiti dove il terreno non è piano. Salite e
+  discese pesano sulla guida del bus.
   La geometria è costruita a riquadri da 400 m, prima quelli vicini al bus.
 * **Tram SIR1**: la sede tranviaria (corsie rosse e rotaia centrale) viene dal tracciato GTFS. I tram automatici sono
   quelli in servizio a quell'ora secondo l'orario GTFS: nei feriali 12-13 per quasi tutto il giorno, nei festivi 7-12.
@@ -128,7 +135,9 @@ curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tr
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json
+# terreno: DTM a 5 m della Regione (GeoServer IDT2, WPS ras:CropCoverage su rv:DTM_RV_5m_3003; servono rasterio e pyproj)
+python3 scripts/dtm_grid.py dtm_rv_5m_3003_padova.tif data/dtm-padova.json
 # misure dal DBGT della Regione (lotto Comune di Padova, shapefile ETRF2000 dal downloader IDT2; servono pyogrio e pyproj)
 curl -o aree.zip 'https://idt2.regione.veneto.it/idt/download/layerDownload/downloadGeoDBT?lotto=LOTTO%20COMUNE%20DI%20PADOVA&rif=ETRF2000&type=aree'
 python3 scripts/measure_streets.py dbgt <cartella aree> data/osm-padova.json data/misure-strade.json
@@ -140,7 +149,7 @@ sui binari OSM, quante fermate del tram hanno la banchina centrale e i numeri de
 gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la sede segue lo shape GTFS.
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright). Contiene dati della
-Regione del Veneto (DBGT del Comune di Padova), licenza IODL 2.0.
+Regione del Veneto (DBGT del Comune di Padova, DTM a 5 m), licenza IODL 2.0.
 
 ## Modalità
 

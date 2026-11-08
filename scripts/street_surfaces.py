@@ -243,7 +243,29 @@ def _rings(geom):
     return out
 
 
-def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None):
+def densify(geom, hfun, maxlen=12.0, tol=0.12):
+    """Spezza i lati più lunghi di maxlen dove il terreno lungo il lato si scosta più di tol dalla retta tra i due
+    estremi: il gioco alza solo i vertici, e un lato lungo taglierebbe argini e ponti. In piano non cambia niente."""
+    def ring(coords):
+        out = [coords[0]]
+        for p, q in zip(coords, coords[1:]):
+            L = math.dist(p, q)
+            if L > maxlen:
+                n = int(math.ceil(L / 4))
+                hp, hq = hfun(*p), hfun(*q)
+                err = max(abs(hfun(p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n) - (hp + (hq - hp) * k / n)) for k in range(1, n))
+                if err > tol:
+                    m = int(math.ceil(L / maxlen))
+                    out += [(p[0] + (q[0] - p[0]) * k / m, p[1] + (q[1] - p[1]) * k / m) for k in range(1, m)]
+            out.append(q)
+        return out
+    polys = []
+    for g in _polys(geom):
+        polys.append(Polygon(ring(list(g.exterior.coords)), [ring(list(r.coords)) for r in g.interiors]))
+    return polys
+
+
+def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None):
     elev = lambda e: heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
     drive = [k for k, e in enumerate(edges) if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3]
@@ -436,7 +458,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
     # riquadri: contorni semplificati prima del taglio, così i bordi tra un riquadro e l'altro combaciano; si tagliano
     # i singoli poligoni (indice spaziale) invece dell'intera geometria, che può essere una collezione mista
-    layers = [_polys(g.simplify(tol)) for g, tol in ((U, 0.15), (walk, 0.3), (islands, 0.1))]
+    # con il terreno: carreggiate e marciapiedi infittiti dove il terreno non è piano (argini, ponti)
+    layers = [densify(g.simplify(tol), hfun) if hfun and dens else _polys(g.simplify(tol)) for g, tol, dens in ((U, 0.15, True), (walk, 0.3, True), (islands, 0.1, False))]
     trees = [STRtree(L) for L in layers]
     cells = []
     x0, z0, x1, z1 = unary_union([p for L in layers[:2] for p in L]).bounds
@@ -452,3 +475,128 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     up_area = up.simplify(0.1).segmentize(4.0)
     return {'tile': TILE, 'cells': cells, 'decks': [r for p in _polys(D.simplify(0.1)) for r in _rings(p)],
             'up': [r for p in _polys(up_area) for r in _rings(p)]}, out_b, stats
+
+
+def terrain_for_game(dtm, nodes, edges, heights):
+    """Griglia delle quote per il gioco (src/world/terrain.js) dalla griglia del DTM (scripts/dtm_grid.py).
+
+    * sotto i cavalcavia e le loro rampe (che il gioco alza da sé, quote in `heights`) il terreno si spiana alla quota
+      del suolo intorno, così il rilevato non si conta due volte;
+    * i ponti sui fiumi (bridge OSM che il gioco lascia a terra) diventano tratti con la quota raccordata tra le due
+      sponde: il gioco li usa per la variante "via" della griglia (asfalto, edifici, veicoli), mentre suolo e acqua
+      seguono l'alveo.
+    """
+    import base64
+    import numpy as np
+    g = dict(dtm)
+    nx, nz, step, x0, z0 = g['nx'], g['nz'], g['step'], g['x0'], g['z0']
+    b = np.frombuffer(base64.b64decode(g['data']), dtype=np.uint8).reshape(nz, nx).astype(np.float64)
+    h = b * g['scale'] + g['offset']
+    X, Z = np.meshgrid(x0 + np.arange(nx) * step, z0 + np.arange(nz) * step)
+
+    def cells_near(geom, d):
+        x_a, z_a, x_b, z_b = geom.buffer(d).bounds
+        i0, i1 = max(0, int((x_a - x0) // step)), min(nx - 1, int((x_b - x0) // step) + 1)
+        j0, j1 = max(0, int((z_a - z0) // step)), min(nz - 1, int((z_b - z0) // step) + 1)
+        if i0 > i1 or j0 > j1:
+            return None
+        import shapely
+        xs, zs = X[j0:j1 + 1, i0:i1 + 1], Z[j0:j1 + 1, i0:i1 + 1]
+        m = shapely.contains_xy(geom.buffer(d), xs, zs)
+        return (slice(j0, j1 + 1), slice(i0, i1 + 1)), m
+    # spianatura sotto i tratti in quota del gioco
+    up = [LineString([nodes[e[0]], nodes[e[1]]]).buffer(e[3] / 2 + 8) for e in edges
+          if max(heights.get(e[0], 0), heights.get(e[1], 0)) > 0.3]
+    flat = 0
+    for comp in _polys(unary_union(up)) if up else []:
+        ring = cells_near(comp.buffer(10).exterior.buffer(15), 0)
+        core = cells_near(comp, 0)
+        if not ring or not core:
+            continue
+        (sl, m) = ring
+        vals = h[sl][m]
+        if not len(vals):
+            continue
+        ground = float(np.percentile(vals, 30))
+        (sl2, m2) = core
+        sub = h[sl2]
+        sub[m2] = np.minimum(sub[m2], ground)
+        flat += int(m2.sum())
+    # ponti sui fiumi: catene di archi bridge a terra, quota lineare tra le sponde (3 m oltre gli estremi)
+    at = defaultdict(list)
+    for k, e in enumerate(edges):
+        if e[5] & 4 and max(heights.get(e[0], 0), heights.get(e[1], 0)) < 0.05 and e[2] != 8:
+            at[e[0]].append(k)
+            at[e[1]].append(k)
+    hx = lambda x, z: float(h[min(nz - 1, max(0, round((z - z0) / step))), min(nx - 1, max(0, round((x - x0) / step)))])
+    seen, bridges = set(), []
+    for k0 in {k for ks in at.values() for k in ks}:
+        if k0 in seen:
+            continue
+        # catena: si risale fino a un estremo (nodo con un solo arco bridge), poi si percorre
+        comp, st = set(), [k0]
+        while st:
+            k = st.pop()
+            if k in comp:
+                continue
+            comp.add(k)
+            for n in edges[k][:2]:
+                st += [j for j in at[n] if j not in comp and len(at[n]) <= 2]
+        seen |= comp
+        ends = [n for k in comp for n in edges[k][:2] if len(at[n]) == 1]
+        if len(ends) != 2:
+            continue
+        order, cur, used = [ends[0]], ends[0], set()
+        while cur != ends[1]:
+            nxt = [(j, edges[j][1] if edges[j][0] == cur else edges[j][0]) for j in at[cur] if j in comp and j not in used]
+            if not nxt:
+                break
+            used.add(nxt[0][0])
+            cur = nxt[0][1]
+            order.append(cur)
+        if cur != ends[1]:
+            continue
+        pts = [nodes[n] for n in order]
+        L = sum(math.dist(p, q) for p, q in zip(pts, pts[1:]))
+        if L < 6 or L > 400:
+            continue
+
+        def beyond(p, q):
+            d = math.dist(p, q) or 1
+            return (p[0] + (p[0] - q[0]) / d * 3, p[1] + (p[1] - q[1]) / d * 3)
+        h0, h1 = hx(*beyond(pts[0], pts[1])), hx(*beyond(pts[-1], pts[-2]))
+        w = max(edges[k][3] for k in comp) / 2 + 3
+        flatpts, s = [], 0.0
+        for i, p in enumerate(pts):
+            if i:
+                s += math.dist(pts[i - 1], p)
+            flatpts += [round(p[0], 1), round(p[1], 1), round(h0 + (h1 - h0) * s / L, 2)]
+        bridges.append([round(w, 1), *flatpts])
+    # quota della variante "via" (con i ponti) per infittire le superfici
+    hv = h.copy()
+    for br in bridges:
+        w = br[0]
+        for k in range(1, len(br) - 5, 3):
+            ax, az, ah, bx, bz, bh = br[k:k + 6]
+            seg = LineString([(ax, az), (bx, bz)])
+            near = cells_near(seg, w)
+            if not near:
+                continue
+            sl, m = near
+            xs, zs = X[sl][m], Z[sl][m]
+            ex, ez = bx - ax, bz - az
+            t = np.clip(((xs - ax) * ex + (zs - az) * ez) / (ex * ex + ez * ez or 1), 0, 1)
+            sub = hv[sl]
+            sub[m] = np.maximum(sub[m], ah + (bh - ah) * t)
+
+    def hfun(x, z):
+        fx = min(max((x - x0) / step, 0), nx - 1.001)
+        fz = min(max((z - z0) / step, 0), nz - 1.001)
+        i, j = int(fx), int(fz)
+        tx, tz = fx - i, fz - j
+        return (hv[j, i] * (1 - tx) + hv[j, i + 1] * tx) * (1 - tz) + (hv[j + 1, i] * (1 - tx) + hv[j + 1, i + 1] * tx) * tz
+    lo, hi = float(h.min()), float(h.max())
+    scale = (hi - lo) / 255 or 0.01
+    out = np.clip(np.round((h - lo) / scale), 0, 255).astype(np.uint8)
+    g.update({'scale': round(scale, 5), 'offset': round(lo, 3), 'data': base64.b64encode(out.tobytes()).decode(), 'bridges': bridges})
+    return g, {'celle_spianate': flat, 'ponti': len(bridges)}, hfun
