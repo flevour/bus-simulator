@@ -2,7 +2,11 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d1117" />
   <title>Padova Bus Simulator</title>
   <link rel="stylesheet" href="./src/style.css" />
 </head>
@@ -72,7 +76,10 @@
           <ol id="stop-list"></ol>
         </section>
       </div>
-      <div class="keys">
+      <div class="keys touch-only">
+        <b>Comandi touch:</b> gira il telefono in orizzontale · trascina il volante a sinistra o a destra · pedali a destra (più in alto premi, più forza) · 🚪 porte · ◀ ▶ frecce · 📯 clacson · ⋯ altri comandi · trascina sulla scena per guardarti intorno, doppio tocco per tornare avanti
+      </div>
+      <div class="keys no-touch">
         <b>Comandi:</b> W/↑ gas · S/↓ freno · A D/← → sterzo · Shift+W/S gas e freno a fondo · F porte · Q/E frecce · G emergenza · Spazio freno a mano · R marcia avanti/indietro · L fari · H clacson · K inginocchiamento · C visuale · Z/X guarda sx/dx · T salta l'attesa · J teletrasporto · M mappa · U audio · I aiuto · P pausa
       </div>
       <div class="disclaimer">Mappa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL). Linee, fermate e orari: GTFS Busitalia Veneto (feed BusOne). Edifici estrusi dalle piante OSM con altezze stimate. Non è un prodotto ufficiale.</div>
@@ -116,12 +123,49 @@
       </div>
       <div id="help-hint">I = aiuto · C = visuale · © OpenStreetMap contributors</div>
     </div>
+    <div id="touch">
+      <div id="t-left">
+        <div class="t-row">
+          <button data-key="KeyQ" aria-label="Freccia sinistra">◀</button>
+          <button data-key="KeyG" aria-label="Quattro frecce">⚠</button>
+          <button data-key="KeyE" aria-label="Freccia destra">▶</button>
+        </div>
+        <div id="t-wheel" aria-label="Volante"><div class="rim"><span class="spoke"></span><span class="hub"></span><span class="mark"></span></div></div>
+      </div>
+      <div id="t-right">
+        <div class="t-row">
+          <button data-key="KeyH" data-hold aria-label="Clacson">📯</button>
+          <button data-key="Space" aria-label="Freno a mano">🅿</button>
+          <button data-key="KeyR" aria-label="Marcia avanti/indietro">R</button>
+          <button data-key="KeyF" class="doors" aria-label="Porte">🚪</button>
+        </div>
+        <div class="t-pedals">
+          <div id="t-brake" class="pedal" aria-label="Freno"><div class="fill"></div><span>FRENO</span></div>
+          <div id="t-gas" class="pedal" aria-label="Acceleratore"><div class="fill"></div><span>GAS</span></div>
+        </div>
+      </div>
+      <button id="t-more" aria-label="Altri comandi">⋯</button>
+      <div id="t-extras" class="card" hidden>
+        <button data-key="KeyC">🎥 Visuale</button>
+        <button data-key="KeyV">👁 Guarda avanti</button>
+        <button data-key="KeyM">🗺️ Mappa</button>
+        <button data-key="KeyJ">📍 Teletrasporto</button>
+        <button data-key="KeyT">⏩ Salta l'attesa</button>
+        <button data-key="KeyL">💡 Fari</button>
+        <button data-key="KeyK">⤵ Inginocchia</button>
+        <button data-key="KeyU">🔈 Audio</button>
+        <button data-key="KeyI">❔ Aiuto</button>
+        <button id="t-fullscreen">⛶ Schermo intero</button>
+        <button id="t-close" class="close">✕ Chiudi</button>
+      </div>
+      <div id="t-rotate">↻ Ruota il telefono in orizzontale per guidare meglio</div>
+    </div>
     <div id="mirror-frame-l" class="mirror-frame"></div>
     <div id="mirror-frame-r" class="mirror-frame"></div>
     <div id="teleport" class="card" hidden>
       <h3>Teletrasporto</h3>
       <ol id="teleport-list"></ol>
-      <div class="sub">Tasti 1–9 o clic · J o Esc per chiudere · nella mappa grande (M) puoi cliccare su qualsiasi strada</div>
+      <div class="sub"><button class="touch-only" id="tp-close">Chiudi</button><span class="no-touch">Tasti 1–9 o clic · J o Esc per chiudere · nella mappa grande (M) puoi cliccare su qualsiasi strada</span></div>
     </div>
     <div id="help" class="card">
       <h3>Come si guida</h3>
@@ -136,7 +180,12 @@
         <li><b>C</b> visuale (cabina, esterna, passeggeri, dall'alto) · <b>Z/X</b> guarda a sinistra/destra (oppure trascina col mouse; <b>V</b> o doppio clic per tornare avanti) · <b>M</b> mappa grande · <b>T</b> salta l'attesa in fermata · <b>J</b> teletrasporto · <b>P</b> pausa</li>
         <li>Quando sei in anticipo e tutti sono saliti, l'attesa in fermata scorre accelerata.</li>
       </ul>
-      <div class="sub">Premi I per chiudere</div>
+      <ul class="touch-only">
+        <li><b>Touch:</b> trascina il <b>volante</b> a sinistra/destra; i <b>pedali</b> sono a destra (più in alto tocchi, più forte). Da fermo, con le porte chiuse, ripremi il freno per la retromarcia (poi il freno arretra e il gas frena), oppure usa <b>R</b>.</li>
+        <li><b>🚪</b> porte · <b>◀ ▶</b> frecce · <b>⚠</b> emergenza · <b>🅿</b> freno a mano · <b>📯</b> clacson · <b>⋯</b> visuale, mappa, teletrasporto, fari, schermo intero…</li>
+        <li>Trascina sulla scena per guardarti intorno, doppio tocco per tornare avanti. Nella mappa grande tocca una strada per teletrasportarti.</li>
+      </ul>
+      <div class="sub"><span class="no-touch">Premi I per chiudere</span><button class="touch-only" id="help-close">Chiudi</button></div>
     </div>
   </div>
 

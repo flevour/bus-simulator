@@ -7,6 +7,7 @@ import { Mission, scheduleFor } from './game/mission.js';
 import { pointAt, projectOnRoute } from './game/routes.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
+import { TouchControls, isTouchDevice } from './game/touch.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -15,7 +16,7 @@ const $ = (id) => document.getElementById(id);
 // ------------------------------------------------------------------
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouchDevice() ? 1.25 : 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -105,9 +106,13 @@ const mirrorQuads = mirrorRT.map((rt) => {
 function layoutMirrors() {
   const W = window.innerWidth, H = window.innerHeight;
   overlayCam.right = W; overlayCam.top = H; overlayCam.updateProjectionMatrix();
-  const mw = Math.min(150, W * 0.11), mh = mw * 1.4;
-  const y = H * 0.42;
-  const pos = [[14 + mw / 2, H - y - mh / 2], [W - 14 - mw / 2, H - y - mh / 2]];
+  // su telefono gli specchietti sono più piccoli, per lasciare spazio a volante e pedali
+  const small = document.body.classList.contains('touch') && H < 600;
+  const mw = small ? Math.min(90, W * 0.08) : Math.min(150, W * 0.11), mh = mw * 1.4;
+  const y = small ? H * 0.34 : H * 0.42;
+  // in modalità touch gli specchietti si spostano verso il centro, oltre il volante e la pulsantiera
+  const inL = small ? 176 : 14, inR = small ? 232 : 14;
+  const pos = [[inL + mw / 2, H - y - mh / 2], [W - inR - mw / 2, H - y - mh / 2]];
   mirrorQuads.forEach((q, i) => {
     q.position.set(pos[i][0], pos[i][1], 0);
     q.scale.set(-mw, mh, 1);
@@ -131,8 +136,13 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
+// comandi touch: i pulsanti passano da onKeyPress come i tasti, volante e pedali sono analogici
+const touch = new TouchControls({ press: (code) => onKeyPress(code), keys });
+if (isTouchDevice()) touch.enable();
+window.addEventListener('touchstart', () => { if (!touch.enabled) { touch.enable(); layoutMirrors(); } }, { passive: true, once: true });
 function readInput() {
-  const fwdKey = keys.has('KeyW') || keys.has('ArrowUp'), backKey = keys.has('KeyS') || keys.has('ArrowDown');
+  const T = touch.state;
+  const fwdKey = keys.has('KeyW') || keys.has('ArrowUp') || T.gas > 0, backKey = keys.has('KeyS') || keys.has('ArrowDown') || T.brake > 0;
   // in retromarcia, appena fermi, W rimette la marcia avanti
   if (bus && bus.dir < 0 && fwdKey && Math.abs(bus.v) < 0.15) setDirection(1);
   // in retromarcia i pedali si scambiano: S dà gas all'indietro, W frena
@@ -142,6 +152,10 @@ function readInput() {
   input.left = keys.has('KeyA') || keys.has('ArrowLeft');
   input.right = keys.has('KeyD') || keys.has('ArrowRight');
   input.shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  // pedali touch: forza proporzionale (in retromarcia il freno touch dà gas all'indietro, come S)
+  input.thrAxis = (rev ? T.brake : T.gas) || null;
+  input.brkAxis = (rev ? T.gas : T.brake) || null;
+  input.steerAxis = T.steer;
   if (bus) bus.horn = keys.has('KeyH');
 }
 
@@ -159,21 +173,31 @@ function resetLook(toast) {
   mouseLook.yaw = 0; mouseLook.pitch = 0;
   if (toast) hud.toast('Sguardo in avanti', 'info');
 }
-canvas.addEventListener('mousedown', (e) => {
-  if (!running || paused || e.button !== 0) return;
-  mouseLook.drag = { x: e.clientX, y: e.clientY };
+// (eventi pointer: funziona col mouse e con un dito sullo schermo; doppio tocco = sguardo in avanti)
+let lastTap = 0;
+canvas.addEventListener('pointerdown', (e) => {
+  if (!running || paused || e.button !== 0 || mouseLook.drag) return;
+  if (e.pointerType !== 'mouse') {
+    const now = performance.now();
+    if (now - lastTap < 320) { resetLook(true); lastTap = 0; return; }
+    lastTap = now;
+  }
+  mouseLook.drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  canvas.setPointerCapture?.(e.pointerId);
   canvas.classList.add('dragging');
 });
-window.addEventListener('mousemove', (e) => {
+window.addEventListener('pointermove', (e) => {
   const d = mouseLook.drag;
-  if (!d) return;
+  if (!d || e.pointerId !== d.id) return;
   const dx = e.clientX - d.x, dy = e.clientY - d.y;
   d.x = e.clientX; d.y = e.clientY;
   const k = camMode === 1 ? 0.006 : 0.0045;
   mouseLook.yaw = Math.max(-2.6, Math.min(2.6, mouseLook.yaw - dx * k));
   mouseLook.pitch = Math.max(-0.7, Math.min(0.55, mouseLook.pitch - dy * 0.0035));
 });
-window.addEventListener('mouseup', () => { mouseLook.drag = null; canvas.classList.remove('dragging'); });
+const endLook = (e) => { if (mouseLook.drag && e.pointerId === mouseLook.drag.id) { mouseLook.drag = null; canvas.classList.remove('dragging'); } };
+window.addEventListener('pointerup', endLook);
+window.addEventListener('pointercancel', endLook);
 canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
 const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'clear', mode: 'service', livery: 'moderna' };
@@ -339,6 +363,7 @@ function togglePause(force) {
   paused = force != null ? force : !paused;
   $('pause').classList.toggle('hidden', !paused);
   if (paused) {
+    touch.release();
     const ok = saveGame();
     $('pause-info').textContent = ok ? `Progressi salvati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: potrai riprendere da qui anche dopo aver chiuso la pagina.` : 'Salvataggio non disponibile in questo browser.';
     if ('speechSynthesis' in window) speechSynthesis.pause();
@@ -499,7 +524,9 @@ function buildMenu() {
   seg('mode', 'm', (m) => { settings.mode = m; });
   seg('livery', 'l', (l) => { settings.livery = l; });
   $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
-  $('start').addEventListener('click', () => startMission());
+  $('start').addEventListener('click', () => { if (touch.enabled) touch.goFullscreen(); startMission(); });
+  $('help-close').addEventListener('click', () => onKeyPress('KeyI'));
+  $('tp-close').addEventListener('click', () => openTeleport(false));
   $('resume').addEventListener('click', () => togglePause(false));
   $('pause-btn').addEventListener('click', () => togglePause(true));
   $('minimap').addEventListener('click', (ev) => {
@@ -509,7 +536,7 @@ function buildMenu() {
     teleportTo(v.cx + (px - v.W / 2) / v.scale, v.cz + (py - v.H / 2) / v.scale);
     hud.setBigMap(false);
   });
-  $('resume-save').addEventListener('click', resumeSaved);
+  $('resume-save').addEventListener('click', () => { if (touch.enabled) touch.goFullscreen(); resumeSaved(); });
   $('discard-save').addEventListener('click', clearSave);
   $('restart').addEventListener('click', () => { clearSave(); togglePause(false); startMission(); });
   refreshResumeBox();
@@ -520,6 +547,7 @@ function buildMenu() {
 
 function backToMenu() {
   saveGame();
+  touch.release();
   togglePause(false);
   refreshResumeBox();
   $('results').classList.add('hidden');

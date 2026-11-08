@@ -451,12 +451,13 @@ export class Bus {
   update(dt, input, world) {
     // input da tastiera con rampe (pedali progressivi)
     // Shift = più forza: W accelera in modo moderato, Shift+W a fondo; S frena dolce, Shift+S frena forte
-    const thrTarget = input.throttle ? (input.shift ? 1 : 0.6) : 0;
-    const brkTarget = input.brake ? (input.shift ? 1 : 0.45) : 0;
+    // i pedali touch danno direttamente la forza (thrAxis / brkAxis, 0..1)
+    const thrTarget = input.thrAxis ? input.thrAxis : input.throttle ? (input.shift ? 1 : 0.6) : 0;
+    const brkTarget = input.brkAxis ? input.brkAxis : input.brake ? (input.shift ? 1 : 0.45) : 0;
     this.throttle += Math.sign(thrTarget - this.throttle) * Math.min(Math.abs(thrTarget - this.throttle), dt * (thrTarget > this.throttle ? 1.3 : 3.5));
     this.brake += Math.sign(brkTarget - this.brake) * Math.min(Math.abs(brkTarget - this.brake), dt * (brkTarget > this.brake ? 1.2 : 4));
     // sterzo
-    const steerTarget = input.left ? 1 : input.right ? -1 : 0;
+    const steerTarget = input.steerAxis != null ? input.steerAxis : input.left ? 1 : input.right ? -1 : 0;
     const sp = Math.abs(this.v);
     const rate = steerTarget !== 0 ? 0.85 : 1.25;
     this.steerIn += Math.sign(steerTarget - this.steerIn) * Math.min(Math.abs(steerTarget - this.steerIn), dt * rate * (steerTarget !== 0 && Math.sign(steerTarget) !== Math.sign(this.steerIn) ? 1.8 : 1));

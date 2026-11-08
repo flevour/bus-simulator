@@ -21,6 +21,19 @@ a ogni push su `main` (o a mano da *Actions → Pubblica su GitHub Pages → Run
 Va attivato una sola volta: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 I percorsi del build sono relativi (`base: './'`), quindi il gioco funziona anche sotto `/bus-simulator/`.
 
+## Smartphone e tablet
+
+Su schermo touch compaiono i comandi a video (meglio con il telefono in orizzontale; all'avvio il gioco passa a
+schermo intero dove il browser lo consente):
+
+* **volante** in basso a sinistra: trascina il dito a sinistra o a destra (sterzo progressivo);
+* **pedali** in basso a destra: più in alto tocchi il pedale, più forza (gas e freno analogici);
+* pulsanti per frecce, emergenza, clacson, freno a mano, marcia avanti/indietro e porte; il tasto **⋯** apre
+  visuale, mappa, teletrasporto, salta l'attesa, fari, inginocchiamento, audio, aiuto e schermo intero;
+* trascina sulla scena per guardarti intorno, doppio tocco per tornare a guardare avanti.
+
+L'HUD si compatta sugli schermi piccoli e la risoluzione di rendering è ridotta per risparmiare batteria.
+
 ## Dati reali: OpenStreetMap + GTFS Busitalia Veneto
 
 La mappa unisce due fonti aperte:
