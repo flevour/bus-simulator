@@ -64,16 +64,25 @@ export class Bus {
     const B = this.body;
     const lam = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o });
     // livree ispirate ai bus urbani di Padova: moderna elettrica (argento, tetto blu, verde lime), storica (arancio e bianco)
-    // e APS Mobilità (bianco sotto, fascia finestre e porte nere, tetto e fascia alta rossi, clima bianco sul tetto)
+    // e APS Mobilità (bianco sotto, fascia finestre e porte nere, tetto e fascia alta rossi, clima bianco sul tetto);
+    // elettrica blu (bianco argento, tetto e fascia alta blu, porte rosse, filetti blu e giallo in basso)
+    // e Busitalia elettrica (bianco, fascia alta e filetti verde lime, onda verde sulla fiancata).
+    // Campi facoltativi: belt (filetto sotto i finestrini), roofBand (fascia sotto il tetto), accent2 (secondo filetto basso),
+    // glass (vetri scuri), logo (scritta sulla fascia alta), wave (decorazione a onda), electric.
     const LIV = {
-      moderna: { lower: 0xc3c7cc, upper: 0xd8dbdf, stripe: 0xa6d22e, door: 0x7a1f2b, accent: 0x1d3b8f, roof: 0x2a56c6, label: '100% ELETTRICO', fleet: '46' + String(100 + ((lineInfo.id.charCodeAt(0) * 7) % 900)).padStart(3, '0') },
+      moderna: { lower: 0xc3c7cc, upper: 0xd8dbdf, stripe: 0xa6d22e, door: 0x7a1f2b, accent: 0x1d3b8f, roof: 0x2a56c6, electric: true, label: '100% ELETTRICO', fleet: '46' + String(100 + ((lineInfo.id.charCodeAt(0) * 7) % 900)).padStart(3, '0') },
       storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, accent: 0x5a5f66, roof: 0xe0e0dc, label: '', fleet: String(800 + ((lineInfo.id.charCodeAt(0) * 3) % 90)) },
       aps: { lower: 0xf4f4f2, upper: 0xd42430, stripe: 0x141517, door: 0x141517, accent: 0x141517, roof: 0xf0f0ee, label: '', fleet: String(600 + ((lineInfo.id.charCodeAt(0) * 5) % 60)),
         glass: 0x0c0d0f, logo: { text: 'APS mobilità', y: 2.84, z: 2.6, bg: '#d42430', fg: '#ffffff' } },
+      blu: { lower: 0xe4e7ec, upper: 0x2a44c4, stripe: 0x2a44c4, belt: 0x141517, door: 0xc22a30, accent: 0x2a44c4, accent2: 0xf2c200, roof: 0x2a44c4, electric: true, paintDoors: true,
+        glass: 0x0c0d0f, label: 'ELETTRICO', labelFg: '#2a44c4', fleet: String(80 + ((lineInfo.id.charCodeAt(0) * 3) % 20)) },
+      busitalia: { lower: 0xf3f3f0, upper: 0xa9cf2c, stripe: 0xa9cf2c, belt: 0xa9cf2c, roofBand: 0x141517, door: 0x24272b, accent: 0xa9cf2c, roof: 0xeeeeea, electric: true,
+        glass: 0x0c0d0f, label: 'BUSITALIA', labelFg: '#4a7d1a', fleet: '7' + String((lineInfo.id.charCodeAt(0) * 11) % 100).padStart(2, '0'),
+        logo: { text: '100% Elettrico  |  Zero Emissioni', y: 2.84, z: 0.5, w: 4.2, bg: '#a9cf2c', fg: '#ffffff' }, wave: '#a9cf2c' },
     };
     const liv = LIV[lineInfo.livery] || LIV.moderna;
     this.livery = lineInfo.livery || 'moderna';
-    this.electric = this.livery === 'moderna';
+    this.electric = !!liv.electric;
     const paint = lam(liv.upper);
     const lower = lam(liv.lower);
     const doorPaint = lam(liv.door);
@@ -111,7 +120,7 @@ export class Bus {
       for (const [a, b] of pieces(excl)) box(0.06, 0.9 - Y0, b - a, lower, x, (0.9 + Y0) / 2, (a + b) / 2);
       // striscia colorata
       for (const [a, b] of pieces(side < 0 ? doorEx : [])) {
-        const s = box(0.02, 0.16, b - a, stripe, x + side * 0.03, 1.0, (a + b) / 2);
+        const s = box(0.02, 0.16, b - a, liv.belt != null ? lam(liv.belt) : stripe, x + side * 0.03, 1.0, (a + b) / 2);
         s.castShadow = false;
       }
       // fascia finestre: montanti e vetri
@@ -134,8 +143,10 @@ export class Bus {
       // carenatura blu con le batterie sul tetto
       box(2.2, 0.5, 9.2, lam(liv.roof), 0, YT + 0.25, -0.4);
       box(2.0, 0.35, 1.2, lam(liv.roof), 0, YT + 0.17, 4.6);
-      for (const sd of [1, -1]) box(0.02, 0.18, BUS.length - 0.6, stripe, sd * (HW + 0.01), YW - 0.12, 0).castShadow = false; // fascia lime sotto il tetto
+      const band = lam(liv.roofBand ?? liv.stripe);
+      for (const sd of [1, -1]) box(0.02, 0.18, BUS.length - 0.6, band, sd * (HW + 0.01), YW - 0.12, 0).castShadow = false; // fascia sotto il tetto
       for (const sd of [1, -1]) box(0.02, 0.12, BUS.length - 0.4, lam(liv.accent), sd * (HW + 0.01), Y0 + 0.1, 0).castShadow = false;
+      if (liv.accent2 != null) for (const sd of [1, -1]) box(0.02, 0.05, BUS.length - 0.4, lam(liv.accent2), sd * (HW + 0.012), Y0 + 0.2, 0).castShadow = false;
     } else {
       const big = this.livery === 'aps';
       box(big ? 1.9 : 1.6, big ? 0.36 : 0.32, big ? 3.2 : 2.8, lam(liv.roof), 0, YT + (big ? 0.18 : 0.16), big ? 1.6 : 0.8); // climatizzatore
@@ -175,16 +186,38 @@ export class Bus {
     for (const side of [1, -1]) {
       const hex = '#' + new THREE.Color(liv.lower).getHexString();
       const txt = liv.label ? liv.label + '  ' + liv.fleet : liv.logo ? liv.fleet : 'PADOVA  ' + liv.fleet;
-      const fg = this.electric ? '#1d3b8f' : liv.logo ? '#2b2d31' : '#ffffff';
-      const t = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.3), new THREE.MeshBasicMaterial({ map: labelTexture(txt, { w: 512, h: 80, bg: hex, fg, font: 'bold 46px Arial' }) }));
-      t.position.set(side * (HW + 0.005), 0.62, -0.9);
+      const fg = liv.labelFg || (this.electric ? '#1d3b8f' : liv.logo ? '#2b2d31' : '#ffffff');
+      const t = new THREE.Mesh(new THREE.PlaneGeometry(1.8, liv.wave ? 0.24 : 0.3), new THREE.MeshBasicMaterial({ map: labelTexture(txt, { w: 512, h: 80, bg: hex, fg, font: 'bold 46px Arial' }) }));
+      t.position.set(side * (HW + 0.005), liv.wave ? 0.58 : 0.62, -0.9);
       t.rotation.y = side * Math.PI / 2;
       B.add(t);
       if (liv.logo) {
-        const lg = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), new THREE.MeshBasicMaterial({ map: labelTexture(liv.logo.text, { w: 512, h: 96, bg: liv.logo.bg, fg: liv.logo.fg, font: 'bold italic 54px Arial' }) }));
+        const lw = liv.logo.w || 1.6;
+        const lg = new THREE.Mesh(new THREE.PlaneGeometry(lw, 0.3), new THREE.MeshBasicMaterial({ map: labelTexture(liv.logo.text, { w: Math.round(lw * 320), h: 96, bg: liv.logo.bg, fg: liv.logo.fg, font: 'bold italic 54px Arial' }) }));
         lg.position.set(side * (HW + 0.005), liv.logo.y, liv.logo.z);
         lg.rotation.y = side * Math.PI / 2;
         B.add(lg);
+      }
+    }
+    if (liv.wave) {
+      // onda verde lungo la fiancata (dietro la porta centrale)
+      const c = document.createElement('canvas');
+      c.width = 1024; c.height = 128;
+      const x = c.getContext('2d');
+      x.fillStyle = '#ffffff';
+      x.fillRect(0, 0, c.width, c.height);
+      x.strokeStyle = liv.wave; x.lineWidth = 14; x.lineCap = 'round';
+      x.beginPath();
+      for (let i = 0; i <= 200; i++) { const u = i / 200; x.lineTo(20 + u * 984, 64 + Math.sin(u * Math.PI * 6) * 40 * (0.35 + 0.65 * u)); }
+      x.stroke();
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      for (const side of [1, -1]) {
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.22), new THREE.MeshLambertMaterial({ map: tex }));
+        w.position.set(side * (HW + 0.006), 0.82, -1.55);
+        w.rotation.y = side * Math.PI / 2;
+        if (side < 0) w.scale.x = -1; // l'onda cresce verso il retro su entrambi i lati
+        B.add(w);
       }
     }
     if (liv.logo) {
@@ -247,7 +280,7 @@ export class Bus {
           new THREE.BoxGeometry(0.05, 2.28, 0.07).translate(0, Y0 + 1.16, -(w - 0.02) / 2 + 0.035),
           new THREE.BoxGeometry(0.05, 2.28, 0.07).translate(0, Y0 + 1.16, (w - 0.02) / 2 - 0.035),
         ]);
-        const frm = new THREE.Mesh(fr, dark);
+        const frm = new THREE.Mesh(fr, liv.paintDoors ? doorPaint : dark);
         g.add(frm, gl);
         g.userData = { z: zc, dir: k ? 1 : -1, w };
         B.add(g);
