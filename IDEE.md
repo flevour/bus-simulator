@@ -70,9 +70,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 ## Veicoli e guida
 
 - [ ] Tram SIR1 (3 moduli), poi linee tram future con 4 moduli (vedi prompt).
-- [ ] Bus snodato da 18 m per le linee più cariche.
 - [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
-- [ ] Volante e pedaliera o gamepad (Gamepad API); comandi touch per smartphone (il gioco è su GitHub Pages).
+- [ ] Volante e pedaliera o gamepad (Gamepad API).
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
 - [ ] Altre livree storiche (anni '80–'90).
 
@@ -166,7 +165,10 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [x] Pausa, salvataggio e ripresa della corsa; teletrasporto (J e clic sulla mappa grande).
 - [x] Sede tranviaria del SIR1 con corsie rosse e rotaia; tram automatici dall'orario GTFS (quanti ne sono in servizio
   a quell'ora, ognuno sulla sua corsa; al capolinea prendono la corsa successiva).
-- [x] Livree: moderna elettrica (argento, tetto blu, verde lime) e storica arancione e bianca.
+- [x] Livree: moderna elettrica (argento, tetto blu, verde lime) e storica arancione e bianca; poi rosso e bianco,
+  elettrico blu a due porte (salita verde, discesa rossa), elettrico verde lime, blu e argento.
+- [x] Bus snodato da 18 m sulla linea 10 (rimorchio che segue la ralla, quattro porte, soffietto).
+- [x] Comandi touch per smartphone: volante e pedali analogici, pulsanti a video, HUD compatto.
 - [x] Sguardo col mouse (trascinamento), V o doppio clic per tornare avanti.
 - [x] Il ritardatario arriva da dietro e sale dalla porta posteriore.
 - [x] Pubblicazione su GitHub Pages da `main`.

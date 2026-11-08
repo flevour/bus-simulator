@@ -14,6 +14,7 @@ import { Audio } from './game/audio.js';
 import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
 import { initNews } from './game/news.js';
 import { Greetings } from './game/greetings.js';
+import { TouchControls, isTouchDevice } from './game/touch.js';
 
 const $ = (id) => document.getElementById(id);
 const capture = (event, properties) => {
@@ -25,7 +26,7 @@ const capture = (event, properties) => {
 // ------------------------------------------------------------------
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouchDevice() ? 1.25 : 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -130,9 +131,13 @@ const mirrorQuads = mirrorRT.map((rt) => {
 function layoutMirrors() {
   const W = window.innerWidth, H = window.innerHeight;
   overlayCam.right = W; overlayCam.top = H; overlayCam.updateProjectionMatrix();
-  const mw = Math.min(150, W * 0.11), mh = mw * 1.4;
-  const y = H * 0.42;
-  const pos = [[14 + mw / 2, H - y - mh / 2], [W - 14 - mw / 2, H - y - mh / 2]];
+  // su telefono gli specchietti sono più piccoli, per lasciare spazio a volante e pedali
+  const small = document.body.classList.contains('touch') && H < 600;
+  const mw = small ? Math.min(90, W * 0.08) : Math.min(150, W * 0.11), mh = mw * 1.4;
+  const y = small ? H * 0.34 : H * 0.42;
+  // in modalità touch gli specchietti si spostano verso il centro, oltre il volante e la pulsantiera
+  const inL = small ? 176 : 14, inR = small ? 232 : 14;
+  const pos = [[inL + mw / 2, H - y - mh / 2], [W - inR - mw / 2, H - y - mh / 2]];
   mirrorQuads.forEach((q, i) => {
     q.position.set(pos[i][0], pos[i][1], 0);
     q.scale.set(-mw, mh, 1);
@@ -158,8 +163,13 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
+// comandi touch: i pulsanti passano da onKeyPress come i tasti, volante e pedali sono analogici
+const touch = new TouchControls({ press: (code) => onKeyPress(code), keys });
+if (isTouchDevice()) touch.enable();
+window.addEventListener('touchstart', () => { if (!touch.enabled) { touch.enable(); layoutMirrors(); } }, { passive: true, once: true });
 function readInput() {
-  const fwdKey = keys.has('KeyW') || keys.has('ArrowUp'), backKey = keys.has('KeyS') || keys.has('ArrowDown');
+  const T = touch.state;
+  const fwdKey = keys.has('KeyW') || keys.has('ArrowUp') || T.gas > 0, backKey = keys.has('KeyS') || keys.has('ArrowDown') || T.brake > 0;
   // in retromarcia, appena fermi, W rimette la marcia avanti
   if (bus && bus.dir < 0 && fwdKey && Math.abs(bus.v) < 0.15) setDirection(1);
   // in retromarcia i pedali si scambiano: S dà gas all'indietro, W frena
@@ -169,6 +179,10 @@ function readInput() {
   input.left = keys.has('KeyA') || keys.has('ArrowLeft');
   input.right = keys.has('KeyD') || keys.has('ArrowRight');
   input.shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  // pedali touch: forza proporzionale (in retromarcia il freno touch dà gas all'indietro, come S)
+  input.thrAxis = (rev ? T.brake : T.gas) || null;
+  input.brkAxis = (rev ? T.gas : T.brake) || null;
+  input.steerAxis = T.steer;
   if (bus) bus.horn = keys.has('KeyH');
 }
 
@@ -186,25 +200,37 @@ function resetLook(toast) {
   mouseLook.yaw = 0; mouseLook.pitch = 0;
   if (toast) hud.toast('Sguardo in avanti', 'info');
 }
-canvas.addEventListener('mousedown', (e) => {
-  if (!running || paused || e.button !== 0) return;
-  mouseLook.drag = { x: e.clientX, y: e.clientY };
+// (eventi pointer: funziona col mouse e con un dito sullo schermo; doppio tocco = sguardo in avanti)
+let lastTap = 0;
+canvas.addEventListener('pointerdown', (e) => {
+  if (!running || paused || e.button !== 0 || mouseLook.drag) return;
+  if (e.pointerType !== 'mouse') {
+    const now = performance.now();
+    if (now - lastTap < 320) { resetLook(true); lastTap = 0; return; }
+    lastTap = now;
+  }
+  mouseLook.drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  canvas.setPointerCapture?.(e.pointerId);
   canvas.classList.add('dragging');
 });
-window.addEventListener('mousemove', (e) => {
+window.addEventListener('pointermove', (e) => {
   const d = mouseLook.drag;
-  if (!d) return;
+  if (!d || e.pointerId !== d.id) return;
   const dx = e.clientX - d.x, dy = e.clientY - d.y;
   d.x = e.clientX; d.y = e.clientY;
   const k = camMode === 1 ? 0.006 : 0.0045;
   mouseLook.yaw = Math.max(-2.6, Math.min(2.6, mouseLook.yaw - dx * k));
   mouseLook.pitch = Math.max(-0.7, Math.min(0.55, mouseLook.pitch - dy * 0.0035));
 });
-window.addEventListener('mouseup', () => { mouseLook.drag = null; canvas.classList.remove('dragging'); });
+const endLook = (e) => { if (mouseLook.drag && e.pointerId === mouseLook.drag.id) { mouseLook.drag = null; canvas.classList.remove('dragging'); } };
+window.addEventListener('pointerup', endLook);
+window.addEventListener('pointercancel', endLook);
 canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
 // linee bus e tram nel menu
 const ALL_LINES = [...LINES, ...TRAM_LINES];
+// linee servite con l'autobus snodato da 18 m
+const ARTICULATED_LINES = new Set(['10']);
 const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus', lightHour: null, fromDepot: true };
 // modalità: servizio di linea, giro libero (regole della strada) o esplorazione (nessuna regola, il tram non deraglia)
 const MODE_NOTE = {
@@ -406,6 +432,7 @@ function togglePause(force) {
   if (paused) {
     document.querySelectorAll('#pause-weather button').forEach((x) => x.classList.toggle('sel', x.dataset.w === settings.weather));
     $('pause-hour').value = settings.lightHour == null ? '' : String(settings.lightHour);
+    touch.release();
     const ok = saveGame();
     $('pause-info').textContent = ok ? `Progressi salvati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: potrai riprendere da qui anche dopo aver chiuso la pagina.` : 'Salvataggio non disponibile in questo browser.';
     if ('speechSynthesis' in window) speechSynthesis.pause();
@@ -572,8 +599,16 @@ function refreshTurno() {
 // elenco delle linee del mezzo scelto (autobus o tram)
 function renderLines() {
   const tram = settings.vehicle === 'tram';
-  $('line-list').innerHTML = ALL_LINES.filter((L) => !!L.tram === tram).map((L) => `<div class="line-card${L.tram ? ' tram' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive</div></div></div>`).join('');
-  const pick = (el) => { settings.line = ALL_LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0]; refreshMenu(); };
+  $('line-list').innerHTML = ALL_LINES.filter((L) => !!L.tram === tram).map((L) => `<div class="line-card${L.tram ? ' tram' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive${ARTICULATED_LINES.has(L.id) && !L.tram ? ' · 🚌 snodato 18 m' : ''}</div></div></div>`).join('');
+  const pick = (el) => {
+    settings.line = ALL_LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0];
+    // lo snodato della linea 10 parte con la livrea Busitalia Veneto (si può comunque cambiare)
+    if (ARTICULATED_LINES.has(settings.line.id) && !settings.line.tram) {
+      settings.livery = 'veneto';
+      document.querySelectorAll('#livery button').forEach((b) => b.classList.toggle('sel', b.dataset.l === 'veneto'));
+    }
+    refreshMenu();
+  };
   document.querySelectorAll('.line-card').forEach((el) => { el.addEventListener('click', () => pick(el)); el.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(el); }); });
   // la livrea riguarda solo l'autobus
   $('livery-box').hidden = tram;
@@ -616,7 +651,9 @@ function buildMenu() {
   seg('livery', 'l', (l) => { settings.livery = l; });
   seg('vehicle', 'k', (k) => setVehicle(k));
   $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
-  $('start').addEventListener('click', () => startMission());
+  $('start').addEventListener('click', () => { if (touch.enabled) touch.goFullscreen(); startMission(); });
+  $('help-close').addEventListener('click', () => onKeyPress('KeyI'));
+  $('tp-close').addEventListener('click', () => openTeleport(false));
   $('resume').addEventListener('click', () => togglePause(false));
   $('pause-btn').addEventListener('click', () => togglePause(true));
   $('minimap').addEventListener('click', (ev) => {
@@ -626,7 +663,7 @@ function buildMenu() {
     teleportTo(v.cx + (px - v.W / 2) / v.scale, v.cz + (py - v.H / 2) / v.scale);
     hud.setBigMap(false);
   });
-  $('resume-save').addEventListener('click', resumeSaved);
+  $('resume-save').addEventListener('click', () => { if (touch.enabled) touch.goFullscreen(); resumeSaved(); });
   $('discard-save').addEventListener('click', clearSave);
   $('restart').addEventListener('click', () => { clearSave(); togglePause(false); startMission(); });
   refreshResumeBox();
@@ -648,6 +685,7 @@ function backToMenu() {
     posthogGameLogger.warn('mission abandoned', missionDetails);
   }
   saveGame();
+  touch.release();
   togglePause(false);
   buses.clear();
   refreshResumeBox();
@@ -686,7 +724,7 @@ function startMission(resume = null) {
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
   } else {
-    bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery });
+    bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery, articulated: ARTICULATED_LINES.has(L.id) });
   }
   resetLook(false);
   bus.onShift = () => audio.shift();
@@ -1051,11 +1089,13 @@ function updateCamera(dt) {
   if (camMode === 0 || camMode === 2) {
     const e = camMode === 0 ? bus.cabEye || [0.62, 2.12, 4.8] : bus.paxEye || [-0.2, 2.05, -5.2];
     const local = V.set(e[0], e[1], e[2]);
-    bus.body.localToWorld(local);
+    // visuale passeggeri dello snodato: in fondo al rimorchio
+    const cabin = camMode === 0 || !bus.tBody ? bus.body : bus.tBody;
+    cabin.localToWorld(local);
     // piccola vibrazione del motore
     const vib = (Math.random() - 0.5) * 0.004 * (0.3 + bus.throttle);
     camera.position.copy(local).add(V2.set(0, vib, 0));
-    bus.body.getWorldQuaternion(Qt);
+    cabin.getWorldQuaternion(Qt);
     Ex.set((camMode === 0 ? -0.13 : -0.12) + mouseLook.pitch, Math.PI + lookYaw + mouseLook.yaw, 0, 'YXZ');
     Qy.setFromEuler(Ex);
     camera.quaternion.copy(Qt).multiply(Qy);
@@ -1147,11 +1187,12 @@ function step(dt) {
   // marciapiede: contano le ruote, non la carrozzeria che in curva sporge sopra il cordolo.
   // Le ruote posteriori tagliano le curve: più margine, e ancora di più a incroci, curve strette e rotonde.
   let kerb = false;
-  if (!bus.isTram) for (const [lx, lz, rear] of [[1.05, 3.3, 0], [-1.05, 3.3, 0], [1.05, -2.6, 1], [-1.05, -2.6, 1]]) {
-    const p = bus.toWorld(lx, lz);
+  // l'asse del rimorchio dello snodato taglia le curve ancora di più
+  if (!bus.isTram) for (const p of bus.wheelProbes()) {
+    const rear = p.rear;
     const ri = city.roadInfo(p.x, p.z);
     if (ri.off < 0.5 || ri.off > 6 || city.onTramway(p.x, p.z, 0.3)) continue;
-    const tol = rear ? 1.0 : 0.5;
+    const tol = [0.5, 1.0, 1.3][rear];
     if (ri.off > tol && (ri.off > tol + (rear ? 0.9 : 0.5) || !city.kerbAllowance(p.x, p.z))) kerb = true;
   }
   // un tocco di un istante non conta

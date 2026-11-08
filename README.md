@@ -21,6 +21,19 @@ a ogni push su `main` (o a mano da *Actions → Pubblica su GitHub Pages → Run
 Va attivato una sola volta: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 I percorsi del build sono relativi (`base: './'`), quindi il gioco funziona anche sotto `/bus-simulator/`.
 
+## Smartphone e tablet
+
+Su schermo touch compaiono i comandi a video (meglio con il telefono in orizzontale; all'avvio il gioco passa a
+schermo intero dove il browser lo consente):
+
+* **volante** in basso a sinistra: trascina il dito a sinistra o a destra (sterzo progressivo);
+* **pedali** in basso a destra: più in alto tocchi il pedale, più forza (gas e freno analogici);
+* pulsanti per frecce, emergenza, clacson, freno a mano, marcia avanti/indietro e porte; il tasto **⋯** apre
+  visuale, mappa, teletrasporto, salta l'attesa, fari, inginocchiamento, audio, aiuto e schermo intero;
+* trascina sulla scena per guardarti intorno, doppio tocco per tornare a guardare avanti.
+
+L'HUD si compatta sugli schermi piccoli e la risoluzione di rendering è ridotta per risparmiare batteria.
+
 ## Dati reali: OpenStreetMap + GTFS Busitalia Veneto
 
 La mappa unisce due fonti aperte:
@@ -199,8 +212,16 @@ future potranno averne 4.
   alberi, lampioni, marciapiedi, strisce pedonali, fiumi (Brenta, Bacchiglione, Piovego, Tronco Maestro) con ponti, ferrovia.
 * **Monumenti**: Prato della Valle con l'Isola Memmia, il canale e le statue, Basilica del Santo, Palazzo della Ragione,
   Torre dell'Orologio, Duomo, Specola, Cappella degli Scrovegni, Stazione FS, Ospedale, Fiera.
-* **Due livree**: il bus moderno **elettrico** (argento con tetto blu e verde lime, motore a coppia piena da fermo,
-  recupero di energia in frenata, fischio dell'inverter) e lo **storico arancione e bianco** con il diesel.
+* **Sei livree**: il bus moderno **elettrico** (argento con tetto blu e verde lime, motore a coppia piena da fermo,
+  recupero di energia in frenata, fischio dell'inverter), lo **storico arancione e bianco** con il diesel, il diesel
+  **rosso e bianco** (bianco con fascia finestre e porte nere, tetto e fascia alta rossi, climatizzatore bianco sul tetto)
+  e tre elettrici: il **blu** (bianco argento con tetto e fascia alta blu, filetti blu e giallo, solo due porte:
+  anteriore verde per la salita e centrale rossa per la discesa), il **verde lime** (bianco con fascia alta verde lime
+  "100% Elettrico | Zero Emissioni" e onda verde) e il **blu e argento** (argento con fascia alta e tetto blu, filetti
+  blu e giallo). Sono ispirate ai mezzi visti a Padova e dintorni: se ne riprendono colori e stile, non loghi o marchi.
+* **Snodato da 18 m sulla linea 10**: motrice e rimorchio uniti da ralla e soffietto, quattro porte. Il rimorchio segue la
+  ralla e in curva taglia più della motrice (attenzione ai cordoli con l'asse posteriore); in retromarcia lo smorzatore
+  anti-sbandamento rallenta la chiusura dello snodo, ma conviene comunque procedere diritti.
 * **Bus** da 12 m con fisica a bicicletta sull'asse posteriore, cambio automatico a 6 marce con convertitore di coppia,
   retarder, freno di fermata, sospensioni (beccheggio/rollio), porte animate, display LED, specchietti retrovisori reali.
 * **Traffico** con modello IDM, semafori sincronizzati, auto che suonano il clacson e sorpassano il bus fermo, pedoni.

@@ -219,6 +219,11 @@ const DOORS = [[4.25, 5.45], [0.2, 1.4], [-4.4, -3.2]];
 const LIV = {
   moderna: { lower: 0xc3c7cc, upper: 0xd8dbdf, stripe: 0xa6d22e, door: 0x7a1f2b, roof: 0x2a56c6, electric: true },
   storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, roof: 0xe0e0dc, electric: false },
+  // versioni semplificate delle livree di src/bus/bus.js (stessi colori, sempre 12 m)
+  aps: { lower: 0xf4f4f2, upper: 0xd42430, stripe: 0x141517, door: 0x141517, roof: 0xf0f0ee, electric: false },
+  blu: { lower: 0xe4e7ec, upper: 0x2a44c4, stripe: 0x141517, door: 0xc22a30, roof: 0x2a44c4, electric: true },
+  busitalia: { lower: 0xf3f3f0, upper: 0xa9cf2c, stripe: 0xa9cf2c, door: 0x24272b, roof: 0xeeeeea, electric: true },
+  veneto: { lower: 0xc7cbd2, upper: 0x2c3fbf, stripe: 0x23262c, door: 0x2a2d33, roof: 0x3550d6, electric: true },
 };
 function colorize(g, c) {
   const n = g.attributes.position.count, arr = new Float32Array(n * 3), cc = new THREE.Color(c);

@@ -4,7 +4,6 @@ import { personGeometry } from '../world/traffic.js';
 import { zoneOf } from '../world/city.js';
 import { fmtHM } from '../data/padova.js';
 import { mulberry32, angleDiff } from '../world/spatial.js';
-import { BUS } from '../bus/bus.js';
 import { posthog, isPostHogConfigured, posthogGameLogger } from '../posthog.js';
 
 const capture = (event, properties) => {
@@ -339,8 +338,7 @@ export class Mission {
   // punto davanti all'ultima porta (out: metri fuori dal fianco)
   rearDoor(bus, out) {
     if (this.tram) return bus.doorPoint(bus.doorCount - 1, out);
-    const rd = BUS.doors[2];
-    return bus.toWorld(-(1.3 + out), (rd.z0 + rd.z1) / 2);
+    return bus.doorWorld(bus.doors.length - 1, -(1.3 + out));
   }
 
   // Tram: a Prato della Valle non c'è la linea aerea. Il pantografo va abbassato prima (O) e rialzato subito dopo.
@@ -389,8 +387,8 @@ export class Mission {
       this.onboard.splice(leaving, 1);
       this.stats.alighted++;
       this.alightT = (0.45 + this.rnd() * 0.35) / (this.tram ? 3 : 1);
-      const door = this.rnd() < 0.5 ? BUS.doors[1] : BUS.doors[2];
-      const dp = this.tram ? bus.doorPoint(Math.floor(this.rnd() * bus.doorCount), 0.3) : bus.toWorld(-1.6, (door.z0 + door.z1) / 2);
+      // sul bus si scende dalle porte dopo l'anteriore
+      const dp = this.tram ? bus.doorPoint(Math.floor(this.rnd() * bus.doorCount), 0.3) : bus.doorWorld(1 + Math.floor(this.rnd() * (bus.doors.length - 1)), -1.6);
       const away = { x: dp.x + st.rx * 4 + st.dx * (this.rnd() * 8 - 4), z: dp.z + st.rz * 4 + st.dz * (this.rnd() * 8 - 4) };
       const p = this.crowd.add({ x: dp.x, z: dp.z, h: 0, ph: 0, speed: 1.3 + this.rnd() * 0.3, sc: 0.85 + this.rnd() * 0.25, col: new THREE.Color().setHSL(this.rnd(), 0.4, 0.3 + this.rnd() * 0.3), life: 9 });
       p.target = away;
@@ -413,10 +411,10 @@ export class Mission {
     };
     // il ritardatario arriva da dietro: sale dalla porta posteriore, senza fare la fila davanti
     const run = st.waiting.find((q) => q.runner && !q.boarding);
-    const rd = BUS.doors[2], rdp = run && this.rearDoor(bus, 0.5);
-    if (run && bus.doorTarget > 0 && bus.doorOpen[this.tram ? bus.doorCount - 1 : 2] > 0.6 && Math.hypot(run.x - rdp.x, run.z - rdp.z) < 2.5 && this.onboard.length + this.walkingIn() < cap) {
+    const rdp = run && this.rearDoor(bus, 0.5);
+    if (run && bus.doorTarget > 0 && bus.doorOpen[this.tram ? bus.doorCount - 1 : bus.doors.length - 1] > 0.6 && Math.hypot(run.x - rdp.x, run.z - rdp.z) < 2.5 && this.onboard.length + this.walkingIn() < cap) {
       run.boarding = true;
-      run.target = this.tram ? this.rearDoor(bus, 0.15) : bus.toWorld(-1.45, (rd.z0 + rd.z1) / 2);
+      run.target = this.rearDoor(bus, 0.15);
       run.speed = Math.max(run.speed, 3);
       run.onArrive = board;
     }
@@ -424,9 +422,8 @@ export class Mission {
       const p = st.waiting.find((q) => !q.boarding && !q.runner);
       if (p) {
         p.boarding = true;
-        const door = BUS.doors[0];
         // sul tram si sale dalla porta più vicina, sul bus da quella anteriore
-        const dp = this.tram ? bus.doorPoint(bus.nearestDoor(p.x, p.z), 0.4) : bus.toWorld(-1.7, (door.z0 + door.z1) / 2);
+        const dp = this.tram ? bus.doorPoint(bus.nearestDoor(p.x, p.z), 0.4) : bus.doorWorld(0, -1.7);
         p.target = dp;
         p.speed = p.elderly ? 0.7 : p.runner ? 3 : 1.6;
         if (p.elderly && !st.elderlyMsg && !this.tram) {
@@ -463,7 +460,7 @@ export class Mission {
     st.runnerDone = true;
     if (this.rnd() > 0.45) return;
     // parte da dietro il bus, ben visibile nello specchietto destro, e punta alla porta posteriore
-    const back = this.tram ? bus.toWorld(-2.6, -(bus.length - 6) - 12) : bus.toWorld(-2.6, -17);
+    const back = this.tram ? bus.toWorld(-2.6, -(bus.length - 6) - 12) : bus.behind(-2.6, 11);
     const p = this.crowd.add({
       x: back.x, z: back.z, h: bus.h, ph: 0, speed: 4.6, sc: 1.0,
       col: new THREE.Color(0xff3d00), dest: this.pickDest(st.idx), runner: true,
