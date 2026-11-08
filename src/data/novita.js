@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 35, d: '2026-11-08', t: 'I bus che incontri per strada non sono più tutti uguali al tuo: ognuno ha la sua livrea, come una flotta vera (la stessa corsa ha sempre lo stesso bus).' },
   { n: 34, d: '2026-11-08', t: 'Cambi autobus anche durante la corsa: nella pausa c\'è lo stesso selettore con le anteprime, e riparti dal punto esatto in cui eri.' },
   { n: 33, d: '2026-11-08', t: 'Nel menu scegli l\'autobus guardandolo: al posto dei nomi ci sono le anteprime di ogni livrea (sulla linea 10 vedi lo snodato).' },
   { n: 32, d: '2026-11-08', t: 'Strade con le misure vere della Regione: carreggiate larghe come quelle reali, marciapiedi stretti dove lo sono davvero (spesso meno di 2 m) e le paline sul bordo del marciapiede. I palazzi hanno l\'altezza misurata: molti erano troppo alti.' },

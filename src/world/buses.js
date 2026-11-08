@@ -204,9 +204,20 @@ export function busRuns(lines, day) {
   const runs = [];
   for (const L of lines) for (const v of L.variants) for (const { t, d } of v[day] || []) {
     const times = scheduleFor(v, t, d);
-    runs.push({ L, v, t, times, end: times[times.length - 1], bus: null, done: false });
+    runs.push({ L, v, t, times, end: times[times.length - 1], bus: null, done: false, livery: liveryFor(L.id, v.idx, t) });
   }
   return runs.sort((a, b) => a.t - b.t);
+}
+// flotta mista: ogni corsa ha la sua livrea, sempre la stessa (dipende da linea, percorso e orario). I mezzi moderni
+// sono i più comuni, lo storico arancione si vede di rado
+const FLEET = [['moderna', 3], ['busitalia', 2], ['veneto', 2], ['blu', 2], ['aps', 1.5], ['storica', 0.6]];
+const FLEET_TOT = FLEET.reduce((a, [, w]) => a + w, 0);
+function liveryFor(line, idx, t) {
+  let h = 2166136261;
+  for (const ch of `${line}|${idx}|${Math.round(t)}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  let u = ((h >>> 0) / 4294967296) * FLEET_TOT;
+  for (const [k, w] of FLEET) { if ((u -= w) < 0) return k; }
+  return 'moderna';
 }
 
 // ------------------------------------------------------------------
@@ -303,7 +314,6 @@ export class BusSim {
     this.buses = [];
     this.runs = [];
     this.parts = []; // pezzi dei bus vicini (collisioni col giocatore, auto, tram)
-    this.livery = 'moderna';
     this.free = [];
     this.tex = new Map();
     this.lightMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x777777 });
@@ -327,9 +337,8 @@ export class BusSim {
     setTimeout(step, 400);
   }
   // servizio dall'orario; mine: corsa guidata dal giocatore { v, t } (non ha un gemello automatico)
-  setService(lines, day, livery, mine = null) {
+  setService(lines, day, mine = null) {
     this.clear();
-    this.livery = livery; // le istanze si rifanno al prossimo modello se la livrea è cambiata
     this.runs = busRuns(lines, day).filter((r) => !mine || r.v !== mine.v || Math.abs(r.t - mine.t) > 120);
     this.lastClock = null;
   }
@@ -616,12 +625,13 @@ export class BusSim {
     m.t = this.texFor(b.run.L.id, b.dest);
     m.ledF.material.map = m.ledS.material.map = m.t.tex;
   }
-  // parti istanziate, una per pezzo per tutti i bus visibili (porte nascoste a porte aperte); il display LED, con la
-  // sua texture, è l'unica mesh per bus
-  buildInstances() {
-    const G = busGeometry(this.livery), D = driverGeometry();
+  // parti istanziate, un gruppo per livrea (creato alla prima volta che serve) con un pezzo per tutti i bus visibili
+  // di quella livrea (porte nascoste a porte aperte); il display LED, con la sua texture, è l'unica mesh per bus
+  instFor(liv) {
+    if (!this.inst) { this.inst = {}; this.slots = {}; }
+    if (this.inst[liv]) return this.inst[liv];
+    const G = busGeometry(liv), D = driverGeometry();
     if (!this.bodyMat) this.bodyMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-    if (this.inst) for (const m of Object.values(this.inst)) { this.scene.remove(m); m.dispose(); }
     const mk = (g, mat, shadow = false) => {
       const m = new THREE.InstancedMesh(g, mat, MAX_VIS);
       m.frustumCulled = false; // le istanze si muovono
@@ -630,9 +640,9 @@ export class BusSim {
       this.scene.add(m);
       return m;
     };
-    this.inst = { body: mk(G.body, this.bodyMat, true), doors: mk(G.doors, this.bodyMat), lights: mk(G.lights, this.lightMat), glass: mk(G.glass, this.glassMat), arm: mk(D.arm, D.mat) };
-    this.slots = Array.from({ length: MAX_VIS }, () => null);
-    this.instLivery = this.livery;
+    this.inst[liv] = { body: mk(G.body, this.bodyMat, true), doors: mk(G.doors, this.bodyMat), lights: mk(G.lights, this.lightMat), glass: mk(G.glass, this.glassMat), arm: mk(D.arm, D.mat) };
+    this.slots[liv] = Array.from({ length: MAX_VIS }, () => null);
+    return this.inst[liv];
   }
   ledMesh() {
     // display frontale e laterale in un'unica mesh con la stessa texture
@@ -645,16 +655,17 @@ export class BusSim {
     return m;
   }
   acquire(b) {
-    if (!this.inst || this.instLivery !== this.livery) this.buildInstances();
-    const slot = this.slots.indexOf(null);
+    const liv = b.run.livery || 'moderna';
+    this.instFor(liv);
+    const slot = this.slots[liv].indexOf(null);
     if (slot < 0) return;
-    this.slots[slot] = b;
+    this.slots[liv][slot] = b;
     const led = this.free.pop() || this.ledMesh();
     const t = this.texFor(b.run.L.id, b.dest);
     led.material.map = t.tex;
     led.material.needsUpdate = true;
     this.scene.add(led);
-    b.model = { slot, led, t, arm: new THREE.Object3D() };
+    b.model = { slot, liv, led, t, arm: new THREE.Object3D() };
     b.model.arm.position.set(DRIVER[0] + ARM_PIVOT[0], DRIVER[1] + ARM_PIVOT[1], DRIVER[2] + ARM_PIVOT[2]);
   }
   release(b) {
@@ -663,8 +674,8 @@ export class BusSim {
     this.untex(m.t);
     this.scene.remove(m.led);
     this.free.push(m.led);
-    for (const im of Object.values(this.inst)) { im.setMatrixAt(m.slot, ZERO); im.instanceMatrix.needsUpdate = true; }
-    this.slots[m.slot] = null;
+    for (const im of Object.values(this.inst[m.liv])) { im.setMatrixAt(m.slot, ZERO); im.instanceMatrix.needsUpdate = true; }
+    this.slots[m.liv][m.slot] = null;
     b.model = null;
   }
   retex(b) {
@@ -690,15 +701,16 @@ export class BusSim {
       const i = b.L.P.seg(Math.max(0, Math.min(b.L.P.len, b.s)));
       b.y = laneHeight(b.L, i);
       M.compose(V.set(b.x, Y_ROAD + b.y, b.z), Q.setFromAxisAngle(UP, b.h), ONE);
-      for (const k of ['body', 'lights', 'glass']) this.inst[k].setMatrixAt(m.slot, M);
-      this.inst.doors.setMatrixAt(m.slot, b.doors < 0.3 ? M : ZERO);
+      const I = this.inst[m.liv];
+      for (const k of ['body', 'lights', 'glass']) I[k].setMatrixAt(m.slot, M);
+      I.doors.setMatrixAt(m.slot, b.doors < 0.3 ? M : ZERO);
       setWave(m.arm, b.waveT);
       m.arm.updateMatrix();
-      this.inst.arm.setMatrixAt(m.slot, M2.multiplyMatrices(M, m.arm.matrix));
+      I.arm.setMatrixAt(m.slot, M2.multiplyMatrices(M, m.arm.matrix));
       m.led.matrix.copy(M);
       m.led.matrixWorldNeedsUpdate = true;
     }
-    for (const im of Object.values(this.inst)) im.instanceMatrix.needsUpdate = true;
+    for (const I of Object.values(this.inst)) for (const im of Object.values(I)) im.instanceMatrix.needsUpdate = true;
   }
   setNight(f) { this.lightMat.color.setScalar(0.35 + f * 0.65); }
   // colleghi da salutare: posizione, direzione e linea dei bus con il modello
