@@ -4,7 +4,6 @@ import { personGeometry } from '../world/traffic.js';
 import { zoneOf } from '../world/city.js';
 import { fmtHM } from '../data/padova.js';
 import { mulberry32, angleDiff } from '../world/spatial.js';
-import { BUS } from '../bus/bus.js';
 
 // Persone alle fermate (in attesa / che salgono / che scendono)
 class Crowd {
@@ -334,8 +333,7 @@ export class Mission {
       this.onboard.splice(leaving, 1);
       this.stats.alighted++;
       this.alightT = 0.45 + this.rnd() * 0.35;
-      const door = this.rnd() < 0.5 ? BUS.doors[1] : BUS.doors[2];
-      const dp = bus.toWorld(-1.6, (door.z0 + door.z1) / 2);
+      const dp = bus.doorWorld(1 + Math.floor(this.rnd() * (bus.doors.length - 1)), -1.6);
       const away = { x: dp.x + st.rx * 4 + st.dx * (this.rnd() * 8 - 4), z: dp.z + st.rz * 4 + st.dz * (this.rnd() * 8 - 4) };
       const p = this.crowd.add({ x: dp.x, z: dp.z, h: 0, ph: 0, speed: 1.3 + this.rnd() * 0.3, sc: 0.85 + this.rnd() * 0.25, col: new THREE.Color().setHSL(this.rnd(), 0.4, 0.3 + this.rnd() * 0.3), life: 9 });
       p.target = away;
@@ -358,10 +356,10 @@ export class Mission {
     };
     // il ritardatario arriva da dietro: sale dalla porta posteriore, senza fare la fila davanti
     const run = st.waiting.find((q) => q.runner && !q.boarding);
-    const rd = BUS.doors[2], rdp = run && bus.toWorld(-1.8, (rd.z0 + rd.z1) / 2);
-    if (run && bus.doorTarget > 0 && bus.doorOpen[2] > 0.6 && Math.hypot(run.x - rdp.x, run.z - rdp.z) < 2.5 && this.onboard.length + this.walkingIn() < cap) {
+    const rdi = bus.doors.length - 1, rdp = run && bus.doorWorld(rdi, -1.8);
+    if (run && bus.doorTarget > 0 && bus.doorOpen[rdi] > 0.6 && Math.hypot(run.x - rdp.x, run.z - rdp.z) < 2.5 && this.onboard.length + this.walkingIn() < cap) {
       run.boarding = true;
-      run.target = bus.toWorld(-1.45, (rd.z0 + rd.z1) / 2);
+      run.target = bus.doorWorld(rdi, -1.45);
       run.speed = Math.max(run.speed, 3);
       run.onArrive = board;
     }
@@ -369,8 +367,7 @@ export class Mission {
       const p = st.waiting.find((q) => !q.boarding && !q.runner);
       if (p) {
         p.boarding = true;
-        const door = BUS.doors[0];
-        const dp = bus.toWorld(-1.7, (door.z0 + door.z1) / 2);
+        const dp = bus.doorWorld(0, -1.7);
         p.target = dp;
         p.speed = p.elderly ? 0.7 : p.runner ? 3 : 1.6;
         if (p.elderly && !st.elderlyMsg) {
@@ -407,13 +404,12 @@ export class Mission {
     st.runnerDone = true;
     if (this.rnd() > 0.45) return;
     // parte da dietro il bus, ben visibile nello specchietto destro, e punta alla porta posteriore
-    const back = bus.toWorld(-2.6, -17);
+    const back = bus.behind(-2.6, 11);
     const p = this.crowd.add({
       x: back.x, z: back.z, h: bus.h, ph: 0, speed: 4.6, sc: 1.0,
       col: new THREE.Color(0xff3d00), dest: this.pickDest(st.idx), runner: true,
     });
-    const rd = BUS.doors[2];
-    const door = bus.toWorld(-1.8, (rd.z0 + rd.z1) / 2);
+    const door = bus.doorWorld(bus.doors.length - 1, -1.8);
     p.target = { x: door.x, z: door.z };
     p.onArrive = () => {
       if (bus.doorTarget === 0 && !st.left) { this.hud.toast('✊ Bussa alla porta posteriore: "Aspetti! Aspetti!"', 'info'); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5 }); this.audio.noiseBurst({ dur: 0.08, type: 'lowpass', freq: 600, gain: 0.5, delay: 0.25 }); }

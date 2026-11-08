@@ -255,7 +255,7 @@ export class Traffic {
     this.grid = new Grid(30);
     for (const c of this.cars) this.grid.insertAABB(c, c.x - 3, c.z - 3, c.x + 3, c.z + 3);
     const near = [];
-    const busCircles = [-4.9, -2.45, 0, 2.45, 4.9].map((lz) => ({ x: bus.x + Math.sin(bus.h) * lz, z: bus.z + Math.cos(bus.h) * lz }));
+    const busCircles = bus.worldCircles();
     this.honks.length = 0;
 
     for (const c of this.cars) {
