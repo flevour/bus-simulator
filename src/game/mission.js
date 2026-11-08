@@ -518,12 +518,12 @@ export class Mission {
         const dot = (dx * e.dx * o + dz * e.dz * o) / (d || 1);
         if (dot > bd) { bd = dot; best = e; }
       }
-      const line = n.radius + 1.2;
       const prev = this.lastSigDist.get(n.id);
       this.lastSigDist.set(n.id, d);
       // tratti interni all'incrocio e sensi unici in uscita non hanno lanterna
       const ap = sig.appr.find((a) => a.node === n && a.edge === best);
       if (!ap) continue;
+      const line = ap.stop ?? n.radius + 1.2; // linea d'arresto
       const movingIn = bus.fx * -ap.out.x + bus.fz * -ap.out.z > 0.5 && bus.v > 1;
       if (prev != null && prev > line && d <= line && movingIn && bd > 0.6) {
         const st = this.lights.stateOf(sig, ap.phase);

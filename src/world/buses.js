@@ -162,8 +162,9 @@ function buildLane(net, city, v, tramSignals) {
   const signals = [];
   for (let k = 1; k < N.length; k++) {
     const n = N[k], e = segs[k - 1].e;
-    if (!n.signal || !e || !n.signal.appr.some((a) => a.node === n && a.edge === e)) continue;
-    signals.push({ s: ls(cum[k] - (n.radius || 0) - 1.2), node: n, edge: e });
+    const ap = n.signal && e && n.signal.appr.find((a) => a.node === n && a.edge === e);
+    if (!ap) continue;
+    signals.push({ s: ls(cum[k] - (ap.stop ?? (n.radius || 0) + 1.2) - 0.3), node: n, edge: e });
   }
   // incroci a raso con la sede del tram: ci si ferma prima del primo binario se un tram ha chiamato l'incrocio
   const tram = [];

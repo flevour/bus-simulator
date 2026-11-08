@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 27, d: '2026-11-08', t: 'Semafori rifatti: la linea d\'arresto è dipinta dove sta davvero, il palo è sul marciapiede subito dopo la linea (non più in mezzo alla strada) e le luci guardano chi arriva. Sulle vie larghe c\'è la lanterna sopra le corsie, sui sensi unici anche a sinistra, nel centro storico è appesa al muro. Ciclo più lungo con l\'onda verde lungo le vie principali.' },
   { n: 26, d: '2026-11-06', t: 'Niente più fermate date per saltate prima di arrivarci: succedeva dove il percorso ripassa vicino a sé stesso (Via Giotto sulla 22, Rotonda Galante sulla 42, Croce Rossa sulla 25). Anche il navigatore lì non salta più avanti.' },
   { n: 25, d: '2026-11-06', t: 'Saluta i colleghi con Y: quando incroci un bus o un tram che viene incontro, l\'autista alza la mano e prendi punti (di più se è della tua linea). A volte saluta lui per primo: ricambia in tempo!' },
   { n: 24, d: '2026-11-06', t: 'Per strada girano i bus di tutte le linee, con l\'orario vero: aspettano al capolinea, fermano alle fermate, si mettono in coda ai semafori. Li vedi anche sulla minimappa e sulla mappa grande (M).' },

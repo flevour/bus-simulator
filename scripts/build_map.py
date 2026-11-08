@@ -165,7 +165,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     ped_gap = ped_signal_gaps(sign_els)
 
     edges = []  # a, b, cls, width, name, flags, speed, layer
-    way_geo = []  # per ogni strada: id OSM dei nodi, punti, posizioni tenute, nodi del grafo, senso unico
+    way_geo = []  # per ogni strada: id OSM dei nodi, punti, posizioni tenute, nodi del grafo, senso unico, tag
     for w in roads:
         t = w['tags']
         cls, cw = DRIVE[t['highway']]
@@ -191,7 +191,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         nm = name_ref(t.get('name', ''))
         sp = speed_of(t)
         ids = [nid(w['nodes'][i], w['geometry'][i]['lat'], w['geometry'][i]['lon']) for i in keep]
-        way_geo.append((w['nodes'], pts, keep, ids, ow))
+        way_geo.append((w['nodes'], pts, keep, ids, ow, t))
         for a, b in zip(ids, ids[1:]):
             if a != b:
                 edges.append([a, b, cls, wd, nm, flags, sp, layer])
@@ -725,6 +725,25 @@ SIGNAL_REACH = 40  # m: distanza massima tra la lanterna (linea d'arresto) e l'i
 SIGN_REACH = 30  # m: lo stesso per STOP e dare precedenza
 SNAP = 15  # m: aggancio di un nodo OSM al nodo del grafo più vicino lungo la sua strada
 PED_GAP = 10  # m: un attraversamento semaforizzato più vicino di così all'incrocio fa parte dell'incrocio
+SIGNAL_STOP_MAX = 35  # m: oltre, il nodo OSM non è la lanterna sulla linea d'arresto del braccio
+SIGNAL_NEAR = 18  # m: incroci così vicini (carreggiate separate, sede del tram in mezzo) sono un solo impianto
+
+
+def lanes_toward(t, fwd):
+    """Corsie nel verso di marcia (fwd = verso della way): lanes:forward/backward, lanes sui sensi unici, altrimenti
+    metà di lanes; 1 se OSM non lo dice."""
+    def num(v):
+        try:
+            return int(float(v.split(';')[0])) if v else None
+        except ValueError:
+            return None
+    n = num(t.get('lanes:forward' if fwd else 'lanes:backward'))
+    if n:
+        return n
+    n = num(t.get('lanes'))
+    if t.get('oneway') in ('yes', '1', '-1') or t.get('junction') == 'roundabout':
+        return n or 1
+    return max(1, n // 2) if n else 1
 
 
 def load_nodes(path):
@@ -762,7 +781,10 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
     * signals: [pedonale, nodo, nodo, ...] per incrocio semaforizzato (più nodi del grafo se l'incrocio è grande);
       pedonale = 1 per i semafori di un attraversamento lontano dagli incroci;
     * signs: [incrocio, nodo da cui si arriva, tipo] con tipo 0 = STOP, 1 = dare precedenza;
-    * crossings: [a, b, metri da a] per le strisce pedonali lungo l'arco a-b.
+    * crossings: [a, b, metri da a] per le strisce pedonali lungo l'arco a-b;
+    * signalArms: [incrocio, nodo da cui si arriva, linea d'arresto in dm (0 = non nota), corsie nel verso, spento]
+      per ogni braccio degli incroci semaforizzati. La linea d'arresto è dove OSM mette il semaforo del braccio;
+      spento = 1 per il verso senza lanterna di un semaforo pedonale con traffic_signals:direction.
     """
     # grado dei nodi come lo vede il gioco (padova.js scarta gli archi più corti di 0,3 m sulle coordinate arrotondate)
     rn = [(round(x, 1), round(z, 1)) for x, z in nodes]
@@ -777,7 +799,7 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
         arm_cls[b][a] = min(cls, arm_cls[b].get(a, 9))
     on_way = defaultdict(list)  # id OSM -> [(strada, posizione)]
     cum = []  # distanza progressiva lungo ogni strada
-    for wi, (osm_ids, pts, _k, _i, _o) in enumerate(way_geo):
+    for wi, (osm_ids, pts, *_r) in enumerate(way_geo):
         c = [0.0]
         for p, q in zip(pts, pts[1:]):
             c.append(c[-1] + math.hypot(q[0] - p[0], q[1] - p[1]))
@@ -835,19 +857,31 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
 
     # ---- semafori ----
     sig = []  # [x, z, incrocio o None, id OSM]
+    arm_stop = {}  # (incrocio, nodo da cui si arriva) -> metri dal centro dell'incrocio alla lanterna OSM
+    arm_off = set()  # (nodo, nodo da cui si arriva) senza lanterna: semafori pedonali che valgono in un verso solo
     for e in els:
         t = e['tags']
         if e['id'] not in ped_gap or e['id'] not in on_way:
             continue
         g = node_id.get(e['id'])
+        dv = t.get('traffic_signals:direction', t.get('direction'))
         if g is not None and deg[g] >= 3:
             j = g
         elif not is_vehicle_signal(t):
             j = None  # attraversamento semaforizzato lontano dai semafori dei veicoli
         else:
-            dv = t.get('traffic_signals:direction', t.get('direction'))
             r = junction(e['id'], lambda wi: steps_of(dv), SIGNAL_REACH)
             j = r[1] if r else None
+            # il nodo OSM del semaforo sta sulla linea d'arresto del braccio da cui si arriva
+            if r and r[0] <= SIGNAL_STOP_MAX:
+                arm_stop[(r[1], r[2])] = max(r[0], arm_stop.get((r[1], r[2]), 0))
+        if j is None and dv in ('forward', 'backward'):
+            # semaforo pedonale in un verso solo: chi arriva dall'altro lato non ha la lanterna
+            wi, i = on_way[e['id']][0]
+            gp = nearest(e['id'])
+            far = next((n for n, _d, _p in walk(wi, i, 1 if dv == 'forward' else -1, SIGNAL_REACH) if n != gp), None)
+            if gp is not None and far is not None:
+                arm_off.add((gp, far))
         sig.append((*xz(e['lat'], e['lon']), j, e['id']))
     # stesso incrocio: lanterne vicine o che portano allo stesso nodo
     parent = list(range(len(sig)))
@@ -883,8 +917,33 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
                     extra.update(path)
         return sorted(inside | extra)
 
+    ring = {(a, b) for a, b, _c, _w, _n, flags, *_r in edges if flags & 16}
+
+    def near_nodes(js):
+        """Incroci a carreggiate separate o con la sede del tram in mezzo: gli altri incroci a pochi metri lungo un arco
+        sono lo stesso impianto. Senza, l'arco che attraversa lo spartitraffico diventava un braccio con la sua lanterna
+        e la linea d'arresto finiva sulla sede del tram."""
+        inside, more = set(js), set()
+        dist = lambda a, b: math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1])
+        for j in js:
+            for nb in arm_cls[j]:
+                if (j, nb) in ring or (nb, j) in ring or arm_cls[j][nb] >= 8:
+                    continue
+                # anche oltre i vertici intermedi (il nodo della via in mezzo alla sede del tram)
+                prev, cur, path, length = j, nb, [], dist(j, nb)
+                while cur not in inside and deg[cur] == 2 and len(arm_cls[cur]) == 2 and length <= SIGNAL_NEAR:
+                    path.append(cur)
+                    prev, cur = cur, next(v for v in arm_cls[cur] if v != prev)
+                    length += dist(prev, cur)
+                if length <= SIGNAL_NEAR and cur not in inside and cur not in owner and deg[cur] >= 3:
+                    more.add(cur)
+                    more.update(path)
+        return sorted(inside | more)
+
     for members in groups.values():
         js = bridge(sorted({m[2] for m in members if m[2] is not None}))
+        if js:
+            js = near_nodes(js)
         ped = 0
         if not js:
             # semaforo pedonale in mezzo a un tratto: vale per il nodo del grafo più vicino (non per un incrocio),
@@ -900,6 +959,25 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
         for j in js:
             owner[j] = len(signals)
         signals.append([ped, *js])
+
+    # bracci degli impianti: linea d'arresto OSM, corsie nel verso di chi arriva, lanterna spenta
+    arc_way = {}
+    for wi, (_o, _p, _k, ids, *_r) in enumerate(way_geo):
+        for a, b in zip(ids, ids[1:]):
+            if a != b:
+                arc_way.setdefault((a, b), (wi, True))
+                arc_way.setdefault((b, a), (wi, False))
+    arms = []
+    for s in signals:
+        inside = set(s[1:])
+        for j in s[1:]:
+            for b in arm_cls[j]:
+                if b in inside or (j, b) not in arc_way and (b, j) not in arc_way:
+                    continue
+                wi, fwd = arc_way.get((b, j), (None, True))
+                lanes = lanes_toward(way_geo[wi][5], fwd) if wi is not None else 1
+                stop = arm_stop.get((j, b), 0)
+                arms.append([j, b, round(stop * 10), lanes, 1 if (j, b) in arm_off else 0])
 
     # ---- STOP e dare precedenza ----
     signs = {}  # (incrocio, nodo da cui si arriva) -> tipo; lo STOP prevale
@@ -958,12 +1036,15 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
     print(f'semafori OSM {len(sig)} -> incroci semaforizzati {sum(1 for s in signals if not s[0])} '
           f'(nodi {sum(len(s) - 1 for s in signals if not s[0])}), pedonali {sum(1 for s in signals if s[0])}, '
           f'non agganciati {ped_lost}')
+    print(f'bracci semaforizzati {len(arms)}: con la linea d\'arresto OSM {sum(1 for a in arms if a[2])}, '
+          f'a più corsie {sum(1 for a in arms if a[3] >= 2)}, senza lanterna (pedonali in un verso) {sum(1 for a in arms if a[4])}')
     print(f'cartelli: STOP {sum(1 for v in signs.values() if v == 0)}, dare precedenza {sum(1 for v in signs.values() if v == 1)} '
           f'(sul nodo dell\'incrocio {on_junction}); strisce pedonali {len(crossings)}')
     return {
         'signals': signals,
         'signs': [[a, b, k] for (a, b), k in sorted(signs.items())],
         'crossings': crossings,
+        'signalArms': [v for a in arms for v in a],
     }
 
 

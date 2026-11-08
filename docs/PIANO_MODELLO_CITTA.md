@@ -389,7 +389,7 @@ una build e l'altra:
 | Tappa | Cosa | Serve | Sessioni |
 |---|---|---|---|
 | **M0** | Strati Overture nella pipeline: parchi, prati, zone pedonali, piazze, alberi, geometria delle strisce, marciapiedi mappati, `width` OSM nella carreggiata, posizione delle paline e pensiline da OSM. Rapporto di verifica (6.1) | Niente: Overture è raggiungibile | 2 |
-| **M1** | Semafori rifatti (5.1): lanterna sulla linea d'arresto e sul marciapiede vero, ripetitrici, fasi e onda verde, controlli | Niente | 1–2 |
+| **M1** ✔ | Semafori rifatti (5.1): lanterna sulla linea d'arresto e sul marciapiede vero, ripetitrici, fasi e onda verde, controlli. **Fatto l'8 novembre**: 354 approcci, 351 con la lanterna (4 a muro), 383 pali tutti a 0,3–3 m dal bordo dell'asfalto, 36 ripetitrici, 53 sbracci. Restano le svolte a sinistra protette | Niente | 1–2 |
 | **M2** | **Carreggiate, marciapiedi e isole misurati**, con la conflazione sulla rete OSM nei passi seguenti. Prima scelta il DBGT di Padova del 2007, se il downloader lo consegna; altrimenti la CTRN del 1997 (bordi e cordoli) | DBGT dal downloader IDT2; la CTRN è su GitHub | 2–3 |
 | **M3** | Altezze degli edifici misurate: DBT, Edifici del Veneto o LiDAR (DSM − DTM) | Host regionali o MASE, oppure scarico dal browser | 1–2 |
 | **M4** | Terreno e quote: DTM LiDAR a 5 m (copre Padova) più argini e scarpate della CTRN, per rampe, sottopassi e profilo delle strade | Tessere LiDAR dal downloader IDT2 | 1 |

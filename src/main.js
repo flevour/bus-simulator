@@ -94,7 +94,7 @@ function buildWorld() {
   // orari tra le fermate a misura di guida (il tram ha già quelli della sua sede)
   for (const L of LINES) for (const v of L.variants) paceVariant(net, v);
   city = new City(scene, net);
-  lights = new TrafficLights(scene, net);
+  lights = new TrafficLights(scene, net, city);
   city.buildSigns();
   trams = new TramSim(scene, net, { track: city.tramTrack });
   // incroci con la sede: precedenza al tram e semafori a barre

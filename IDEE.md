@@ -17,7 +17,6 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
    "Fatto"). Restano:
    - fermate del tram dai nodi OSM (`tram_stop`);
-   - semafori pedonali solo nel verso indicato da `traffic_signals:direction`;
    - dossi (`traffic_calming`) e corsie riservate (`highway=busway`);
    - istruzioni: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
 4. [ ] **Segnaletica orizzontale dai tag OSM già presenti** (`lanes` su ~5400 strade, `lanes:forward/backward`,
@@ -28,7 +27,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    - corsie preferenziali gialle con la scritta BUS da `lanes:psv` / `bus:lanes`.
 5. [~] **Segnalazioni dal gioco** (modulo Richieste; il 6 novembre dalla linea 42 in Via Madonna della Salute):
    - [x] fermate date per saltate prima di averle attraversate (vedi "Fatto");
-   - [ ] semafori in mezzo alla strada e orientati male; zone pedonali; profilo altimetrico delle strade;
+   - [x] semafori in mezzo alla strada e orientati male (vedi "Fatto");
+   - [ ] zone pedonali; profilo altimetrico delle strade;
    - [ ] navigatore sulle linee 22, 13, 25 (in parte era lo stesso salto della posizione, da ricontrollare);
    - [ ] zona Plebiscito: strade e fermate;
    - [ ] cavalcavia da migliorare e posizione dei fiumi;
@@ -112,6 +112,12 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Semafori rifatti (tappa M1 del piano): linea d'arresto dal nodo OSM del semaforo o prima delle strisce, palo sul
+  marciapiede vero subito oltre la linea (nessuno in carreggiata), ripetitrice a sinistra sui sensi unici a più corsie,
+  sbracci sulle vie larghe, lanterne a muro dove il marciapiede è stretto, luci orientate sull'asse del braccio;
+  incroci a carreggiate separate e con la sede del tram come un solo impianto; ciclo comune di 60 s con giallo di 4 s
+  sulle vie dei bus e onda verde; semafori pedonali solo nel verso di `traffic_signals:direction`.
+  Restano le svolte a sinistra protette (`turn:lanes`).
 - [x] Posizione lungo il percorso che segue il verso di marcia: dove il percorso ripassa vicino a sé stesso non salta
   più avanti (fermate date per saltate prima di arrivarci, navigatore avanti di centinaia di metri).
 - [x] Bus automatici di tutte le linee dall'orario GTFS (capolinea, fermate a richiesta, semafori, code, uscita fuori

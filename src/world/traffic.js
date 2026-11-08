@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
-import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight } from './city.js';
+import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
 import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
@@ -21,74 +21,345 @@ function guessSignals(net) {
   return chosen.map((n) => ({ ped: false, nodes: [n] }));
 }
 
+// Tempi (art. 159–168 Regolamento CdS, Nota MIT 67906/2007 per il giallo). Il ciclo è comune a tutti gli impianti,
+// così l'onda verde tiene: 60 s, più corto dei 90 s tipici ma con le stesse proporzioni
+const CYCLE = 60, ALL_RED = 2, PED_GREEN = 12;
+const WAVE_V = 12; // m/s (circa 43 km/h): velocità dell'onda verde lungo le vie coordinate
+const WAVE_REACH = 700; // m: distanza massima tra due impianti coordinati
+const HEAD_Y = 2.3; // bordo inferiore della lanterna sul palo (2–3 m)
+const MAST_Y = 5.4; // bordo inferiore della lanterna sopra la carreggiata (5,10–6,00 m)
+const HEAD_H = 1.05;
+
+// punto e direzione (verso l'esterno) a d metri dal centro del nodo n lungo il braccio e, oltre i vertici intermedi;
+// from = estremo dell'arco verso l'incrocio, t = metri da from, end = lunghezza del braccio fino al prossimo incrocio
+function armPoint(nodes, n, e, d) {
+  let from = n, arc = e, d0 = 0;
+  for (let k = 0; k < 60; k++) {
+    const o = arc.a === from.id ? 1 : -1, to = nodes[o > 0 ? arc.b : arc.a];
+    if (d <= d0 + arc.len || to.edges.length !== 2) {
+      const dx = arc.dx * o, dz = arc.dz * o, t = d - d0;
+      return { x: from.x + dx * t, z: from.z + dz * t, dx, dz, arc, from, t, end: to.edges.length !== 2 ? d0 + arc.len : Infinity };
+    }
+    d0 += arc.len;
+    arc = to.edges[0] === arc ? to.edges[1] : to.edges[0];
+    from = to;
+  }
+  return null;
+}
+
+// strisce pedonali lungo il braccio: metri dal centro del nodo, fino a maxD
+function armCrossings(nodes, n, e, maxD) {
+  const out = [];
+  let from = n, arc = e, d0 = 0;
+  for (let k = 0; k < 60 && d0 < maxD; k++) {
+    const o = arc.a === from.id ? 1 : -1, to = nodes[o > 0 ? arc.b : arc.a];
+    for (const s of arc.cross || []) { const d = d0 + (o > 0 ? s : arc.len - s); if (d <= maxD) out.push(d); }
+    d0 += arc.len;
+    if (to.edges.length !== 2) break;
+    arc = to.edges[0] === arc ? to.edges[1] : to.edges[0];
+    from = to;
+  }
+  return out;
+}
+
 export class TrafficLights {
-  constructor(scene, net) {
+  constructor(scene, net, city = null) {
     this.net = net;
+    this.city = city;
     this.signals = [];
+    this.byKey = new Map(); // `${nodo}:${arco}` -> approccio
+    this.stopArcs = new Map(); // `${arco}:${nodo verso cui si va}` -> { ap, t }: arco con la linea d'arresto, a t m dal nodo
+    this.stats = { approcci: 0, lineaOsm: 0, palo: 0, muro: 0, senzaPalo: 0, ripetitrici: 0, sbracci: 0 };
     const rnd = mulberry32(99);
     const rank = (e) => e.cls * 10 - Math.min(e.routes || 0, 9);
+    const arms = net.signalArms;
     // un incrocio grande (strade a carreggiate separate) occupa più nodi del grafo: un solo impianto per tutti
     for (const g of net.signals || guessSignals(net)) {
       const inside = new Set(g.nodes);
       const appr = [];
       for (const n of g.nodes)
         for (const e of n.edges) {
-          // niente lanterna sui tratti interni all'incrocio, sulle vie pedonali e sui sensi unici in uscita
+          // niente lanterna sui tratti interni all'incrocio, sulle vie pedonali, sui sensi unici in uscita e, per i
+          // semafori pedonali con traffic_signals:direction, nel verso che OSM esclude
           if (e.ped || inside.has(net.nodes[e.a === n.id ? e.b : e.a]) || (e.oneway && (e.oneway === 1 ? e.b : e.a) !== n.id)) continue;
+          const info = arms && arms.get(`${n.id}:${e.id}`);
+          if (info && info.off) continue;
           const out = e.a === n.id ? { x: e.dx, z: e.dz } : { x: -e.dx, z: -e.dz };
-          appr.push({ node: n, edge: e, out, ang: Math.atan2(out.z, out.x) });
+          appr.push({ node: n, edge: e, out, ang: Math.atan2(out.z, out.x), info, lanes: info ? info.lanes : e.oneway && e.width >= 7 ? 2 : 1 });
         }
       if (!appr.length) continue;
       // fase 0: la strada principale e quelle allineate; fase 1: le trasversali (i semafori pedonali hanno solo la 0)
       const ref = appr.reduce((p, q) => (rank(q.edge) < rank(p.edge) ? q : p));
       for (const ap of appr) {
-        let d = Math.abs(((ap.ang - ref.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI); // 0 = opposto, PI = stesso
+        const d = Math.abs(((ap.ang - ref.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI); // 0 = opposto, PI = stesso
         ap.phase = g.ped || d < Math.PI / 4 || d > (Math.PI * 3) / 4 ? 0 : 1;
       }
-      // pedonale: verde lungo per i veicoli, poi il rosso mentre attraversano i pedoni
-      const sig = { nodes: g.nodes, ped: g.ped, appr, offset: rnd() * 50, cycle: g.ped ? [28, 3, 1, 12, 0, 1] : [13, 3, 1, 10, 3, 1] };
-      sig.total = sig.cycle.reduce((a, b) => a + b, 0);
+      // giallo 3 s a 50 km/h, 4 s con molti mezzi pesanti (le vie dei bus); tutto rosso 2 s; verdi in proporzione
+      // all'importanza delle vie di ciascuna fase. Pedonale: verde lungo ai veicoli, poi il rosso per chi attraversa
+      const Y = appr.some((a) => a.edge.routes > 0) ? 4 : 3;
+      let cycle;
+      if (g.ped) cycle = [CYCLE - Y - PED_GREEN - 2 * ALL_RED, Y, ALL_RED, PED_GREEN, 0, ALL_RED];
+      else {
+        const imp = (ph) => Math.max(0, ...appr.filter((a) => a.phase === ph).map((a) => (9 - a.edge.cls) * 2 + Math.min(a.edge.routes || 0, 6)));
+        const w0 = imp(0), w1 = imp(1), free = CYCLE - 2 * (Y + ALL_RED);
+        const f = w1 > 0 ? Math.min(0.68, Math.max(0.45, w0 / (w0 + w1))) : 0.68;
+        const G0 = Math.round(free * f);
+        cycle = [G0, Y, ALL_RED, free - G0, Y, ALL_RED];
+      }
+      const sig = { nodes: g.nodes, ped: g.ped, appr, offset: rnd() * CYCLE, cycle, total: CYCLE };
       for (const n of g.nodes) n.signal = sig;
+      for (const ap of appr) this.byKey.set(`${ap.node.id}:${ap.edge.id}`, ap);
       this.signals.push(sig);
     }
-    // pali e lanterne (instanced)
-    const count = this.signals.reduce((a, s) => a + s.appr.length, 0);
-    const poleG = mergeGeometries([
-      new THREE.CylinderGeometry(0.07, 0.09, 3.2, 6).translate(0, 1.6, 0),
-      new THREE.BoxGeometry(0.36, 1.05, 0.26).translate(0, 3.6, 0),
-    ]);
-    this.poles = new THREE.InstancedMesh(poleG, new THREE.MeshLambertMaterial({ color: 0x23272b }), count);
-    const lampG = new THREE.CircleGeometry(0.12, 12);
-    this.lamps = new THREE.InstancedMesh(lampG, new THREE.MeshBasicMaterial({ color: 0xffffff }), count * 3);
-    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), S = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
-    let i = 0, j = 0;
-    for (const s of this.signals)
-      for (const ap of s.appr) {
-        const n = ap.node, e = ap.edge;
-        const r = n.radius + 3.5;
-        const inc = { x: -ap.out.x, z: -ap.out.z };
-        const right = { x: -inc.z, z: inc.x };
-        const x = n.x + ap.out.x * r + right.x * (e.width / 2 + 1.0);
-        const z = n.z + ap.out.z * r + right.z * (e.width / 2 + 1.0);
-        // la lanterna guarda verso il traffico in arrivo (direzione ap.out)
-        const ang = Math.atan2(ap.out.x, ap.out.z);
-        Q.setFromAxisAngle(Y, ang);
-        M.compose(P.set(x, 0.1, z), Q, S);
-        this.poles.setMatrixAt(i++, M);
-        ap.lampIdx = j;
-        for (let k = 0; k < 3; k++) {
-          const lp = new THREE.Vector3(0, 3.95 - k * 0.33, 0.135).applyQuaternion(Q);
-          M.compose(P.set(x + lp.x, 0.1 + lp.y, z + lp.z), Q, S);
-          this.lamps.setMatrixAt(j++, M);
-        }
-        ap.pos = { x, z };
-      }
-    this.lamps.instanceMatrix.needsUpdate = true;
-    this.poles.castShadow = true;
-    scene.add(this.poles, this.lamps);
+    for (const s of this.signals) for (const ap of s.appr) this.placeApproach(s, ap);
+    this.greenWave();
+    this.buildMeshes(scene);
     this.time = 0;
     this._c = new THREE.Color();
     this.update(0);
+  }
+
+  // linea d'arresto, pali e lanterne di un approccio
+  placeApproach(sig, ap) {
+    const nodes = this.net.nodes, n = ap.node, e = ap.edge, city = this.city;
+    this.stats.approcci++;
+    // linea d'arresto: dove OSM mette il semaforo del braccio, altrimenti 1 m prima delle strisce vicine all'incrocio,
+    // altrimenti appena fuori dall'incrocio. Mai sulle strisce e sempre sull'arco d'arrivo (lì si fermano i veicoli)
+    const trim = n.trim ? n.trim.get(e) : n.joint ? 0 : n.radius * 0.6;
+    const cross = armCrossings(nodes, n, e, sig.ped ? 5 : trim + 14);
+    let s = cross.length ? Math.max(...cross) + 2.7 : sig.ped ? 3.2 : trim + 1.0;
+    // il nodo OSM del semaforo è spesso sull'angolo dell'incrocio, oltre le strisce: vale solo se è più lontano
+    if (ap.info && ap.info.stop > s) { s = ap.info.stop; this.stats.lineaOsm++; }
+    s = Math.max(s, trim + 0.6);
+    for (const c of cross) if (c - 2.2 < s && c + 2.2 > s) s = c + 2.7;
+    // la linea può stare su un arco precedente (bracci con vertici intermedi vicino all'incrocio), non oltre il braccio
+    let p = armPoint(nodes, n, e, s);
+    if (s > p.end - 2) p = armPoint(nodes, n, e, (s = Math.max(Math.min(s, p.end - 2), Math.min(trim + 0.6, p.end - 1))));
+    ap.stop = s;
+    this.stopArcs.set(`${p.arc.id}:${p.from.id}`, { ap, t: p.t });
+    const q = armPoint(nodes, n, e, ap.stop + 12);
+    // le lanterne guardano chi arriva, lungo l'asse del braccio alla linea d'arresto (non l'arco del grafo)
+    let fx = q.x - p.x, fz = q.z - p.z;
+    const fl = Math.hypot(fx, fz) || 1;
+    fx /= fl; fz /= fl;
+    ap.face = { x: fx, z: fz };
+    const hw = e.width / 2;
+    const off = (x, z) => (city ? (city.asphRings ? city.surfaceOff(x, z) : city.clearance(x, z, ['road'], 20)) : 1);
+    // bordo dell'asfalto da un lato (side 1 = destra di chi arriva): dall'asse si attraversa la carreggiata fino al
+    // primo punto fuori
+    const edgeAt = (px, pz, side) => {
+      const rx = fz * side, rz = -fx * side;
+      let seen = off(px, pz) < 0;
+      for (let o = 0.2; o <= hw + 16; o += 0.2) {
+        const v = off(px + rx * o, pz + rz * o);
+        if (v < 0) seen = true;
+        else if (seen || o > hw) return o;
+      }
+      return null;
+    };
+    // 0 = libero, 1 = edificio (si può appendere la lanterna al muro), 2 = asfalto, binari o altro
+    const free = (x, z) => {
+      if (!city) return 0;
+      if (off(x, z) < 0.25 || city.clearance(x, z, ['tram', 'rail'], 15) < 0.4) return 2;
+      const arr = city.obstacles.query(x, z, 3, this._oq || (this._oq = []));
+      for (const b of arr) {
+        const dx = x - b.x, dz = z - b.z, u = dx * b.c + dz * b.s, v = -dx * b.s + dz * b.c;
+        if (Math.abs(u) < b.hx + 0.2 && Math.abs(v) < b.hz + 0.2) return b.kind === 'building' ? 1 : 2;
+      }
+      return 0;
+    };
+    // palo appena oltre la linea d'arresto (art. 168: il primo veicolo fermo vede le luci), 0,6 m fuori dall'asfalto;
+    // se lì non c'è posto, poco più avanti o poco prima. Dove il marciapiede è stretto e c'è la facciata (centro
+    // storico) la lanterna va su una mensola a muro
+    const place = (side) => {
+      let wall = null;
+      for (const d of [-0.6, -1.6, -2.8, 0.6, 1.8, 3.2]) {
+        const sp = ap.stop + d;
+        if (sp < 0.5) continue;
+        const a = armPoint(nodes, n, e, sp);
+        const o = edgeAt(a.x, a.z, side);
+        if (o == null) continue;
+        const at = (po) => ({ x: a.x + fz * side * po, z: a.z - fx * side * po, o: po });
+        const P = at(o + 0.6), f = free(P.x, P.z);
+        if (f === 0) return P;
+        if (f === 1 && !wall) { const W = at(o + 0.25); if (free(W.x, W.z) !== 2) wall = { ...W, wall: true }; }
+      }
+      return wall;
+    };
+    const h = n.h || 0;
+    ap.heads = [];
+    ap.poles = [];
+    // a destra; sui sensi unici, se a destra non c'è posto (sede del tram accanto), a sinistra
+    let R = place(1), Rs = 1;
+    if (!R && e.oneway) { R = place(-1); Rs = -1; }
+    if (R) {
+      this.stats.palo++;
+      if (R.wall) this.stats.muro++;
+      ap.pos = { x: R.x, z: R.z };
+      // vie larghe (due o più corsie nel verso) o palo lontano dalle corsie: palo a sbraccio con la lanterna sopra le
+      // corsie di chi arriva
+      const reach = R.o - Rs * (e.oneway ? 0 : hw / 2); // dal palo al centro delle corsie di chi arriva
+      const mast = !R.wall && !sig.ped && e.cls <= 5 && (ap.lanes >= 2 || reach > hw + 3.5) ? Math.min(10, reach) : 0;
+      if (!R.wall) ap.poles.push({ x: R.x, z: R.z, y: h, mast, side: Rs });
+      ap.heads.push({ x: R.x + fx * 0.2, y: h + 0.1 + HEAD_Y + (R.wall ? 0.5 : 0), z: R.z + fz * 0.2, wall: R.wall ? Rs : 0 });
+      if (mast) {
+        this.stats.sbracci++;
+        ap.heads.push({ x: R.x - fz * Rs * mast + fx * 0.2, y: h + 0.1 + MAST_Y, z: R.z + fx * Rs * mast + fz * 0.2 });
+      }
+    } else {
+      this.stats.senzaPalo++;
+      ap.pos = { x: p.x + fz * (hw + 1), z: p.z - fx * (hw + 1) };
+    }
+    // ripetitrice a sinistra, obbligatoria sui sensi unici con due o più corsie (art. 168 c. 3)
+    if (e.oneway && ap.lanes >= 2 && Rs === 1) {
+      const Lp = place(-1);
+      if (Lp) {
+        this.stats.ripetitrici++;
+        if (!Lp.wall) ap.poles.push({ x: Lp.x, z: Lp.z, y: h, mast: 0, side: -1 });
+        ap.heads.push({ x: Lp.x + fx * 0.2, y: h + 0.1 + HEAD_Y + (Lp.wall ? 0.5 : 0), z: Lp.z + fz * 0.2, wall: Lp.wall ? -1 : 0 });
+      }
+    }
+    // linea d'arresto: continua, larga 50 cm, sulle corsie di chi arriva (art. 144)
+    const er = edgeAt(p.x, p.z, 1);
+    const el = e.oneway ? edgeAt(p.x, p.z, -1) : null;
+    ap.line = { x: p.x, z: p.z, fx, fz, w0: e.oneway ? -((el ?? hw) - 0.3) : 0.15, w1: (er ?? hw) - 0.3, y: h };
+  }
+
+  // onda verde: lungo una via, l'impianto a valle accende il verde quando arriva chi è partito col verde da quello a
+  // monte, a WAVE_V. Si coordina a partire dagli impianti più importanti (più linee bus)
+  greenWave() {
+    const nodes = this.net.nodes, bySig = new Map();
+    for (const s of this.signals) for (const n of s.nodes) bySig.set(n, s);
+    const start = (s, p) => (p === 0 ? 0 : s.cycle[0] + s.cycle[1] + s.cycle[2]);
+    const links = new Map(this.signals.map((s) => [s, []]));
+    for (const s of this.signals)
+      for (const ap of s.appr) {
+        // si risale la via di chi arriva fino all'impianto precedente
+        let from = ap.node, arc = ap.edge, d = 0;
+        for (let k = 0; k < 200 && d < WAVE_REACH; k++) {
+          const o = arc.a === from.id ? 1 : -1, to = nodes[o > 0 ? arc.b : arc.a], dx = arc.dx * o, dz = arc.dz * o;
+          d += arc.len;
+          const s2 = bySig.get(to);
+          if (s2 && s2 !== s) {
+            // a monte, la fase di chi va verso s: l'approccio allineato con il verso di marcia
+            let best = null, bd = 0.6;
+            for (const a2 of s2.appr) { const dot = a2.out.x * dx + a2.out.z * dz; if (dot > bd) { bd = dot; best = a2; } }
+            if (best) {
+              const l = { up: s2, upPhase: best.phase, down: s, downPhase: ap.phase, d };
+              links.get(s).push(l);
+              links.get(s2).push(l);
+            }
+            break;
+          }
+          let next = null, bd = 0.7;
+          for (const e2 of to.edges) {
+            if (e2 === arc || e2.ped) continue;
+            const o2 = e2.a === to.id ? 1 : -1, dot = e2.dx * o2 * dx + e2.dz * o2 * dz;
+            if (dot > bd) { bd = dot; next = e2; }
+          }
+          if (!next) break;
+          from = to;
+          arc = next;
+        }
+      }
+    const weight = (s) => s.appr.reduce((a, ap) => a + (ap.edge.routes || 0), 0);
+    const done = new Set();
+    for (const root of [...this.signals].sort((a, b) => weight(b) - weight(a))) {
+      if (done.has(root)) continue;
+      done.add(root);
+      const queue = [root];
+      while (queue.length) {
+        const s = queue.shift();
+        for (const l of links.get(s)) {
+          // verde di "down" (fase downPhase) = verde di "up" (fase upPhase) + d / WAVE_V
+          const other = l.up === s ? l.down : l.up;
+          if (done.has(other)) continue;
+          const t = l.d / WAVE_V;
+          if (other === l.down) other.offset = s.offset - start(s, l.upPhase) + start(other, l.downPhase) - t;
+          else other.offset = s.offset - start(s, l.downPhase) + start(other, l.upPhase) + t;
+          other.offset = ((other.offset % CYCLE) + CYCLE) % CYCLE;
+          done.add(other);
+          queue.push(other);
+        }
+      }
+    }
+  }
+
+  buildMeshes(scene) {
+    const parts = [], Y = new THREE.Vector3(0, 1, 0), Q = new THREE.Quaternion(), M = new THREE.Matrix4(), S = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
+    const pole = new THREE.CylinderGeometry(0.07, 0.09, 1, 6).translate(0, 0.5, 0);
+    const mastPole = new THREE.CylinderGeometry(0.1, 0.14, 1, 8).translate(0, 0.5, 0);
+    const arm = new THREE.CylinderGeometry(0.06, 0.07, 1, 6).rotateZ(Math.PI / 2).translate(-0.5, 0, 0);
+    // lanterna: cassa, pannello di contrasto nero e visiere sopra le tre luci
+    const head = mergeGeometries([
+      new THREE.BoxGeometry(0.36, HEAD_H, 0.26).translate(0, HEAD_H / 2, 0),
+      new THREE.BoxGeometry(0.62, HEAD_H + 0.25, 0.03).translate(0, HEAD_H / 2, -0.15),
+      ...[0, 1, 2].map((k) => new THREE.BoxGeometry(0.3, 0.025, 0.17).translate(0, HEAD_H - 0.02 - k * 0.33, 0.215)),
+    ]);
+    const add = (g, x, y, z, ang, sy = 1, sx = 1) => {
+      Q.setFromAxisAngle(Y, ang);
+      M.compose(P.set(x, y, z), Q, S.set(sx, sy, 1));
+      parts.push(g.clone().applyMatrix4(M));
+    };
+    let heads = 0;
+    for (const s of this.signals)
+      for (const ap of s.appr) {
+        const ang = Math.atan2(ap.face.x, ap.face.z);
+        for (const pl of ap.poles) {
+          if (pl.mast) {
+            add(mastPole, pl.x, pl.y + 0.1, pl.z, 0, MAST_Y + HEAD_H + 0.3);
+            // braccio verso il centro della carreggiata (a sinistra di chi arriva), poi la lanterna appesa
+            add(arm, pl.x, pl.y + 0.1 + MAST_Y + HEAD_H + 0.05, pl.z, pl.side < 0 ? ang + Math.PI : ang, 1, pl.mast);
+          } else add(pole, pl.x, pl.y + 0.1, pl.z, 0, HEAD_Y + HEAD_H - 0.1);
+        }
+        for (const hd of ap.heads) {
+          add(head, hd.x, hd.y, hd.z, ang);
+          // mensola verso la facciata
+          if (hd.wall) add(arm, hd.x, hd.y + HEAD_H / 2, hd.z, hd.wall > 0 ? ang + Math.PI : ang, 1, 0.9);
+          heads++;
+        }
+      }
+    if (parts.length) {
+      this.poles = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshLambertMaterial({ color: 0x23272b }));
+      this.poles.castShadow = true;
+      scene.add(this.poles);
+    }
+    // luci (instanced: il colore cambia a ogni fase), lenti da 200 mm
+    this.lamps = new THREE.InstancedMesh(new THREE.CircleGeometry(0.1, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }), Math.max(1, heads * 3));
+    let j = 0;
+    for (const s of this.signals)
+      for (const ap of s.appr) {
+        Q.setFromAxisAngle(Y, Math.atan2(ap.face.x, ap.face.z));
+        ap.lampIdx = j;
+        for (const hd of ap.heads)
+          for (let k = 0; k < 3; k++) {
+            const lp = new THREE.Vector3(0, HEAD_H - 0.19 - k * 0.33, 0.135).applyQuaternion(Q);
+            M.compose(P.set(hd.x + lp.x, hd.y + lp.y, hd.z + lp.z), Q, S.set(1, 1, 1));
+            this.lamps.setMatrixAt(j++, M);
+          }
+        ap.lampN = j - ap.lampIdx;
+      }
+    this.lamps.count = j;
+    this.lamps.instanceMatrix.needsUpdate = true;
+    scene.add(this.lamps);
+    // linee d'arresto
+    const pos = [];
+    for (const s of this.signals)
+      for (const ap of s.appr) {
+        const L = ap.line;
+        if (!L || L.w1 - L.w0 < 0.8) continue;
+        const rx = L.fz, rz = -L.fx, y = Y_ROAD + 0.022 + L.y;
+        const Pt = (a, w) => [L.x + L.fx * a + rx * w, y, L.z + L.fz * a + rz * w];
+        const a = Pt(-0.25, L.w0), b = Pt(-0.25, L.w1), c = Pt(0.25, L.w0), d = Pt(0.25, L.w1);
+        pos.push(...a, ...c, ...b, ...b, ...c, ...d);
+      }
+    if (pos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.computeVertexNormals();
+      this.stopLines = new THREE.Mesh(g, layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e0, side: THREE.DoubleSide }), 4));
+      scene.add(this.stopLines);
+    }
   }
 
   stateOf(sig, phase) {
@@ -104,16 +375,22 @@ export class TrafficLights {
     const c = sig.cycle;
     // fasi: [A verde, A giallo, tutto rosso, B verde, B giallo, tutto rosso]
     let k = 0;
-    while (t > c[k]) { t -= c[k]; k++; }
+    while (k < 5 && t > c[k]) { t -= c[k]; k++; }
     if (phase === 0) return k === 0 ? 'G' : k === 1 ? 'Y' : 'R';
     return k === 3 ? 'G' : k === 4 ? 'Y' : 'R';
   }
+  // approccio (linea d'arresto, fase) per chi arriva al nodo percorrendo l'arco "edge"; null se non c'è lanterna
+  approach(node, edge) {
+    return node.signal ? this.byKey.get(`${node.id}:${edge.id}`) || null : null;
+  }
+  // linea d'arresto sull'arco "edge" per chi va verso il nodo "to": { ap, t: metri prima di to }
+  stopOn(edge, to) {
+    return this.stopArcs.get(`${edge.id}:${to.id}`) || null;
+  }
   // stato per chi arriva al nodo percorrendo l'arco "edge"
   lightFor(node, edge) {
-    const sig = node.signal;
-    if (!sig) return 'G';
-    const ap = sig.appr.find((a) => a.edge === edge && a.node === node);
-    return ap ? this.stateOf(sig, ap.phase) : 'G'; // tratto interno all'incrocio: si libera l'incrocio
+    const ap = this.approach(node, edge);
+    return ap ? this.stateOf(node.signal, ap.phase) : 'G'; // tratto interno all'incrocio: si libera l'incrocio
   }
 
   update(dt) {
@@ -121,11 +398,15 @@ export class TrafficLights {
     const c = this._c;
     for (const s of this.signals)
       for (const ap of s.appr) {
+        if (!ap.lampN) continue;
         const st = this.stateOf(s, ap.phase);
+        if (st === ap._st) continue;
+        ap._st = st;
         const cols = [st === 'R' ? 0xff2a1a : 0x2a0806, st === 'Y' ? 0xffb300 : 0x2a2006, st === 'G' ? 0x26ff6a : 0x062a10];
-        for (let k = 0; k < 3; k++) this.lamps.setColorAt(ap.lampIdx + k, c.set(cols[k]));
+        for (let k = 0; k < ap.lampN; k++) this.lamps.setColorAt(ap.lampIdx + k, c.set(cols[k % 3]));
+        this._dirty = true;
       }
-    if (this.lamps.instanceColor) this.lamps.instanceColor.needsUpdate = true;
+    if (this._dirty && this.lamps.instanceColor) { this.lamps.instanceColor.needsUpdate = true; this._dirty = false; }
   }
 }
 
@@ -355,10 +636,12 @@ export class Traffic {
       if (!c.turn && ctx.tramSignals) gap = Math.min(gap, ctx.tramSignals.carGap(c, g));
       if (!c.turn) {
         const to = g.to;
-        if (to.signal) {
-          const st = this.lights.lightFor(to, c.edge);
-          const dist = g.s1 - c.s;
-          if (dist > 0.5 && (st === 'R' || (st === 'Y' && dist > c.v * 1.2))) gap = Math.min(gap, dist - 1.5);
+        const sl = this.lights.stopOn(c.edge, to);
+        if (sl) {
+          // muso (2,1 m davanti al centro dell'auto) alla linea d'arresto, anche prima dell'arco che entra nell'incrocio
+          const ap = sl.ap, st = this.lights.stateOf(ap.node.signal, ap.phase);
+          const dist = c.edge.len - sl.t - c.s - 2.3;
+          if (dist > -0.3 && (st === 'R' || (st === 'Y' && dist > c.v * 1.2))) gap = Math.min(gap, dist + 1.2); // IDM: ci si ferma 2 m prima
         }
       }
       // IDM
