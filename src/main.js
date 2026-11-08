@@ -15,6 +15,7 @@ import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
 import { initNews } from './game/news.js';
 import { Greetings } from './game/greetings.js';
 import { TouchControls, isTouchDevice } from './game/touch.js';
+import { liveryPreviews } from './game/liveryPreview.js';
 
 const $ = (id) => document.getElementById(id);
 const capture = (event, properties) => {
@@ -533,8 +534,21 @@ function hourTag(t) {
   return h < 7 ? ' 🌅 alba' : h < 9.3 ? ' 🚸 ora di punta' : h < 17 ? ' ☀️' : h < 19.5 ? ' 🚦 punta serale' : h < 20.5 ? ' 🌇 tramonto' : ' 🌙 notte';
 }
 
+// anteprime dei bus nel menu: per la linea 10 si vede lo snodato. Si disegnano dopo il primo frame del menu
+let liveryT = 0;
+function refreshLiveryPreviews() {
+  if ($('livery-box').hidden) return;
+  const art = ARTICULATED_LINES.has(settings.line.id) && !settings.line.tram;
+  clearTimeout(liveryT);
+  liveryT = setTimeout(() => {
+    const btns = [...document.querySelectorAll('#livery button')];
+    const imgs = liveryPreviews(btns.map((b) => b.dataset.l), art);
+    for (const b of btns) b.querySelector('img').src = imgs[b.dataset.l];
+  }, 30);
+}
 function refreshMenu() {
   const L = settings.line;
+  refreshLiveryPreviews();
   document.querySelectorAll('.line-card').forEach((el) => el.classList.toggle('sel', el.dataset.id === L.id));
   // direzioni principali (andata / ritorno) e tutte le varianti di percorso
   const [ia, ib] = L.pair;

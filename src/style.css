@@ -150,6 +150,13 @@ button.link { background: none; border: 0; color: #90a4ae; text-decoration: unde
 .seg.col { flex-direction: column; }
 .seg.col button { text-align: left; font-size: 13px; }
 .seg button:disabled { opacity: .35; cursor: default; }
+/* scelta dell'autobus: solo anteprime, il nome è nel suggerimento */
+#livery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+#livery button { padding: 2px; aspect-ratio: 32 / 15; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.08); cursor: pointer; }
+#livery button img { display: block; width: 100%; height: 100%; object-fit: contain; }
+#livery button img:not([src]) { visibility: hidden; }
+#livery button:hover { border-color: rgba(255,179,0,.5); }
+#livery button.sel { background: rgba(255,179,0,.16); border-color: #ffb300; }
 #route-variant { margin-top: 6px; font-size: 13px; }
 #line-list { max-height: 440px; overflow: auto; padding-right: 4px; }
 button.primary:disabled { filter: grayscale(1); opacity: .5; cursor: default; }
