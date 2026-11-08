@@ -15,7 +15,17 @@ export const BUS = {
     { z0: -4.4, z1: -3.2 }, // posteriore
   ],
 };
+// snodato da 18 m: motrice (fino a -3.8) + rimorchio agganciato alla ralla in z = -4.4 (coordinate della motrice).
+// Le coordinate del rimorchio hanno origine nella ralla: soffietto tra +0.6 e -0.6, coda a -7.6, asse a -5.2.
+export const ART = { joint: -4.4, frontEnd: -3.8, trailerFront: -0.6, trailerRear: -7.6, trailerAxle: -5.2, maxAngle: 0.87,
+  doors: [
+    { z0: 4.25, z1: 5.45, u: 0 },
+    { z0: 0.2, z1: 1.4, u: 0 },
+    { z0: -2.0, z1: -0.8, u: 1 },
+    { z0: -4.3, z1: -3.1, u: 1 },
+  ] };
 const WB = BUS.frontAxle - BUS.rearAxle;
+const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const HW = BUS.width / 2;
 
 const GEARS = [3.43, 2.01, 1.42, 1.0, 0.83, 0.59];
@@ -42,7 +52,8 @@ export class Bus {
     this.gear = 1; this.dir = 1; // 1 = D, -1 = R
     this.rpm = IDLE; this.shiftTimer = 0; this.powerKw = 0;
     this.parking = true;
-    this.doorOpen = [0, 0, 0];
+    this.articulated = !!lineInfo.articulated;
+    this.ht = 0; this.tax = 0; this.taz = 0; // rimorchio: direzione e posizione dell'asse
     this.doorTarget = 0;
     this.kneel = 0; this.kneelTarget = 0;
     this.indicator = 0; // -1 sx, 1 dx, 2 emergenza
@@ -54,7 +65,8 @@ export class Bus {
     this.passengers = 0;
     this.wheelSpin = 0;
     this.blink = 0;
-    this.circles = [-4.9, -2.45, 0, 2.45, 4.9];
+    this.circles = this.articulated ? [-2.55, -0.3, 1.95, 4.2, 4.9] : [-4.9, -2.45, 0, 2.45, 4.9];
+    this.tCircles = [-1.0, -3.3, -5.6, -6.3]; // rimorchio
     this.lastCollision = 0;
     this.buildModel(lineInfo);
   }
@@ -66,7 +78,8 @@ export class Bus {
     // livree ispirate ai bus urbani di Padova: moderna elettrica (argento, tetto blu, verde lime), storica (arancio e bianco)
     // e APS Mobilità (bianco sotto, fascia finestre e porte nere, tetto e fascia alta rossi, clima bianco sul tetto);
     // elettrica blu (bianco argento, tetto e fascia alta blu, porte rosse, filetti blu e giallo in basso)
-    // e Busitalia elettrica (bianco, fascia alta e filetti verde lime, onda verde sulla fiancata).
+    // Busitalia elettrica (bianco, fascia alta e filetti verde lime, onda verde sulla fiancata)
+    // e Busitalia Veneto (argento, fascia alta e tetto blu, filetti blu e giallo: quella degli snodati della linea 10).
     // Campi facoltativi: belt (filetto sotto i finestrini), roofBand (fascia sotto il tetto), accent2 (secondo filetto basso),
     // glass (vetri scuri), logo (scritta sulla fascia alta), wave (decorazione a onda), electric.
     const LIV = {
@@ -74,15 +87,21 @@ export class Bus {
       storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, accent: 0x5a5f66, roof: 0xe0e0dc, label: '', fleet: String(800 + ((lineInfo.id.charCodeAt(0) * 3) % 90)) },
       aps: { lower: 0xf4f4f2, upper: 0xd42430, stripe: 0x141517, door: 0x141517, accent: 0x141517, roof: 0xf0f0ee, label: '', fleet: String(600 + ((lineInfo.id.charCodeAt(0) * 5) % 60)),
         glass: 0x0c0d0f, logo: { text: 'APS mobilità', y: 2.84, z: 2.6, bg: '#d42430', fg: '#ffffff' } },
-      blu: { lower: 0xe4e7ec, upper: 0x2a44c4, stripe: 0x2a44c4, belt: 0x141517, door: 0xc22a30, accent: 0x2a44c4, accent2: 0xf2c200, roof: 0x2a44c4, electric: true, paintDoors: true,
+      blu: { lower: 0xe4e7ec, upper: 0x2a44c4, stripe: 0x2a44c4, belt: 0x141517, door: 0xc22a30, accent: 0x2a44c4, accent2: 0xf2c200, roof: 0x2a44c4, electric: true, twoDoors: true, doorColors: [0x3aa845, 0xc22a30],
         glass: 0x0c0d0f, label: 'ELETTRICO', labelFg: '#2a44c4', fleet: String(80 + ((lineInfo.id.charCodeAt(0) * 3) % 20)) },
       busitalia: { lower: 0xf3f3f0, upper: 0xa9cf2c, stripe: 0xa9cf2c, belt: 0xa9cf2c, roofBand: 0x141517, door: 0x24272b, accent: 0xa9cf2c, roof: 0xeeeeea, electric: true,
         glass: 0x0c0d0f, label: 'BUSITALIA', labelFg: '#4a7d1a', fleet: '7' + String((lineInfo.id.charCodeAt(0) * 11) % 100).padStart(2, '0'),
         logo: { text: '100% Elettrico  |  Zero Emissioni', y: 2.84, z: 0.5, w: 4.2, bg: '#a9cf2c', fg: '#ffffff' }, wave: '#a9cf2c' },
+      veneto: { lower: 0xc7cbd2, upper: 0x2c3fbf, stripe: 0x2c3fbf, belt: 0x23262c, roofBand: 0x2c3fbf, door: 0x2a2d33, accent: 0x2c3fbf, accent2: 0xf2c200, roof: 0x3550d6, electric: true,
+        glass: 0x0b0c10, label: 'BUSITALIA', labelFg: '#1d2f8f', fleet: '9' + String((lineInfo.id.charCodeAt(0) * 7) % 100).padStart(2, '0'),
+        logo: { text: 'BUSITALIA VENETO', y: 2.84, z: 2.4, w: 2.4, bg: '#2c3fbf', fg: '#ffffff' } },
     };
     const liv = LIV[lineInfo.livery] || LIV.moderna;
     this.livery = lineInfo.livery || 'moderna';
     this.electric = !!liv.electric;
+    // porte: u = 0 motrice, 1 rimorchio. Alcune livree hanno solo anteriore (salita) e centrale (discesa)
+    this.doors = this.articulated ? ART.doors : BUS.doors.slice(0, liv.twoDoors ? 2 : 3).map((d) => ({ ...d, u: 0 }));
+    this.doorOpen = this.doors.map(() => 0);
     const paint = lam(liv.upper);
     const lower = lam(liv.lower);
     const doorPaint = lam(liv.door);
@@ -100,60 +119,96 @@ export class Bus {
     };
     const L2 = BUS.length / 2;
     const Y0 = 0.32, YB = 1.12, YW = 2.62, YT = 3.05;
-    // intervalli lungo z esclusi (passaruota, porte)
-    const arches = [BUS.frontAxle, BUS.rearAxle].map((a) => [a - 0.62, a + 0.62]);
-    const pieces = (excl) => {
-      const segs = [];
-      let z = -L2 + 0.05;
-      const ex = [...excl].sort((a, b) => a[0] - b[0]);
-      for (const [a, b] of ex) { if (a > z) segs.push([z, a]); z = Math.max(z, b); }
-      if (z < L2 - 0.05) segs.push([z, L2 - 0.05]);
-      return segs;
+    const art = this.articulated;
+    // sezioni della carrozzeria: motrice ed eventuale rimorchio
+    this.trailer = null; this.tBody = null; this.bellows = null;
+    const units = [{ P: B, G: this.group, zMin: art ? ART.frontEnd : -L2, zMax: L2, axles: [BUS.frontAxle, BUS.rearAxle] }];
+    if (art) {
+      this.trailer = new THREE.Group();
+      this.trailer.position.z = ART.joint;
+      this.tBody = new THREE.Group();
+      this.trailer.add(this.tBody);
+      this.group.add(this.trailer);
+      units.push({ P: this.tBody, G: this.trailer, zMin: ART.trailerRear, zMax: ART.trailerFront, axles: [ART.trailerAxle] });
+    }
+    units.forEach((u, k) => { u.doors = this.doors.filter((d) => d.u === k); u.front = k === 0; u.rear = k === units.length - 1; });
+    this.units = units;
+    const glassMat = new THREE.MeshLambertMaterial({ color: liv.glass ?? 0x1d2a33, transparent: true, opacity: liv.glass ? 0.7 : 0.55 });
+    const beltMat = liv.belt != null ? lam(liv.belt) : stripe;
+    const roofMat = lam(liv.roof);
+    const floorMat = lam(0x4b4f55);
+    const shell = (u) => {
+      const P = u.P, len = u.zMax - u.zMin, zc = (u.zMax + u.zMin) / 2;
+      // intervalli lungo z esclusi (passaruota, porte)
+      const arches = u.axles.map((a) => [a - 0.62, a + 0.62]);
+      const pieces = (excl) => {
+        const segs = [];
+        let z = u.zMin + 0.05;
+        const ex = [...excl].sort((a, b) => a[0] - b[0]);
+        for (const [a, b] of ex) { if (a > z) segs.push([z, a]); z = Math.max(z, b); }
+        if (z < u.zMax - 0.05) segs.push([z, u.zMax - 0.05]);
+        return segs;
+      };
+      const doorEx = u.doors.map((d) => [d.z0, d.z1]);
+      for (const side of [1, -1]) {
+        const x = side * (HW - 0.03);
+        const excl = side < 0 ? [...arches, ...doorEx] : arches;
+        // fascia bassa (0.95 - YB) continua tranne porte
+        for (const [a, b] of pieces(side < 0 ? doorEx : [])) box(0.06, YB - 0.9, b - a, lower, x, (YB + 0.9) / 2, (a + b) / 2, P);
+        // gonna (Y0-0.9) esclusi passaruota e porte
+        for (const [a, b] of pieces(excl)) box(0.06, 0.9 - Y0, b - a, lower, x, (0.9 + Y0) / 2, (a + b) / 2, P);
+        // striscia colorata
+        for (const [a, b] of pieces(side < 0 ? doorEx : [])) box(0.02, 0.16, b - a, beltMat, x + side * 0.03, 1.0, (a + b) / 2, P).castShadow = false;
+        // fascia finestre: montanti e vetri
+        for (const [a, b] of pieces(side < 0 ? doorEx : [])) {
+          const g = new THREE.Mesh(new THREE.PlaneGeometry(b - a, YW - YB), glassMat);
+          g.position.set(x + side * 0.035, (YW + YB) / 2, (a + b) / 2);
+          g.rotation.y = side * Math.PI / 2;
+          P.add(g);
+          // montanti ogni ~1.5 m
+          const n = Math.max(1, Math.round((b - a) / 1.55));
+          for (let k = 0; k <= n; k++) if (a + ((b - a) * k) / n < u.zMax - 0.3) box(0.08, YW - YB, 0.1, dark, x, (YW + YB) / 2, a + ((b - a) * k) / n, P);
+        }
+        // sopra le porte
+        if (side < 0) for (const d of u.doors) box(0.06, YT - YW + 0.1, d.z1 - d.z0, paint, x, (YW + YT) / 2 - 0.05, (d.z0 + d.z1) / 2, P);
+      }
+      // tetto
+      box(BUS.width, YT - YW, len - 0.1, paint, 0, (YW + YT) / 2, zc, P);
+      if (this.electric) {
+        // carenatura con le batterie sul tetto
+        const p0 = u.zMin + 0.6, p1 = u.zMax - (u.front ? 1.8 : 0.3);
+        box(2.2, 0.5, p1 - p0, roofMat, 0, YT + 0.25, (p0 + p1) / 2, P);
+        if (u.front) box(2.0, 0.35, 1.2, roofMat, 0, YT + 0.17, u.zMax - 1.4, P);
+        const band = lam(liv.roofBand ?? liv.stripe);
+        for (const sd of [1, -1]) box(0.02, 0.18, len - 0.6, band, sd * (HW + 0.01), YW - 0.12, zc, P).castShadow = false; // fascia sotto il tetto
+        for (const sd of [1, -1]) box(0.02, 0.12, len - 0.4, lam(liv.accent), sd * (HW + 0.01), Y0 + 0.1, zc, P).castShadow = false;
+        if (liv.accent2 != null) for (const sd of [1, -1]) box(0.02, 0.05, len - 0.4, lam(liv.accent2), sd * (HW + 0.012), Y0 + 0.2, zc, P).castShadow = false;
+      } else {
+        const big = this.livery === 'aps';
+        if (u.front) box(big ? 1.9 : 1.6, big ? 0.36 : 0.32, big ? 3.2 : 2.8, roofMat, 0, YT + (big ? 0.18 : 0.16), big ? 1.6 : 0.8, P); // climatizzatore
+        else box(1.6, 0.32, 2.4, roofMat, 0, YT + 0.16, zc + 0.6, P);
+        if (u.rear) box(1.4, 0.25, 1.6, lam(big ? 0xc9ccd0 : liv.roof), 0, YT + 0.12, u.zMin + 1.4, P);
+      }
+      // pavimento
+      box(BUS.width - 0.1, 0.08, len - 0.1, floorMat, 0, Y0 + 0.04, zc, P);
+      // ombra a terra
+      const sh = new THREE.Mesh(new THREE.PlaneGeometry(BUS.width + 0.4, len + 0.4), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -12 }));
+      sh.rotation.x = -Math.PI / 2;
+      sh.position.set(0, 0.02, zc);
+      u.G.add(sh);
     };
-    const doorEx = BUS.doors.map((d) => [d.z0, d.z1]);
-    for (const side of [1, -1]) {
-      const x = side * (HW - 0.03);
-      const excl = side < 0 ? [...arches, ...doorEx] : arches;
-      // fascia bassa (0.95 - YB) continua tranne porte
-      for (const [a, b] of pieces(side < 0 ? doorEx : [])) box(0.06, YB - 0.9, b - a, lower, x, (YB + 0.9) / 2, (a + b) / 2);
-      // gonna (Y0-0.9) esclusi passaruota e porte
-      for (const [a, b] of pieces(excl)) box(0.06, 0.9 - Y0, b - a, lower, x, (0.9 + Y0) / 2, (a + b) / 2);
-      // striscia colorata
-      for (const [a, b] of pieces(side < 0 ? doorEx : [])) {
-        const s = box(0.02, 0.16, b - a, liv.belt != null ? lam(liv.belt) : stripe, x + side * 0.03, 1.0, (a + b) / 2);
-        s.castShadow = false;
-      }
-      // fascia finestre: montanti e vetri
-      const glassMat = new THREE.MeshLambertMaterial({ color: liv.glass ?? 0x1d2a33, transparent: true, opacity: liv.glass ? 0.7 : 0.55 });
-      for (const [a, b] of pieces(side < 0 ? doorEx : [])) {
-        const g = new THREE.Mesh(new THREE.PlaneGeometry(b - a, YW - YB), glassMat);
-        g.position.set(x + side * 0.035, (YW + YB) / 2, (a + b) / 2);
-        g.rotation.y = side * Math.PI / 2;
-        B.add(g);
-        // montanti ogni ~1.5 m
-        const n = Math.max(1, Math.round((b - a) / 1.55));
-        for (let k = 0; k <= n; k++) if (a + ((b - a) * k) / n < L2 - 0.3) box(0.08, YW - YB, 0.1, dark, x, (YW + YB) / 2, a + ((b - a) * k) / n);
-      }
-      // sopra le porte
-      if (side < 0) for (const d of BUS.doors) box(0.06, YT - YW + 0.1, d.z1 - d.z0, paint, x, (YW + YT) / 2 - 0.05, (d.z0 + d.z1) / 2);
+    units.forEach(shell);
+    if (art) {
+      // soffietto e piattaforma girevole tra motrice e rimorchio (ruota di metà dell'angolo di snodo)
+      this.bellows = new THREE.Group();
+      this.bellows.position.z = ART.joint;
+      B.add(this.bellows);
+      const bm = [lam(0x2b2d31), lam(0x3a3d42)];
+      for (let i = 0; i < 6; i++) box(BUS.width - 0.12, YT - Y0 - 0.1, 0.2, bm[i % 2], 0, (YT + Y0) / 2, -0.5 + i * 0.2, this.bellows);
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.06, 28), lam(0x55595f));
+      plate.position.y = Y0 + 0.11;
+      this.bellows.add(plate);
     }
-    // tetto
-    box(BUS.width, YT - YW, BUS.length - 0.1, paint, 0, (YW + YT) / 2, 0);
-    if (this.electric) {
-      // carenatura blu con le batterie sul tetto
-      box(2.2, 0.5, 9.2, lam(liv.roof), 0, YT + 0.25, -0.4);
-      box(2.0, 0.35, 1.2, lam(liv.roof), 0, YT + 0.17, 4.6);
-      const band = lam(liv.roofBand ?? liv.stripe);
-      for (const sd of [1, -1]) box(0.02, 0.18, BUS.length - 0.6, band, sd * (HW + 0.01), YW - 0.12, 0).castShadow = false; // fascia sotto il tetto
-      for (const sd of [1, -1]) box(0.02, 0.12, BUS.length - 0.4, lam(liv.accent), sd * (HW + 0.01), Y0 + 0.1, 0).castShadow = false;
-      if (liv.accent2 != null) for (const sd of [1, -1]) box(0.02, 0.05, BUS.length - 0.4, lam(liv.accent2), sd * (HW + 0.012), Y0 + 0.2, 0).castShadow = false;
-    } else {
-      const big = this.livery === 'aps';
-      box(big ? 1.9 : 1.6, big ? 0.36 : 0.32, big ? 3.2 : 2.8, lam(liv.roof), 0, YT + (big ? 0.18 : 0.16), big ? 1.6 : 0.8); // climatizzatore
-      box(1.4, 0.25, 1.6, lam(big ? 0xc9ccd0 : liv.roof), 0, YT + 0.12, -4.6);
-    }
-    // pavimento
-    box(BUS.width - 0.1, 0.08, BUS.length - 0.1, lam(0x4b4f55), 0, Y0 + 0.04, 0);
     // frontale
     box(BUS.width, 0.62, 0.12, lower, 0, Y0 + 0.31, L2 - 0.06);
     box(BUS.width + 0.04, 0.25, 0.2, dark, 0, Y0 + 0.1, L2); // paraurti
@@ -171,17 +226,18 @@ export class Bus {
     ledS.position.set(-HW - 0.02, 2.35, 3.0);
     ledS.rotation.y = -Math.PI / 2;
     B.add(ledS);
+    const RU = units[units.length - 1], RP = RU.P, RZ = RU.zMin; // coda (motrice o rimorchio)
     const ledR = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.26), new THREE.MeshBasicMaterial({ map: labelTexture(lineInfo.id, { w: 128, h: 64, bg: '#080808', fg: '#ffa31a', font: 'bold 52px Courier New' }) }));
-    ledR.position.set(0, 2.75, -L2 - 0.012);
+    ledR.position.set(0, 2.75, RZ - 0.012);
     ledR.rotation.y = Math.PI;
-    B.add(ledR);
+    RP.add(ledR);
     // retro
-    box(BUS.width, YT - Y0, 0.1, lower, 0, (YT + Y0) / 2 - 0.3, -L2 + 0.05).scale.set(1, 0.72, 1);
-    box(BUS.width + 0.04, 0.25, 0.2, dark, 0, Y0 + 0.1, -L2);
+    box(BUS.width, YT - Y0, 0.1, lower, 0, (YT + Y0) / 2 - 0.3, RZ + 0.05, RP).scale.set(1, 0.72, 1);
+    box(BUS.width + 0.04, 0.25, 0.2, dark, 0, Y0 + 0.1, RZ, RP);
     const rw = new THREE.Mesh(new THREE.PlaneGeometry(BUS.width - 0.4, 0.8), new THREE.MeshLambertMaterial({ color: 0x1d2a33, transparent: true, opacity: 0.6 }));
-    rw.position.set(0, 2.35, -L2 - 0.01);
+    rw.position.set(0, 2.35, RZ - 0.01);
     rw.rotation.y = Math.PI;
-    B.add(rw);
+    RP.add(rw);
     // logo laterale "PADOVA" (APS: logo bianco sulla fascia rossa alta e numero di matricola in basso)
     for (const side of [1, -1]) {
       const hex = '#' + new THREE.Color(liv.lower).getHexString();
@@ -238,11 +294,11 @@ export class Bus {
     for (const s of [1, -1]) {
       box(0.42, 0.16, 0.06, this.headMat, s * 0.9, 0.78, L2 + 0.01);
       box(0.18, 0.12, 0.06, s > 0 ? this.indMatL : this.indMatR, s * 1.17, 0.78, L2 + 0.01);
-      box(0.16, 0.4, 0.06, this.tailMat, s * 1.08, 1.0, -L2 - 0.01);
-      box(0.16, 0.2, 0.06, this.brakeMat, s * 1.08, 1.45, -L2 - 0.01);
-      box(0.16, 0.16, 0.06, s > 0 ? this.indMatL : this.indMatR, s * 1.08, 1.7, -L2 - 0.01);
+      box(0.16, 0.4, 0.06, this.tailMat, s * 1.08, 1.0, RZ - 0.01, RP);
+      box(0.16, 0.2, 0.06, this.brakeMat, s * 1.08, 1.45, RZ - 0.01, RP);
+      box(0.16, 0.16, 0.06, s > 0 ? this.indMatL : this.indMatR, s * 1.08, 1.7, RZ - 0.01, RP);
       box(0.06, 0.08, 0.2, s > 0 ? this.indMatL : this.indMatR, s * (HW + 0.02), 1.05, 3.9);
-      box(0.12, 0.1, 0.06, this.revMat, s * 0.7, 0.55, -L2 - 0.01);
+      box(0.12, 0.1, 0.06, this.revMat, s * 0.7, 0.55, RZ - 0.01, RP);
     }
     // fari reali
     this.headLight = new THREE.SpotLight(0xfff1d0, 0, 90, 0.5, 0.5, 1.2);
@@ -259,8 +315,10 @@ export class Bus {
     // porte (due ante ciascuna)
     this.doorLeaves = [];
     const doorGlass = new THREE.MeshLambertMaterial({ color: 0x2a3a44, transparent: true, opacity: 0.45 });
-    for (const d of BUS.doors) {
+    for (const [di, d] of this.doors.entries()) {
       const w = (d.z1 - d.z0) / 2;
+      const frameMat = liv.doorColors ? lam(liv.doorColors[Math.min(di, liv.doorColors.length - 1)]) : dark;
+      const DP = units[d.u].P;
       const leaves = [];
       for (const k of [0, 1]) {
         const g = new THREE.Group();
@@ -280,10 +338,10 @@ export class Bus {
           new THREE.BoxGeometry(0.05, 2.28, 0.07).translate(0, Y0 + 1.16, -(w - 0.02) / 2 + 0.035),
           new THREE.BoxGeometry(0.05, 2.28, 0.07).translate(0, Y0 + 1.16, (w - 0.02) / 2 - 0.035),
         ]);
-        const frm = new THREE.Mesh(fr, liv.paintDoors ? doorPaint : dark);
+        const frm = new THREE.Mesh(fr, frameMat);
         g.add(frm, gl);
         g.userData = { z: zc, dir: k ? 1 : -1, w };
-        B.add(g);
+        DP.add(g);
         leaves.push(g);
       }
       this.doorLeaves.push(leaves);
@@ -295,7 +353,7 @@ export class Bus {
     tire.rotateZ(Math.PI / 2);
     const rim = new THREE.CylinderGeometry(0.3, 0.3, 0.36, 12);
     rim.rotateZ(Math.PI / 2);
-    for (const az of [BUS.frontAxle, BUS.rearAxle])
+    for (const [az, G] of [[BUS.frontAxle, this.group], [BUS.rearAxle, this.group], ...(art ? [[ART.trailerAxle, this.trailer]] : [])])
       for (const s of [1, -1]) {
         const pivot = new THREE.Group();
         pivot.position.set(s * (HW - 0.2), BUS.wheelR, az);
@@ -303,17 +361,13 @@ export class Bus {
         spin.add(new THREE.Mesh(tire, lam(0x151515)), new THREE.Mesh(rim, lam(0x9aa0a6)));
         spin.children.forEach((c) => (c.castShadow = true));
         pivot.add(spin);
-        this.group.add(pivot);
-        this.wheels.push({ pivot, spin, front: az > 0 });
+        G.add(pivot);
+        this.wheels.push({ pivot, spin, front: G === this.group && az > 0 });
       }
-    // ombra a terra
-    const sh = new THREE.Mesh(new THREE.PlaneGeometry(BUS.width + 0.4, BUS.length + 0.4), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -12 }));
-    sh.rotation.x = -Math.PI / 2;
-    sh.position.y = 0.02;
-    this.group.add(sh);
 
     // ---------- interni ----------
     const seatMat = lam(0x24476b);
+    this.cabinLightMat = new THREE.MeshLambertMaterial({ color: 0xcccccc, emissive: 0xf0f4ff, emissiveIntensity: 0.3 });
     const poleMat = lam(0xf2c200);
     const seatG = mergeGeometries([
       new THREE.BoxGeometry(0.45, 0.1, 0.45).translate(0, 0.45, 0),
@@ -321,33 +375,37 @@ export class Bus {
       new THREE.BoxGeometry(0.06, 0.45, 0.06).translate(0, 0.22, 0),
     ]);
     this.seats = [];
-    const seatRows = [];
-    for (let z = 2.9; z > -5.4; z -= 0.8) {
-      if (z < BUS.doors[1].z1 + 0.3 && z > BUS.doors[1].z0 - 0.5) continue; // area carrozzine
-      if (z < BUS.doors[2].z1 + 0.2 && z > BUS.doors[2].z0 - 0.3) { seatRows.push([z, [0.72, 0.27]]); continue; }
-      seatRows.push([z, [0.72, 0.27, -0.72, -0.27]]);
-    }
-    const seatInst = new THREE.InstancedMesh(seatG, seatMat, seatRows.reduce((a, r) => a + r[1].length, 0));
-    let si = 0;
     const M = new THREE.Matrix4();
-    for (const [z, xs] of seatRows)
-      for (const x of xs) {
-        M.makeTranslation(x, Y0 + 0.08, z);
-        seatInst.setMatrixAt(si++, M);
-        this.seats.push({ x, z, y: Y0 + 0.08 });
+    for (const [k, u] of units.entries()) {
+      const seatRows = [];
+      const mid = this.doors[1];
+      for (let z = u.front ? 2.9 : u.zMax - 0.6; z > u.zMin + 0.6; z -= 0.8) {
+        if (u.doors.includes(mid) && z < mid.z1 + 0.3 && z > mid.z0 - 0.5) continue; // area carrozzine
+        if (u.doors.some((d) => d !== mid && d !== this.doors[0] && z < d.z1 + 0.2 && z > d.z0 - 0.3)) { seatRows.push([z, [0.72, 0.27]]); continue; }
+        seatRows.push([z, [0.72, 0.27, -0.72, -0.27]]);
       }
-    B.add(seatInst);
-    // corrimano e pali
-    const poles = [];
-    for (let z = 3.6; z > -5.5; z -= 1.6) for (const x of [0.45, -0.45]) poles.push(new THREE.CylinderGeometry(0.02, 0.02, 2.3, 6).translate(x, Y0 + 1.15, z));
-    for (const x of [0.45, -0.45]) poles.push(new THREE.CylinderGeometry(0.02, 0.02, 9.6, 6).rotateX(Math.PI / 2).translate(x, YW - 0.15, -0.9));
-    B.add(new THREE.Mesh(mergeGeometries(poles), poleMat));
-    // luci soffitto
-    this.cabinLightMat = new THREE.MeshLambertMaterial({ color: 0xcccccc, emissive: 0xf0f4ff, emissiveIntensity: 0.3 });
-    box(0.25, 0.03, 9.5, this.cabinLightMat, 0.6, YW - 0.02, -0.6).castShadow = false;
-    box(0.25, 0.03, 9.5, this.cabinLightMat, -0.6, YW - 0.02, -0.6).castShadow = false;
-    // pareti interne sotto finestrino (grigio chiaro)
-    for (const s of [1, -1]) box(0.02, 0.75, BUS.length - 0.4, interiorWall, s * (HW - 0.08), Y0 + 0.45, 0).castShadow = false;
+      const seatInst = new THREE.InstancedMesh(seatG, seatMat, seatRows.reduce((a, r) => a + r[1].length, 0));
+      let si = 0;
+      for (const [z, xs] of seatRows)
+        for (const x of xs) {
+          M.makeTranslation(x, Y0 + 0.08, z);
+          seatInst.setMatrixAt(si++, M);
+          this.seats.push({ x, z, y: Y0 + 0.08, u: k });
+        }
+      u.P.add(seatInst);
+      // corrimano e pali
+      const top = u.front ? 3.6 : u.zMax - 0.5;
+      const poles = [];
+      for (let z = top; z > u.zMin + 0.5; z -= 1.6) for (const x of [0.45, -0.45]) poles.push(new THREE.CylinderGeometry(0.02, 0.02, 2.3, 6).translate(x, Y0 + 1.15, z));
+      const r0 = u.zMin + 0.3, r1 = u.front ? 3.9 : u.zMax - 0.3;
+      for (const x of [0.45, -0.45]) poles.push(new THREE.CylinderGeometry(0.02, 0.02, r1 - r0, 6).rotateX(Math.PI / 2).translate(x, YW - 0.15, (r0 + r1) / 2));
+      u.P.add(new THREE.Mesh(mergeGeometries(poles), poleMat));
+      // luci soffitto
+      const c0 = u.zMin + 0.65, c1 = u.front ? 4.15 : u.zMax - 0.3;
+      for (const x of [0.6, -0.6]) box(0.25, 0.03, c1 - c0, this.cabinLightMat, x, YW - 0.02, (c0 + c1) / 2, u.P).castShadow = false;
+      // pareti interne sotto finestrino (grigio chiaro)
+      for (const sd of [1, -1]) box(0.02, 0.75, u.zMax - u.zMin - 0.4, interiorWall, sd * (HW - 0.08), Y0 + 0.45, (u.zMax + u.zMin) / 2, u.P).castShadow = false;
+    }
     // display interno "prossima fermata"
     this.innerCanvas = document.createElement('canvas');
     this.innerCanvas.width = 512; this.innerCanvas.height = 96;
@@ -432,14 +490,19 @@ export class Bus {
       new THREE.CylinderGeometry(0.17, 0.2, 0.7, 8).translate(0, 0.35, 0),
       new THREE.SphereGeometry(0.12, 10, 8).translate(0, 0.86, 0),
     ]);
-    this.paxMesh = new THREE.InstancedMesh(pg, new THREE.MeshLambertMaterial({ color: 0xffffff }), 110);
-    this.paxMesh.count = 0;
-    this.paxMesh.frustumCulled = false;
-    B.add(this.paxMesh);
+    const paxMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    this.paxMeshes = units.map((u) => {
+      const m = new THREE.InstancedMesh(pg, paxMat, 110);
+      m.count = 0;
+      m.frustumCulled = false;
+      u.P.add(m);
+      return m;
+    });
     this.paxColors = [];
     this.standSpots = [];
-    for (let z = 3.4; z > -5.0; z -= 0.55) for (const x of [0.05, -0.15]) this.standSpots.push({ x: x + (Math.random() - 0.5) * 0.2, z });
-    for (const d of BUS.doors.slice(1)) for (let k = 0; k < 6; k++) this.standSpots.push({ x: -0.6 - Math.random() * 0.3, z: d.z0 + Math.random() * 1.2 });
+    for (const [k, u] of units.entries())
+      for (let z = u.front ? 3.4 : u.zMax - 0.4; z > u.zMin + 1.0; z -= 0.55) for (const x of [0.05, -0.15]) this.standSpots.push({ x: x + (Math.random() - 0.5) * 0.2, z, u: k });
+    for (const d of this.doors.slice(1)) for (let k = 0; k < 6; k++) this.standSpots.push({ x: -0.6 - Math.random() * 0.3, z: d.z0 + Math.random() * 1.2, u: d.u });
   }
 
   setInnerDisplay(text) {
@@ -457,31 +520,41 @@ export class Bus {
   }
 
   setPassengerVisuals(n) {
-    const M = new THREE.Matrix4(), col = new THREE.Color();
+    const M = new THREE.Matrix4();
     const seatCount = this.seats.length;
     const show = Math.min(n, 110);
+    const counts = this.paxMeshes.map(() => 0);
     while (this.paxColors.length < show) this.paxColors.push(new THREE.Color().setHSL(Math.random(), 0.4 + Math.random() * 0.3, 0.3 + Math.random() * 0.35));
     for (let i = 0; i < show; i++) {
+      let u;
       if (i < seatCount) {
         const s = this.seats[i];
         M.makeScale(1, 0.85, 1);
         M.setPosition(s.x, s.y + 0.18, s.z + 0.05);
+        u = s.u;
       } else {
         const p = this.standSpots[(i - seatCount) % this.standSpots.length];
         M.makeScale(1, 1.55, 1);
         M.setPosition(p.x, 0.4, p.z);
+        u = p.u;
       }
-      this.paxMesh.setMatrixAt(i, M);
-      this.paxMesh.setColorAt(i, this.paxColors[i]);
+      const mesh = this.paxMeshes[u];
+      mesh.setMatrixAt(counts[u], M);
+      mesh.setColorAt(counts[u]++, this.paxColors[i]);
     }
-    this.paxMesh.count = show;
-    this.paxMesh.instanceMatrix.needsUpdate = true;
-    if (this.paxMesh.instanceColor) this.paxMesh.instanceColor.needsUpdate = true;
+    this.paxMeshes.forEach((mesh, u) => {
+      mesh.count = counts[u];
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    });
   }
 
   place(x, z, h) {
     this.x = x; this.z = z; this.h = h;
     this.v = 0;
+    this.ht = h;
+    const a = this.toWorldT(0, ART.trailerAxle);
+    this.tax = a.x; this.taz = a.z;
     this.syncTransform();
   }
 
@@ -490,11 +563,61 @@ export class Bus {
   get speedKmh() { return Math.abs(this.v) * 3.6; }
   get doorsClosed() { return this.doorOpen.every((d) => d < 0.01); }
   get doorsAnyOpen() { return this.doorOpen.some((d) => d > 0.05); }
-  get mass() { return 11800 + this.passengers * 72; }
+  get mass() { return (this.articulated ? 17800 : 11800) + this.passengers * 72; }
+  // angolo di snodo (rimorchio rispetto alla motrice, 0 se rigido)
+  get artAngle() { return this.articulated ? wrapA(this.ht - this.h) : 0; }
   // punto (locale) -> mondo
   toWorld(lx, lz) {
     const c = Math.cos(this.h), s = Math.sin(this.h);
     return { x: this.x + lx * c + lz * s, z: this.z - lx * s + lz * c };
+  }
+  // punto nelle coordinate del rimorchio (origine nella ralla) -> mondo; senza snodo coincide con la motrice
+  toWorldT(lx, lz) {
+    if (!this.articulated) return this.toWorld(lx, lz);
+    const j = this.toWorld(0, ART.joint);
+    const c = Math.cos(this.ht), s = Math.sin(this.ht);
+    return { x: j.x + lx * c + lz * s, z: j.z - lx * s + lz * c };
+  }
+  // punto davanti a una porta (lx < 0 = lato porte)
+  doorWorld(i, lx) {
+    const d = this.doors[i], zc = (d.z0 + d.z1) / 2;
+    return d.u ? this.toWorldT(lx, zc) : this.toWorld(lx, zc);
+  }
+  // punto a "dist" metri dietro la coda del bus
+  behind(lx, dist) {
+    return this.articulated ? this.toWorldT(lx, ART.trailerRear - dist) : this.toWorld(lx, -BUS.length / 2 - dist);
+  }
+  // cerchi di ingombro in coordinate mondo (lz: posizione lungo la motrice, approssimata per il rimorchio)
+  worldCircles(out = []) {
+    out.length = 0;
+    for (const lz of this.circles) { const p = this.toWorld(0, lz); out.push({ x: p.x, z: p.z, lz }); }
+    if (this.articulated) for (const tz of this.tCircles) { const p = this.toWorldT(0, tz); out.push({ x: p.x, z: p.z, lz: ART.joint + tz }); }
+    return out;
+  }
+  // ruote per il controllo del cordolo: rear 0 anteriori, 1 posteriori, 2 rimorchio
+  wheelProbes() {
+    const out = [];
+    for (const s of [1.05, -1.05]) {
+      out.push({ ...this.toWorld(s, BUS.frontAxle), rear: 0 });
+      out.push({ ...this.toWorld(s, BUS.rearAxle), rear: 1 });
+      if (this.articulated) out.push({ ...this.toWorldT(s, ART.trailerAxle), rear: 2 });
+    }
+    return out;
+  }
+  // il rimorchio segue la ralla: l'asse viene trascinato verso il punto di aggancio
+  updateTrailer() {
+    if (!this.articulated) return;
+    const j = this.toWorld(0, ART.joint);
+    const L = -ART.trailerAxle;
+    let dx = j.x - this.tax, dz = j.z - this.taz;
+    if (dx * dx + dz * dz < 1e-6) { dx = Math.sin(this.ht); dz = Math.cos(this.ht); }
+    const ht = Math.atan2(dx, dz);
+    // in retromarcia lo smorzatore anti-sbandamento frena la rotazione dello snodo (come sugli snodati a spinta)
+    this.ht = this.v < 0 ? this.ht + wrapA(ht - this.ht) * 0.3 : ht;
+    const a = wrapA(this.ht - this.h);
+    if (Math.abs(a) > ART.maxAngle) this.ht = this.h + Math.sign(a) * ART.maxAngle;
+    this.tax = j.x - Math.sin(this.ht) * L;
+    this.taz = j.z - Math.cos(this.ht) * L;
   }
 
   // ---------------- fisica ----------------
@@ -590,12 +713,14 @@ export class Bus {
     this.aLat += (this.v * yaw - this.aLat) * Math.min(1, dt * 8);
     this.odometer += Math.abs(this.v) * dt;
 
+    this.updateTrailer();
     // collisioni
     const hit = this.collide(world);
     this.lastHit = hit;
+    if (hit) this.updateTrailer();
 
     // porte
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < this.doors.length; i++) {
       const target = this.doorTarget;
       const d = target - this.doorOpen[i];
       this.doorOpen[i] += Math.sign(d) * Math.min(Math.abs(d), dt / (target > 0 ? 1.1 : 1.4));
@@ -608,11 +733,11 @@ export class Bus {
 
   collide(world) {
     let hit = null;
-    const c = Math.cos(this.h), s = Math.sin(this.h);
+    const circ = this._circ || (this._circ = []);
     for (let iter = 0; iter < 2; iter++) {
       let pushX = 0, pushZ = 0;
-      for (const lz of this.circles) {
-        const cx = this.x + lz * s, cz = this.z + lz * c;
+      for (const pc of this.worldCircles(circ)) {
+        const cx = pc.x, cz = pc.z, lz = pc.lz;
         const obs = world.obstaclesNear(cx, cz, 4);
         for (const b of obs) {
           if (b.dead) continue;
@@ -675,8 +800,16 @@ export class Bus {
       if (w.front) w.pivot.rotation.y = this.steer;
     }
     this.wheelRot.rotation.z = -this.steer * 14;
+    if (this.articulated) {
+      const art = this.artAngle;
+      this.trailer.rotation.y = art;
+      this.bellows.rotation.y = art / 2;
+      this.tBody.rotation.x = this.pitch * 0.6;
+      this.tBody.rotation.z = this.body.rotation.z;
+      this.tBody.position.y = this.body.position.y;
+    }
     // porte: le ante escono e scorrono
-    BUS.doors.forEach((d, i) => {
+    this.doors.forEach((d, i) => {
       const o = this.doorOpen[i];
       for (const g of this.doorLeaves[i]) {
         const u = g.userData;

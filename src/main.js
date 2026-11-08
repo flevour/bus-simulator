@@ -200,6 +200,8 @@ window.addEventListener('pointerup', endLook);
 window.addEventListener('pointercancel', endLook);
 canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
+// linee servite con l'autobus snodato da 18 m
+const ARTICULATED_LINES = new Set(['10']);
 const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'clear', mode: 'service', livery: 'moderna' };
 let indAccum = 0, lastBlinkOn = false, wasMoving = false;
 let showHelp = false;
@@ -316,7 +318,7 @@ function placeBusAt(x, z, h) {
   bus.place(x, z, h);
   city.ensureTiles(x, z, 600);
   bus.steerIn = 0; bus.steer = 0; bus.throttle = 0; bus.brake = 0;
-  bus.doorTarget = 0; bus.doorOpen = [0, 0, 0]; bus.parking = true; bus.dir = 1;
+  bus.doorTarget = 0; bus.doorOpen = bus.doors.map(() => 0); bus.parking = true; bus.dir = 1;
   chase.init = false;
   // via le auto troppo vicine
   for (let i = traffic.cars.length - 1; i >= 0; i--) { const c = traffic.cars[i]; if (Math.hypot(c.x - x, c.z - z) < 35) traffic.cars.splice(i, 1); }
@@ -509,8 +511,16 @@ function refreshStops() {
 }
 
 function buildMenu() {
-  $('line-list').innerHTML = LINES.map((L) => `<div class="line-card" data-id="${L.id}" tabindex="0"><div class="badge" style="background:${L.color}">${L.id}</div><div><div class="nm">${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive</div></div></div>`).join('');
-  const pick = (el) => { settings.line = LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0]; refreshMenu(); };
+  $('line-list').innerHTML = LINES.map((L) => `<div class="line-card" data-id="${L.id}" tabindex="0"><div class="badge" style="background:${L.color}">${L.id}</div><div><div class="nm">${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive${ARTICULATED_LINES.has(L.id) ? ' · 🚌 snodato 18 m' : ''}</div></div></div>`).join('');
+  const pick = (el) => {
+    settings.line = LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0];
+    // lo snodato della linea 10 parte con la livrea Busitalia Veneto (si può comunque cambiare)
+    if (ARTICULATED_LINES.has(settings.line.id)) {
+      settings.livery = 'veneto';
+      document.querySelectorAll('#livery button').forEach((b) => b.classList.toggle('sel', b.dataset.l === 'veneto'));
+    }
+    refreshMenu();
+  };
   document.querySelectorAll('.line-card').forEach((el) => { el.addEventListener('click', () => pick(el)); el.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(el); }); });
   const seg = (id, attr, fn) => document.querySelectorAll(`#${id} button`).forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll(`#${id} button`).forEach((x) => x.classList.remove('sel'));
@@ -577,7 +587,7 @@ function startMission(resume = null) {
   const L = settings.line;
   const V = curVariant();
   const destName = V.stops[V.stops.length - 1].name;
-  bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery });
+  bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery, articulated: ARTICULATED_LINES.has(L.id) });
   resetLook(false);
   bus.onShift = () => audio.shift();
   mission = new Mission({ scene, net, line: L, route: V, day: settings.variant, departure: settings.departure, depDur: settings.depDur, hud, audio, lights, city, free: settings.mode === 'free' });
@@ -755,12 +765,14 @@ function updateCamera(dt) {
   lookYaw += (lookTarget - lookYaw) * Math.min(1, dt * 5);
   bus.group.updateMatrixWorld(true);
   if (camMode === 0 || camMode === 2) {
-    const local = camMode === 0 ? V.set(0.62, 2.12, 4.8) : V.set(-0.2, 2.05, -5.2);
-    bus.body.localToWorld(local);
+    // visuale passeggeri: in fondo al bus (nel rimorchio, se snodato)
+    const cabin = camMode === 0 || !bus.tBody ? bus.body : bus.tBody;
+    const local = camMode === 0 ? V.set(0.62, 2.12, 4.8) : V.set(-0.2, 2.05, bus.tBody ? -6.8 : -5.2);
+    cabin.localToWorld(local);
     // piccola vibrazione del motore
     const vib = (Math.random() - 0.5) * 0.004 * (0.3 + bus.throttle);
     camera.position.copy(local).add(V2.set(0, vib, 0));
-    bus.body.getWorldQuaternion(Qt);
+    cabin.getWorldQuaternion(Qt);
     Ex.set((camMode === 0 ? -0.13 : -0.12) + mouseLook.pitch, Math.PI + lookYaw + mouseLook.yaw, 0, 'YXZ');
     Qy.setFromEuler(Ex);
     camera.quaternion.copy(Qt).multiply(Qy);
@@ -770,7 +782,7 @@ function updateCamera(dt) {
     // la visuale esterna gira attorno al bus trascinando il mouse (o con Z/X)
     const oy = mouseLook.yaw + lookYaw * 1.4, cy = Math.cos(oy), sy = Math.sin(oy);
     const f = V2.set(bus.fx * cy + bus.fz * sy, 0, -bus.fx * sy + bus.fz * cy);
-    const target = V.set(bus.x, bus.elev || 0, bus.z).addScaledVector(f, -17).add(new THREE.Vector3(0, 6.5 + mouseLook.pitch * 10, 0));
+    const target = V.set(bus.x, bus.elev || 0, bus.z).addScaledVector(f, bus.articulated ? -22 : -17).add(new THREE.Vector3(0, 6.5 + mouseLook.pitch * 10, 0));
     if (!chase.init) { chase.pos.copy(target); chase.init = true; }
     chase.pos.lerp(target, Math.min(1, dt * 3));
     camera.position.copy(chase.pos);
@@ -826,11 +838,12 @@ function step(dt) {
   // marciapiede: contano le ruote, non la carrozzeria che in curva sporge sopra il cordolo.
   // Le ruote posteriori tagliano le curve: più margine, e ancora di più a incroci, curve strette e rotonde.
   let kerb = false;
-  for (const [lx, lz, rear] of [[1.05, 3.3, 0], [-1.05, 3.3, 0], [1.05, -2.6, 1], [-1.05, -2.6, 1]]) {
-    const p = bus.toWorld(lx, lz);
+  // l'asse del rimorchio dello snodato taglia le curve ancora di più
+  for (const p of bus.wheelProbes()) {
+    const rear = p.rear;
     const ri = city.roadInfo(p.x, p.z);
     if (ri.off < 0.5 || ri.off > 6) continue;
-    const tol = rear ? 1.0 : 0.5;
+    const tol = [0.5, 1.0, 1.3][rear];
     if (ri.off > tol && (ri.off > tol + (rear ? 0.9 : 0.5) || !city.kerbAllowance(p.x, p.z))) kerb = true;
   }
   // un tocco di un istante non conta
