@@ -6,6 +6,7 @@ import { allStopPlacements } from '../game/routes.js';
 import { LINES } from '../data/padova.js';
 import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
+import { applyTerrain } from './terrain.js';
 
 export const Y_ROAD = 0.14;
 export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie rosse e rotaia centrale)
@@ -294,6 +295,7 @@ export function makeBuildingMaterial(uniforms, merged = false) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += lit * mix(vec3(1.0, 0.78, 0.42), vec3(0.75, 0.85, 1.0), step(0.85, shade)) * 0.85;
         totalEmissiveRadiance += arch * uNight * vec3(0.32, 0.22, 0.12);`);
+    applyTerrain(sh);
   };
   return m;
 }
@@ -1355,7 +1357,18 @@ export class City {
 
   // ---- fermate (scenografia per tutte le linee) ----
   buildStops() {
-    this.stopPlacements = allStopPlacements(this.net, (x, z) => this.snapToRoad(x, z), (x, z) => this.clearance(x, z, ['road', 'tram'], 20));
+    // con la pianta delle strade: il bordo vero dell'asfalto, attraversando la carreggiata dall'asse
+    const kerb = this.asphRings ? (cx, cz, rx, rz, hw) => {
+      let seen = this.surfaceOff(cx, cz) < 0;
+      for (let o = 0.2; o <= hw + 8; o += 0.2) {
+        if (this.surfaceOff(cx + rx * o, cz + rz * o) < 0) seen = true;
+        else if (seen || o > hw) return o;
+      }
+      return null;
+    } : null;
+    // fuori da ogni carreggiata: con la pianta delle strade conta l'asfalto vero, non il nastro dell'arco
+    const clear = this.asphRings ? (x, z) => Math.min(this.surfaceOff(x, z), this.clearance(x, z, ['tram'], 20) + 0.3) : (x, z) => this.clearance(x, z, ['road', 'tram'], 20);
+    this.stopPlacements = allStopPlacements(this.net, (x, z) => this.snapToRoad(x, z), clear, kerb);
     const glass = new THREE.MeshLambertMaterial({ color: 0x9fc4d6, transparent: true, opacity: 0.35 });
     const frame = new THREE.MeshLambertMaterial({ color: 0x2b3a4a });
     const yellow = new THREE.MeshLambertMaterial({ color: 0xf2c200 });
