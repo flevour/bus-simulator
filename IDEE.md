@@ -10,6 +10,12 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    - i semafori del tram coordinati con quelli stradali agli incroci semaforizzati;
    - interni più curati;
    - pedoni che attraversano la sede e si fermano;
+   - [ ] **turni del tram e deposito della Guizza**, come per il bus (vedi "Fatto"): la prima corsa del turno esce dal
+     deposito, l'ultima ci rientra; al capolinea cambio cabina (B) e corsa successiva senza tornare al menu. Il
+     deposito è accanto al capolinea della Guizza: in OSM ci sono i binari di servizio (`railway=tram`,
+     `service=yard`, Busitalia Veneto, verso 45.3670, 11.8756), alcuni dentro la rimessa (`tunnel=building_passage`),
+     e sono già nell'export `data/osm-padova-tram.json` (35 binari di servizio), da vedere se il gioco li usa. Il
+     binario tronco "che entra in un edificio" è forse l'ingresso della rimessa: da verificare;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
 2. [ ] **Nuovo piazzale della stazione** con gli anelli (ovali concentrici) del tram, per le linee future
    **SIR2, SIR3, SIR4, SIR5**. La geometria del tram dovrà gestire più linee, gli anelli e i deviatoi, non una sola
@@ -36,7 +42,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
      - [ ] passeggeri anche sugli altri autobus;
      - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
-       deposito (oggi dietro la sbarra c'è prato), il tram (deposito della Guizza) e i turni che cambiano linea;
+       deposito (oggi dietro la sbarra c'è prato), il tram (deposito della Guizza, punto 1) e i turni che cambiano
+       linea;
      - [ ] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
 
 ## Mappa e dati
@@ -89,8 +96,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [ ] Controllore e validazione dei biglietti.
 - [ ] Annunci di fermata più naturali; display interno con le prossime fermate.
 - [ ] Affollamento per fascia oraria e per fermata più realistico.
-- [~] Turni di lavoro: più corse di fila con sosta al capolinea (fatto per il bus, vedi "Fatto"); restano il tram, la
-  pausa dell'autista e il cambio turno.
+- [~] Turni di lavoro: più corse di fila con sosta al capolinea (fatto per il bus, vedi "Fatto"); restano il tram
+  (punto 1), la pausa dell'autista e il cambio turno.
 
 ## Meteo e ambiente
 
