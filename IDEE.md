@@ -26,13 +26,17 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    - mezzeria continua dove `overtaking=no`;
    - frecce a terra da `turn:lanes`;
    - corsie preferenziali gialle con la scritta BUS da `lanes:psv` / `bus:lanes`.
-5. [~] **Segnalazioni dal gioco del 6 novembre** (modulo Richieste, linea 42 in Via Madonna della Salute):
+5. [~] **Segnalazioni dal gioco** (modulo Richieste; il 6 novembre dalla linea 42 in Via Madonna della Salute):
    - [x] fermate date per saltate prima di averle attraversate (vedi "Fatto");
    - [ ] semafori in mezzo alla strada e orientati male; zone pedonali; profilo altimetrico delle strade;
    - [ ] navigatore sulle linee 22, 13, 25 (in parte era lo stesso salto della posizione, da ricontrollare);
    - [ ] zona Plebiscito: strade e fermate;
    - [ ] cavalcavia da migliorare e posizione dei fiumi;
-   - [ ] mappa più grande.
+   - [ ] mappa più grande;
+   - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
+     - [ ] passeggeri anche sugli altri autobus;
+     - [ ] deposito per le prime corse del mattino e le ultime della sera, che partono dalla stazione o ci finiscono;
+     - [ ] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
 
 ## Mappa e dati
 
