@@ -51,11 +51,22 @@ FOCUS_BORDI = [
     (11.8850, 45.3875, 11.8905, 45.3905),  # 11 e 11B verso Due Palazzi
 ]
 FOCUS_BOXES = [FOCUS, FOCUS_SUD] + FOCUS_BORDI
-WATER_W = {'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
+# l'area fino ai capolinea veri (corsia capolinea, docs/ESTENSIONE_LINEE.md): corridoi di celle da CELLA metri attorno ai
+# percorsi completi delle linee, più una cella di margine, invece di rettangoli più grandi. Tram: le linee di
+# data/tram-linee-nuove.json (il SIR3 fino a Voltabarozzo, con il deposito accanto al capolinea)
+CELLA = 250.0
+CORRIDOI_TRAM = ('SIR3',)
+TRAM_NUOVE = __file__.rsplit('/', 2)[0] + '/data/tram-linee-nuove.json'
+FOCUS_CELLE = set()  # (ix, iz) delle celle, riempito da main()
+WATER_W ={'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
 
 
 def xz(lat, lon):
     return ((lon - ORIGIN_LON) * M_LON, -(lat - ORIGIN_LAT) * M_LAT)
+
+
+def latlon(x, z):
+    return ORIGIN_LAT - z / M_LAT, ORIGIN_LON + x / M_LON
 
 
 def rdp(pts, eps, keep=None):
@@ -236,7 +247,32 @@ def speed_of(tags):
 
 
 def in_focus(lat, lon, m=0.0):
-    return any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES)
+    """Il punto è nell'area di gioco, allargata di m gradi: nei riquadri o in una cella dei corridoi."""
+    if any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES):
+        return True
+    x, z = xz(lat, lon)
+    mx, mz, C = m * M_LON, m * M_LAT, CELLA
+    i, j = math.floor(x / C), math.floor(z / C)
+    return any((i + a, j + b) in FOCUS_CELLE and (i + a) * C - mx <= x <= (i + a + 1) * C + mx and (j + b) * C - mz <= z <= (j + b + 1) * C + mz
+               for a in (-1, 0, 1) for b in (-1, 0, 1))
+
+
+def corridor_cells(paths, cell=CELLA, ring=1):
+    """Celle (ix, iz) da cell metri toccate dai percorsi (liste di punti lat/lon), più ring celle tutto attorno."""
+    hit = set()
+    for pts in paths:
+        q = [xz(la, lo) for la, lo in pts]
+        for (ax, az), (bx, bz) in zip(q, q[1:]):
+            n = max(1, int(math.hypot(bx - ax, bz - az) // (cell / 4)))
+            for i in range(n + 1):
+                hit.add((math.floor((ax + (bx - ax) * i / n) / cell), math.floor((az + (bz - az) * i / n) / cell)))
+    return {(i + a, j + b) for i, j in hit for a in range(-ring, ring + 1) for b in range(-ring, ring + 1)}
+
+
+def tram_corridors(path=TRAM_NUOVE, ids=CORRIDOI_TRAM):
+    """Celle dei corridoi attorno ai binari delle linee del tram nuove (tutti e due i versi)."""
+    linee = json.load(open(path, encoding='utf-8'))['linee']
+    return corridor_cells([v['percorso'] for l in linee if l['id'] in ids for v in l['versi']])
 
 
 STOP_WORDS = {'via', 'viale', 'corso', 'piazza', 'piazzale', 'p', 'zza', 'largo', 'fr', 'ang', 'incr', 'angolo', 'di', 'del',
@@ -372,6 +408,18 @@ def cut_path(seq, nodes, stops, margin=60.0):
         while b < S and L < margin and not uturn(b):
             L += seg(b)
             b += 1
+    # niente tornante in testa o in coda: un tratto corto prima di una svolta stretta, con la fermata non più vicina a
+    # lui che al nodo della svolta, è l'aggancio che entra da una via laterale dove il percorso vero arriva da fuori
+    # (la 24 a Volta fr. 24 arriva da ovest per Via Volta, fuori dall'area; l'aggancio partiva da Via Rosa Luxemburg)
+    def sharp(j):
+        (ax, az), (bx, bz), (cx, cz) = nodes[seq[j - 1]], nodes[seq[j]], nodes[seq[j + 1]]
+        u, w = (bx - ax, bz - az), (cx - bx, cz - bz)
+        return u[0] * w[0] + u[1] * w[1] < math.cos(math.radians(75)) * math.hypot(*u) * math.hypot(*w)
+    near_node = lambda p, j: math.dist(p, nodes[seq[j]])
+    while b - a > 2 and seg(a) < 25 and sharp(a + 1) and d(stops[0], a) >= near_node(stops[0], a + 1) - 5:
+        a += 1
+    while b - a > 2 and seg(b - 1) < 25 and sharp(b - 1) and d(stops[-1], b - 1) >= near_node(stops[-1], b - 1) - 5:
+        b -= 1
     return seq[a:b + 1]
 
 
@@ -411,6 +459,26 @@ def gtfs_cover(gt, step=4.0, reach=6.0, share=0.7):
     return covered
 
 
+def gtfs_links(els, ways, covered, share=0.7):
+    """Vie fuori dall'area che collegano due vie dell'area (tra due loro nodi in comune) dove passa un tracciato GTFS dei
+    bus: al bordo dell'area il map matching altrimenti salta il pezzo o fa un giro (la 3 in Via Bembo verso Lion girava
+    per 2,7 km di vie residenziali; con Via del Cristo nel corridoio del SIR3 saltava 282 m)."""
+    have = {w['id'] for w in ways}
+    on = {n for w in ways if w.get('tags', {}).get('highway') in DRIVE for n in w['nodes']}
+    out = []
+    for e in els:
+        if e['type'] != 'way' or 'geometry' not in e or e['id'] in have or e.get('tags', {}).get('highway') not in DRIVE:
+            continue
+        k = [i for i, n in enumerate(e['nodes']) if n in on]
+        if len(k) < 2:
+            continue
+        pts = [xz(g['lat'], g['lon']) for g in e['geometry'][k[0]:k[-1] + 1]]
+        L = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
+        if L >= 5 and sum(math.dist(pts[q], pts[q + 1]) for i, j in covered(pts) for q in range(i, j)) > share * L:
+            out.append(e)
+    return out
+
+
 def measured_piece(meas, s):
     """Tratto misurato (data/misure-strade.json) della via che contiene il punto a s metri dall'inizio."""
     for p in meas or ():
@@ -423,12 +491,17 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     # larghezze misurate di carreggiate e marciapiedi (scripts/measure_streets.py), per via OSM
     measures = json.load(open(measures_path, encoding='utf-8'))['vie'] if measures_path else {}
+    FOCUS_CELLE.update(tram_corridors())
+    print(f'corridoi fino ai capolinea: {len(FOCUS_CELLE)} celle da {CELLA:.0f} m ({len(FOCUS_CELLE) * CELLA * CELLA / 1e6:.1f} km²)')
     # solo gli elementi che toccano l'area di gioco (con un piccolo margine)
-    ways = [e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
+    ways =[e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
 
     # ---------------- strade ----------------
     gt = build_gtfs.load(gtfs_dir)
     on_gtfs = gtfs_cover(gt)
+    links = gtfs_links(els, ways, on_gtfs)
+    print('vie fuori dall\'area tra due vie dell\'area, dove passa un bus:', ', '.join(f"{w['tags'].get('name', '')} ({w['id']})" for w in links))
+    ways += links
     roads, gtfs_ways = [], set()
     for w in ways:
         t = w.get('tags', {})
@@ -844,8 +917,13 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     if not bus_ok(k, u):
                         continue
                     side, t = right_of(stop, u, v)
-                    if 0 < side < 4 and 0.05 < t < 1.0 and d_cur > side + 4 and (best is None or side < best[0]):
-                        best = (side, u, v)
+                    # golfi di fermata (strade di servizio a senso unico accanto alla carreggiata: Piovese Park, sotto
+                    # la tangenziale): la palina può stare fino a 5 m oltre il bordo del golfo o, approssimata, dentro
+                    hw = edges[k][3] / 2
+                    lane = 0 < side < 4 and d_cur > side + 4
+                    bay = edges[k][2] == 7 and edges[k][5] & 3 and -hw < side < hw + 5 and d_cur > abs(side) + 3
+                    if (lane or bay) and 0.05 < t < 1.0 and (best is None or abs(side) < best[0]):
+                        best = (abs(side), u, v)
             if not best:
                 continue
             _s, u, v = best
@@ -1027,7 +1105,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     # ---------------- edifici ----------------
     buildings = []
     if overture_path:
-        buildings = overture_buildings(overture_path)
+        # l'export Overture copre riquadri interi: si tengono gli edifici dell'area di gioco, come le strade
+        buildings = [b for b in overture_buildings(overture_path) if in_focus(*latlon(sum(b[3][0::2]) / (len(b[3]) // 2), sum(b[3][1::2]) / (len(b[3]) // 2)), 0.0015)]
+        print('edifici Overture nell\'area di gioco:', len(buildings))
         if volumes_path:
             print('edifici con l\'altezza misurata (DBGT):', measured_heights(buildings, volumes_path))
     for w in ([] if overture_path else ways):
