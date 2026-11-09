@@ -89,7 +89,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [~] Edifici: altezze misurate dal DBGT della Regione (fatto, vedi "Fatto"); restano tetti più vari e i portici veri
   (nel DBGT ci sono i volumi sopra i portici, con l'altezza libera).
 - [ ] Piste ciclabili e ciclisti; sottopassi pedonali.
-- [ ] Ampliare l'area di gioco oltre Centro e Arcella (linee oggi tagliate "tratto in città").
+- [ ] Ampliare l'area di gioco oltre Centro e Arcella (linee oggi tagliate "tratto in città"): linee complete fino ai
+  capolinea veri, con un corridoio di 130 km² attorno ai tracciati. Valutazione e piano in
+  [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md).
 
 ## Veicoli e guida
 
@@ -131,7 +133,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Tecnica
 
-- [ ] Bundle da 4,7 MB: dati JSON separati e compressi, caricamento progressivo.
+- [ ] Bundle da 13,5 MB (12,4 MB di mappa): rete sempre caricata, strade ed edifici a riquadri scaricati vicino al bus.
+  Piano nella sezione 4 di [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md).
 - [ ] Prestazioni su mobile.
 - [ ] Test automatici in CI (build + giro dell'autopilota in headless).
 

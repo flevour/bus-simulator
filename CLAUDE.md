@@ -23,6 +23,7 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   data del giorno, nello stesso commit della modifica.
 * `docs/prompt-tram.md`: specifica del tram SIR1 guidabile.
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
+* `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,
   verifiche, tappe). Le misure di riferimento della sezione 3 valgono dove mancano i dati.
 

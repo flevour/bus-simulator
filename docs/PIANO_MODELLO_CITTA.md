@@ -417,10 +417,14 @@ alberate e aiuole, 6,6 km²) e alberi veri (13.171 da filari, aree alberate e bo
 6. **Rapporto di verifica nel build** (6.1) e test in CI: pali e paline sul marciapiede, edifici fuori dalle strade,
    marciapiedi stretti, percorsi dei bus liberi, a ogni rigenerazione della mappa; un giro dell'autopilota in headless.
 7. **Peso della mappa**: 11 MB di JSON nel bundle. Dati separati e compressi, caricati a riquadri; meno alberi e
-   chiome più semplici lontano dalla telecamera (telefoni).
+   chiome più semplici lontano dalla telecamera (telefoni). Piano del caricamento per aree di strade ed edifici in
+   [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md) (sezione 4).
 8. **Verifica visiva con l'ortofoto AGEA 2024** (M5) in modalità Esplorazione, caricata dal browser di chi gioca.
 9. **M6–M7**: catasto e Mapillary (serve un token) per i semafori mancanti; richiesta di accesso civico al Comune
    per il gemello digitale del 2023 e i piani semaforici.
+10. **Linee complete fino ai capolinea veri**: corridoio di 130 km² attorno ai tracciati GTFS al posto dei
+    rettangoli di `FOCUS_BOXES`, dopo il caricamento per aree (punto 7). Valutazione, dati e tappe in
+    [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md).
 
 Passi della conflazione della CTRN (M2):
 
