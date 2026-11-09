@@ -19,7 +19,7 @@ import json
 import math
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import build_gtfs  # noqa: E402  (riusa lettura GTFS e conversioni)
@@ -211,6 +211,13 @@ def turn_tags(t, ow):
     return f, b
 
 
+def bus_both_ways(tags):
+    """Senso unico per le auto ma con i bus ammessi anche in controsenso (corsia bus in controsenso)."""
+    return (tags.get('oneway:bus') == 'no' or tags.get('oneway:psv') == 'no' or 'opposite' in tags.get('busway', '')
+            or 'opposite' in tags.get('busway:left', '') or 'opposite' in tags.get('busway:right', '')
+            or tags.get('lanes:bus:backward', '0') not in ('0', '') or tags.get('lanes:psv:backward', '0') not in ('0', ''))
+
+
 def speed_of(tags):
     m = re.match(r'(\d+)', tags.get('maxspeed', ''))
     return int(m.group(1)) if m else 0
@@ -220,24 +227,54 @@ def in_focus(lat, lon, m=0.0):
     return any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES)
 
 
-def snap_stops_to_osm(stops, osm, reach=25.0):
-    """Fermate GTFS sulla palina OSM (highway=bus_stop, data/osm-fermate.json) più vicina entro reach metri, una palina
-    per fermata (prima le coppie più vicine: le due direzioni non si scambiano la palina). Aggiunge in fondo pensilina
-    e panchina di OSM (1, 0 o None). Restituisce quante fermate sono state spostate."""
+STOP_WORDS = {'via', 'viale', 'corso', 'piazza', 'piazzale', 'p', 'zza', 'largo', 'fr', 'ang', 'incr', 'angolo', 'di', 'del',
+              'della', 'dei', 'de', 'da', 'e', 'f', 't'}
+
+
+def name_tokens(n):
+    """Parole di un nome di fermata, senza "via", "fr.", "ang." e simili (i numeri civici contano)."""
+    return {t for t in re.findall(r'[a-zà-ù]+|[0-9]+', (n or '').lower()) if t not in STOP_WORDS and len(t) > 1}
+
+
+def snap_stops_to_osm(stops, osm, reach=25.0, name_reach=50.0, min_sim=0.6):
+    """Fermate GTFS sulla palina OSM (highway=bus_stop, data/osm-fermate.json), una palina per fermata.
+    Prima le coppie con lo stesso nome (somiglianza pesata: "Giotto", comune a tutte le fermate della via, conta poco;
+    "Contarine" molto) entro name_reach metri, dalle più somiglianti; poi le altre fermate sulla palina più vicina entro
+    reach metri. Così "Giotto Contarine" va su "Via Giotto / Porte Contarine" e non sulla palina di "Giotto Centro
+    Strada", che è più vicina. Aggiunge in fondo pensilina e panchina di OSM (1, 0 o None). Restituisce quante fermate
+    sono state spostate."""
+    df = Counter()
+    for n in [s[2] for s in stops] + [o[2] for o in osm]:
+        df.update(name_tokens(n))
+    N = len(stops) + len(osm)
+
+    def w(t):
+        return math.log(N / df[t]) if df[t] else 1.0
+
+    def sim(a, b):
+        A, B = name_tokens(a), name_tokens(b)
+        if not A or not B:
+            return 0.0
+        return 2 * sum(w(t) for t in A & B) / (sum(map(w, A)) + sum(map(w, B)))
+
     C = 50
     grid = defaultdict(list)
     for j, o in enumerate(osm):
         grid[(int(o[0] // C), int(o[1] // C))].append(j)
-    pairs = []
+    near = []
     for i, s in enumerate(stops):
-        for gx in range(int((s[0] - reach) // C), int((s[0] + reach) // C) + 1):
-            for gz in range(int((s[1] - reach) // C), int((s[1] + reach) // C) + 1):
+        for gx in range(int((s[0] - name_reach) // C), int((s[0] + name_reach) // C) + 1):
+            for gz in range(int((s[1] - name_reach) // C), int((s[1] + name_reach) // C) + 1):
                 for j in grid.get((gx, gz), ()):
                     d = math.hypot(osm[j][0] - s[0], osm[j][1] - s[1])
-                    if d <= reach:
-                        pairs.append((d, i, j))
+                    if d <= name_reach:
+                        near.append((d, i, j, sim(s[2], osm[j][2])))
     used_s, used_o, moved = set(), set(), 0
-    for d, i, j in sorted(pairs):
+    by_name = [q for q in near if q[3] >= min_sim]
+    # senza parole in comune la palina vicina vale solo entro 15 m ("Ferrovia (Ex Catasto)", sulla strada a sud del
+    # piazzale, finiva sulla banchina "Piazzale Stazione" a 24,6 m)
+    by_dist = [q for q in near if q[0] <= reach and (q[3] > 0 or q[0] <= 15)]
+    for d, i, j, _sm in sorted(by_name, key=lambda q: (-round(q[3], 2), q[0])) + sorted(by_dist):
         if i in used_s or j in used_o:
             continue
         used_s.add(i)
@@ -248,6 +285,24 @@ def snap_stops_to_osm(stops, osm, reach=25.0):
             s.append('')
         s[4:] = [o[4], o[5]]
         moved += d > 0.5
+    return moved
+
+
+def onto_platforms(stops, platforms, reach=6.0):
+    """Fermate a pochi metri da una banchina dei bus (stazione: la palina OSM della Corsia 2 sta 4 m prima della punta
+    della banchina) portate sulla banchina, mezzo metro dentro: il bus si ferma accanto alla banchina, non prima."""
+    from shapely.geometry import Point, Polygon
+    from shapely.ops import nearest_points
+    polys = [Polygon([(f[i], f[i + 1]) for i in range(0, len(f), 2)]).buffer(0) for f in platforms if len(f) >= 6]
+    moved = 0
+    for s in stops:
+        p = Point(s[0], s[1])
+        d, g = min(((g.distance(p), g) for g in polys), key=lambda q: q[0], default=(1e9, None))
+        if 0 < d < reach:
+            inner = g.buffer(-0.5)
+            q = nearest_points(inner if not inner.is_empty else g, p)[0]
+            s[0], s[1] = round(q.x, 1), round(q.y, 1)
+            moved += 1
     return moved
 
 
@@ -327,7 +382,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     fixed.add(i)
         keep = rdp(pts, 1.2, fixed)
         ow = 1 if t.get('oneway') in ('yes', '1') or t.get('junction') == 'roundabout' else -1 if t.get('oneway') == '-1' else 0
-        flags = (1 if ow == 1 else 0) | (2 if ow == -1 else 0) | (4 if t.get('bridge') not in (None, 'no') else 0) | (8 if t.get('tunnel') not in (None, 'no') else 0) | (16 if t.get('junction') == 'roundabout' else 0) | (32 if psv_lane(t) else 0) | (sidewalk_sides(t) << 6)
+        flags = (1 if ow == 1 else 0) | (2 if ow == -1 else 0) | (4 if t.get('bridge') not in (None, 'no') else 0) | (8 if t.get('tunnel') not in (None, 'no') else 0) | (16 if t.get('junction') == 'roundabout' else 0) | (32 if psv_lane(t) else 0) | (sidewalk_sides(t) << 6) | (256 if ow and bus_both_ways(t) else 0)
         try:
             layer = int(t.get('layer', '0').split(';')[0])
         except ValueError:
@@ -376,9 +431,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         L = math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1])
         # le corsie riservate costano come una strada normale: sono fatte per i bus
         cost = L * (1.0 if cls <= 5 or flags & 32 else 1.6 if cls == 6 else 2.5 if cls == 7 else 3.5)
-        # sensi unici: contromano molto penalizzato (restano possibili le corsie bus in controsenso)
-        fwd_pen = 1.6 if flags & 2 else 1.0
-        back_pen = 1.6 if flags & 1 else 1.0
+        # sensi unici: contromano molto penalizzato (il tracciato GTFS può tagliare un piazzale: alla stazione si girava
+        # contromano); le corsie bus in controsenso (flag 256) non costano di più
+        fwd_pen = 6.0 if flags & 2 and not flags & 256 else 1.0
+        back_pen = 6.0 if flags & 1 and not flags & 256 else 1.0
         adj[a].append((b, cost * fwd_pen, k))
         adj[b].append((a, cost * back_pen, k))
 
@@ -546,11 +602,17 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             return seq
         return path[:-1] + seq if at_start else seq + path[1:]
 
+    edge_of = {}
+    for k, e in enumerate(edges):
+        edge_of[(e[0], e[1])] = edge_of[(e[1], e[0])] = k
+
     def bus_ok(k, frm):
         """Il bus può percorrere l'arco k partendo da frm (sensi unici rispettati, niente vie pedonali)."""
         a, b, cls, _w, _n, flags = edges[k][:6]
         if cls == 8:
             return False
+        if flags & 256:
+            return True
         if flags & 1:
             return frm == a
         if flags & 2:
@@ -565,6 +627,127 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         t = ((stop[0] - ax) * dx + (stop[1] - az) * dz) / l2
         tc = max(0.0, min(1.0, t))
         return math.hypot(stop[0] - ax - dx * tc, stop[1] - az - dz * tc), t
+
+    def bus_path(src, dst, max_len):
+        """Percorso più corto per il bus da src a dst rispettando i sensi unici (corsie bus in controsenso comprese),
+        entro max_len metri; None se non c'è."""
+        dist, prev, pq = {src: 0.0}, {}, [(0.0, src)]
+        while pq:
+            d, u = heapq.heappop(pq)
+            if u == dst:
+                break
+            if d > dist.get(u, 1e18) or d > max_len:
+                continue
+            for v2, _c, k in adj[u]:
+                if not bus_ok(k, u):
+                    continue
+                nd = d + math.hypot(nodes[v2][0] - nodes[u][0], nodes[v2][1] - nodes[u][1])
+                if nd < dist.get(v2, 1e18):
+                    dist[v2], prev[v2] = nd, u
+                    heapq.heappush(pq, (nd, v2))
+        if dst not in dist or dist[dst] > max_len:
+            return None
+        return path_nodes(prev, src, dst), dist[dst]
+
+    def right_of(stop, u, v):
+        """Distanza della fermata a destra del tratto u->v (negativa a sinistra) e posizione lungo il tratto (0-1)."""
+        (ax, az), (bx, bz) = nodes[u], nodes[v]
+        dx, dz = bx - ax, bz - az
+        L = math.hypot(dx, dz) or 1e-9
+        return ((stop[0] - ax) * -dz + (stop[1] - az) * dx) / L, ((stop[0] - ax) * dx + (stop[1] - az) * dz) / (L * L)
+
+    def terminal_lane(seq, stop, at_start, max_extra=600.0):
+        """Capolinea lontano dal percorso: il tracciato GTFS nei piazzali è approssimativo (alla stazione le corsie
+        sono tre, a senso unico, una accanto all'altra) e l'aggancio può finire sulla corsia sbagliata o sulla strada
+        accanto. Se la fermata non sta lungo gli ultimi (o primi) tratti ma accanto a un arco percorso nel suo verso con
+        la fermata a destra, si arriva (o si parte) da lì con il percorso legale più corto."""
+        span = seq[:5] if at_start else seq[-5:]
+        d_cur = min((seg_dist(stop, a, b)[0] for a, b in zip(span, span[1:])), default=1e9)
+        # anche se il percorso passa dalla fermata ma ci arriva (o riparte) contromano
+        if any(not bus_ok(edge_of[(a, b)], a) for a, b in zip(span, span[1:]) if (a, b) in edge_of):
+            d_cur = 1e9
+        best = None
+        for _d, k, _t in candidates(stop[0], stop[1], 9, 8):
+            a, b = edges[k][0], edges[k][1]
+            for u, v in ((a, b), (b, a)):
+                if not bus_ok(k, u):
+                    continue
+                side, t = right_of(stop, u, v)
+                if 0 < side < 8 and 0.05 < t < 1.0 and d_cur > side + 4 and (best is None or side < best[0]):
+                    best = (side, u, v)
+        if not best:
+            return seq
+        _s, u, v = best
+        plen = lambda p: sum(math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1]) for a, b in zip(p, p[1:]))
+        legal = lambda p: all((a, b) not in edge_of or bus_ok(edge_of[(a, b)], a) for a, b in zip(p, p[1:]))
+        out = None  # (percorso, lunghezza aggiunta meno quella tolta)
+        if at_start:
+            for j in range(min(len(seq), 8)):
+                if not legal(seq[j:j + 5]):
+                    continue  # il pezzo che resta deve essere percorribile (niente contromano subito dopo)
+                r = bus_path(v, seq[j], max_extra)
+                if r and u not in r[0] and (out is None or r[1] - plen(seq[:j + 1]) < out[1]):
+                    out = ([u] + r[0] + seq[j + 1:], r[1] - plen(seq[:j + 1]))
+        else:
+            for j in range(len(seq) - 1, max(-1, len(seq) - 9), -1):
+                if not legal(seq[max(0, j - 4):j + 1]):
+                    continue
+                r = bus_path(seq[j], u, max_extra)
+                if r and v not in r[0] and (out is None or r[1] - plen(seq[j:]) < out[1]):
+                    out = (seq[:j] + r[0] + [v], r[1] - plen(seq[j:]))
+        return out[0] if out else seq
+
+    def stop_lanes(seq, stops, max_extra=120.0):
+        """Fermate in mezzo al percorso accanto a una corsia parallela (stazione: le linee che passano e fermano alla
+        Corsia 3 facevano la corsia nord, a 7 m dalla banchina): se il percorso passa lontano dalla fermata e un arco
+        accanto, percorso nel suo verso, ha la fermata a destra, si passa da lì quando costa poco (le due corsie
+        finiscono nello stesso nodo)."""
+        plen = lambda p: sum(math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1]) for a, b in zip(p, p[1:]))
+        for stop in stops:
+            if len(seq) < 3:
+                break
+            dists = [seg_dist(stop, a, b)[0] for a, b in zip(seq, seq[1:])]
+            i = min(range(len(dists)), key=dists.__getitem__)
+            d_cur = dists[i]
+            best = None
+            for _d, k, _t in candidates(stop[0], stop[1], 9, 8):
+                a, b = edges[k][0], edges[k][1]
+                for u, v in ((a, b), (b, a)):
+                    if not bus_ok(k, u):
+                        continue
+                    side, t = right_of(stop, u, v)
+                    if 0 < side < 4 and 0.05 < t < 1.0 and d_cur > side + 4 and (best is None or side < best[0]):
+                        best = (side, u, v)
+            if not best:
+                continue
+            _s, u, v = best
+            out = None
+            for a_ in range(max(0, i - 6), i + 1):
+                r1 = bus_path(seq[a_], u, 400)
+                if not r1 or v in r1[0]:
+                    continue
+                for b_ in range(i + 1, min(len(seq), i + 8)):
+                    r2 = bus_path(v, seq[b_], 400)
+                    if not r2 or u in r2[0]:
+                        continue
+                    extra = r1[1] + plen([u, v]) + r2[1] - plen(seq[a_:b_ + 1])
+                    if extra < max_extra and (out is None or extra < out[1]):
+                        out = (seq[:a_] + r1[0] + r2[0] + seq[b_ + 1:], extra)
+            if out:
+                seq = out[0]
+        return seq
+
+    def drop_spurs(seq, pts):
+        """Toglie le andate e ritorno A-B-A in una via laterale (errori di aggancio del tracciato GTFS), se lì non c'è
+        una fermata (dentro l'arco, non all'incrocio A)."""
+        i = 0
+        while i < len(seq) - 2:
+            if seq[i] == seq[i + 2] and not any(d < 20 and 0.3 < t <= 1.05 for d, t in (seg_dist(p, seq[i], seq[i + 1]) for p in pts)):
+                del seq[i + 1:i + 3]
+                i = max(0, i - 2)
+            else:
+                i += 1
+        return seq
 
     def stop_edge(seq, stop, at_start, reach=12.0):
         """Capolinea: il tracciato GTFS può cominciare (o finire) al nodo vicino alla fermata invece che sul tratto dove
@@ -588,7 +771,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
     gt = build_gtfs.load(gtfs_dir)
     if osm_stops_path:
-        print('fermate spostate sulla palina OSM:', snap_stops_to_osm(gt['stops'], json.load(open(osm_stops_path, encoding='utf-8'))['fermate']))
+        osm_st = json.load(open(osm_stops_path, encoding='utf-8'))
+        print('fermate spostate sulla palina OSM:', snap_stops_to_osm(gt['stops'], osm_st['fermate']))
+        print('fermate portate sulla banchina:', onto_platforms(gt['stops'], osm_st.get('banchine') or []))
     lines_out = []
     failed = 0
     for line in gt['lines']:
@@ -607,6 +792,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             # e si comincia (o si finisce) sull'arco lungo cui sta la fermata del capolinea
             seq = stop_edge(seq, gt['stops'][v['stops'][0]], True)
             seq = stop_edge(seq, gt['stops'][v['stops'][-1]], False)
+            seq = terminal_lane(seq, gt['stops'][v['stops'][0]], True)
+            seq = terminal_lane(seq, gt['stops'][v['stops'][-1]], False)
+            seq = stop_lanes(seq, [gt['stops'][si] for si in v['stops'][1:-1]])
+            seq = drop_spurs(seq, [gt['stops'][si] for si in v['stops']])
             # controllo: lunghezza agganciata vs lunghezza del tracciato GTFS
             sp = [xz(la, lo) for la, lo in v['shape_pts']]
             Lg = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(sp, sp[1:]))
@@ -829,7 +1018,27 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         print('terreno:', tst)
     green = json.load(open(green_path, encoding='utf-8')) if green_path else None
     streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
-    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges, edge_walk, hfun, green, streets)
+    platforms = json.load(open(osm_stops_path, encoding='utf-8')).get('banchine') if osm_stops_path else None
+    if platforms:
+        # corsie a senso unico tra le banchine (stazione): larghe quanto lo spazio libero, una corsia sola (in OSM la
+        # corsia nord è larga 8,4 m e i bus si tenevano a destra, sopra la banchina)
+        from shapely.geometry import LineString as _LS, Polygon as _Poly
+        from shapely.ops import unary_union as _uu
+        Pl = _uu([_Poly([(f[i], f[i + 1]) for i in range(0, len(f), 2)]).buffer(0) for f in platforms if len(f) >= 6])
+        narrowed = 0
+        for k, e in enumerate(edges):
+            if not e[5] & 3:
+                continue
+            d = _LS([nodes[e[0]], nodes[e[1]]]).distance(Pl)
+            if d < e[3] / 2 - 0.3:
+                e[3] = round(max(3.4, 2 * d + 0.4), 1)
+                narrowed += 1
+                if k in edge_lanes:  # una corsia sola: niente righe divisorie
+                    lt = list(edge_lanes[k])
+                    lt[0], lt[1] = min(lt[0], 1), min(lt[1], 1)
+                    edge_lanes[k] = tuple(lt)
+        print('corsie ristrette tra le banchine:', narrowed)
+    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges, edge_walk, hfun, green, streets, platforms)
     print('pianta delle strade:', st)
 
     nodes_flat = []

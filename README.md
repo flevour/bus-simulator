@@ -107,10 +107,21 @@ uniscono non si incrociano.
   conoscono il cordolo vero (dalla palina piazzata 0,7 m oltre l'asfalto): il bus parte accostato lì, l'accostamento
   e i passeggeri in attesa si misurano da lì. Se la fermata del capolinea sta lungo l'arco che entra nel primo nodo
   (o esce dall'ultimo), quell'arco si aggiunge al percorso: a Largo Debussy e alla stazione la corsa parte dal punto
-  in cui il bus sta fermo, nel verso del tracciato, e arrivo e partenza hanno la stessa palina.
+  in cui il bus sta fermo, nel verso del tracciato, e arrivo e partenza hanno la stessa palina. Se invece la fermata
+  del capolinea non sta lungo il percorso ma accanto a un arco percorso nel suo verso, con la fermata a destra (le
+  corsie della stazione, a senso unico una accanto all'altra), si arriva o si parte da lì con il percorso legale più
+  corto (al massimo 600 m). Lo stesso per le fermate in mezzo al percorso, se la corsia giusta costa al massimo 120 m
+  in più (le linee che passano dalla stazione fermano alla Corsia 3 dalla corsia sud). Le andate e ritorno in una via
+  laterale (A-B-A, errori di aggancio) si tolgono se lì non c'è una fermata.
+* **Sensi unici**: nell'aggancio dei tracciati il contromano costa 6 volte la strada (era 1,6: i percorsi tagliavano
+  piazzali e sensi unici), tranne sulle corsie bus in controsenso (`oneway:bus=no`, `oneway:psv=no`,
+  `busway=opposite_lane`, `lanes:bus:backward`), che il gioco conosce (flag 256) anche per le corse fuori servizio.
 * **Paline OSM** (`data/osm-fermate.json`, da `scripts/osm_stops.py`): le fermate `highway=bus_stop` di OSM, dallo
-  strato Overture `base/infrastructure` che riporta i tag originali. Ogni fermata GTFS si sposta sulla palina OSM più
-  vicina entro 25 m (una palina per fermata); la pensilina e la panchina ci sono dove OSM le segna o non dice niente.
+  strato Overture `base/infrastructure` che riporta i tag originali. Ogni fermata GTFS va sulla palina con lo stesso
+  nome (somiglianza pesata sulle parole: "Giotto", comune a tutta la via, conta poco; "Contarine" molto) entro 50 m,
+  poi le altre sulla palina più vicina entro 25 m (15 m se i nomi non hanno parole in comune); una palina per
+  fermata. La pensilina e la panchina ci sono dove OSM le segna o non dice niente. Le banchine dei bus
+  (`highway=platform`, le corsie della stazione) sono aree lastricate e rialzate al posto delle isole del DBGT.
 * **Isole, verde e alberi del DBGT** (`data/dbgt-verde.json`, da `scripts/dbgt_green.py`): gli spartitraffico
   (`SPART`) diventano isole dove stanno dentro l'asfalto di oggi o tra due carreggiate, mai sulle corsie delle auto,
   sulle carreggiate e agli incroci dei bus o sulla sede del tram; prati, aree alberate e aiuole (`AR_VRD`) sono uno

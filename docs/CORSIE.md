@@ -108,6 +108,24 @@ piano del modello della città, prossimi passi 1).
     corsia nord alla corsia sud verso x = 190 per gli arrivi da est alla corsia 3; (4) la fermata Ex Catasto alla sua
     posizione GTFS sulla strada sud, non alla palina OSM dell'isola; (5) partenze della 14, della 6 e della 25 che
     comincino dalla fermata e non sulla strada sud.
+- Fatto il 9 novembre dalla sessione cloud sul checkout principale (richiesta diretta di chi gioca, unito sopra le
+  corsie e la segnaletica di questa corsia e sopra le fermate del tram, mappa rigenerata), per il **piazzale della
+  stazione** (punti 1, 4 e 5 sopra; 2 e 3 in parte) e per i **tratti A-B-A**: banchine dei bus (`highway=platform`,
+  in `data/osm-fermate.json` → `banchine`, da `scripts/osm_stops.py`) nella pianta delle strade
+  (`street_surfaces.surfaces(..., platforms)`) al posto delle isole del DBGT, e la palina delle corsie 1 e 2 sulla
+  banchina nord; corsie a senso unico tra le banchine ristrette (una corsia, anche nei codici di `lanes`); paline per
+  nome in `snap_stops_to_osm`, senza parole in comune solo entro 15 m (Ex Catasto resta sulla strada sud); fermate a
+  meno di 6 m da una banchina portate sopra (`onto_platforms`); contromano 6 volte la strada nell'aggancio (era 1,6),
+  tranne le corsie bus in controsenso (`bus_both_ways`, flag 256, letto anche dal gioco in `busCan`); `terminal_lane`
+  per i capolinea lontani dal percorso o raggiunti contromano (partenze della 6 e della 14 dalla corsia 3, arrivi
+  alla corsia 3 sulla corsia sud) e `stop_lanes` per le fermate in mezzo al percorso (5, 6, 9 e 42 passano dalla
+  corsia sud e fermano alla Corsia 3); `drop_spurs` toglie gli A-B-A senza fermata già nei dati (restano 44). Per i punti
+  2 e 3 i bus arrivano alla corsia giusta con il giro legale dall'entrata est: i due passaggi veri (x = 231 e
+  x = 190) restano da aggiungere alla rete come archi propri. Con i sensi unici la linea 2 (Diretto Piazze) ora si
+  aggancia, ma come la 6 e la 12 (già prima, 3,2 km) fa un giro di 3,5 km lontano dal tracciato GTFS attorno a
+  (-1547, 497), nel corridoio di Via Sorio: manca una strada o un passaggio nella rete. I lampioni stanno a metà
+  larghezza dell'arco più 1,9 m senza guardare l'asfalto vero: sono i 1121 lampioni in carreggiata del rapporto (uno
+  in più nel piazzale per le corsie ristrette); basterebbe scartarli dove `surfaceOff` dice asfalto.
 
 ### tram-reti
 
@@ -142,6 +160,8 @@ Le richieste arrivate da chi gioca (IDEE, prossimi passi 5). Fatto:
 
 Le altre voci delle segnalazioni (zona Plebiscito, cavalcavia e fiumi, mappa più grande) sono dati della mappa:
 corsia `mappa` e onda 3.
+
+Dopo la chiusura i dati del piazzale sono stati sistemati dalla sessione cloud (vedi la sezione `mappa`).
 
 ## Onde successive
 

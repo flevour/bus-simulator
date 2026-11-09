@@ -105,7 +105,8 @@ export function stopPose(route, st, back = 6.5) {
 }
 
 // il bus può percorrere l'arco e partendo dal nodo from? (anche le corsie riservate, non le vie pedonali)
-export const busCan = (e, from) => !e.ped && (!e.oneway || (e.oneway === 1) === (e.a === from));
+// (busBoth: senso unico con la corsia bus in controsenso)
+export const busCan = (e, from) => !e.ped && (!e.oneway || e.busBoth || (e.oneway === 1) === (e.a === from));
 
 // Percorso più breve per un bus tra due nodi della rete (Dijkstra), per le corse fuori servizio. Le vie piccole e le
 // strade di servizio costano di più: si va sulle strade principali come farebbe un autista. notFrom: nodo da non
@@ -361,6 +362,10 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       const m = sxx > 1 ? sxy / sxx : 0;
       return { m, c: mk - m * mo };
     };
+    // fuori i punti dove il cordolo è più di 1 m oltre la mediana (un passo carraio, la palina appena prima della
+    // banchina); quelli più vicini restano, il bus non deve salirci
+    const med = pts.map((p) => p[1]).sort((a, b) => a - b)[pts.length >> 1];
+    if (pts.length >= 3) { const near = pts.filter(([, q]) => q <= med + 1); if (near.length >= 3) pts = near; }
     let ks = 0;
     if (pts.length >= 3) {
       let f = fit(pts);
@@ -385,8 +390,10 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
     const dx = best.ex / best.l, dz = best.ez / best.l, hw = best.e.width / 2;
     const rx = -dz, rz = dx; // la palina sta a destra della direzione di marcia
     // una palina per tratto e verso: due fermate vicine sulla stessa corsia ne hanno una sola, ma le corsie parallele di
-    // un capolinea (stazione: corsia nord e corsia sud a 10 m) hanno ognuna la sua
-    if (out.some((o) => o.dx * dx + o.dz * dz > 0.5 && Math.abs((o.cx - best.cx) * dx + (o.cz - best.cz) * dz) < 12 && Math.abs((o.cx - best.cx) * rx + (o.cz - best.cz) * rz) < 3)) return;
+    // un capolinea (stazione: corsia nord e corsia sud a 10 m) hanno ognuna la sua. Il confronto è con il punto di
+    // partenza delle altre, prima dello spostamento lungo la strada (che faceva sfuggire i doppioni: a Boschetti c'erano
+    // 16 paline una sopra l'altra)
+    if (out.some((o) => o.dx * dx + o.dz * dz > 0.5 && Math.abs((o.bx - best.cx) * dx + (o.bz - best.cz) * dz) < 12 && Math.abs((o.bx - best.cx) * rx + (o.bz - best.cz) * rz) < 3)) return;
     // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate, incroci):
     // se il punto esatto è occupato si sposta la fermata di qualche metro lungo la strada
     let spot = null;
@@ -400,17 +407,21 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       const k = useKerb ? kerb(cx, cz, rx, rz, hw) : null;
       // (anche in fondo a un golfo di fermata, dove l'asfalto misurato si allarga)
       const atKerb = k != null && k > hw - 2.5 && k < hw + 8;
-      for (const off of atKerb ? [k + 0.7, k + 0.5] : [hw + 1.6]) {
-        const px = cx + rx * off, pz = cz + rz * off;
-        if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6)) continue;
-        spot = { cx, cz, px, pz, kerb: atKerb ? k : hw, ...(atKerb ? busLine(cx, cz, k, dx, dz, hw) : {}) };
-        break;
+      // la pensilina sta 1,6 m oltre la palina: sulle banchine strette (corsie della stazione) non ci sta, resta la palina
+      for (const roof of atKerb ? [true, false] : [true]) {
+        for (const off of atKerb ? [k + 0.7, k + 0.5] : [hw + 1.6]) {
+          const px = cx + rx * off, pz = cz + rz * off;
+          if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || (roof && clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6))) continue;
+          spot = { cx, cz, px, pz, kerb: atKerb ? k : hw, roof, ...(atKerb ? busLine(cx, cz, k, dx, dz, hw) : {}) };
+          break;
+        }
+        if (spot) break;
       }
     }
     if (!spot) return;
     out.push({
       id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw, kerb: spot.kerb, kl: spot.kl, ks: spot.ks, shelter: st.shelter, bench: st.bench,
+      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, bx: best.cx, bz: best.cz, dx, dz, rx, rz, hw, kerb: spot.kerb, kl: spot.kl, ks: spot.ks, shelter: spot.roof ? st.shelter : 0, bench: spot.roof ? st.bench : 0,
     });
   }
 }

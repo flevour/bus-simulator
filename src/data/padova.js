@@ -192,7 +192,7 @@ export function buildNetwork() {
     const cls = E[k + 2], flags = E[k + 5];
     const e = {
       id: edges.length, a: A.id, b: B.id, cls, width: E[k + 3], name: MAP.names[E[k + 4]] || '',
-      oneway: flags & 1 ? 1 : flags & 2 ? -1 : 0, bridge: !!(flags & 4), tunnel: !!(flags & 8), roundabout: !!(flags & 16), psv: !!(flags & 32),
+      oneway: flags & 1 ? 1 : flags & 2 ? -1 : 0, busBoth: !!(flags & 256), bridge: !!(flags & 4), tunnel: !!(flags & 8), roundabout: !!(flags & 16), psv: !!(flags & 32),
       speed: E[k + 6], layer: E[k + 7], len, dx: dx / len, dz: dz / len, routes: 0,
       main: cls <= 3, ped: cls === 8, service: cls === 7,
     };

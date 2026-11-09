@@ -37,13 +37,17 @@ STOP_FAR = 40.0  # m: oltre, la fermata non sta sul percorso della sua variante
 WALK_MIN = 1.5  # m: un marciapiede più stretto non è un marciapiede
 H_ELEV = 0.05  # m: nodi in quota (cavalcavia): sotto possono esserci edifici
 
-# valori del 9 novembre 2026 (main dopo le corsie e la segnaletica orizzontale); l'area arrotondata ai 1000 m²
+# valori del 9 novembre 2026 (main dopo le corsie e la segnaletica orizzontale); l'area arrotondata ai 1000 m².
+# Dopo il piazzale della stazione (sensi unici nell'aggancio): fermate spostate da 121 a 33; edifici in carreggiata
+# da 147 a 170 e lungo i bus da 92 a 114 per la linea 2 (Diretto Piazze, prima scartata) nelle vie strette del centro
+# e la 12 che non va più contromano: sovrapposizioni di 0,2-0,9 m tra edifici Overture e carreggiate DBGT, come le
+# altre; fermate lontane da 12 a 13 (Madonna della Salute 85 sulla 22, a 41 m, nella zona fuori area)
 SOGLIE = {
-    'edifici_in_carreggiata': 147,
-    'edifici_in_carreggiata_bus': 92,
+    'edifici_in_carreggiata': 170,
+    'edifici_in_carreggiata_bus': 114,
     'edifici_sui_percorsi': 0,
-    'fermate_lontane': 12,
-    'fermate_spostate': 121,
+    'fermate_lontane': 13,
+    'fermate_spostate': 33,
     'marciapiedi_stretti_m2': 169000,
 }
 NOMI = {

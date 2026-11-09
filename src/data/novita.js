@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 51, d: '2026-11-09', t: 'Piazzale della Stazione rifatto: le banchine delle corsie sono quelle vere, i bus entrano dal lato est e percorrono le corsie nel loro senso unico, ogni corsia ferma alla sua banchina. Le fermate prendono la palina con il loro nome (in Via Giotto "Contarine" e "Centro Strada" non sono più scambiate) e non ci sono più paline doppie una sopra l\'altra. I percorsi non fanno più brevi andate e ritorno nelle vie laterali e non vanno contromano.' },
   { n: 50, d: '2026-11-09', t: 'Tram: banchine e fermate al loro posto vero, prese da OpenStreetMap; molte erano una decina di metri troppo avanti.' },
   { n: 49, d: '2026-11-09', t: 'Sugli altri autobus c\'è gente: dai finestrini vedi i passeggeri seduti e in piedi, e di sera l\'interno è illuminato. Alle fermate dove si fermano qualcuno aspetta, sale dalla porta davanti e scende da quella in mezzo.' },
   { n: 48, d: '2026-11-09', t: 'Corsie dipinte come quelle vere: sulle vie a più corsie le righe tratteggiate tra una corsia e l\'altra, la mezzeria continua dove non si sorpassa, le corsie dei bus con la riga gialla e la scritta BUS (anche quelle in controsenso, come in Corso Garibaldi) e le frecce a terra prima degli incroci con le corsie di svolta. Le auto restano nella loro corsia; sulle strade strette niente mezzeria.' },

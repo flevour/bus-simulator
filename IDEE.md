@@ -94,10 +94,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
   capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa).
 - [~] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificato linea per linea in
-  [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md); restano le correzioni ai dati (corsia `mappa`).
+  [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md); i dati sono sistemati (banchine vere, sensi unici, Ex
+  Catasto sulla strada sud, partenze dalla fermata). Restano i due passaggi che mancano in OSM (dalla strada sud alla
+  corsia sud verso x = 231, dalla corsia nord alla corsia sud verso x = 190): oggi i bus ci arrivano con il giro
+  legale dall'entrata est. Corsia 1 e Corsia 2 hanno la stessa palina (OSM le mette a 1,8 m l'una dall'altra); la 4
+  per il Capolinea Nord parte dalla corsia sud e fa il giro del piazzale. La banchina sud è del tram.
 - [~] Percorsi con brevi deviazioni avanti e indietro in una via laterale (179 tratti A-B-A, errori di aggancio del
-  tracciato GTFS): il gioco toglie quelli senza fermate (117); restano 62, quasi tutti vie tagliate al bordo della
-  mappa con una fermata in fondo, da capire caso per caso.
+  tracciato GTFS): tolti già nei dati quelli senza fermate; restano 44, con una fermata nella via laterale (quasi
+  tutti vie tagliate al bordo della mappa), da capire caso per caso. Tratti contromano da oltre mille a 127.
+- [ ] Corsie bus in controsenso (flag 256): il gioco le conosce per i percorsi, ma i bus le percorrono al centro della
+  strada; servirebbe una corsia propria sul lato giusto, e le auto non dovrebbero usarla.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
   `src/data/padova-map.json`.
 - [~] Edifici: altezze misurate dal DBGT della Regione e portici veri (fatti, vedi "Fatto"); restano tetti più vari.
@@ -153,6 +159,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] Piazzale della stazione: banchine vere di OSM (`highway=platform`) al posto delle isole del DBGT del 2007,
+  corsie a senso unico rispettate (ogni capolinea si raggiunge sulla corsia della sua banchina), corsie ristrette allo
+  spazio tra le banchine. Paline per nome (Via Giotto), niente paline doppie (erano 28), andate e ritorno A-B-A da 179
+  a 44, tratti contromano da oltre mille a 127.
 - [x] Passeggeri sugli altri autobus: dai finestrini dei bus automatici si vedono i passeggeri seduti e in piedi (di
   sera con l'interno illuminato); vicino al giocatore, alle fermate dove si fermano, qualcuno aspetta, sale dalla
   porta anteriore e scende da quella centrale, e il bus aspetta che abbiano finito.

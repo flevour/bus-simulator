@@ -9,15 +9,18 @@
 import { writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
+// Dopo il piazzale della stazione: fermate con ostacoli da 20 a 19, fuori strada da 11 a 9, spostate da 47 a 33;
+// lampioni da 1120 a 1121 (uno sull'asfalto del piazzale: i lampioni stanno a metà larghezza dell'arco più 1,9 m e le
+// corsie tra le banchine sono state ristrette, ma il piazzale intorno resta asfalto)
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 0,
-  lampioni_in_carreggiata: 1120,
+  lampioni_in_carreggiata: 1121,
   alberi_in_carreggiata: 4,
   pensiline_in_carreggiata: 0,
-  fermate_con_ostacoli: 20,
-  fermate_fuori_strada: 11,
-  fermate_spostate: 47,
+  fermate_con_ostacoli: 19,
+  fermate_fuori_strada: 9,
+  fermate_spostate: 33,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',

@@ -320,7 +320,7 @@ def dbgt_polys(lst):
     return out
 
 
-def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None):
+def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None, platforms=None):
     elev = lambda e: heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
     drive = [k for k, e in enumerate(edges) if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3]
@@ -492,6 +492,18 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             U = U.difference(E)
             islands = unary_union([islands, E])
             n_isl = len(extra)
+    # banchine dei bus di OSM (le corsie della stazione): lastricate e rialzate, fuori dall'asfalto; le isole che le
+    # toccano (DBGT del 2007, prima del piazzale di oggi) tornano asfalto
+    P = Polygon()
+    if platforms:
+        pp = [Polygon([(f[i], f[i + 1]) for i in range(0, len(f), 2)]) for f in platforms if len(f) >= 6]
+        P = unary_union([g if g.is_valid else g.buffer(0) for g in pp]).buffer(0)
+        Pb = P.buffer(0.5)
+        gone = [g for g in _polys(islands) if g.intersects(Pb)]
+        if gone:
+            islands = islands.difference(unary_union(gone)).buffer(0)
+            U = unary_union([U, *gone])
+        U = U.difference(P).buffer(0)
     # edifici fuori da carreggiate (anche quelle in quota), marciapiede minimo e sede del tram
     clear = [unary_union([pieces[k] for k in drive]).buffer(0.8, quad_segs=2)]
     clear += [pieces[k].buffer(BUS_KERB, quad_segs=2) for k in drive if (min(edges[k][0], edges[k][1]), max(edges[k][0], edges[k][1])) in bus_edges]
@@ -549,7 +561,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             bands.append(seg(edges[k]).buffer(dr, single_sided=True))
         if sides == 3:
             bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
-    walk = unary_union([*bands, ped, dbgt_m]).difference(U).difference(islands)
+    walk = unary_union([*bands, ped, dbgt_m, P]).difference(U).difference(islands)
     walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
     # verde del DBGT (prati, aree alberate, aiuole): sta sotto marciapiedi e carreggiate (il gioco lo disegna più in
     # basso), quindi non si ritaglia, se non sull'acqua; ritagliarlo moltiplicava i vertici
