@@ -92,6 +92,11 @@ uniscono non si incrociano.
   affiancate sulla stessa lastra d'asfalto si dividono la larghezza. Per ogni tratto di 40 m si tiene la mediana, se i
   campioni sono abbastanza e concordi. Dove manca la misura valgono le regole di prima (corsie OSM, tipo di strada).
   Le paline stanno 0,6 m oltre il bordo vero dell'asfalto.
+* **Forma vera di carreggiate e marciapiedi** (`data/dbgt-strade.json`, da `scripts/dbgt_streets.py`): all'asfalto
+  ricavato dalle vie OSM si uniscono i poligoni di carreggiata del DBGT (`AC_VEI`) che toccano una via di oggi (piazze,
+  golfi di fermata, corsie di sosta, anelli dei capolinea, angoli veri degli incroci; un poligono grande solo se per
+  almeno il 30% sta già sulle strade di oggi), mai dentro gli edifici o sotto le rampe; ai marciapiedi quelli di
+  `AR_MARC` accanto. I passi carrai con il nome di una via restano nel grafo (Largo Claude Debussy).
 * **Isole, verde e alberi del DBGT** (`data/dbgt-verde.json`, da `scripts/dbgt_green.py`): gli spartitraffico
   (`SPART`) diventano isole dove stanno dentro l'asfalto di oggi o tra due carreggiate, mai sulle corsie delle auto,
   sulle carreggiate e agli incroci dei bus o sulla sede del tram; prati, aree alberate e aiuole (`AR_VRD`) sono uno
@@ -142,7 +147,7 @@ curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tr
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json
 # terreno: DTM a 5 m della Regione (GeoServer IDT2, WPS ras:CropCoverage su rv:DTM_RV_5m_3003; servono rasterio e pyproj)
 python3 scripts/dtm_grid.py dtm_rv_5m_3003_padova.tif data/dtm-padova.json
 # misure dal DBGT della Regione (lotto Comune di Padova, shapefile ETRF2000 dal downloader IDT2; servono pyogrio e pyproj)
@@ -150,6 +155,7 @@ curl -o aree.zip 'https://idt2.regione.veneto.it/idt/download/layerDownload/down
 python3 scripts/measure_streets.py dbgt <cartella aree> data/osm-padova.json data/misure-strade.json
 python3 scripts/dbgt_volumes.py <cartella aree> data/dbgt-volumi.json
 python3 scripts/dbgt_green.py <cartella aree> <cartella linee> src/data/padova-map.json data/dbgt-verde.json
+python3 scripts/dbgt_streets.py <cartella aree> src/data/padova-map.json data/dbgt-strade.json
 ```
 
 `build_map.py` stampa quanti semafori, cartelli e attraversamenti ha agganciato, quanti campioni del tram sono finiti

@@ -41,13 +41,14 @@ Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e b
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json
 ```
 
 `data/misure-strade.json` (larghezze misurate di carreggiate e marciapiedi) e `data/dbgt-volumi.json` (altezze degli
 edifici) vengono dal DBGT della Regione del Veneto con `scripts/measure_streets.py` e `scripts/dbgt_volumes.py`;
 `data/dtm-padova.json` (quote del terreno) dal DTM a 5 m della Regione con `scripts/dtm_grid.py`; `data/dbgt-verde.json`
-(isole, aree verdi, alberi) dal DBGT con `scripts/dbgt_green.py` (comandi nel README).
+(isole, aree verdi, alberi) e `data/dbgt-strade.json` (poligoni di carreggiate e marciapiedi) dal DBGT con
+`scripts/dbgt_green.py` e `scripts/dbgt_streets.py` (comandi nel README).
 Il terreno si applica nel vertex shader (`src/world/terrain.js`): i materiali nuovi lo prendono da soli, quelli con un
 `onBeforeCompile` proprio devono chiamare `applyTerrain(sh)`; le posizioni in JavaScript restano piane (y = 0) e
 `terrain.at(x, z)` dà la quota dove serve (telecamera, pendenza del bus).

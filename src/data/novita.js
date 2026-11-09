@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 39, d: '2026-11-09', t: 'Strade con la forma vera: piazze, golfi di fermata, corsie di sosta e angoli degli incroci come sono davvero (rilievo della Regione), marciapiedi dove ci sono.' },
   { n: 38, d: '2026-11-09', t: 'Ponti e rive sistemati: le strade non scendono più verso i fiumi e restano attaccate ai marciapiedi, l\'acqua scorre nel suo alveo sotto i ponti. Largo Debussy ha il suo anello attorno all\'isola, con il giardino accanto.' },
   { n: 37, d: '2026-11-09', t: 'Più verde vero: parchi, prati e aiuole dove ci sono davvero, gli alberi dei viali e dei parchi al loro posto (filari compresi) e nuovi spartitraffico tra le carreggiate, misurati dalla Regione.' },
   { n: 36, d: '2026-11-08', t: 'Padova non è più piatta: il terreno ha le quote vere della Regione. Il centro storico sta qualche metro più in alto, i fiumi scorrono nel loro alveo tra gli argini, i ponti scavalcano l\'acqua e in salita il bus fatica un po\' di più.' },

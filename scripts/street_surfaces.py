@@ -308,7 +308,19 @@ def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram):
     return [c for c in cands if c.area >= 3 and not busy.intersects(c) and near(c)]
 
 
-def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None):
+def dbgt_polys(lst):
+    """Poligoni da anelli piatti [[esterno], [buco], ...] (data/dbgt-*.json)."""
+    out = []
+    for r in lst:
+        if len(r[0]) < 6:
+            continue
+        g = Polygon([(r[0][i], r[0][i + 1]) for i in range(0, len(r[0]), 2)], [[(h[i], h[i + 1]) for i in range(0, len(h), 2)] for h in r[1:] if len(h) >= 6])
+        g = g if g.is_valid else g.buffer(0)
+        out += _polys(g)
+    return out
+
+
+def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None):
     elev = lambda e: heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
     drive = [k for k, e in enumerate(edges) if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3]
@@ -415,7 +427,28 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     rtree = STRtree(rb)
     at_ring = lambda h: any(rb[i].distance(h) < 0.5 for i in rtree.query(h.buffer(0.5)))
     kept = [h for h in pre_holes if free(h) and not h.buffer(-1.0).is_empty and at_ring(h) and erased(h) > 0.8 * h.area]
-    U = unary_union([U, *fillets]).difference(unary_union([ring_islands, *kept])).buffer(0)
+    # carreggiate misurate del DBGT (2007) che toccano una via OSM di oggi: piazze, golfi di fermata, anelli dei
+    # capolinea, angoli veri degli incroci. Un poligono grande entra solo se almeno il 30% sta già sulle strade di oggi
+    # (una via cambiata o sparita non torna); mai dentro gli edifici di oggi né sotto le rampe dei cavalcavia
+    dbgt_c, dbgt_m = Polygon(), Polygon()
+    if streets:
+        import shapely
+        flat2b = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
+        bl = []
+        for b in buildings:
+            q = Polygon(flat2b(b[3])) if len(b[3]) >= 6 else Polygon()
+            bl.append(q if q.is_valid else q.buffer(0))
+        bld = unary_union(bl)
+        upe = unary_union([pieces[k] for k in drive if elev(edges[k])])
+        Ut, U2 = U.buffer(1.0), U.buffer(2.0)
+        shapely.prepare(Ut)
+        sel = [c for c in dbgt_polys(streets.get('carreggiate', [])) if Ut.intersects(c) and (c.area <= 6000 or c.intersection(U2).area >= 0.3 * c.area)]
+        dbgt_c = unary_union(sel).difference(bld).difference(upe.buffer(1.0)).buffer(0) if sel else Polygon()
+        Uc = unary_union([U, dbgt_c]).buffer(1.5)
+        shapely.prepare(Uc)
+        msel = [c for c in dbgt_polys(streets.get('marciapiedi', [])) if Uc.intersects(c)]
+        dbgt_m = unary_union(msel).difference(bld).difference(upe).buffer(0) if msel else Polygon()
+    U = unary_union([U, *fillets, dbgt_c]).difference(unary_union([ring_islands, *kept])).buffer(0)
     islands = [ring_islands] if not ring_islands.is_empty else []
     for p in ([U] if isinstance(U, Polygon) else list(U.geoms)):
         for r in p.interiors:
@@ -509,7 +542,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             bands.append(seg(edges[k]).buffer(dr, single_sided=True))
         if sides == 3:
             bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
-    walk = unary_union([*bands, ped]).difference(U).difference(islands)
+    walk = unary_union([*bands, ped, dbgt_m]).difference(U).difference(islands)
     walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
     # verde del DBGT (prati, aree alberate, aiuole): sta sotto marciapiedi e carreggiate (il gioco lo disegna più in
     # basso), quindi non si ritaglia, se non sull'acqua; ritagliarlo moltiplicava i vertici
@@ -547,6 +580,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         alberi = [v for x, z, k in zip(xs, zs, ok) if k for v in (x, z)]
     stats = {'carreggiata_m2': round(U.area), 'marciapiede_m2': round(walk.area), 'isole': len(getattr(islands, 'geoms', [islands])),
              'isole_dbgt': n_isl, 'verde_m2': round(verde.area), 'alberi': len(alberi) // 2,
+             'carreggiata_dbgt_m2': round(dbgt_c.area), 'marciapiede_dbgt_m2': round(dbgt_m.area),
              'impalcati_m2': round(D.area), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
     # carreggiate in quota (cavalcavia e rampe): un'area sola anche loro, la quota la mette il gioco vertice per vertice
     up_area = up.simplify(0.1).segmentize(4.0)
