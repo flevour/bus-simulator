@@ -193,6 +193,11 @@ uniscono non si incrociano.
   dove i percorsi escono e rientrano (Via Madonna della Salute per la 22, verso l'Ippodromo per la 9 e la 42, a nord per
   la 4, la 13 e la 17, a ovest per la 21, a sud per la 11). Le linee che escono dalla mappa tengono il tratto più lungo
   di fermate consecutive, e il percorso comincia e finisce attorno a quelle.
+* **Corridoi fino ai capolinea** (`CORRIDOI_TRAM` in `scripts/build_map.py`): celle da 250 m attorno ai binari completi
+  delle linee del tram nuove, più una di margine, con strade ed edifici. Oggi il SIR3 fino a Voltabarozzo e al deposito.
+  Le vie fuori dall'area che collegano due vie dell'area dove passa un bus entrano anche loro (`gtfs_links`). Capolinea
+  e fermate ancora fuori dalla mappa: `python3 scripts/inventario_capolinea.py <cartella_gtfs>` (tabelle in
+  `docs/ESTENSIONE_LINEE.md`, sezione 6).
 
 Per rigenerare i dati:
 

@@ -23,7 +23,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    Restano:
    - la sede di SIR2 e SIR3 nella pianta delle strade (tappa 3, corsia `mappa`): oggi i binari sono disegnati sopra
      l'asfalto e in diversi tratti la corsia dei bus ci passa sopra o accanto (richiesta in `docs/CORSIE.md`);
-   - l'area di Voltabarozzo (tappa 4) e le linee fino ai capolinea veri (Voltabarozzo, Rubano, Busa di Vigonza);
+   - [x] l'area di Voltabarozzo (tappa 4): il SIR3 intero fino al capolinea (vedi "Fatto");
+   - il SIR2 fino ai capolinea veri (Rubano, Busa di Vigonza), corsia `capolinea`;
    - i rami del SIR2 per Romagnoli e per l'Ospedale San Lazzaro, ancora in cantiere in OSM;
    - SIR4 e SIR5, e le linee passanti della rete SMART (T1, T2 e le altre) sugli stessi binari;
    - la linea 10 resta tra gli autobus (deciso il 9 novembre); quando il SIR2 sarà in servizio si potrà toglierla.
@@ -52,7 +53,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [x] rotonde attraversate dal tram: l'isola verde copre binari e sede (9 novembre, vedi "Fatto");
    - [x] bus automatici contromano sul binario del tram in Via Tommaseo (Pace) e in Piazza Garibaldi, con il muso dentro
      il tram (9 novembre, vedi "Fatto");
-   - [ ] mappa più grande (corsia `capolinea`);
+   - [~] mappa più grande (corsia `capolinea`): fatto il corridoio del SIR3 fino a Voltabarozzo;
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
      - [x] passeggeri anche sugli altri autobus (vedi "Fatto");
      - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
@@ -100,9 +101,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   4, Crescini 6, Facciolati CTO, Capolinea Pontecorvo e altre ai bordi della mappa. Capire caso per caso.
 - [~] Capolinea: tratti del percorso GTFS senza strada. Le corsie di servizio dove passa un bus entrano nella rete
   (vedi "Fatto"); restano 11 salti, tutti ai bordi della mappa (13 ad Altichiero, 19 a Saletto, 24 a Mandriola).
-- [ ] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
+- [~] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
   bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
-  capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa).
+  capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa). Corsia `capolinea`: inventario dei
+  capolinea e gruppi in [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md), sezione 6; fatto il SIR3 (vedi "Fatto"),
+  poi il SIR2 e gli autobus.
 - [~] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificato linea per linea in
   [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md); i dati sono sistemati (banchine vere, sensi unici, Ex
   Catasto sulla strada sud, partenze dalla fermata). Restano i due passaggi che mancano in OSM (dalla strada sud alla
@@ -173,6 +176,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **SIR3 fino a Voltabarozzo** (corsia `capolinea`, 9 novembre): l'area di gioco comprende un corridoio di celle da
+  250 m attorno ai binari del SIR3 (2,3 km² in più, con il deposito), con gli edifici Overture della zona; il SIR3 si
+  guida intero nei due versi e i suoi tram automatici fanno il capolinea. 4, 14 e 16 arrivano più avanti su Via
+  Piovese, fino allo svincolo della tangenziale, e lì fermano nei golfi di Piovese Park. Ai bordi dell'area: Via Bembo
+  tra due vie dell'area (la 3 verso Lion senza il giro di 2,7 km né l'andata e ritorno), Via Volta per la 24 (niente
+  salto nel prato), e le linee tagliate non cominciano più con un tornante. Inventario dei capolinea:
+  `scripts/inventario_capolinea.py`.
 - [x] Verifiche automatiche: `npm test` con Playwright (il gioco si carica, corse del bus e del tram che avanzano,
   giro guidato con un pilota scritto nella prova sulle linee 24, 10, 3, 14 e sul SIR1 nei due versi), rapporto di
   verifica sulla mappa (`scripts/verifica_mappa.py` sul JSON, `tests/mappa.spec.js` nel gioco) con soglie sui valori

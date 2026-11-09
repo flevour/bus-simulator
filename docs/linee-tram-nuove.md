@@ -2,8 +2,8 @@
 
 Ricerca e piano per portare nel gioco le linee in costruzione. Stato al 9 novembre 2026: qui ci sono le fonti, una
 prova di instradamento sui binari OSM (`scripts/tram_percorsi.py`, fuori da `build_map.py`), i dati delle linee
-(tappa 1) e il piano. **SIR3 e SIR2 sono nel gioco per il tratto in città** (tappa 2, sezione "Nel gioco"); la pipeline
-della mappa non è cambiata. Le tappe del piano sono ordinate per toccare il meno possibile `build_map.py`,
+(tappa 1) e il piano. **SIR3 e SIR2 sono nel gioco** (tappa 2, sezione "Nel gioco"): il SIR3 intero fino a Voltabarozzo
+(tappa 4, corsia `capolinea`), il SIR2 per il tratto in città. Le tappe del piano sono ordinate per toccare il meno possibile `build_map.py`,
 `street_surfaces.py` e `city.js`, che sono della corsia `mappa`.
 
 ![Binari OSM (blu SIR1, rosso SIR2, arancio SIR3; tratteggio: in cantiere), percorsi trovati e fermate OSM](img/linee-tram-nuove.png)
@@ -138,9 +138,9 @@ python3 scripts/tram_percorsi.py data/osm-padova-tram-cantiere.json SIR2.kml SIR
 * In stazione tutte e quattro le prove passano dall'**anello esterno**, l'unico percorribile in OSM: il tratto della
   stazione è quindi provvisorio finché non c'è la geometria dei due anelli (vedi sopra).
 
-**Area di gioco.** Dentro la rete stradale del gioco ci sono le fermate del SIR3 da Pace a Cornaro (Gregorianum e Parco
-Iris sono sulla passeggiata Bianchini, senza strade attorno ma dentro il riquadro `FOCUS`); Nani, Piovese, il
-capolinea e il deposito sono fuori, a sud-est. Del SIR2 ci sono le fermate da Cimitero Maggiore a Savelli; Rubano e
+**Area di gioco.** Dal 9 novembre l'area comprende il corridoio del SIR3 (celle da 250 m attorno ai binari, in
+`build_map.py`): tutte le fermate fino a Voltabarozzo e il deposito sono dentro. Prima c'erano le fermate da Pace a
+Cornaro (Gregorianum e Parco Iris sulla passeggiata Bianchini, senza strade attorno ma dentro il riquadro `FOCUS`). Del SIR2 ci sono le fermate da Cimitero Maggiore a Savelli; Rubano e
 Chiesanuova a ovest, Net Center, San Lazzaro, Ponte di Brenta e Vigonza a est sono fuori. L'export OSM delle strade
 `data/osm-padova.json` arriva fin là (lat 45,32–45,67, lon 11,69–11,99): allargare l'area è una scelta dei riquadri
 `FOCUS` di `build_map.py`, non dei dati.
@@ -191,8 +191,9 @@ python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-ferma
   (`track.switches`: verso, progressiva, punto, unione o diramazione, binario dell'altra sede), con un raccordo di 20 m
   sul binario che si stacca. Il verso -1 di una linea può correre anche sul suo verso +1 (l'anello del SIR3).
 * **Tratto in città**: le fermate con una strada della mappa entro 120 m, la serie più lunga di fila. SIR3 da Stazione
-  sud a Cornaro (10 e 11 fermate), SIR2 da Cimitero Maggiore a Savelli (16 fermate); i binari arrivano 150 m oltre.
-  Le corse tagliate si chiamano come quelle del SIR1, per esempio "Cornaro (per Voltabarozzo)".
+  sud a Cornaro (10 e 11 fermate) fino al corridoio del 9 novembre, ora intero (13 e 14 fermate); SIR2 da Cimitero
+  Maggiore a Savelli (16 fermate); i binari arrivano 150 m oltre. Le corse tagliate si chiamano come quelle del SIR1,
+  per esempio "Savelli (per Busa di Vigonza)".
 * **Menu**: SIR3 e SIR2 nell'elenco del tram dopo il SIR1, con la scritta "in costruzione" e il nome della linea intera.
 * **Tram automatici** dall'orario generato, ognuno sulla sede della sua linea e con i suoi moduli. Al capolinea ad
   anello del SIR3 il tram prosegue sul binario della corsa dopo senza cambiare cabina; il giocatore fa lo stesso con B
@@ -232,11 +233,12 @@ Prima il SIR3 (apre per primo e la parte nel gioco è quasi tutta già dentro la
 3. **Sede tranviaria nella pianta delle strade.** `build_map.py` passa a `street_surfaces.surfaces()` le corsie del
    tram: vanno aggiunte quelle di SIR3 e SIR2, e i bus non devono trovarsi la sede in corsia (verifica del CLAUDE.md).
    È la tappa che si sovrappone di più al lavoro sulla mappa: farla **dopo** che l'altra sessione ha unito il suo.
-4. **Area di Voltabarozzo.** Un riquadro `FOCUS` in più (circa lon 11,885–11,912, lat 45,372–45,392) per avere strade,
-   edifici e deposito fino al capolinea; vanno controllati gli altri dati (DBGT, DTM, segnaletica) su quell'area.
-   Anche questa tocca `build_map.py`: dopo la tappa 3. In alternativa, in un primo tempo il SIR3 si guida fino a
-   Cornaro ("tratto in città"), come già si fa per il SIR1 verso la Guizza.
-5. **SIR3 nel gioco** (fatto per il tratto in città): linea nel menu del tram (3 moduli), tram automatici dall'orario generato, fermate con banchina,
+4. **Area di Voltabarozzo** (fatta il 9 novembre dalla corsia `capolinea`): invece di un riquadro `FOCUS`, un corridoio
+   di celle da 250 m attorno ai binari del SIR3 (`CORRIDOI_TRAM` in `build_map.py`), con strade, edifici e deposito
+   fino al capolinea. DBGT, DTM, segnaletica e paline c'erano già; servivano gli edifici Overture. I binari del
+   deposito (OSM `service=yard`) non sono disegnati. Per il SIR2 lo stesso corridoio chiede export nuovi (vedi
+   [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md), sezione 6).
+5. **SIR3 nel gioco** (fatto, intero dal 9 novembre): linea nel menu del tram (3 moduli), tram automatici dall'orario generato, fermate con banchina,
    scambio all'uscita dell'anello.
 6. **SIR2 nel gioco** (fatto per il tratto in città): il tratto da Cimitero Maggiore a Savelli (come "tratto in città"), 4 moduli, binari in comune
    col SIR1 e col SIR3. **La linea 10 esce di servizio** quando c'è il SIR2: serve uno scenario (per esempio "oggi"

@@ -10,16 +10,19 @@ import { writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
 // 9 novembre: lampioni e alberi dei viali stanno fuori dall'asfalto vero (City.buildTreesAndLamps); con la corsia
-// mappa sopra il piazzale della stazione fermate con ostacoli 9, fuori strada 5, spostate 11
+// mappa sopra il piazzale della stazione fermate con ostacoli 9, fuori strada 5, spostate 11. Corsia capolinea,
+// corridoio del SIR3 fino a Voltabarozzo: una palina in carreggiata, Piovese fr. Park (linee 4, 14, 16) nel golfo sotto
+// il cavalcavia della tangenziale, fuori dall'asfalto ma sotto il nastro di Corso Primo Maggio (arco in quota, che
+// roadInfo conta); con Via Bembo e Via Volta nella rete (gtfs_links di build_map.py) fuori strada 4, spostate 7
 const SOGLIE = {
   semafori_in_carreggiata: 2,
-  paline_in_carreggiata: 0,
+  paline_in_carreggiata: 1,
   lampioni_in_carreggiata: 0,
   alberi_in_carreggiata: 0,
   pensiline_in_carreggiata: 0,
   fermate_con_ostacoli: 9,
-  fermate_fuori_strada: 5,
-  fermate_spostate: 11,
+  fermate_fuori_strada: 4,
+  fermate_spostate: 7,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',

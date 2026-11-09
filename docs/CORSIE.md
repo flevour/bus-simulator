@@ -187,16 +187,18 @@ Prossimo lavoro, in quest'ordine:
   disegna sopra la sede futura (larghezze e corsie da rivedere quando OSM avrà le strade rifatte); a Chiesanuova
   qualche scaglia nello svincolo ovest e un tratto di binario sotto un triangolo dell'asfalto in quota (suddiviso
   ogni 20 m in `buildRoads`);
-- le 9 fermate dove il bus fermo tocca una facciata e le 11 agganciate lontano (richieste di `verifiche`, sopra);
+- le 9 fermate dove il bus fermo tocca una facciata e le 11 agganciate lontano (richieste di `verifiche`, sopra; dopo il
+  corridoio del SIR3 sono 7, le quattro di Bembo 95 sulla 3 a posto);
 - svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
 - le fermate senza palina e gli 11 tratti A-B-A con una fermata rimasti (3 in Via Bembo, 4 in Via Gramsci, 16 e 24
-  al Capolinea Plebiscito; elenchi in IDEE, "Mappa e dati");
+  al Capolinea Plebiscito; elenchi in IDEE, "Mappa e dati"); quelli di Via Bembo li ha tolti la corsia `capolinea`
+  (il pezzo di Via Bembo tra due vie dell'area, `gtfs_links`);
 - cavalcavia: sistemate le rampe (Borgomagno e raccordi, vedi IDEE); restano i sottopassi che nella realtà scendono
   sotto il piano della strada (Corso Australia su Via Cignaroli, Corso Tredici Giugno su Via Rienza, 3,6 m sopra la
   strada di sotto), che chiedono di abbassare il terreno sotto le strade `tunnel`; posizione dei fiumi senza dettagli;
 - zona Plebiscito: sistemato il Capolinea Plebiscito; per il resto servono i dettagli di chi l'ha segnalata;
 - gli 11 salti senza strada rimasti sono ai bordi (13 ad Altichiero, 19 a Saletto, 24 a Mandriola): li risolve la
-  corsia `capolinea`.
+  corsia `capolinea` (fatto quello della 24 in Via Volta).
 
 ### capolinea
 
@@ -238,6 +240,35 @@ Con la corsia `mappa`, che resta aperta:
   la mappa di `main`, si rigenera e si rifanno le verifiche; se intanto l'altra corsia ha pubblicato, si ripete;
 - la sede di SIR2 e SIR3 nella pianta delle strade (tappa 3) la fa `mappa`, primo del suo prossimo lavoro; `capolinea`
   la estende ai tratti nuovi con le stesse funzioni quando è su `main`.
+
+Fatto il 9 novembre (dettagli in [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md), sezione 6):
+
+- inventario: `scripts/inventario_capolinea.py <cartella_gtfs>`, tabelle nella sezione 6. Il SIR1 è intero (i
+  capolinea di Pontevigodarzere e Guizza sono nella mappa);
+- gruppo 1a, **SIR3 fino a Voltabarozzo** con i due rami e il deposito: corridoio di celle attorno ai binari
+  (`CORRIDOI_TRAM`, `corridor_cells`, `tram_corridors`, `in_focus` in `build_map.py`), edifici Overture del corridoio
+  nel parquet e filtro degli edifici sull'area. La sede nella pianta delle strade arriva da sola dai binari completi di
+  `data/tram-linee-nuove.json` (lavoro della corsia `mappa`). Il SIR3 si guida intero nei due versi;
+- funzioni nuove per i bordi dell'area: `gtfs_links` (vie fuori dall'area tra due vie dell'area dove passa un bus: Via
+  Bembo per la 3, che toglie l'A-B-A di Via Bembo della lista della corsia `mappa`, e Via Volta per la 24) e il taglio
+  dei tornanti in testa e in coda in `cut_path`.
+
+Funzioni della corsia `mappa` cambiate da `capolinea`: `stop_lanes` in `build_map.py` accetta anche i golfi di fermata
+(strade di servizio a senso unico, palina fino a 5 m oltre il bordo o dentro il golfo, percorso attuale almeno 3 m più
+lontano): cambia solo Piovese Park (4, 14, 16), le corsie della stazione restano come prima. Le soglie di
+`verifica_mappa.py` e `tests/mappa.spec.js` (una palina in carreggiata: Piovese fr. Park, sotto il cavalcavia della
+tangenziale).
+
+Prossimo lavoro, in quest'ordine:
+
+- gruppo 1b, SIR2 fino a Rubano e alla Busa di Vigonza: 173 celle nuove (10,8 km², stima 3-4 MB di mappa). Servono gli
+  export fuori dal riquadro di oggi: nodi OSM (`scripts/overpass-nodes.ql` sul corridoio), paline (Overture
+  `base/infrastructure`), edifici Overture, DTM, DBGT dei lotti di Rubano e Vigonza o le misure della sezione 3 del
+  piano; i rami di Romagnoli e San Lazzaro se OSM ha i binari;
+- binari del deposito di Voltabarozzo (OSM `service=yard`, in `data/osm-padova-tram-cantiere.json`): non disegnati, li
+  può prendere la corsia `tram-turni` con il deposito della Guizza;
+- gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da
+  togliere per le linee che arrivano ai capolinea.
 
 ### tram-reti (chiusa il 9 novembre)
 

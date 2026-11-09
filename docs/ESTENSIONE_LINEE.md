@@ -126,3 +126,116 @@ più bassa in periferia dove ci sono meno edifici: i dati non li ho generati.
 Tocca `build_map.py`, `street_surfaces.py`, `city.js` e `padova-map.json`, gli stessi file delle tappe del
 [piano del modello della città](PIANO_MODELLO_CITTA.md): va fatto nella sessione che porta avanti quel piano, una
 tappa alla volta.
+
+## 6. Inventario e gruppi di capolinea (corsia capolinea)
+
+`scripts/inventario_capolinea.py <cartella_gtfs>` confronta le linee complete con la mappa e stampa le tabelle qui
+sotto: ogni variante urbana del GTFS (fermate e corse di un mercoledì e di una domenica) con quella di
+`padova-map.json` (intera, tagliata, assente), il SIR1 dal GTFS, SIR2 e SIR3 con la regola del gioco (fermate con una
+strada entro 120 m) e le fermate agganciate male di `verifica_mappa.py`. Si rilancia dopo ogni gruppo.
+
+### Stato dopo il gruppo 1a (SIR3, 9 novembre)
+
+157 varianti urbane con corse nei due giorni: 19 intere nella mappa, 114 tagliate, 24 assenti (13 oltre le 10
+varianti per linea che tiene `build_gtfs.load`, 8 con il tracciato oltre i 9 km di `RADIUS`, 3 non agganciate). Le
+assenti non dipendono dall'area: vanno tolti quei due limiti quando le linee arrivano ai capolinea.
+
+**Tram**
+
+| Linea | Verso | Fermate | Nella mappa | Fuori | Capolinea fuori |
+|---|---|---|---|---|---|
+| SIR1 | Pontevigodarzere (156 corse fer.) | 25 | 25 | 0 | – |
+| SIR1 | Cavalletto (147 corse fer.) | 9 | 9 | 0 | – |
+| SIR1 | Guizza Capolinea Sud (142 corse fer.) | 10 | 10 | 0 | – |
+| SIR1 | Guizza Capolinea Sud (138 corse fer.) | 10 | 10 | 0 | – |
+| SIR3 | Voltabarozzo | 13 | 13 | 0 | – |
+| SIR3 | Stazione | 14 | 14 | 0 | – |
+| SIR2 | Busa di Vigonza | 35 | 16 | 19 (fino a 4.250 m) | Rubano, Busa di Vigonza |
+| SIR2 | Rubano | 35 | 16 | 19 (fino a 4.250 m) | Busa di Vigonza, Rubano |
+
+**Autobus.** I capolinea sono raggruppati entro 300 m; le corse sono quelle delle varianti tagliate o assenti che ci
+partono o ci arrivano.
+
+| Capolinea | Linee | Corse fer. | Corse fest. | Dalla mappa | Dal centro | lat, lon |
+|---|---|---|---|---|---|---|
+| Capolinea Ponte Brenta | 10 | 123 | 72 | 440 m | 6,0 km | 45.4259, 11.9493 |
+| Capolinea Granze Sud | 6, 7, 14, 15B | 121 | 50 | 1.880 m | 5,8 km | 45.3791, 11.9399 |
+| Capolinea Torre | 22 | 109 | 40 | 250 m | 5,5 km | 45.4295, 11.9409 |
+| Capolinea Lion | 3 | 97 | 30 | 2.250 m | 7,7 km | 45.3385, 11.8830 |
+| Capolinea Ippodromo Mortise | 9, 42 | 86 | 34 | 170 m | 4,0 km | 45.4252, 11.9218 |
+| Cap. Sarmeola via Emilia | 10 | 70 | 44 | 2.920 m | 5,8 km | 45.4226, 11.8065 |
+| Capolinea Carpanedo | 88 | 65 | 48 | 2.860 m | 8,3 km | 45.3330, 11.8657 |
+| Capolinea Lagrange | 6 | 112 | 0 | 1.100 m | 3,8 km | 45.4002, 11.8296 |
+| Capolinea Voltabrusegana | 5, 42 | 71 | 34 | 660 m | 3,9 km | 45.3892, 11.8351 |
+| Capolinea Selvazzano | 12 | 67 | 32 | 4.630 m | 7,6 km | 45.3962, 11.7816 |
+| Capolinea Mandriola | 24 | 65 | 32 | 440 m | 5,4 km | 45.3648, 11.8459 |
+| Capolinea Caselle | 10, 12 | 69 | 28 | 2.870 m | 5,2 km | 45.4143, 11.8119 |
+| Capolinea Taggi' | 11B | 64 | 30 | 1.830 m | 7,3 km | 45.4599, 11.8218 |
+| Capolinea Cadoneghe | 4 | 59 | 34 | 540 m | 5,2 km | 45.4399, 11.9249 |
+| Capolinea Rio | 14, 16 | 76 | 0 | 970 m | 5,7 km | 45.3612, 11.9086 |
+| Capolinea Bragni | 4 | 51 | 25 | 1.610 m | 7,0 km | 45.4666, 11.9075 |
+| Capolinea Saonara | 7 | 74 | 0 | 5.250 m | 9,4 km | 45.3694, 11.9843 |
+| Capolinea Villatora | 6, 15B | 62 | 10 | 3.800 m | 7,3 km | 45.3859, 11.9660 |
+| Capolinea Mandria via Carnia | 22 | 51 | 19 | 2.000 m | 5,4 km | 45.3760, 11.8244 |
+| Capolinea Mandria via Monselice | 22 | 40 | 20 | 1.530 m | 5,4 km | 45.3707, 11.8318 |
+| Capolinea Saletto | 19 | 50 | 0 | 2.660 m | 7,7 km | 45.4756, 11.8578 |
+| Capolinea Albignasego (Momumento) | 3, 88 | 47 | 0 | 1.360 m | 6,8 km | 45.3464, 11.8677 |
+| Capolinea Tencarola | 12 | 31 | 16 | 2.690 m | 5,6 km | 45.3980, 11.8069 |
+| Capolinea Ponte S. Nicolò | 14 | 30 | 6 | 1.910 m | 6,9 km | 45.3627, 11.9379 |
+| Capolinea Limena | 17 | 32 | 0 | 3.700 m | 8,9 km | 45.4826, 11.8366 |
+| Capolinea Tavo (Chiesa) | 19 | 26 | 0 | 5.270 m | 10,3 km | 45.4991, 11.8559 |
+| Padova, Via Montà 429 | 21 | 20 | 0 | 60 m | 5,6 km | 45.4452, 11.8306 |
+| Sorio Park Colli | 2 | 14 | 0 | 330 m | 3,2 km | 45.3980, 11.8389 |
+| Capolinea Giarre | 22 | 12 | 0 | 3.010 m | 8,1 km | 45.3472, 11.8200 |
+| Stati Uniti Ex capolinea | 7 | 9 | 0 | 2.140 m | 5,6 km | 45.3913, 11.9458 |
+| Capolinea Roncajette Don Rossi PSN | 4, 16 | 7 | 0 | 3.370 m | 8,4 km | 45.3449, 11.9365 |
+| Capolinea Duca Abruzzi | 6 | 5 | 0 | 470 m | 3,7 km | 45.3941, 11.8348 |
+| Spagna fr mtcc | 7 | 4 | 0 | 800 m | 4,4 km | 45.3886, 11.9267 |
+| San Giacomo Chiesa | 3 | 3 | 0 | 2.340 m | 7,6 km | 45.3411, 11.9024 |
+
+Capolinea che sono già nella mappa (entro 60 m dalla rete) ma fuori dalle corse del gioco:
+
+| Capolinea | Linee | Corse fer. | Corse fest. | Perché |
+|---|---|---|---|---|
+| Ferrovia Corsia 2 | 6, 7, 9, 19, 22, 25 | 141 | 0 | la linea esce prima dalla mappa; non agganciata; oltre 9 km; oltre le 10 varianti |
+| Capolinea Nord Tram | 4, 17, 19 | 59 | 0 | oltre 9 km; oltre le 10 varianti |
+| Capolinea Due Palazzi | 11 | 25 | 0 | la linea esce prima dalla mappa |
+| Capolinea scuola Severi | 9 | 8 | 0 | non agganciata |
+| Codalunga Liceo | 22 | 3 | 1 | oltre le 10 varianti |
+| Capolinea Plebiscito | 16 | 2 | 0 | la linea esce prima dalla mappa |
+| Capolinea Terranegra | 6 | 2 | 0 | oltre le 10 varianti |
+
+### Gruppi
+
+| Gruppo | Cosa | Stato |
+|---|---|---|
+| 1a | SIR3 fino a Voltabarozzo, con i due rami e il deposito | fatto il 9 novembre |
+| 1b | SIR2 fino a Rubano e alla Busa di Vigonza; rami di Romagnoli e Ospedale San Lazzaro se OSM ha i binari | da fare |
+| 2 | autobus, dai capolinea più usati e da quelli segnalati (Volta fr. 24 e Mandriola sulla 24, salti ad Altichiero e Saletto) | da fare |
+
+**Gruppo 1a.** In `build_map.py` l'area comprende i corridoi di celle da 250 m attorno ai binari completi delle linee di
+`CORRIDOI_TRAM` (oggi il SIR3), più una cella di margine: 96 celle, 37 fuori dai riquadri di oggi (2,3 km²), da Cornaro
+al capolinea. Il deposito è a meno di 100 m dal capolinea e ci sta dentro. Dati già in repo per quell'area: strade,
+nodi, binari, paline, DTM e DBGT (lotto del Comune); servivano solo gli edifici Overture (3.944 in più nel parquet,
+tenuti solo quelli dell'area). Il SIR3 ora è intero nel gioco nei due versi (13 e 14 fermate), i tram automatici fanno
+il capolinea di Voltabarozzo, e 4, 14 e 16 arrivano più avanti su Via Piovese (6-7 fermate in più) fino allo svincolo
+della tangenziale. Con l'area nuova sono servite tre correzioni dell'aggancio, utili anche altrove:
+
+- `gtfs_links`: le vie fuori dall'area che collegano due vie dell'area dove passa un tracciato GTFS (Via Bembo per la
+  3 verso Lion, che prima girava per 2,7 km di vie residenziali; 58 m di Via Alessandro Volta per la 24);
+- `cut_path`: il pezzo tenuto di una linea tagliata non comincia con un tratto corto prima di una svolta stretta (la 24
+  a Volta fr. 24);
+- `stop_lanes`: anche i golfi di fermata (strade di servizio a senso unico) a Piovese Park, sotto la tangenziale.
+
+Peso: mappa da 12,66 a 13,46 MB (4,05 → 4,29 MB compressa), JavaScript 14,6 MB. Rapporto della mappa: +7 edifici in
+carreggiata (+6 lungo i bus, nessuno nella corsia), tutti nell'area nuova; fermate agganciate male da 11 a 7.
+Restano da fare nell'area: i binari del deposito (in OSM 7 vie `service=yard` in `data/osm-padova-tram-cantiere.json`)
+non sono disegnati, il gioco disegna solo i binari delle linee; nell'anello est dello svincolo di Piovese Park (raggio
+di circa 12 m) il pilota delle prove a volte sale sul marciapiede o si pianta, la stessa corsa passa una volta e
+l'altra no.
+
+**Gruppo 1b, cosa serve.** Il corridoio del SIR2 aggiunge 173 celle (10,8 km², da lon 11,772 a 11,958): in proporzione
+al SIR3 circa 3-4 MB di mappa, quindi 17 MB circa, sotto il limite di 20 MB. Fuori dal riquadro di oggi mancano
+l'export dei nodi OSM (semafori e cartelli) e delle paline (strato Overture `base/infrastructure`), gli edifici
+Overture, il DTM e il DBGT di Rubano e Vigonza (altri lotti); l'export delle strade `data/osm-padova.json` arriva già
+fin là.

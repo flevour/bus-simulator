@@ -47,13 +47,18 @@ SOGLIE = {
     # di servizio dei capolinea, rampe del Cavalcavia Borgomagno): edifici in carreggiata da 170 a 167 (lungo i bus da
     # 114 a 111), fermate lontane da 13 a 2, agganciate nel punto sbagliato da 33 a 11; il marciapiede stretto cresce
     # con l'area ai bordi (Via Madonna della Salute e altri cinque riquadri: 56.000 m² di marciapiede, 2.200 stretti);
-    # con la sede del tram tolta dai marciapiedi (tutte le linee) da 171.196 a 170.618
-    'edifici_in_carreggiata': 167,
-    'edifici_in_carreggiata_bus': 111,
+    # con la sede del tram tolta dai marciapiedi (tutte le linee) da 171.196 a 170.618.
+    # Corsia capolinea, corridoio del SIR3 fino a Voltabarozzo (2,3 km² in più): edifici in carreggiata da 167 a 174 e
+    # lungo i bus da 111 a 117, tutti nell'area nuova (0,2-2 m, edifici Overture contro carreggiate DBGT, nessuno nella
+    # corsia); marciapiede stretto da 170.618 a 175.993 (+5.400 m² su 94.000 nuovi); con il pezzo di Via Bembo tra due
+    # vie dell'area (gtfs_links) la 3 non fa più l'andata e ritorno e Bembo 95 torna al suo posto: agganciate male da 11
+    # a 7
+    'edifici_in_carreggiata': 174,
+    'edifici_in_carreggiata_bus': 117,
     'edifici_sui_percorsi': 0,
     'fermate_lontane': 2,
-    'fermate_spostate': 11,
-    'marciapiedi_stretti_m2': 170700,
+    'fermate_spostate': 7,
+    'marciapiedi_stretti_m2': 176000,
 }
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',
