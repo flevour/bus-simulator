@@ -1314,7 +1314,10 @@ function step(dt) {
   if (bus.isTram && ((bus._curveT = (bus._curveT || 0) - dt) <= 0 || bus._curveLim == null)) { bus._curveLim = bus.curveLimit(); bus._curveT = 0.25; }
   const speedLimit = bus.isTram ? Math.min(zoneOf(bus.x, bus.z) === 0 ? 30 : 50, bus._curveLim || 70) : mid.edge && mid.edge.speed ? Math.min(90, mid.edge.speed) : zoneOf(bus.x, bus.z) === 0 ? 30 : 50;
   // fari obbligatori di notte e con scarsa visibilità (pioggia forte, nebbia)
-  const ctx = { speedLimit, onSidewalk, night: (mission._night || 0) > 0.5 || wx.fog > 0.6 || wx.rain > 0.6 };
+  // dossi e attraversamenti rialzati: scossone della cassa (più forte con più velocità) e comfort nella missione
+  const bump = bus.isTram ? null : city.bumpHit(bus);
+  if (bump) bus.pitch -= bump.sev * Math.min(1, Math.abs(bus.v) / 8) * 0.03;
+  const ctx = { speedLimit, onSidewalk, bump, night: (mission._night || 0) > 0.5 || wx.fog > 0.6 || wx.rain > 0.6 };
   mission.update(dt, bus, ctx);
   city.update(dt);
   if (depotMesh) depotMesh.update(dt, bus);

@@ -1,4 +1,4 @@
-// Nodi OSM con semafori, STOP, dare precedenza e attraversamenti pedonali nell'area di gioco.
+// Nodi OSM con semafori, STOP, dare precedenza, attraversamenti pedonali e dossi (traffic_calming) nell'area di gioco.
 // Area: i riquadri FOCUS e FOCUS_SUD di scripts/build_map.py allargati di 300 m (sud, ovest, nord, est).
 // Uso: curl -X POST --data-urlencode data@scripts/overpass-nodes.ql https://overpass-api.de/api/interpreter
 //      e poi scripts/filter_osm_nodes.py per tenere solo i tag che servono (vedi README).
@@ -9,5 +9,6 @@
   node["highway"="traffic_signals"]["traffic_signals"];
   node["traffic_signals:direction"];
   node["direction"];
+  node["traffic_calming"];
 );
 out body;

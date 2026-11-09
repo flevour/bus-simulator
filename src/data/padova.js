@@ -327,11 +327,22 @@ export function buildNetwork() {
     if (!crossings.has(e)) crossings.set(e, []);
     crossings.get(e).push(e.a === String(a) ? s : e.len - s);
   }
+  // dossi e attraversamenti rialzati (traffic_calming): arco -> [{ s: metri dal nodo a, kind, up }], kind 0 dosso,
+  // 1 dosso lungo, 2 cuscino, 3 attraversamento rialzato (rampe prima e dopo), 4 rampa di una via rialzata che sale
+  // nel verso a -> b (up = 1) o contro (-1)
+  const calming = MAP.calming ? new Map() : null;
+  for (const [a, b, s, kind] of MAP.calming || []) {
+    const e = edgeBetween(String(a), String(b));
+    if (!e) continue;
+    if (!calming.has(e)) calming.set(e, []);
+    const fw = e.a === String(a);
+    calming.get(e).push({ s: fw ? s : e.len - s, kind, up: fw ? 1 : -1 });
+  }
   const expandSeq = (seq) => seq.filter((id, i) => i === 0 || id !== seq[i - 1]);
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, terrain: MAP.terrain || null };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m

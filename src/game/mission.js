@@ -273,6 +273,7 @@ export class Mission {
     if (aL > 1.7) disc += (aL - 1.7) * 14;
     if (aT > 1.9) disc += (aT - 1.9) * 12;
     this.comfort = Math.max(0, Math.min(100, this.comfort - disc * dt * (this.onboard.length ? 1 : 0.3) + dt * 1.2));
+    if (ctx.bump) this.bumpHit(bus, ctx.bump);
     if ((aL > 3.8 || aT > 3.6) && this.onboard.length > 0 && this.cooldown('fall', 12)) {
       this.addScore(standing > 0 ? -40 : -20, standing > 0 ? 'Ahia! Un passeggero in piedi è caduto!' : 'Passeggeri sballottati!');
     }
@@ -301,6 +302,14 @@ export class Mission {
     this.crowd.update(dt);
   }
 
+  // dosso o attraversamento rialzato preso più forte di b.lim: passeggeri sballottati
+  bumpHit(bus, b) {
+    const over = bus.speedKmh - b.lim;
+    if (over <= 0) return;
+    this.comfort = Math.max(0, this.comfort - over * b.sev * (this.onboard.length ? 1.2 : 0.4));
+    if (over > 10 && this.onboard.length > 0 && this.cooldown('dosso', 8)) this.addScore(-Math.round(over * b.sev), `Dosso preso a ${Math.round(bus.speedKmh)} km/h: rallenta prima!`);
+  }
+
   // giro libero: solo regole della strada e comfort
   updateFree(dt, bus, ctx, front) {
     this.atStop = false;
@@ -311,6 +320,7 @@ export class Mission {
     if (aL > 1.7) disc += (aL - 1.7) * 14;
     if (aT > 1.9) disc += (aT - 1.9) * 12;
     this.comfort = Math.max(0, Math.min(100, this.comfort - disc * dt * 0.3 + dt * 1.2));
+    if (ctx.bump) this.bumpHit(bus, ctx.bump);
     const limit = ctx.speedLimit;
     if (bus.speedKmh > limit + 6) {
       this.speedT = (this.speedT || 0) + dt;

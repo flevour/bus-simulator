@@ -616,6 +616,35 @@ export class City {
         }
       }
     };
+    // dossi (art. 179): fascia a strisce gialle e nere di traverso, 0,6 m (1,2 quelli lunghi); cuscini: un cuscino per
+    // corsia che i bus scavalcano; attraversamenti e vie rialzate: denti bianchi sulle rampe, con la punta verso l'alto.
+    // Ogni rampa o dosso va anche in bumpGrid (bumpHit): sev è lo scossone, lim la velocità che non dà fastidio
+    this.bumpGrid = new Grid(40);
+    const bumpY = new GeoBuilder(), bumpK = new GeoBuilder();
+    const CALM = [{ sev: 1, lim: 25, len: 0.6 }, { sev: 0.7, lim: 30, len: 1.2 }, { sev: 0.3, lim: 40, len: 2.4 }, { sev: 0.6, lim: 30 }, { sev: 0.6, lim: 30 }];
+    const calmingAt = (e, A, s, c) => {
+      const hw = e.width / 2 - 0.3, rx = -e.dz, rz = e.dx, y = Y_ROAD + 0.018, kd = CALM[c.kind];
+      const P = (t, w) => [A.x + e.dx * t + rx * w, y, A.z + e.dz * t + rz * w];
+      const band = (t, len, w0, w1) => {
+        for (let w = w0, k = 0; w < w1 - 0.05; w += 0.5, k++) (k % 2 ? bumpK : bumpY).quad(P(t - len / 2, w), P(t - len / 2, Math.min(w + 0.5, w1)), P(t + len / 2, w), P(t + len / 2, Math.min(w + 0.5, w1)), [0, 0, 1, 0, 0, 1, 1, 1]);
+      };
+      // denti con la punta verso dir (+1 nel verso a -> b) a partire da t
+      const teeth = (t, dir) => {
+        for (let w = -hw + 0.2; w < hw - 0.6; w += 1.0) {
+          const b0 = P(t, w), b1 = P(t, w + 0.6), tip = P(t + dir * 0.8, w + 0.3);
+          paintTri.push(...(dir > 0 ? [b0, b1, tip] : [b1, b0, tip]));
+        }
+      };
+      const ramp = (t) => {
+        const x = A.x + e.dx * t, z = A.z + e.dz * t, it = { x, z, rx, rz, hw: hw + 0.3, sev: kd.sev, lim: kd.lim };
+        this.bumpGrid.insertAABB(it, x - hw - 1, z - hw - 1, x + hw + 1, z + hw + 1);
+      };
+      if (c.kind <= 1) { band(s, kd.len, -hw, hw); ramp(s); }
+      else if (c.kind === 2) { for (const l of laneLayout(e).lanes) band(s, kd.len, l.off - 0.85, l.off + 0.85); ramp(s); }
+      else if (c.kind === 3) for (const d of [-1, 1]) { teeth(s + d * 3.3, -d); ramp(s + d * 2.7); }
+      else { teeth(s, c.up); ramp(s); }
+    };
+    const paintTri = [];
     // rotatorie ad anello chiuso e quasi circolari: corona d'asfalto, marciapiede solo fuori, isola al centro
     const rings = this.findRoundabouts();
     // Catene: i tratti consecutivi della stessa via (nodo intermedio con due archi, stesso tipo e larghezza, curva
@@ -717,6 +746,11 @@ export class City {
         }
       }
       if (surf && e.turn && !(e.osmLanes && e.osmLanes.mark === 2)) turnArrows(e, A, B);
+      if (this.net.calming && this.net.calming.has(e)) {
+        // fuori dagli incroci, come le strisce pedonali
+        const lo = (A.trim ? A.trim.get(e) : 0) + 1.5, hi = e.len - (B.trim ? B.trim.get(e) : 0) - 1.5;
+        if (hi >= lo) for (const c of this.net.calming.get(e)) calmingAt(e, A, Math.min(hi, Math.max(lo, c.s)), c);
+      }
     }
     const inter = new GeoBuilder(), joints = new GeoBuilder(), walkDisc = new GeoBuilder();
     for (const n of Object.values(nodes)) {
@@ -765,6 +799,13 @@ export class City {
     this.group.add(rm, im, wm, cm, mk);
     if (lines.pos.length) this.group.add(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4)));
     if (yellow.pos.length) this.group.add(new THREE.Mesh(yellow.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe6b422 }), 4)));
+    if (bumpY.pos.length) this.group.add(new THREE.Mesh(bumpY.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8b818 }), 5)), new THREE.Mesh(bumpK.build(), layer(new THREE.MeshLambertMaterial({ color: 0x1c1c1c }), 5)));
+    if (paintTri.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(paintTri.flat(), 3));
+      g.computeVertexNormals();
+      this.group.add(new THREE.Mesh(g, layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 5)));
+    }
     if (paint.pos.length || paintBus.pos.length) {
       const atlas = TX.roadMarkAtlas(), mat = (color) => layer(new THREE.MeshLambertMaterial({ map: atlas, color, alphaTest: 0.5 }), 5);
       if (paint.pos.length) this.group.add(new THREE.Mesh(paint.build(), mat(0xe8e8e2)));
@@ -895,6 +936,24 @@ export class City {
     }
     const lineMat = layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4);
     for (const g of [islandLines, edgeLines]) if (g.pos.length) this.group.add(new THREE.Mesh(g.build(), lineMat));
+  }
+  // dosso o rampa attraversati da obj (x, z) dall'ultima chiamata: il più forte, { sev, lim }, o null
+  bumpHit(obj) {
+    const p = obj._bumpPrev, x1 = obj.x, z1 = obj.z;
+    obj._bumpPrev = { x: x1, z: z1 };
+    if (!p || !this.bumpGrid) return null;
+    const mx = x1 - p.x, mz = z1 - p.z, m = Math.hypot(mx, mz);
+    if (m < 1e-4 || m > 20) return null;
+    let best = null;
+    for (const b of this.bumpGrid.query(x1, z1, m + 2, this._qb || (this._qb = []))) {
+      // la linea del dosso (di traverso) e lo spostamento si incrociano
+      const sx = b.rx * 2 * b.hw, sz = b.rz * 2 * b.hw, ax = b.x - b.rx * b.hw, az = b.z - b.rz * b.hw;
+      const den = mx * sz - mz * sx;
+      if (Math.abs(den) < 1e-9) continue;
+      const t = ((ax - p.x) * sz - (az - p.z) * sx) / den, u = ((ax - p.x) * mz - (az - p.z) * mx) / den;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1 && (!best || b.sev > best.sev)) best = b;
+    }
+    return best;
   }
   // distanza (m) dal bordo dell'asfalto: negativa dentro la carreggiata, al più 8
   surfaceOff(x, z) {

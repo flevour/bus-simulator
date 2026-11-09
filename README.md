@@ -62,7 +62,7 @@ La mappa unisce due fonti aperte:
   sensi unici, limiti di velocità e ponti; le piante dei ~21.000 edifici del centro; i binari (anche i fasci di
   stazione e lo scalo); fiumi e canali (Brenta, Bacchiglione, Piovego, Tronco Maestro, Scaricatore…).
 * **Nodi OpenStreetMap** (`data/osm-padova-nodes.json`, query `scripts/overpass-nodes.ql`): semafori, STOP, dare
-  precedenza e attraversamenti pedonali reali.
+  precedenza, attraversamenti pedonali e dossi reali.
 * **Binari del tram OpenStreetMap** (`data/osm-padova-tram.json`, query `scripts/overpass-tram.ql`): la sede del gioco
   segue i binari veri, uno per verso. Lo shape GTFS corre su uno dei due binari e ha punti radi: viene campionato ogni
   2 m e agganciato al binario OSM vicino e parallelo. Le fermate vanno sul nodo OSM dove si ferma il tram
@@ -178,6 +178,14 @@ uniscono non si incrociano.
   25 m formano un solo impianto, anche quando l'incrocio occupa più nodi (strade a carreggiate separate). I semafori
   pedonali lontani dagli incroci restano come nodo del grafo. Se la mappa è generata senza i nodi OSM, il gioco torna
   a dedurre semafori e cartelli dal tipo di strada.
+* **Corsie e segnaletica orizzontale dai tag OSM** (`lanes`, `lanes:forward/backward`, corsie dei bus da `busway`,
+  `lanes:psv`, `psv:lanes`, `bus:lanes`, `overtaking`, `lane_markings`, `turn:lanes`): la carreggiata misurata si
+  divide in corsie (al più 3,75 m, almeno 2,6, quelle dei bus contro il cordolo), con il tratteggio 3 + 3 m tra le
+  corsie dello stesso verso, la mezzeria continua dove il sorpasso è vietato, la riga gialla e la scritta BUS sulle
+  corsie riservate (anche in controsenso) e le frecce a terra prima degli incroci. Sulle strade strette niente mezzeria.
+* **Dossi e attraversamenti rialzati** (`traffic_calming` dei nodi OSM e delle vie rialzate): dossi a strisce gialle e
+  nere, denti bianchi sulle rampe. Presi troppo forte (oltre 25-40 km/h secondo il tipo) scuotono il bus e i
+  passeggeri.
 * Il **tram SIR1** è guidabile sulla sua linea, da Guizza Capolinea a Pontevigodarzere (vedi sotto).
 * **Area di gioco** allargata a sud lungo il tram, fino al capolinea della Guizza.
 
@@ -291,7 +299,8 @@ future potranno averne 4.
 * ✅ puntualità alla fermata, accostamento preciso, uso corretto delle frecce, comfort dei passeggeri
 * ❌ semaforo rosso, STOP non rispettato, autovelox (30 km/h in centro, 50 fuori), incidenti, ruote sul marciapiede (la carrozzeria che sporge
   in curva non conta, e a incroci e rotonde la ruota posteriore può tagliare la curva), fermate saltate,
-  partenze anticipate, porte aperte fuori fermata, passeggeri lasciati a terra, frenate e curve brusche
+  partenze anticipate, porte aperte fuori fermata, passeggeri lasciati a terra, frenate e curve brusche, dossi presi
+  troppo forte
 
 ## Cosa c'è dentro
 

@@ -364,6 +364,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     edge_walk = []  # per ogni arco: marciapiede misurato a sinistra e a destra (0 = non misurato)
     edge_lanes = {}  # arco -> corsie dai tag OSM (lane_tags), nel verso a -> b
     turns = []  # [arco, frecce nel verso a -> b, frecce contro]: sull'ultimo arco della via in ciascun verso
+    table_ways = []  # (primo arco, ultimo arco) delle vie rialzate (traffic_calming=table)
     n_meas = 0
     way_geo = []  # per ogni strada: id OSM dei nodi, punti, posizioni tenute, nodi del grafo, senso unico, tag
     for w in roads:
@@ -411,6 +412,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     edge_lanes[len(edges)] = lt
                 edges.append([a, b, cls, we, nm, flags, sp, layer])
                 edge_walk.append((pc[3], pc[4]) if pc else (0.0, 0.0))
+        if t.get('traffic_calming') == 'table' and len(edges) > first:
+            table_ways.append((first, len(edges) - 1))
         tf, tb = turn_tags(t, ow)
         if (tf or tb) and len(edges) > first:
             # turn:lanes vale alla fine della via: frecce sull'ultimo arco in ciascun verso
@@ -424,6 +427,15 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
           f'sorpasso vietato {sum(1 for v in edge_lanes.values() if v[4] or v[5])}, frecce {len(turns)}')
 
     signage = osm_signage(sign_els, ped_gap, way_geo, node_id, nodes, edges) if nodes_path else {}
+    # vie rialzate: una rampa (tipo 4) a ciascuna estremità, che sale nel verso da a verso b (il gioco la tiene fuori
+    # dall'incrocio): all'inizio della via il primo arco, alla fine l'ultimo percorso al contrario
+    for k0, k1 in table_ways:
+        a, b = edges[k0][:2]
+        signage.setdefault('calming', []).append([a, b, 0.0, 4])
+        a, b = edges[k1][:2]
+        signage['calming'].append([b, a, 0.0, 4])
+    if table_ways:
+        print(f'vie rialzate: {len(table_ways)}')
 
     # adiacenza per il map matching
     adj = defaultdict(list)
@@ -1232,6 +1244,7 @@ def tram_lane(flat, segs, grid, cell):
     return [round(v, 2) for i in keep for v in sm[i]]
 
 
+CALMING = {'bump': 0, 'hump': 1, 'cushion': 2, 'table': 3}  # traffic_calming -> tipo nei dati del gioco
 SIGNAL_SKIP = ('blinker', 'emergency', 'ramp_meter')  # lampeggianti e semafori dei vigili del fuoco: niente ciclo
 NO_MARKINGS = ('unmarked', 'no', 'informal')
 SIGNAL_GROUP = 25  # m: i semafori dei vari bracci dello stesso incrocio
@@ -1296,6 +1309,8 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
       pedonale = 1 per i semafori di un attraversamento lontano dagli incroci;
     * signs: [incrocio, nodo da cui si arriva, tipo] con tipo 0 = STOP, 1 = dare precedenza;
     * crossings: [a, b, metri da a] per le strisce pedonali lungo l'arco a-b;
+    * calming: [a, b, metri da a, tipo] per dossi (0), dossi lunghi (1), cuscini (2) e attraversamenti rialzati (3); in
+      main() si aggiungono le rampe delle vie rialzate (4, che sale da a verso b);
     * signalArms: [incrocio, nodo da cui si arriva, linea d'arresto in dm (0 = non nota), corsie nel verso, spento]
       per ogni braccio degli incroci semaforizzati. La linea d'arresto è dove OSM mette il semaforo del braccio;
       spento = 1 per il verso senza lanterna di un semaforo pedonale con traffic_signals:direction.
@@ -1547,6 +1562,28 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
         seen[key].append(sa)
         crossings.append([a, b, round(s, 1)])
 
+    # ---- dossi e attraversamenti rialzati (traffic_calming) ----
+    calming = []
+    for e in els:
+        kind = CALMING.get(e['tags'].get('traffic_calming'))
+        if kind is None or e['id'] not in on_way:
+            continue
+        g = node_id.get(e['id'])
+        if g is not None and deg[g] >= 3:
+            continue  # incrocio rialzato: non si sa su quale braccio
+        wi, i = on_way[e['id']][0]
+        keep, ids = way_geo[wi][2], way_geo[wi][3]
+        j = max(k for k in range(len(keep) - 1) if keep[k] <= i) if len(keep) > 1 else None
+        if j is None or ids[j] == ids[j + 1]:
+            continue
+        a, b = ids[j], ids[j + 1]
+        if arm_cls[a].get(b, 9) >= 8:
+            continue
+        (ax, az), (bx, bz) = nodes[a], nodes[b]
+        x, z = xz(e['lat'], e['lon'])
+        L = math.hypot(bx - ax, bz - az) or 1e-9
+        calming.append([a, b, round(max(0.0, min(L, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / L)), 1), kind])
+
     print(f'semafori OSM {len(sig)} -> incroci semaforizzati {sum(1 for s in signals if not s[0])} '
           f'(nodi {sum(len(s) - 1 for s in signals if not s[0])}), pedonali {sum(1 for s in signals if s[0])}, '
           f'non agganciati {ped_lost}')
@@ -1554,10 +1591,12 @@ def osm_signage(els, ped_gap, way_geo, node_id, nodes, edges):
           f'a più corsie {sum(1 for a in arms if a[3] >= 2)}, senza lanterna (pedonali in un verso) {sum(1 for a in arms if a[4])}')
     print(f'cartelli: STOP {sum(1 for v in signs.values() if v == 0)}, dare precedenza {sum(1 for v in signs.values() if v == 1)} '
           f'(sul nodo dell\'incrocio {on_junction}); strisce pedonali {len(crossings)}')
+    print(f'dossi: {sum(1 for c in calming if c[3] < 3)}, attraversamenti rialzati {sum(1 for c in calming if c[3] == 3)}')
     return {
         'signals': signals,
         'signs': [[a, b, k] for (a, b), k in sorted(signs.items())],
         'crossings': crossings,
+        'calming': calming,
         'signalArms': [v for a in arms for v in a],
     }
 

@@ -10,12 +10,12 @@ import json
 import sys
 
 TAGS = ('highway', 'crossing', 'crossing:signals', 'crossing:markings', 'traffic_signals',
-        'traffic_signals:direction', 'direction', 'stop', 'priority')
+        'traffic_signals:direction', 'direction', 'stop', 'priority', 'traffic_calming')
 HIGHWAY = ('traffic_signals', 'stop', 'give_way', 'crossing')
 
 
 def useful(t):
-    return t.get('highway') in HIGHWAY or 'crossing' in t or 'traffic_signals:direction' in t
+    return t.get('highway') in HIGHWAY or 'crossing' in t or 'traffic_signals:direction' in t or 'traffic_calming' in t
 
 
 def main(src, out):
