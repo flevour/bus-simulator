@@ -4,7 +4,7 @@ import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
 import { LINES, TRAM_LINES, laneLayout, laneSpan } from '../data/padova.js';
-import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack } from '../tram/tram.js';
+import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, tramLength } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 import { applyTerrain } from './terrain.js';
 
@@ -1286,7 +1286,18 @@ export class City {
       this.group.add(new THREE.Mesh(mergeGeometries(pan.filter((x) => x.mat === 'sign').map((x) => x.g)), new THREE.MeshLambertMaterial({ map: panTex, side: THREE.DoubleSide })));
     }
     // banchine: a destra del binario di chi le serve (a sinistra dove la fermata lo dice), con la linea bianca di fermata
-    // a fine banchina. Le fermate in comune tra più linee hanno una banchina sola
+    // a fine banchina. Le fermate in comune tra più linee hanno una banchina sola, lunga per il tram più lungo che ci
+    // ferma (SIR2 a 4 moduli): il muso si ferma a fine banchina, quindi la banchina si allunga indietro, e la pensilina
+    // con lei. Le centrali servono i due versi e si allungano dai due capi
+    const stopMods = [];
+    for (const track of tracks) {
+      const M = Math.max(3, ...track.lines.map((ln) => ln.modules || 3));
+      for (const dir of [1, -1]) for (const st of track.stopsDir[dir]) { const p = track.path(dir).at(st.s); stopMods.push({ x: p.x, z: p.z, dx: p.dx, dz: p.dz, M }); }
+    }
+    const extraAt = (x, z, dx, dz, bothDirs) => {
+      const M = Math.max(3, ...stopMods.filter((o) => Math.hypot(o.x - x, o.z - z) < 15 && (bothDirs || o.dx * dx + o.dz * dz > 0.9)).map((o) => o.M));
+      return tramLength(M) - tramLength(3);
+    };
     const plat = [], roofs = [], stopLines = new GeoBuilder(), built = [];
     for (const track of tracks) for (const dir of [1, -1]) {
       const P = track.path(dir);
@@ -1300,16 +1311,19 @@ export class City {
           if (dir > 0) {
             const O = track.path(-1), q = O.at(O.project(p.x, p.z).s), gap = Math.hypot(q.x - p.x, q.z - p.z);
             const w = Math.max(1.6, Math.min(3, gap - TRAM.width - 0.3)), mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2;
-            plat.push(new THREE.BoxGeometry(w, 0.3, 30).rotateY(ang).translate(mx, Y_ROAD + h + 0.15, mz));
-            roofs.push(new THREE.BoxGeometry(Math.max(1.4, w - 0.2), 0.15, 12).rotateY(ang).translate(mx, Y_ROAD + h + 2.96, mz));
-            for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(mx + dx * k, Y_ROAD + h + 1.46, mz + dz * k));
+            const len = 30 + 2 * extraAt(mx, mz, dx, dz, true), roof = len * 0.4, k = roof / 2 - 1.5;
+            plat.push(new THREE.BoxGeometry(w, 0.3, len).rotateY(ang).translate(mx, Y_ROAD + h + 0.15, mz));
+            roofs.push(new THREE.BoxGeometry(Math.max(1.4, w - 0.2), 0.15, roof).rotateY(ang).translate(mx, Y_ROAD + h + 2.96, mz));
+            for (const kk of [-k, k]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(mx + dx * kk, Y_ROAD + h + 1.46, mz + dz * kk));
           }
         } else {
           const wide = this.clearance(p.x + rx * (L + 1.5), p.z + rz * (L + 1.5), ['road'], 20) >= 0.3;
-          const off = wide ? L + 1.5 : L + 1.1, ox = rx * off, oz = rz * off; // bordo verso il tram a 1,8 m dal binario
-          plat.push(new THREE.BoxGeometry(wide ? 2.8 : 2.0, 0.3, 30).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 0.15, p.z + oz));
-          roofs.push(new THREE.BoxGeometry(wide ? 2.4 : 1.8, 0.15, 12).rotateY(ang).translate(p.x + ox, Y_ROAD + h + 2.96, p.z + oz));
-          for (const k of [-4.5, 4.5]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(p.x + ox + dx * k + rx * (wide ? 0.9 : 0.6), Y_ROAD + h + 1.46, p.z + oz + dz * k + rz * (wide ? 0.9 : 0.6)));
+          const ext = extraAt(p.x, p.z, dx, dz, false), len = 30 + ext, roof = len * 0.4, k = roof / 2 - 1.5;
+          // bordo verso il tram a 1,8 m dal binario; centro indietro di metà dell'allungamento
+          const off = wide ? L + 1.5 : L + 1.1, cx = p.x + rx * off - dx * ext / 2, cz = p.z + rz * off - dz * ext / 2;
+          plat.push(new THREE.BoxGeometry(wide ? 2.8 : 2.0, 0.3, len).rotateY(ang).translate(cx, Y_ROAD + h + 0.15, cz));
+          roofs.push(new THREE.BoxGeometry(wide ? 2.4 : 1.8, 0.15, roof).rotateY(ang).translate(cx, Y_ROAD + h + 2.96, cz));
+          for (const kk of [-k, k]) roofs.push(new THREE.BoxGeometry(0.12, 2.9, 0.12).translate(cx + dx * kk + rx * (wide ? 0.9 : 0.6), Y_ROAD + h + 1.46, cz + dz * kk + rz * (wide ? 0.9 : 0.6)));
         }
         const q = P.at(st.s + TRAM_STOP_AHEAD), qr = [-q.dz, q.dx];
         const Q = (a, w) => [q.x + q.dx * a + qr[0] * w, Y_ROAD + h + 0.045, q.z + q.dz * a + qr[1] * w];

@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 59, d: '2026-11-09', t: 'Tram: le fermate del SIR2 e quelle che il SIR2 ha in comune con le altre linee (Eremitani, Stazione nord e Stazione sud) hanno la banchina e la pensilina più lunghe, così il tram a 4 casse ci sta tutto e non lascia l\'ultima carrozza fuori.' },
   { n: 58, d: '2026-11-09', t: 'Cavalcavia Borgomagno sistemato: la rampa dei bus e del tram che sale dalla stazione è un viadotto con i piloni, il tram non resta più sospeso in aria e la 24 passa sotto in piano, senza gobba. Rampe più dolci anche al Cavalcavia Grassi e al Mortise.' },
   { n: 57, d: '2026-11-09', t: 'Niente più lampioni in mezzo alla strada: stanno sul marciapiede anche dove la carreggiata è più larga della via, e alle fermate il bus non li tocca più.' },
   { n: 56, d: '2026-11-09', t: 'Capolinea Plebiscito: la 16 e la 24 girano sulle corsie vere del capolinea, accanto al parcheggio, invece di attraversare il prato in linea retta. Lo stesso vale per le altre corsie di servizio dove passano i bus.' },
