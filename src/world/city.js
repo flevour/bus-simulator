@@ -2251,9 +2251,16 @@ export class City {
       const mA = A.joint ? 2 : A.radius + 8, mB = B.joint ? 2 : B.radius + 4;
       for (let s = mA + ((e.id * 17) % lampStep); s < e.len - mB; s += lampStep, k++) {
         const side = k % 2 ? 1 : -1;
-        const off = e.width / 2 + 1.9;
-        const x = A.x + e.dx * s + -e.dz * side * off, z = A.z + e.dz * s + e.dx * side * off;
-        if (this.clearance(x, z, ['road', 'tram']) < 1.6) continue;
+        // fuori dall'asfalto vero (la pianta delle strade è spesso più larga della via del grafo): il palo si sposta
+        // verso l'esterno fino a 3 m, altrimenti non si mette
+        let x, z, ok = false;
+        for (const extra of [0, 1, 2, 3]) {
+          const off = e.width / 2 + 1.9 + extra;
+          x = A.x + e.dx * s + -e.dz * side * off; z = A.z + e.dz * s + e.dx * side * off;
+          if (this.clearance(x, z, ['road', 'tram']) < 1.6) break;
+          if (!this.asphRings || this.surfaceOff(x, z) >= 0.5) { ok = true; break; }
+        }
+        if (!ok) continue;
         lamps.push({ x, z, ang: Math.atan2(e.dx, e.dz), side });
         this.addObstacle(x, z, 0.18, 0.18, 0, 'pole');
       }

@@ -9,21 +9,17 @@
 import { writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
-// Dopo il piazzale della stazione: fermate con ostacoli da 20 a 19, fuori strada da 11 a 9, spostate da 47 a 33;
-// lampioni da 1120 a 1121 (uno sull'asfalto del piazzale: i lampioni stanno a metà larghezza dell'arco più 1,9 m e le
-// corsie tra le banchine sono state ristrette, ma il piazzale intorno resta asfalto)
-// 9 novembre, area allargata ai bordi e linee tagliate attorno alle fermate tenute: lampioni e alberi messi a caso si
-// rimescolano (1.030 lampioni in carreggiata cambiano posto, 16 in più), e con le fermate al posto giusto sulle linee 9,
-// 11, 11B, 12 e 21 il bus fermo trova pali che prima non incontrava (Beato Pellegrino 105, Cernaia 66)
+// 9 novembre: i lampioni stanno fuori dall'asfalto vero (City.buildTreesAndLamps), gli alberi messi a caso si
+// rimescolano a ogni mappa nuova
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 0,
-  lampioni_in_carreggiata: 1136,
-  alberi_in_carreggiata: 9,
+  lampioni_in_carreggiata: 0,
+  alberi_in_carreggiata: 5,
   pensiline_in_carreggiata: 0,
-  fermate_con_ostacoli: 25,
-  fermate_fuori_strada: 9,
-  fermate_spostate: 33,
+  fermate_con_ostacoli: 11,
+  fermate_fuori_strada: 7,
+  fermate_spostate: 11,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',

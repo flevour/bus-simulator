@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 58, d: '2026-11-09', t: 'Niente più lampioni in mezzo alla strada: stanno sul marciapiede anche dove la carreggiata è più larga della via, e alle fermate il bus non li tocca più.' },
   { n: 57, d: '2026-11-09', t: 'Capolinea Plebiscito: la 16 e la 24 girano sulle corsie vere del capolinea, accanto al parcheggio, invece di attraversare il prato in linea retta. Lo stesso vale per le altre corsie di servizio dove passano i bus.' },
   { n: 56, d: '2026-11-09', t: 'Meno inversioni a U: alla Rotonda Galante (9 e 42) e in altri punti il bus gira nella rotatoria invece di tornare indietro in mezzo alla strada, e le linee che escono dalla mappa e rientrano per la stessa via (22 a Torre, 6 e 12 in Via Sorio, 11 in Via Montà, 25 in Via Croce Rossa) cominciano o finiscono nel verso giusto, senza manovra.' },
   { n: 55, d: '2026-11-09', t: 'Piazzale della stazione sistemato: la banchina delle Corsie 1 e 2 c\'è (con paline e pensiline), gli autobus che arrivano alla Corsia 3 passano dalla corsia giusta invece di entrare contromano o fermarsi nella corsia nord, le partenze dalla Corsia 3 e dalla Corsia 2 cominciano alla fermata, e la fermata Ex Catasto è sulla strada sud.' },
