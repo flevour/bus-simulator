@@ -43,7 +43,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [x] navigatore sulle linee 22, 13, 25 (vedi "Fatto"); la 22 verso Mandria ora ha Via Madonna della Salute;
    - [~] zona Plebiscito: al Capolinea Plebiscito la 16 e la 24 saltavano in linea retta sul prato (vedi "Fatto");
      la segnalazione non dice altro: se resta qualcosa servono i dettagli da chi gioca;
-   - [ ] cavalcavia da migliorare e posizione dei fiumi;
+   - [~] cavalcavia: al Borgomagno la rampa dei bus e del tram che sale dalla stazione restava a terra, con il tram
+     sospeso e una gobba dove passa la 24 (vedi "Fatto"); restano i sottopassi che nella realtà scendono sotto il
+     piano della strada (Corso Australia su Via Cignaroli, Corso Tredici Giugno su Via Rienza: il gioco non abbassa
+     le strade) e la posizione dei fiumi;
    - [ ] mappa più grande;
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
      - [x] passeggeri anche sugli altri autobus (vedi "Fatto");
@@ -105,10 +108,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   legale dall'entrata est. Corsia 1 e Corsia 2 hanno la stessa palina (OSM le mette a 1,8 m l'una dall'altra); la 4
   per il Capolinea Nord parte dalla corsia sud e fa il giro del piazzale. La banchina sud è del tram.
 - [~] Percorsi con brevi deviazioni avanti e indietro in una via laterale (179 tratti A-B-A, errori di aggancio del
-  tracciato GTFS): quelli senza fermate li tolgono già i dati (`drop_spurs`); con i giri nelle rotatorie e le linee tagliate senza andata e
-  ritorno ai capi (vedi "Fatto") ne restano 17 con una fermata: la 3 in Via Bembo (749 m), la 4 in Piazzale
-  Castagnara e in Via Gramsci, la 6 al Liceo Codalunga, la 15B e la 16 ai giardini di Corso Garibaldi, la 24 al
-  Capolinea Plebiscito. Da capire caso per caso (alcuni possono essere veri).
+  tracciato GTFS): quelli senza fermate li tolgono già i dati (`drop_spurs`); con i giri nelle rotatorie e le linee
+  tagliate senza andata e ritorno ai capi (vedi "Fatto") ne restano 11, tutti con una fermata: la 3 in Via Bembo
+  (749 m, tre varianti), la 4 in Via Gramsci (cinque varianti), la 16 e la 24 al Capolinea Plebiscito. Da capire caso
+  per caso (alcuni possono essere veri).
 - [ ] Corsie bus in controsenso (flag 256): il gioco le conosce per i percorsi, ma i bus le percorrono al centro della
   strada; servirebbe una corsia propria sul lato giusto, e le auto non dovrebbero usarla.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
@@ -198,6 +201,12 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
     tagliate senza andata e ritorno ai capi;
   - **corsie di servizio dove passa un bus** (anelli dei capolinea nei parcheggi): il Capolinea Plebiscito senza salti;
   - **lampioni** fuori dall'asfalto vero: da 1.116 in carreggiata a nessuno.
+  - **rampe dei cavalcavia** (`overpass_heights` in `street_surfaces.py`): la quota scende su tutti i rami con il
+    nome del ponte (al Borgomagno la rampa dei bus e del tram verso la stazione era a terra, con un gradino di 6,5 m
+    in 16 m, il tram sospeso sopra il terrapieno del DTM e una gobba di 2,8 m nel sottopasso della 24); almeno 5 m
+    sopra le strade in sottopasso (`tunnel` o `layer` < 0) dove la rampa è ancora alta; raccordi al 10% per le
+    strade che si innestano (Via Friburgo al Cavalcavia Grassi, Via Pietro Liberi, Cavalcavia Mortise: prima fino
+    al 74%).
 - [x] Passeggeri sugli altri autobus: dai finestrini dei bus automatici si vedono i passeggeri seduti e in piedi (di
   sera con l'interno illuminato); vicino al giocatore, alle fermate dove si fermano, qualcuno aspetta, sale dalla
   porta anteriore e scende da quella centrale, e il bus aspetta che abbiano finito.

@@ -9,16 +9,17 @@
 import { writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
-// 9 novembre: i lampioni stanno fuori dall'asfalto vero (City.buildTreesAndLamps), gli alberi messi a caso si
-// rimescolano a ogni mappa nuova
+// 9 novembre: i lampioni stanno fuori dall'asfalto vero (City.buildTreesAndLamps); con la corsia mappa sopra il
+// piazzale della stazione fermate con ostacoli 9, fuori strada 5, spostate 11; gli alberi messi a caso si rimescolano
+// a ogni mappa nuova
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 0,
   lampioni_in_carreggiata: 0,
-  alberi_in_carreggiata: 5,
+  alberi_in_carreggiata: 4,
   pensiline_in_carreggiata: 0,
-  fermate_con_ostacoli: 11,
-  fermate_fuori_strada: 7,
+  fermate_con_ostacoli: 9,
+  fermate_fuori_strada: 5,
   fermate_spostate: 11,
 };
 const NOMI = {

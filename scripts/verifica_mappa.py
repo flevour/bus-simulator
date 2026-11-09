@@ -43,15 +43,16 @@ H_ELEV = 0.05  # m: nodi in quota (cavalcavia): sotto possono esserci edifici
 # e la 12 che non va più contromano: sovrapposizioni di 0,2-0,9 m tra edifici Overture e carreggiate DBGT, come le
 # altre; fermate lontane da 12 a 13 (Madonna della Salute 85 sulla 22, a 41 m, nella zona fuori area)
 SOGLIE = {
-    # 147: le corsie di servizio dove passa un bus (anelli dei capolinea) portano un edificio a 0,3 m dall'asfalto
-    'edifici_in_carreggiata': 170,
-    'edifici_in_carreggiata_bus': 114,
+    # 9 novembre, corsia mappa sopra il piazzale della stazione (area ai bordi, linee tagliate, inversioni a U, corsie
+    # di servizio dei capolinea, rampe del Cavalcavia Borgomagno): edifici in carreggiata da 170 a 167 (lungo i bus da
+    # 114 a 111), fermate lontane da 13 a 2, agganciate nel punto sbagliato da 33 a 11; il marciapiede stretto cresce
+    # con l'area ai bordi (Via Madonna della Salute e altri cinque riquadri: 56.000 m² di marciapiede, 2.200 stretti)
+    'edifici_in_carreggiata': 167,
+    'edifici_in_carreggiata_bus': 111,
     'edifici_sui_percorsi': 0,
-    'fermate_lontane': 13,
-    'fermate_spostate': 33,
-    # 9 novembre, area allargata ai bordi (Via Madonna della Salute e altri cinque riquadri): 56.000 m² di marciapiede
-    # in più, di cui 2.200 stretti
-    'marciapiedi_stretti_m2': 171300,
+    'fermate_lontane': 2,
+    'fermate_spostate': 11,
+    'marciapiedi_stretti_m2': 171200,
 }
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',

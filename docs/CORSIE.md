@@ -166,8 +166,11 @@ dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.
 Prossimo lavoro, in quest'ordine:
 
 - svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
-- le 25 fermate senza palina e i 17 tratti A-B-A con una fermata rimasti (elenchi in IDEE, "Mappa e dati");
-- cavalcavia e posizione dei fiumi (segnalazione del 6 novembre, senza dettagli);
+- le fermate senza palina e gli 11 tratti A-B-A con una fermata rimasti (3 in Via Bembo, 4 in Via Gramsci, 16 e 24
+  al Capolinea Plebiscito; elenchi in IDEE, "Mappa e dati");
+- cavalcavia: sistemate le rampe (Borgomagno e raccordi, vedi IDEE); restano i sottopassi che nella realtà scendono
+  sotto il piano della strada (Corso Australia su Via Cignaroli, Corso Tredici Giugno su Via Rienza, 3,6 m sopra la
+  strada di sotto), che chiedono di abbassare il terreno sotto le strade `tunnel`; posizione dei fiumi senza dettagli;
 - zona Plebiscito: sistemato il Capolinea Plebiscito; per il resto servono i dettagli di chi l'ha segnalata;
 - gli 11 salti senza strada rimasti sono ai bordi (13 ad Altichiero, 19 a Saletto, 24 a Mandriola): li risolve il
   caricamento per aree (onda 3).

@@ -8,6 +8,7 @@ Al posto di nastri, dischi e ventagli sovrapposti disegnati a runtime, qui si ca
 Le quote dei cavalcavia seguono la stessa regola del gioco (src/data/padova.js): i tratti in quota non fanno
 parte del piano stradale a terra.
 """
+import heapq
 import math
 from collections import defaultdict
 
@@ -16,6 +17,8 @@ from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 from shapely.ops import unary_union
 
 H_DECK, R_RAMP, PSV_DECK = 7.0, 130.0, 0.92  # come markOverpasses in src/data/padova.js
+MAX_SLOPE = 0.10  # pendenza massima di un raccordo verso una rampa
+H_CLEAR = 5.0  # m: quota minima di una rampa sopra una strada in sottopasso (un bus è alto 3,2 m, l'impalcato 0,9)
 SIDEWALK = 3.5  # m: marciapiede attorno alle carreggiate
 BRIDGE_WALK = 2.0  # m: marciapiede sui ponti sopra l'acqua
 FILLET_BUS, FILLET = 7.0, 3.5  # m: raggio dei raccordi agli incroci (percorsi dei bus, altre strade)
@@ -30,19 +33,31 @@ DECK_JOIN = 4.5  # m: impalcati più vicini del doppio di così diventano un cor
 TRAM_HALF = 1.7 + 0.5  # m: metà della corsia di un binario più il cordolo
 
 
-def _cross(p, q, r, s):
+def _cross_t(p, q, r, s):
+    """Frazione di p-q dove il segmento incrocia r-s, o None."""
     rx, rz, sx, sz = q[0] - p[0], q[1] - p[1], s[0] - r[0], s[1] - r[1]
     den = rx * sz - rz * sx
     if abs(den) < 1e-9:
-        return False
+        return None
     t = ((r[0] - p[0]) * sz - (r[1] - p[1]) * sx) / den
     u = ((r[0] - p[0]) * rz - (r[1] - p[1]) * rx) / den
-    return 0 <= t <= 1 and 0 <= u <= 1
+    return t if 0 <= t <= 1 and 0 <= u <= 1 else None
+
+
+def _cross(p, q, r, s):
+    return _cross_t(p, q, r, s) is not None
+
+
+def _smooth(u):
+    u = max(0.0, min(1.0, u))
+    return u * u * (3 - 2 * u)
 
 
 def overpass_heights(nodes, edges, rails):
     """Quote dei nodi dei cavalcavia: ponti OSM in quota (layer >= 1) sopra la ferrovia o sopra un'altra strada,
-    tutta la catena del ponte, rampe raccordate fino a 130 m che non salgono sulla strada di sotto."""
+    tutta la catena del ponte, rampe raccordate fino a 130 m che non salgono sulla strada di sotto (su tutti i rami
+    con il nome del ponte, almeno H_CLEAR sopra le strade in sottopasso), raccordi al massimo al 10% per le strade che
+    si innestano sulle rampe."""
     C = 100
     cells = lambda a, b: [(gx, gz) for gx in range(int(min(a[0], b[0]) // C), int(max(a[0], b[0]) // C) + 1)
                           for gz in range(int(min(a[1], b[1]) // C), int(max(a[1], b[1]) // C) + 1)]
@@ -89,8 +104,9 @@ def overpass_heights(nodes, edges, rails):
                     deck.add(j)
                     stack.append(j)
     # Rampe: dalla fine dell'impalcato la quota scende solo lungo la prosecuzione della strada stessa (stessa via, o il
-    # ramo più dritto ai nodi intermedi) e arriva a zero al primo incrocio o a 130 m; le strade laterali restano a
-    # terra (prima la quota si spargeva su tutte le strade entro 130 m: incroci e rotatorie ai piedi sollevati)
+    # ramo più dritto ai nodi intermedi, più i rami con il nome del ponte) e arriva a zero al primo incrocio o a 130 m;
+    # le strade laterali restano a terra (prima la quota si spargeva su tutte le strade entro 130 m: incroci e
+    # rotatorie ai piedi sollevati)
     deck_nodes = {n for k in deck for n in edges[k][:2]}
     name_of = lambda k: edges[k][4]
     heights = {}
@@ -98,48 +114,101 @@ def overpass_heights(nodes, edges, rails):
     def put(n, h):
         if h > 0.001 and h > heights.get(n, 0):
             heights[n] = h
+    # strade in sottopasso (tunnel o layer < 0): la rampa che ci passa sopra resta in quota fin oltre l'incrocio. Al
+    # Cavalcavia Borgomagno OSM segna il sottopasso sulla strada di sotto (Piazzale della Stazione, dove passa la 24) e
+    # non il ponte sulla rampa dei bus e del tram che sale dalla stazione
+    tgrid = defaultdict(list)
+    for j, f in enumerate(edges):
+        if f[5] & 8 or f[7] < 0:
+            for c in cells(nodes[f[0]], nodes[f[1]]):
+                tgrid[c].append(j)
+
+    def over_tunnel(p, q, a, b):
+        """Frazione di p-q dove l'arco scavalca l'ultima strada in sottopasso, o -1."""
+        ts = [_cross_t(p, q, nodes[edges[j][0]], nodes[edges[j][1]]) for c in cells(p, q) for j in tgrid.get(c, ())
+              if not {edges[j][0], edges[j][1]} & {a, b}]
+        return max([t for t in ts if t is not None], default=-1.0)
+
     for n in deck_nodes:
         put(n, H_DECK)
     for n0 in deck_nodes:
         din = [k for k in at[n0] if k in deck]
-        for k0 in at[n0]:
-            if k0 in deck:
-                continue
-            nm = name_of(din[0]) if din else None
-            path, cur, k, dist = [(n0, 0.0)], n0, k0, 0.0
+        nm = name_of(din[0]) if din else None
+        # rami da seguire: (cammino, nodo, arco, metri, metri all'ultimo sottopasso). Dove la strada del ponte si divide
+        # in due rami con lo stesso nome si scende su tutti e due (Borgomagno: la corsia dei bus verso Via Codalunga e
+        # la rampa verso la stazione); prima si seguiva solo il più dritto e l'altro restava a terra, con un gradino
+        stack = [([(n0, 0.0)], n0, k0, 0.0, 0.0) for k0 in at[n0] if k0 not in deck]
+        while stack:
+            path, cur, k, dist, dcross = stack.pop()
             while True:
                 e = edges[k]
                 nxt = e[1] if e[0] == cur else e[0]
                 dx, dz = nodes[nxt][0] - nodes[cur][0], nodes[nxt][1] - nodes[cur][1]
                 L = math.hypot(dx, dz) or 1e-9
                 dist += L
-                if nxt in deck_nodes or nxt in under:
+                if nxt in deck_nodes or nxt in under or any(n == nxt for n, _ in path):
                     break
+                tc = over_tunnel(nodes[cur], nodes[nxt], cur, nxt)
+                if tc >= 0:  # quota piena fino a 15 m oltre il sottopasso (sugli archi lunghi non fino in fondo)
+                    dcross = min(dist, dist - L + tc * L + 15)
                 path.append((nxt, dist))
                 if dist >= R_RAMP:
                     break
                 outs = [j for j in at[nxt] if j != k and j not in deck]
                 ground_deg = len(at[nxt])
-                best, bd = None, 0.7
+                best, bd, same = None, 0.7, []
                 for j in outs:
                     f = edges[j]
                     o = f[1] if f[0] == nxt else f[0]
                     ex, ez = nodes[o][0] - nodes[nxt][0], nodes[o][1] - nodes[nxt][1]
                     c = (ex * dx + ez * dz) / ((math.hypot(ex, ez) or 1e-9) * L)
+                    if nm and name_of(j) == nm and c > 0.5:
+                        same.append(j)
                     # a un incrocio si prosegue solo sulla stessa via (o dritto se l'impalcato finisce a meno di 40 m)
                     if ground_deg >= 3 and name_of(j) != nm and dist >= 40:
                         continue
                     if c > bd:
                         best, bd = j, c
+                if best is None and same:
+                    best = same[0]
+                stack += [(list(path), nxt, j, dist, dcross) for j in same if j != best]
                 if best is None:
                     break
                 cur, k = nxt, best
             Lp = path[-1][1]
             if Lp < 1:
                 continue
+            # quota piena fino al sottopasso (almeno H_CLEAR sopra la strada di sotto), poi la discesa; solo se la rampa
+            # lì è ancora alta: dove è già scesa a terra (Corso Australia su Via Cignaroli) nella realtà è il sottopasso
+            # a scendere sotto il piano della strada, e il gioco non abbassa le strade
+            hx = H_DECK * _smooth(1 - dcross / Lp) if dcross else 0.0
+            if hx < H_DECK / 3:
+                dcross = 0.0
+            hc = max(hx, H_CLEAR) if dcross else 0.0
             for n, d in path:
-                u = max(0.0, min(1.0, 1 - d / Lp))
-                put(n, H_DECK * u * u * (3 - 2 * u))
+                if d <= dcross:
+                    h = max(H_DECK * _smooth(1 - d / Lp), hc)
+                else:
+                    h = (hc or H_DECK) * _smooth(1 - (d - dcross) / max(1.0, Lp - dcross))
+                put(n, h)
+    # raccordi: dove una strada si innesta su una rampa (stesso nodo) nessun arco sale più di MAX_SLOPE; la quota si
+    # propaga all'indietro sulla strada che si innesta (Via Pietro Liberi sulla rampa nord del Borgomagno saliva di 4 m
+    # in 6 m, la carreggiata di Via Friburgo al Cavalcavia Grassi di 7 m in 20 m)
+    lens = [math.dist(nodes[e[0]], nodes[e[1]]) for e in edges]
+    # accanto a una strada che passa sotto un impalcato (quota 0 obbligata) il raccordo sposterebbe solo il gradino
+    pinned = under | {o for n in under for j in at[n] for o in edges[j][:2]}
+    pq = [(-h, n) for n, h in heights.items()]
+    heapq.heapify(pq)
+    while pq:
+        h, n = pq[0][0] * -1, heapq.heappop(pq)[1]
+        if h < heights.get(n, 0) - 1e-6:
+            continue
+        for j in at[n]:
+            o = edges[j][1] if edges[j][0] == n else edges[j][0]
+            need = h - MAX_SLOPE * lens[j]
+            if need > heights.get(o, 0) + 0.01 and o not in pinned and not edges[j][5] & 8:
+                heights[o] = need
+                heapq.heappush(pq, (-need, o))
     out = {}
     for n, h in heights.items():
         psv = all(edges[j][5] & 32 for j in at[n])
