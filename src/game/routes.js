@@ -63,8 +63,17 @@ export function alignStops(route, placements) {
     // kerb: distanza dall'asse del cordolo vero alla palina (carreggiata misurata, golfi di fermata); chi aspetta sta
     // un metro oltre, sul marciapiede
     const kerb = pr.pl.kerb != null ? pr.pl.kerb : hw;
-    Object.assign(st, { s: pr.s, x: p.x + rx * (kerb + 1.0), z: p.z + rz * (kerb + 1.0), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw, kerb });
+    Object.assign(st, { s: pr.s, x: p.x + rx * (kerb + 1.0), z: p.z + rz * (kerb + 1.0), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw, kerb, kl: pr.pl.kl ?? kerb, ks: pr.pl.ks || 0 });
   });
+}
+
+// Bus fermo alla fermata con il centro "back" metri prima della palina: accostato al cordolo vero e parallelo a lui
+// (kl, ks: la linea del cordolo lungo la fermata, vedi allStopPlacements; dove non è parallelo all'asse, come a
+// Largo Debussy, il bus lo segue)
+export function stopPose(route, st, back = 6.5) {
+  const p = pointAt(route, st.s - back), rx = -p.dz, rz = p.dx, ks = st.ks || 0;
+  const lat = (st.kl ?? st.kerb ?? st.hw) - ks * back - 1.6;
+  return { x: p.x + rx * lat, z: p.z + rz * lat, h: Math.atan2(p.dx + rx * ks, p.dz + rz * ks) };
 }
 
 // il bus può percorrere l'arco e partendo dal nodo from? (anche le corsie riservate, non le vie pedonali)
@@ -222,6 +231,33 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
   }
   return out;
 
+  // Linea del bus lungo la fermata: il cordolo vero misurato ogni 3 m per la lunghezza del bus (palina a o = 0, il bus
+  // dietro), retta che lo segue (pendenza ks, scartati i punti fuori riga: passi carrai, incroci, golfi) spostata sul
+  // punto più vicino all'asse, così il bus non sale sul marciapiede in nessun punto. kl: dove passa la retta alla palina.
+  function busLine(cx, cz, k, dx, dz, hw) {
+    const rx = -dz, rz = dx;
+    let pts = [[0, k]];
+    for (const o of [-3, -6, -9, -12]) {
+      const q = kerb(cx + dx * o, cz + dz * o, rx, rz, hw);
+      if (q != null && q > hw - 2.5 && q < hw + 8) pts.push([o, q]);
+    }
+    const fit = (P) => {
+      const n = P.length, mo = P.reduce((a, p) => a + p[0], 0) / n, mk = P.reduce((a, p) => a + p[1], 0) / n;
+      let sxx = 0, sxy = 0;
+      for (const [o, q] of P) { sxx += (o - mo) ** 2; sxy += (o - mo) * (q - mk); }
+      const m = sxx > 1 ? sxy / sxx : 0;
+      return { m, c: mk - m * mo };
+    };
+    let ks = 0;
+    if (pts.length >= 3) {
+      let f = fit(pts);
+      const keep = pts.filter(([o, q]) => Math.abs(q - (f.c + f.m * o)) < 0.4);
+      if (keep.length >= 3 && keep.length < pts.length) { pts = keep; f = fit(pts); }
+      ks = Math.max(-0.2, Math.min(0.2, f.m));
+    }
+    return { ks, kl: Math.min(...pts.map(([o, q]) => q - ks * o)) };
+  }
+
   function placeFor(st, v) {
     let best = null, bd = 60;
     for (let i = 0; i < v.nodes.length - 1; i++) {
@@ -244,19 +280,22 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       if (spot) break;
       if (best.at + sh < 0 || best.at + sh > best.l) continue;
       const cx = best.cx + dx * sh, cz = best.cz + dz * sh;
-      // palina 0,6 m oltre il cordolo vero (la carreggiata misurata può essere più larga o più stretta dell'arco)
+      // palina 0,7 m oltre il cordolo vero, 0,5 m sulle banchine strette (la carreggiata misurata può essere più larga
+      // o più stretta dell'arco)
       const k = useKerb ? kerb(cx, cz, rx, rz, hw) : null;
       // (anche in fondo a un golfo di fermata, dove l'asfalto misurato si allarga)
       const atKerb = k != null && k > hw - 2.5 && k < hw + 8;
-      const off = atKerb ? k + 0.6 : hw + 1.6;
-      const px = cx + rx * off, pz = cz + rz * off;
-      if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6)) continue;
-      spot = { cx, cz, px, pz, kerb: atKerb ? k : hw };
+      for (const off of atKerb ? [k + 0.7, k + 0.5] : [hw + 1.6]) {
+        const px = cx + rx * off, pz = cz + rz * off;
+        if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6)) continue;
+        spot = { cx, cz, px, pz, kerb: atKerb ? k : hw, ...(atKerb ? busLine(cx, cz, k, dx, dz, hw) : {}) };
+        break;
+      }
     }
     if (!spot) return;
     out.push({
       id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw, kerb: spot.kerb, shelter: st.shelter, bench: st.bench,
+      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw, kerb: spot.kerb, kl: spot.kl, ks: spot.ks, shelter: st.shelter, bench: st.bench,
     });
   }
 }

@@ -576,7 +576,8 @@ export class City {
       road2[road2.length - 1] = trim(pts[pts.length - 1], pts[pts.length - 2], trimAt(fwd.end, fwd.edge));
       if (surf) {
         // mezzeria tratteggiata sul doppio senso; le righe di bordo seguono il bordo dell'asfalto (buildSurfaces)
-        if (!e0.roundabout && style(e0) === road) for (const d of dashes(road2, 3, 7.5)) lines.strip(d, 0.13, Y_ROAD + 0.012, 1, 0);
+        // (non sulle strade di servizio: piazzali, capolinea, parcheggi non hanno la mezzeria)
+        if (!e0.roundabout && !e0.service && style(e0) === road) for (const d of dashes(road2, 3, 7.5)) lines.strip(d, 0.13, Y_ROAD + 0.012, 1, 0);
         continue;
       }
       style(e0).strip(road2, e0.width, Y_ROAD, e0.ped ? 6 : 12);
@@ -1421,7 +1422,12 @@ export class City {
       let seen = this.surfaceOff(cx, cz) < 0;
       for (let o = 0.2; o <= hw + 8; o += 0.2) {
         if (this.surfaceOff(cx + rx * o, cz + rz * o) < 0) seen = true;
-        else if (seen || o > hw) return o;
+        else if (seen || o > hw) {
+          // il bordo è tra o - 0,2 e o: si stringe a 2,5 cm (il bus si accosta a 30 cm dal cordolo, non sopra)
+          let a = o - 0.2, b = o;
+          for (let i = 0; i < 3; i++) { const m = (a + b) / 2; if (this.surfaceOff(cx + rx * m, cz + rz * m) < 0) a = m; else b = m; }
+          return (a + b) / 2;
+        }
       }
       return null;
     } : null;
@@ -1475,10 +1481,10 @@ export class City {
       // obstacle pensilina
       if (shelter && this.clearance(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, ['road'], 20) > 0.8) this.addObstacle(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, 2.6, 1.0, Math.atan2(-st.dz, st.dx), 'shelter');
       // segnaletica gialla della fermata (stile italiano): zig-zag all'ingresso e all'uscita,
-      // linea tratteggiata lato corsia e la scritta BUS, leggibile da chi arriva
-      const lx = st.cx + st.rx * (st.hw - 1.6), lz = st.cz + st.rz * (st.hw - 1.6);
-      const y = Y_ROAD + 0.025;
-      const p = (o, w) => [lx + st.dx * o + st.rx * w, y, lz + st.dz * o + st.rz * w];
+      // linea tratteggiata lato corsia e la scritta BUS, leggibile da chi arriva. Dove si ferma il bus: al cordolo
+      // vero (1,6 m dal bordo all'asse del bus), seguendolo anche dove non è parallelo all'asse della strada
+      const y = Y_ROAD + 0.025, kb = (st.kl ?? st.kerb ?? st.hw) - 1.6, ks = st.ks || 0;
+      const p = (o, w) => { const l = kb + ks * o + w; return [st.cx + st.dx * o + st.rx * l, y, st.cz + st.dz * o + st.rz * l]; };
       // o: lungo la strada (0 = palina), w: verso il marciapiede
       const WL = -1.1, WC = 1.3, LW = 0.07; // bordo lato corsia, bordo lato marciapiede, mezza larghezza linea
       const line = (o0, w0, o1, w1) => {

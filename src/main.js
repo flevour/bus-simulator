@@ -6,7 +6,7 @@ import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/t
 import { BusSim } from './world/buses.js';
 import { Bus } from './bus/bus.js';
 import { Mission, Transfer, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
-import { pointAt, projectOnRoute, startGoal, planTransfer, findPath } from './game/routes.js';
+import { pointAt, projectOnRoute, startGoal, planTransfer, findPath, stopPose } from './game/routes.js';
 import { turnoOf } from './game/turni.js';
 import { DEPOT_NAME, depotGate, DepotGate } from './world/depot.js';
 import { HUD } from './game/hud.js';
@@ -809,9 +809,8 @@ function startMission(resume = null) {
     bus.setFront(st0.s - 0.5);
     mission.s = Math.max(0, st0.s - 0.5 - TRAM.ref);
   } else {
-    const p = pointAt(mission.route, st0.s - 6.5);
-    const lat = (st0.kerb ?? st0.hw) - 1.6; // accostato al cordolo vero della fermata
-    bus.place(p.x + -p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
+    const q = stopPose(mission.route, st0); // accostato al cordolo vero della fermata
+    bus.place(q.x, q.z, q.h);
     mission.s = Math.max(0, st0.s - 6.5);
   }
   bus.setInnerDisplay(mission.transfer ? 'Fuori servizio' : 'Linea ' + L.id + ' – ' + destName);
@@ -952,8 +951,8 @@ function chainNext() {
     // nessuna strada fin lì nel verso giusto (partenza al bordo della mappa: il giro fino al capolinea vero è fuori
     // mappa): il bus va alla fermata di partenza
     if (!atStart) {
-      const p = pointAt(goal.route, goal.s - 6.5), lat = (goal.route.stops[0].kerb ?? goal.route.stops[0].hw) - 1.6;
-      placeBusAt(p.x - p.dz * lat, p.z + p.dx * lat, Math.atan2(p.dx, p.dz));
+      const q = stopPose(goal.route, goal.route.stops[0]);
+      placeBusAt(q.x, q.z, q.h);
       hud.toast(V.cutStart ? `🌀 Giro al capolinea fuori mappa: riparti da ${goal.stop.name}` : `🌀 Il bus è alla fermata di partenza ${goal.stop.name}`, 'info');
     }
     beginService();

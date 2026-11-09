@@ -195,7 +195,7 @@ export class Mission {
       // accostamento misurato dal cordolo vero della fermata (kerb), se c'è
       const kerb = st.kerb ?? st.hw;
       const inZone = along > -12 && along < 10 && proj.d < Math.max(st.hw, kerb) + 2.5;
-      const lat = Math.abs(proj.lat - (kerb - 1.6));
+      const lat = Math.abs(proj.lat - ((st.kl ?? kerb) - 1.6));
       this.stopInfo = { st, along, inZone, lat };
       const stopped = Math.abs(bus.v) < 0.3;
       if (inZone && stopped && bus.doorOpen[0] > 0.9) {
