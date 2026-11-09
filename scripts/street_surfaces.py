@@ -414,7 +414,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     bpolys = []
     flat2 = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
     for b in buildings:
-        p = Polygon(flat2(b[3]), [flat2(h) for h in (b[4] if len(b) > 4 else []) if len(h) >= 6]) if len(b[3]) >= 6 else Polygon()
+        p = Polygon(flat2(b[3]), [flat2(h) for h in (b[4] if len(b) > 4 and b[4] else []) if len(h) >= 6]) if len(b[3]) >= 6 else Polygon()
         bpolys.append(p if p.is_valid else p.buffer(0))
     btree = STRtree(bpolys)
     free = lambda h: h.area < ISLAND_MAX and not any(bpolys[i].intersects(h) for i in btree.query(h))
@@ -508,7 +508,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             g = g.simplify(0.05)
             flat = [round(v, 1) for xy in list(g.exterior.coords)[:-1] for v in xy]
             holes = [[round(v, 1) for xy in list(r.coords)[:-1] for v in xy] for r in g.interiors]
-            out_b.append([b[0], b[1], b[2], flat, holes] if holes else [b[0], b[1], b[2], flat])
+            out_b.append([b[0], b[1], b[2], flat, holes or None, *b[5:]])
     # marciapiede: fascia attorno alla carreggiata e aree pedonali; via isole, acqua (tranne sui ponti) e l'impronta
     # delle rampe in quota. Gli edifici non si tolgono: lo coprono già, e il ritaglio triplicherebbe i vertici
     ped = unary_union([seg(e).buffer(e[3] / 2, quad_segs=4) for e in edges if e[2] == 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3])

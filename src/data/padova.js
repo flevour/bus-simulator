@@ -165,7 +165,8 @@ export function buildNetwork() {
   const flat = (f) => { const out = []; for (let i = 0; i < f.length; i += 2) out.push({ x: f[i], z: f[i + 1] }); return out; };
   const water = MAP.water.map(([name, width, f]) => ({ name, width, pts: flat(f) })).filter((w) => w.pts.length > 1);
   const rails = MAP.rails.map(([bt, yard, f]) => ({ bridge: bt === 1, tunnel: bt === 2, yard: !!yard, pts: flat(f) })).filter((r) => r.pts.length > 1);
-  const buildings = MAP.buildings.map(([h, kind, name, f, holes]) => ({ h, kind, name, pts: flat(f), holes: holes ? holes.map(flat) : null }));
+  // por: altezza libera dei portici misurati (DBGT), 0 = misurato senza portici, undefined = non misurato
+  const buildings = MAP.buildings.map(([h, kind, name, f, holes, por]) => ({ h, kind, name, pts: flat(f), holes: holes ? holes.map(flat) : null, por }));
   // tram SIR1: tracciato e fermate (sede tranviaria in mezzo a Via Aspetti, Via Reni, ecc.)
   // sede del tram: inversione ai capolinea tagliata, curve raccordate, binario tronco di 40 m oltre i capolinea.
   // Con i binari OSM (tramLanes) c'è un tracciato per verso; con il solo GTFS il primo è l'asse dei due binari

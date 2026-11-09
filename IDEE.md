@@ -53,7 +53,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
   fermate, verifiche e tappe in [`docs/PIANO_MODELLO_CITTA.md`](docs/PIANO_MODELLO_CITTA.md). Fatte M1–M4 e verde,
   isole e alberi del DBGT; i prossimi passi in ordine sono nel piano (sezione 7, "Prossimi passi"):
   - [ ] corsie e segnaletica orizzontale, svolte a sinistra protette ai semafori;
-  - [ ] portici veri dai volumi del DBGT;
+  - [x] portici veri dai volumi del DBGT (vedi "Fatto");
   - [ ] paline e pensiline da OSM;
   - [ ] zone pedonali e piazze lastricate;
   - [ ] quote stradali del DBGT e sottopassi; tessere LiDAR da chiedere alla Regione;
@@ -130,6 +130,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Portici veri: dai volumi del DBGT sopra i portici (altezza libera misurata) per 2.198 edifici; archi alti come
+  quelli reali; quelli a caso restano solo fuori dall'area misurata. Forma vera di carreggiate e marciapiedi dal
+  DBGT; ponti e rive senza strade che scendono nell'alveo; Largo Debussy con l'anello del capolinea.
 - [x] Isole, verde e alberi dal DBGT: spartitraffico tra le carreggiate e alle isole di traffico (fuori dalle corsie
   e dai percorsi dei bus), prati, aree alberate e aiuole come strato verde, alberi veri dei filari e dei parchi al
   posto di quelli generati dentro il comune.

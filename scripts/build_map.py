@@ -1105,7 +1105,9 @@ def ring_area(r):
 
 def measured_heights(buildings, vol_path):
     """Altezze misurate (DBGT, strato UN_VOL, scripts/dbgt_volumes.py) al posto di quelle stimate: per ogni edificio la
-    media dei volumi che ha dentro, pesata sull'area, se coprono almeno il 40% della pianta. Restituisce quanti."""
+    media dei volumi che ha dentro, pesata sull'area, se coprono almeno il 40% della pianta. Restituisce quanti.
+    Portici: agli edifici misurati si aggiunge in fondo (sesto elemento) l'altezza libera dei portici (UN_VOL_POR = 3,
+    UN_VOL_INH), 0 se non ne hanno; il gioco disegna i portici solo dove ci sono."""
     v = json.load(open(vol_path, encoding='utf-8'))['v']
     C = 50
     grid = defaultdict(list)
@@ -1121,22 +1123,28 @@ def measured_heights(buildings, vol_path):
         return c
     done = 0
     for b in buildings:
-        f, holes = b[3], b[4] if len(b) > 4 else []
+        f, holes = b[3], (b[4] if len(b) > 4 and b[4] else [])
         xs, zs = f[0::2], f[1::2]
         area = abs(ring_area(list(zip(xs, zs)))) - sum(abs(ring_area(list(zip(h[0::2], h[1::2])))) for h in holes)
         if area < 4:
             continue
-        sw = sa = 0.0
+        sw = sa = pa = pi = 0.0
         for gx in range(int(min(xs) // C), int(max(xs) // C) + 1):
             for gz in range(int(min(zs) // C), int(max(zs) // C) + 1):
                 for i in grid.get((gx, gz), ()):
-                    x, z, a, h = v[i:i + 4]
+                    x, z, a, h, por, inh = v[i:i + 6]
                     if inside(x, z, f) and not any(inside(x, z, hh) for hh in holes):
                         sw += a * h
                         sa += a
+                        if por == 3 and inh > 1.5:
+                            pa += a
+                            pi += a * inh
         if sa >= 0.4 * area:
             b[0] = round(sw / sa, 1)
             done += 1
+            while len(b) < 5:
+                b.append(None)
+            b[5:] = [round(max(2.5, min(7.0, pi / pa)), 1) if pa >= 10 else 0]
     return done
 
 
@@ -1243,7 +1251,7 @@ def overture_buildings(path):
                 for x, z in h:
                     hf += [round(x, 1), round(z, 1)]
                 hflat.append(hf)
-            out.append([round(src_h, 1), kind, name, flat, hflat] if hflat else [round(src_h, 1), kind, name, flat])
+            out.append([round(src_h, 1), kind, name, flat, hflat or None])
     print('edifici Overture:', len(out))
     return out
 

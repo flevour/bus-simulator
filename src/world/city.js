@@ -282,10 +282,13 @@ export function makeBuildingMaterial(uniforms, merged = false) {
         win = flo < 0.5 ? shop * step(0.45, vSeed) : win;
         win *= isWall * step(vWP.y, vH - 0.6);
         // portici ad arco al piano terra (centro storico)
-        float portico = isWall * centro * step(vSeed, 0.42) * step(7.0, vH) * step(vWP.y, 3.9);
+        // portici: misurati (seme negativo = altezza libera) dove il DBGT li ha, altrimenti a caso nel centro storico
+        float misurato = step(vSeed, -0.5);
+        float pH = mix(3.9, -vSeed, misurato);
+        float portico = isWall * step(vWP.y, pH) * max(misurato, centro * step(0.0, vSeed) * step(vSeed, 0.42) * step(7.0, vH));
         float fx4 = fract(tw / 4.2 + vSeed * 3.0);
         float ax = (fx4 - 0.5) / 0.36;
-        float archTop = 2.5 + 1.0 * sqrt(max(0.0, 1.0 - ax * ax));
+        float archTop = pH * 0.64 + pH * 0.26 * sqrt(max(0.0, 1.0 - ax * ax));
         float arch = portico * step(abs(ax), 1.0) * step(vWP.y, archTop);
         win *= 1.0 - portico;
         // persiane accanto alle finestre (centro e case più vecchie)
@@ -1740,6 +1743,9 @@ export class City {
       if (area < 4) continue;
       const cx = b.cx, cz = b.cz;
       const r = hash(cx, cz);
+      // seme per lo shader: negativo = portici misurati alti -seme; sopra 0,42 = niente portici (misurato senza); se non
+      // misurato, a caso nel centro
+      const seed = b.por > 0 ? -b.por : b.por === 0 ? 0.42 + r * 0.58 : r;
       const zone = zoneOf(cx, cz);
       const nm = b.name || '';
       const church = b.kind === 'church' || /church|cathedral|chapel|basilica/.test(b.kind) || /^(Chiesa|Basilica|Duomo|Cattedrale|Oratorio)/i.test(nm);
@@ -1771,7 +1777,7 @@ export class City {
           // ordine dei vertici coerente con la normale (faccia visibile dall'esterno del muro)
           const cr = (v[1][2] - v[0][2]) * 0 + ((v[1][0] - v[0][0]) * nz - (v[1][2] - v[0][2]) * nx);
           const order = cr > 0 ? [0, 1, 2, 3, 4, 5] : [0, 2, 1, 3, 5, 4];
-          for (const k of order) { W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(r); W.h.push(h); }
+          for (const k of order) { W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(seed); W.h.push(h); }
           this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
         }
       }

@@ -84,7 +84,8 @@ uniscono non si incrociano.
   cortili interni. Altezza: quella misurata dalla Regione del Veneto (DBGT del Comune di Padova, volo 2007: media dei
   volumi `UN_VOL` dentro la pianta, pesata sull'area, se coprono almeno il 40%; `data/dbgt-volumi.json`), altrimenti
   piani da OSM se presenti, altrimenti altezza Microsoft ML (stimata da immagini satellitari) convertita in piani con
-  una calibrazione sugli edifici OSM, altrimenti stima per tipologia.
+  una calibrazione sugli edifici OSM, altrimenti stima per tipologia. I portici sono quelli del DBGT (volumi
+  `UN_VOL_POR` = 3, con l'altezza libera `UN_VOL_INH`); a caso nel centro solo dove il DBGT non arriva.
 * **Carreggiate e marciapiedi misurati** (`data/misure-strade.json`, da `scripts/measure_streets.py`): dai poligoni
   del DBGT (carreggiate `AC_VEI`, marciapiedi `AR_MARC`, edifici `EDIFC`), spostati di 2,4 m sugli edifici OSM. Lungo
   ogni via OSM si tirano raggi perpendicolari ogni 4 m (non a meno di 12 m dagli incroci, e solo dove l'asse OSM cade
