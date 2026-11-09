@@ -43,8 +43,8 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 
 | File | Chi lo modifica | Perché |
 |---|---|---|
-| `src/data/padova-map.json` | solo la corsia della mappa | una riga sola da 12 MB: due rigenerazioni non si uniscono |
-| `scripts/build_map.py`, `scripts/street_surfaces.py` | solo la corsia della mappa | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a questa corsia |
+| `src/data/padova-map.json` | `mappa` e `capolinea`, una rigenerazione alla volta | una riga sola da 12 MB: due rigenerazioni non si uniscono, si prende quella di `main` e si rigenera (regola 4) |
+| `scripts/build_map.py`, `scripts/street_surfaces.py` | `mappa` (dettagli dentro l'area) e `capolinea` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a queste corsie |
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
 | `src/world/traffic.js` | `Traffic`/`Walkers` al traffico, `TramSim`/`TramSignals` al tram | stesse classi in due corsie = conflitti |
 | `src/main.js` | tutti, ognuno nelle sue funzioni | |
@@ -58,6 +58,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `mappa` | `mappa` | 5175 / 4175 |
 | `tram-reti` (chiusa il 9 novembre) | `tram-reti` | 5176 / 4176 |
 | `segnalazioni` (chiusa il 9 novembre) | `segnalazioni` | 5177 / 4177 |
+| `capolinea` (dal 9 novembre) | `capolinea` | 5178 / 4178 |
 
 ### verifiche
 
@@ -146,6 +147,15 @@ delle strade di `src/world/city.js`, `src/data/padova.js`, `src/data/padova-map.
     striscio e i bus si fermavano sopra i binari. Due fermate dei bus sono senza palina perché cadrebbe sui binari:
     Sografi 31 (via Sografi, SIR3) e Grassi (Cittadella) (via Venezia, SIR2);
   - **area di Voltabarozzo** (tappa 4): riquadro `FOCUS` fino al capolinea e al deposito, poi il SIR3 intero.
+    Passata alla corsia `capolinea`.
+- Segnalazioni di chi gioca del 9 novembre (foto nel pannello del checkout principale):
+  - **cavalcavia di Chiesanuova** sul SIR2 ("non convince"): l'impalcato è quasi tutto grigio chiaro, con pezzi di
+    asfalto scuro a triangoli e schegge storte che si sovrappongono; la sede rossa del tram è a pezzi obliqui che non
+    seguono il binario e il tram corre sul grigio; le righe bianche delle corsie stanno sul grigio; bordi
+    dell'impalcato irregolari e un rettangolo scuro sospeso accanto al binario;
+  - **rotonde attraversate dal tram**: l'isola verde al centro della rotonda e l'isola triangolare all'ingresso sono
+    disegnate sopra la sede rossa e i binari, che spariscono sotto l'erba ("priorità del layer sbagliata"). Va
+    insieme alla sede di SIR3 e SIR2 nella pianta delle strade; da controllare anche sul SIR1.
 Fatto il 9 novembre (dettagli in IDEE, "Fatto"): corsie e segnaletica orizzontale dai tag OSM, fermate del tram sui
 nodi `tram_stop`, dossi e attraversamenti rialzati, `highway=busway` (niente da fare), area ai bordi e linee tagliate
 (la 22 in Via Madonna della Salute), inversioni a U, corsie di servizio dei capolinea (Capolinea
@@ -162,7 +172,7 @@ dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.
 Prossimo lavoro, in quest'ordine:
 
 - sede di SIR3 e SIR2 nella pianta delle strade (richiesta di `tram-reti`, sopra): le corsie dei bus passano sopra i
-  binari nuovi o a meno di 2,5 m;
+  binari nuovi o a meno di 2,5 m; con le segnalazioni del cavalcavia di Chiesanuova e delle rotonde (sopra);
 - le 9 fermate dove il bus fermo tocca una facciata e le 11 agganciate lontano (richieste di `verifiche`, sopra);
 - svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
 - le fermate senza palina e gli 11 tratti A-B-A con una fermata rimasti (3 in Via Bembo, 4 in Via Gramsci, 16 e 24
@@ -171,8 +181,49 @@ Prossimo lavoro, in quest'ordine:
   sotto il piano della strada (Corso Australia su Via Cignaroli, Corso Tredici Giugno su Via Rienza, 3,6 m sopra la
   strada di sotto), che chiedono di abbassare il terreno sotto le strade `tunnel`; posizione dei fiumi senza dettagli;
 - zona Plebiscito: sistemato il Capolinea Plebiscito; per il resto servono i dettagli di chi l'ha segnalata;
-- gli 11 salti senza strada rimasti sono ai bordi (13 ad Altichiero, 19 a Saletto, 24 a Mandriola): li risolve il
-  caricamento per aree (onda 3).
+- gli 11 salti senza strada rimasti sono ai bordi (13 ad Altichiero, 19 a Saletto, 24 a Mandriola): li risolve la
+  corsia `capolinea`.
+
+### capolinea
+
+Aperta il 9 novembre 2026. La mappa fino a tutti i capolinea, prima quelli del tram, con le loro fermate (IDEE, "Mappa
+fino a tutti i capolinea di tutte le linee" e "mappa più grande"). Piano: tappa 2 di
+[`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md) e tappa 4 di [`linee-tram-nuove.md`](linee-tram-nuove.md). È il lavoro
+dell'onda 3 anticipato, a gruppi di capolinea, senza aspettare il caricamento per aree finché il peso lo permette.
+
+- **Inventario**, prima di tutto: per ogni linea (autobus del GTFS, SIR1, SIR2 e SIR3 da `data/tram-linee-nuove.json`)
+  i capolinea e le fermate fuori dall'area di oggi o agganciate male, con le corse che li usano. Tabella in
+  `ESTENSIONE_LINEE.md`, aggiornata a ogni gruppo.
+- **Ordine**:
+  1. tram: SIR3 fino a Voltabarozzo con i due rami (Giardinetto e Zeno all'andata, Piovese al ritorno) e il deposito
+     (riquadro di circa lon 11,885–11,912, lat 45,372–45,392); SIR2 fino a Rubano e alla Busa di Vigonza, con le
+     fermate e le banchine OSM, e i rami di Romagnoli e dell'Ospedale San Lazzaro se OSM ha i binari; controllo dei
+     capolinea del SIR1 (Pontevigodarzere, Guizza). Dove la linea è intera, via il "tratto in città";
+  2. autobus, dai capolinea più usati (tabella della sezione 2 di `ESTENSIONE_LINEE.md`) e da quelli segnalati (Volta
+     fr. 24 e Mandriola sulla 24, gli 11 salti senza strada ad Altichiero, Saletto e Mandriola).
+- **Area**: corridoi attorno ai percorsi (celle da 250 m) e riquadri ai capolinea per anelli e piazzali, non
+  rettangoli più grandi. Dati per le aree nuove: export Overpass di strade, nodi e tram, edifici Overture, DTM; il DBGT
+  dove c'è (lotti "Padova Sud" ed "ETRA Padova"), altrimenti le misure della sezione 3 del
+  [piano della città](PIANO_MODELLO_CITTA.md). Gli export nuovi in file a parte (per esempio `data/osm-corridoio.json`)
+  finché non sostituiscono quelli di oggi.
+- **Peso**: misurare bundle, avvio e memoria a ogni gruppo (oggi 13,5 MB di JavaScript, 12,4 MB di mappa). Prima che
+  la mappa superi circa 20 MB fermarsi e chiedere: lì serve il caricamento per aree (sezione 4 di
+  `ESTENSIONE_LINEE.md`), che riscrive `city.js` e parte quando nessun'altra corsia ci lavora.
+- **Verifiche** a ogni gruppo: quelle della regola 3 con `scripts/verifica_mappa.py --elenco`, percorsi liberi e
+  fermate raggiungibili nelle aree nuove, e il giro dal posto di guida ai capolinea nuovi (foto a 2,5 m da terra, una
+  linea vera con il pilota di `tests/guida.js`).
+- **Nel gioco**, dopo i dati: turni con i capolinea veri (via la tolleranza di 1,5 km in `turni.js` e il trasferimento
+  in `chainNext`), uscita dal deposito verso tutte le varianti (tappa 3 di `ESTENSIONE_LINEE.md`).
+
+Con la corsia `mappa`, che resta aperta:
+
+- in `build_map.py` `capolinea` tocca la definizione dell'area (`FOCUS`, `FOCUS_BORDI`, corridoi), i tagli delle linee
+  e le funzioni nuove per le aree nuove; `mappa` i dettagli dentro l'area. Chi cambia una funzione dell'altra lo scrive
+  qui;
+- `padova-map.json` lo rigenerano tutte e due, una alla volta: prima di pubblicare rebase su `origin/main`, si prende
+  la mappa di `main`, si rigenera e si rifanno le verifiche; se intanto l'altra corsia ha pubblicato, si ripete;
+- la sede di SIR2 e SIR3 nella pianta delle strade (tappa 3) la fa `mappa`, primo del suo prossimo lavoro; `capolinea`
+  la estende ai tratti nuovi con le stesse funzioni quando è su `main`.
 
 ### tram-reti (chiusa il 9 novembre)
 
@@ -220,8 +271,8 @@ Onda 2, quando le corsie dell'onda 1 si chiudono:
 - `guida`: gamepad, bus elettrico con ricarica, telecamera della porta posteriore, specchietti.
 
 Onda 3, da sola su `city.js`: `mappa-aree` al posto di `mappa`. Caricamento per aree (sezione 4 di
-[`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md)), poi le linee fino ai capolinea veri (vale anche per la segnalazione
-"mappa più grande"), poi le tappe 3 e 4 del tram e l'aggiornamento automatico del GTFS.
+[`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md)) e l'aggiornamento automatico del GTFS. Le linee fino ai capolinea veri
+e la tappa 4 del tram le ha anticipate la corsia `capolinea`.
 
 Per aprire una corsia (da `~/Sites/flevour/bus-simulator`):
 

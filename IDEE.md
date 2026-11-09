@@ -47,7 +47,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      sospeso e una gobba dove passa la 24 (vedi "Fatto"); restano i sottopassi che nella realtà scendono sotto il
      piano della strada (Corso Australia su Via Cignaroli, Corso Tredici Giugno su Via Rienza: il gioco non abbassa
      le strade) e la posizione dei fiumi;
-   - [ ] mappa più grande;
+   - [ ] cavalcavia di Chiesanuova sul SIR2 (9 novembre): impalcato a pezzi, asfalto e sede del tram storti (corsia
+     `mappa`);
+   - [ ] rotonde attraversate dal tram: l'isola verde copre binari e sede (9 novembre, corsia `mappa`);
+   - [ ] mappa più grande (corsia `capolinea`);
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
      - [x] passeggeri anche sugli altri autobus (vedi "Fatto");
      - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
