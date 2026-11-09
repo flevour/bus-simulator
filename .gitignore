@@ -3,3 +3,5 @@ dist
 dist-single
 __pycache__/
 .env
+test-results
+playwright-report

@@ -37,6 +37,7 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
 npm install
 npm run dev           # http://localhost:5173
 npm run build         # dist/ (quello che va su GitHub Pages)
+npm test              # prove nel browser headless (Playwright, tests/); la prima volta: npx playwright install --only-shell chromium
 npm run build:single  # dist-single/index.html autosufficiente
 python3 scripts/to_artifact.py dist-single/index.html <uscita>.html   # pagina per un artefatto claude.ai
 ```
@@ -66,8 +67,10 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
 
 ## Verifiche
 
-* Test nel browser headless con Playwright (Chromium preinstallato nei container cloud). Lancia con
-  `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader` e servi il build con `npx vite preview --port 4173`.
+* `npm test` lancia le prove di `tests/` (Playwright, dipendenza di sviluppo): build senza PostHog in una cartella
+  temporanea, servita su una porta libera, Chromium con
+  `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`. Si lancia prima di ogni push su `main`.
+  Le prove nuove usano gli aiuti di `tests/gioco.js` (apertura del gioco, avvio di una corsa dal menu).
 * `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
   `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.

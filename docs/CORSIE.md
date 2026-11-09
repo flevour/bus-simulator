@@ -12,9 +12,12 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 3. Per pubblicare:
    ```bash
    git fetch origin && GIT_EDITOR=: git rebase origin/main
-   npm run build            # e i test della corsia verifiche, quando ci sono
+   npm run build && npm test
    git push origin HEAD:main
    ```
+   `npm test` compila il gioco senza PostHog in una cartella temporanea, lo serve su una porta libera e lancia le
+   prove di Playwright in `tests/`. La prima volta (o quando il rebase porta una versione nuova di Playwright):
+   `npm install` e `npx playwright install --only-shell chromium`.
 4. Conflitti nel rebase:
    - `src/data/novita.js` e `IDEE.md`: si tengono le righe di tutti; in `novita.js` la riga nuova va in cima con
      `n` successivo all'ultimo di `main`;
