@@ -342,18 +342,35 @@ def cut_path(seq, nodes, stops, margin=60.0):
             new.append(best + d(p, i))
         back.append(b)
         cost = new
-    idx = min(range(S), key=lambda i: cost[i])
-    i1 = i0 = idx
+    idxs = [min(range(S), key=lambda i: cost[i])]
     for b in reversed(back):
-        i0 = b[i0]
-    a, L = i0, 0.0
-    while a > 0 and L < margin:
-        a -= 1
-        L += seg(a)
-    b, L = i1 + 1, 0.0
-    while b < S and L < margin:
-        L += seg(b)
-        b += 1
+        idxs.append(b[idxs[-1]])
+    idxs.reverse()
+    i0, i1 = idxs[0], idxs[-1]
+    nxt, prv = (idxs[1], idxs[-2]) if len(idxs) > 1 else (S, 0)
+    uturn = lambda j: 0 < j < S and seq[j - 1] == seq[j + 1]
+    mirror = lambda i, j: 2 * j - 1 - i if 0 <= 2 * j - 1 - i < S and seq[2 * j - 1 - i] == seq[i + 1] and seq[2 * j - i] == seq[i] else None
+    # il percorso esce dalla mappa e rientra per la stessa via (andata e ritorno con l'inversione a U sulla punta): la
+    # prima fermata va sul ritorno, nel verso della linea, e si parte dalla punta; l'ultima sull'andata, e si finisce lì
+    a = b = None
+    for j in range(i0 + 1, min(nxt, S)):
+        if uturn(j) and mirror(i0, j) is not None and mirror(i0, j) <= nxt:
+            i0, a = mirror(i0, j), j
+            break
+    for j in range(i1, prv, -1):
+        if uturn(j) and mirror(i1, j) is not None and mirror(i1, j) >= prv:
+            i1, b = mirror(i1, j), j
+            break
+    if a is None:
+        a, L = i0, 0.0
+        while a > 0 and L < margin and not uturn(a):
+            a -= 1
+            L += seg(a)
+    if b is None:
+        b, L = i1 + 1, 0.0
+        while b < S and L < margin and not uturn(b):
+            L += seg(b)
+            b += 1
     return seq[a:b + 1]
 
 
@@ -832,6 +849,50 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             return seq
         return [best[1]] + seq if at_start else seq + [best[1]]
 
+    def loop_back(T, P, limit):
+        """Giro da T a P senza inversioni a U (nemmeno la prima: non si torna subito su P), nei sensi di marcia giusti,
+        entro limit metri e solo per strade principali, rotatorie e corsie dei bus (non dentro i quartieri): [T, ..., P],
+        o None. Ricerca sugli archi orientati (nodo, nodo da cui si arriva)."""
+        ok = lambda k, frm: bus_ok(k, frm) and (edges[k][2] <= 4 or edges[k][5] & 32)
+        pq = [(math.dist(nodes[T], nodes[w]), w, T, None) for w, _c, k in adj[T] if w != P and ok(k, T)]
+        heapq.heapify(pq)
+        parent = {}
+        while pq:
+            d, u, frm, par = heapq.heappop(pq)
+            if (u, frm) in parent or d > limit:
+                continue
+            parent[(u, frm)] = par
+            if u == P:
+                path, st = [u], (u, frm)
+                while st is not None:
+                    path.append(st[1])
+                    st = parent[st]
+                return path[::-1]
+            for w, _c, k in adj[u]:
+                if w != frm and ok(k, u) and (w, u) not in parent:
+                    heapq.heappush(pq, (d + math.dist(nodes[u], nodes[w]), w, u, (u, frm)))
+        return None
+
+    def no_uturns(seq, stops, limit=600.0):
+        """Inversioni a U in mezzo al percorso (A-B-A su un nodo, di solito un aggancio sbagliato davanti a una rotatoria
+        o a un isolato) con una fermata (stops: punti) sull'andata e ritorno: dove si può, il giro attorno al posto della
+        manovra. Quelle senza fermate le toglie il gioco (spurs in src/game/routes.js). Restituisce (percorso, giri)."""
+        out, n, i = list(seq), 0, 1
+        while i < len(out) - 1:
+            if out[i - 1] == out[i + 1]:
+                k = 1
+                while i - k - 1 >= 0 and i + k + 1 < len(out) and out[i - k - 1] == out[i + k + 1]:
+                    k += 1
+                spur = out[i - k:i + 1]
+                on = any(seg_dist(p, u, v)[0] < 30 for p in stops for u, v in zip(spur, spur[1:]))
+                loop = loop_back(out[i], out[i - 1], limit) if on else None
+                if loop:
+                    out[i:i + 2] = loop
+                    n += 1
+                    i += len(loop) - 1
+            i += 1
+        return out, n
+
     gt = build_gtfs.load(gtfs_dir)
     if osm_stops_path:
         osm_st = json.load(open(osm_stops_path, encoding='utf-8'))
@@ -839,6 +900,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         print('fermate portate sulla banchina:', onto_platforms(gt['stops'], osm_st.get('banchine') or []))
     lines_out = []
     failed = 0
+    uturns_fixed = 0
     for line in gt['lines']:
         variants = []
         for v in line['variants']:
@@ -847,6 +909,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 failed += 1
                 continue
             seq, gaps = res
+            seq, n_loops = no_uturns(seq, [gt['stops'][si][:2] for si in v['stops']])
+            uturns_fixed += n_loops
             # capolinea: il tracciato GTFS parte (o finisce) alla fermata, ma l'aggancio può cominciare all'incrocio dopo
             # (Largo Debussy: la fermata è nel piazzale, l'aggancio partiva da Via Leonardo da Vinci). Si riattacca il
             # tratto fino al nodo vicino alla prima (o ultima) fermata, se è a pochi metri di strada
@@ -1140,6 +1204,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     }
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
+    print(f'inversioni a U sostituite da un giro: {uturns_fixed}')
     print(f'nodi {len(nodes)} archi {len(edges)} edifici {len(buildings)} binari {len(rails)} acque {len(water)} linee {len(lines_out)} varianti non agganciate {failed}')
 
 
