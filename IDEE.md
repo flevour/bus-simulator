@@ -21,7 +21,10 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    **SIR2, SIR3, SIR4, SIR5**. La geometria del tram dovrà gestire più linee, gli anelli e i deviatoi, non una sola
    sede: modellarla come grafo di binari (rami e scambi) su cui ogni linea ha il suo percorso.
    - ricerca sui tracciati di SIR2 e SIR3 (fonti, binari già in OSM, cosa manca):
-     [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md).
+     [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md);
+   - in stazione due quasi-ovali concentrici, interno ed esterno (oggi il SIR1 usa l'esterno), con le fermate
+     Stazione nord e Stazione sud che servono entrambi;
+   - SIR3 con tram a 3 moduli; SIR2 con tram a 4 moduli, al posto della linea di autobus 10.
 3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
    "Fatto"). Restano:
    - fermate del tram dai nodi OSM (`tram_stop`);

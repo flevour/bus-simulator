@@ -1,264 +1,178 @@
 {
- "fonte": "trampadova.it (Comune di Padova), mappe KML delle linee: wp-content/themes/hello-theme-child-master/assets/SIR2.kml e SIR3.kml, lette il 9 novembre 2026. Posizioni indicative del progetto; * = capolinea intermedio.",
- "linee": {
+ "fonti": {
+  "kml": "trampadova.it (Comune di Padova), mappe KML delle linee: https://www.trampadova.it/wp-content/themes/hello-theme-child-master/assets/SIR2.kml e SIR3.kml, lette il 9/11/2026. Posizioni indicative del progetto; * = capolinea intermedio sul ramo.",
+  "osm": "Fermate railway=tram_stop di OpenStreetMap (© OpenStreetMap contributors, ODbL), export Overpass del 9/11/2026 (data/osm-padova-tram-cantiere.json), in ordine lungo i percorsi trovati da scripts/tram_percorsi.py; s = metri dal primo punto del percorso."
+ },
+ "kml": {
   "SIR3": [
-   [
-    "Stazione sud",
-    45.41658,
-    11.880614
-   ],
-   [
-    "Pace",
-    45.415158,
-    11.884392
-   ],
-   [
-    "Gozzi",
-    45.412478,
-    11.882916
-   ],
-   [
-    "Morgagni",
-    45.407551,
-    11.885386
-   ],
-   [
-    "Ospedale",
-    45.40321,
-    11.88824
-   ],
-   [
-    "Sografi",
-    45.40037,
-    11.89041
-   ],
-   [
-    "Forcellini",
-    45.397469,
-    11.892883
-   ],
-   [
-    "Gregorianum",
-    45.395187,
-    11.894934
-   ],
-   [
-    "Parco Iris",
-    45.39292,
-    11.896908
-   ],
-   [
-    "Cornaro",
-    45.388421,
-    11.89811
-   ],
-   [
-    "Nani",
-    45.38007,
-    11.90343
-   ],
-   [
-    "Piovese",
-    45.3769,
-    11.9057
-   ],
-   [
-    "Capolinea Voltabarozzo",
-    45.37484,
-    11.907589
-   ]
+   ["Stazione sud", 45.41658, 11.880614],
+   ["Pace", 45.415158, 11.884392],
+   ["Gozzi", 45.412478, 11.882916],
+   ["Morgagni", 45.407551, 11.885386],
+   ["Ospedale", 45.40321, 11.88824],
+   ["Sografi", 45.40037, 11.89041],
+   ["Forcellini", 45.397469, 11.892883],
+   ["Gregorianum", 45.395187, 11.894934],
+   ["Parco Iris", 45.39292, 11.896908],
+   ["Cornaro", 45.388421, 11.89811],
+   ["Nani", 45.38007, 11.90343],
+   ["Piovese", 45.3769, 11.9057],
+   ["Capolinea Voltabarozzo", 45.37484, 11.907589]
   ],
   "SIR2": [
-   [
-    "Capolinea Rubano",
-    45.433847,
-    11.779754
-   ],
-   [
-    "Comune di Rubano",
-    45.426641,
-    11.787447
-   ],
-   [
-    "Rubano V.le Europa",
-    45.425794,
-    11.794079
-   ],
-   [
-    "Zona industriale Rubano",
-    45.422709,
-    11.801538
-   ],
-   [
-    "Quartiere Fatima",
-    45.421664,
-    11.808021
-   ],
-   [
-    "Via Borromeo",
-    45.420912,
-    11.812342
-   ],
-   [
-    "Sarmeola",
-    45.41939,
-    11.821202
-   ],
-   [
-    "Brentella",
-    45.417733,
-    11.825922
-   ],
-   [
-    "Brentella Est",
-    45.41666,
-    11.82926
-   ],
-   [
-    "*Romagnoli",
-    45.415429,
-    11.832657
-   ],
-   [
-    "Chiesanuova",
-    45.414426,
-    11.8356
-   ],
-   [
-    "Pierobon",
-    45.412892,
-    11.839705
-   ],
-   [
-    "Cimitero Maggiore",
-    45.4108,
-    11.8489
-   ],
-   [
-    "Vicenza",
-    45.411479,
-    11.860939
-   ],
-   [
-    "Savonarola",
-    45.411937,
-    11.864543
-   ],
-   [
-    "Verdi",
-    45.40932,
-    11.87277
-   ],
-   [
-    "Insurrezione",
-    45.409247,
-    11.87611
-   ],
-   [
-    "Garibaldi",
-    45.41015,
-    11.878107
-   ],
-   [
-    "Eremitani",
-    45.412104,
-    11.878617
-   ],
-   [
-    "Trieste",
-    45.414205,
-    11.878987
-   ],
-   [
-    "Stazione nord",
-    45.41659,
-    11.88044
-   ],
-   [
-    "Stazione sud",
-    45.41588,
-    11.8804
-   ],
-   [
-    "Pace",
-    45.41542,
-    11.88308
-   ],
-   [
-    "Tribunale/Fiera",
-    45.41364,
-    11.88862
-   ],
-   [
-    "Università",
-    45.411865,
-    11.893377
-   ],
-   [
-    "Stanga",
-    45.409259,
-    11.900576
-   ],
-   [
-    "Anelli",
-    45.410845,
-    11.902257
-   ],
-   [
-    "Venezia",
-    45.410508,
-    11.906824
-   ],
-   [
-    "Savelli",
-    45.411997,
-    11.910951
-   ],
-   [
-    "Net Center",
-    45.41566,
-    11.92032
-   ],
-   [
-    "*Nuovo Ospedale San Lazzaro",
-    45.41632,
-    11.922149
-   ],
-   [
-    "Palasport San Lazzaro",
-    45.417354,
-    11.924726
-   ],
-   [
-    "San Marco",
-    45.420072,
-    11.933584
-   ],
-   [
-    "Ippodromo",
-    45.421977,
-    11.938101
-   ],
-   [
-    "Dante de Nanni",
-    45.423472,
-    11.942136
-   ],
-   [
-    "Ponte Di Brenta",
-    45.425484,
-    11.947749
-   ],
-   [
-    "Villa Breda",
-    45.426363,
-    11.949747
-   ],
-   [
-    "Busa Di Vigonza",
-    45.428219,
-    11.953358
-   ]
+   ["Capolinea Rubano", 45.433847, 11.779754],
+   ["Comune di Rubano", 45.426641, 11.787447],
+   ["Rubano V.le Europa", 45.425794, 11.794079],
+   ["Zona industriale Rubano", 45.422709, 11.801538],
+   ["Quartiere Fatima", 45.421664, 11.808021],
+   ["Via Borromeo", 45.420912, 11.812342],
+   ["Sarmeola", 45.41939, 11.821202],
+   ["Brentella", 45.417733, 11.825922],
+   ["Brentella Est", 45.41666, 11.82926],
+   ["*Romagnoli", 45.415429, 11.832657],
+   ["Chiesanuova", 45.414426, 11.8356],
+   ["Pierobon", 45.412892, 11.839705],
+   ["Cimitero Maggiore", 45.4108, 11.8489],
+   ["Vicenza", 45.411479, 11.860939],
+   ["Savonarola", 45.411937, 11.864543],
+   ["Verdi", 45.40932, 11.87277],
+   ["Insurrezione", 45.409247, 11.87611],
+   ["Garibaldi", 45.41015, 11.878107],
+   ["Eremitani", 45.412104, 11.878617],
+   ["Trieste", 45.414205, 11.878987],
+   ["Stazione nord", 45.41659, 11.88044],
+   ["Stazione sud", 45.41588, 11.8804],
+   ["Pace", 45.41542, 11.88308],
+   ["Tribunale/Fiera", 45.41364, 11.88862],
+   ["Università", 45.411865, 11.893377],
+   ["Stanga", 45.409259, 11.900576],
+   ["Anelli", 45.410845, 11.902257],
+   ["Venezia", 45.410508, 11.906824],
+   ["Savelli", 45.411997, 11.910951],
+   ["Net Center", 45.41566, 11.92032],
+   ["*Nuovo Ospedale San Lazzaro", 45.41632, 11.922149],
+   ["Palasport San Lazzaro", 45.417354, 11.924726],
+   ["San Marco", 45.420072, 11.933584],
+   ["Ippodromo", 45.421977, 11.938101],
+   ["Dante de Nanni", 45.423472, 11.942136],
+   ["Ponte Di Brenta", 45.425484, 11.947749],
+   ["Villa Breda", 45.426363, 11.949747],
+   ["Busa Di Vigonza", 45.428219, 11.953358]
   ]
+ },
+ "osm": {
+  "SIR3": {
+   "Stazione sud -> Capolinea Voltabarozzo": {
+    "lunghezza": 5350,
+    "fermate": [
+     ["Pace", 351, 45.4149713, 11.8839464],
+     ["Gozzi", 699, 45.4119949, 11.8826772],
+     ["Morgagni", 1305, 45.4072627, 11.8856576],
+     ["Ospedale", 1825, 45.4029966, 11.8883529],
+     ["Sografi", 2156, 45.4003825, 11.8903339],
+     ["Forcellini", 2565, 45.3972469, 11.8930589],
+     ["Gregorianum", 2868, 45.3949833, 11.8952148],
+     ["Parco Iris", 3160, 45.3927401, 11.8971297],
+     ["Cornaro", 3613, 45.3887387, 11.8980932],
+     ["Nani", 4705, 45.3798656, 11.9031219],
+     ["Piovese", 5105, 45.3769843, 11.9053837]
+    ]
+   },
+   "Capolinea Voltabarozzo -> Stazione sud": {
+    "lunghezza": 5569,
+    "fermate": [
+     ["Voltabarozzo", 0, 45.3757009, 11.9080031],
+     ["Piovese", 192, 45.3767332, 11.9060471],
+     ["Nani", 560, 45.3795542, 11.9039075],
+     ["Cornaro", 1670, 45.3885055, 11.8981233],
+     ["Parco Iris", 2120, 45.3924849, 11.8971103],
+     ["Gregorianum", 2441, 45.3949997, 11.8952526],
+     ["Forcellini", 2702, 45.3969396, 11.8933903],
+     ["Sografi", 3154, 45.4003825, 11.8903339],
+     ["Ospedale", 3411, 45.4024469, 11.8888759],
+     ["Morgagni", 3994, 45.4071575, 11.8856357],
+     ["Gozzi", 4608, 45.4119949, 11.8826772],
+     ["Pace", 4958, 45.4149713, 11.8839464]
+    ]
+   }
+  },
+  "SIR2": {
+   "Capolinea Rubano -> Busa Di Vigonza": {
+    "lunghezza": 16276,
+    "fermate": [
+     ["Rubano", 0, 45.4327574, 11.7794875],
+     ["Municipio Rubano", 1145, 45.4266038, 11.7874965],
+     ["Quartiere Europa", 1594, 45.42597, 11.7931546],
+     ["Z.I. Rubano", 2129, 45.4231827, 11.798671],
+     ["Quartiere Fatima", 2772, 45.4218475, 11.8066617],
+     ["Via Borromeo", 3276, 45.4207891, 11.812931],
+     ["Sarmeola", 3782, 45.4198085, 11.8192317],
+     ["Brentella", 4305, 45.4179949, 11.8253835],
+     ["Brentella Est", 4688, 45.4164623, 11.8297679],
+     ["Chiesanuova", 5127, 45.4147211, 11.8347989],
+     ["Pierobon", 5590, 45.4128068, 11.8400667],
+     ["Cimitero Maggiore", 6367, 45.4107305, 11.8494442],
+     ["Via Vicenza", 7221, 45.4115153, 11.8602266],
+     ["Savonarola", 7740, 45.4112928, 11.8665261],
+     ["Via S. Pietro", 7968, 45.4100344, 11.8688319],
+     ["Via Dante", 8289, 45.4093453, 11.8726822],
+     ["Garibaldi", 8767, 45.4099129, 11.8780765],
+     ["Eremitani", 9012, 45.4120976, 11.8785272],
+     ["Pace", 10012, 45.4151797, 11.8844901],
+     ["Tribunale/Fiera", 10234, 45.4142617, 11.8870211],
+     ["Università", 10888, 45.4114912, 11.8944016],
+     ["Stanga", 11442, 45.4093614, 11.9007287],
+     ["Anelli", 11759, 45.4107368, 11.9030192],
+     ["Venezia", 12141, 45.4104791, 11.9068975],
+     ["Savelli", 12451, 45.4118071, 11.9103787],
+     ["Net Center", 13288, 45.4154352, 11.9197564],
+     ["Palasport S. Lazzaro", 13701, 45.4172303, 11.9243766],
+     ["San Marco", 14471, 45.4199581, 11.9334002],
+     ["Ippodromo", 14868, 45.4217624, 11.9377118],
+     ["Dante di Nanni", 15159, 45.4229669, 11.9410213],
+     ["Ponte di Brenta", 15614, 45.4250739, 11.9459935],
+     ["Villa Breda", 15978, 45.426541, 11.9500706],
+     ["Busa di Vigonza", 16276, 45.4281527, 11.9531241]
+    ]
+   },
+   "Busa Di Vigonza -> Capolinea Rubano": {
+    "lunghezza": 16660,
+    "fermate": [
+     ["Busa di Vigonza", 0, 45.4281527, 11.9531241],
+     ["Villa Breda", 297, 45.4265263, 11.950131],
+     ["Ponte di Brenta", 661, 45.4250739, 11.9459935],
+     ["Dante di Nanni", 1116, 45.4229669, 11.9410213],
+     ["Ippodromo", 1408, 45.4217624, 11.9377118],
+     ["San Marco", 1802, 45.4200024, 11.9333964],
+     ["Palasport S. Lazzaro", 2448, 45.4177442, 11.925828],
+     ["Net Center", 2987, 45.4154754, 11.9197366],
+     ["Savelli", 3824, 45.411857, 11.9103501],
+     ["Venezia", 4134, 45.4104791, 11.9068975],
+     ["Anelli", 4484, 45.4107452, 11.9034464],
+     ["Stanga", 4827, 45.4093939, 11.900748],
+     ["Università", 5384, 45.4114912, 11.8944016],
+     ["Tribunale/Fiera", 5974, 45.4139677, 11.8877399],
+     ["Pace", 6245, 45.415088, 11.8846585],
+     ["Eremitani", 7662, 45.4120963, 11.8785745],
+     ["Garibaldi", 7907, 45.409925, 11.8780257],
+     ["Via Dante", 8368, 45.4092885, 11.8728099],
+     ["Via S. Pietro", 8698, 45.4100344, 11.8688319],
+     ["Savonarola", 8927, 45.4112928, 11.8665261],
+     ["Via Vicenza", 9449, 45.4114669, 11.8602395],
+     ["Cimitero Maggiore", 10303, 45.4107305, 11.8494442],
+     ["Pierobon", 11003, 45.4124679, 11.8408923],
+     ["Chiesanuova", 11540, 45.4147461, 11.834846],
+     ["Brentella Est", 11933, 45.4163076, 11.8303303],
+     ["Brentella", 12362, 45.4179584, 11.8253676],
+     ["Sarmeola", 12886, 45.4198498, 11.819259],
+     ["Via Borromeo", 13393, 45.4207891, 11.812931],
+     ["Quartiere Fatima", 13897, 45.4218475, 11.8066617],
+     ["Z.I. Rubano", 14434, 45.4229121, 11.799964],
+     ["Quartiere Europa", 15073, 45.426011, 11.7931964],
+     ["Municipio Rubano", 15524, 45.4266469, 11.7875091],
+     ["Rubano", 16660, 45.4327574, 11.7794875]
+    ]
+   }
+  }
  }
 }

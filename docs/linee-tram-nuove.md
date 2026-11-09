@@ -1,137 +1,180 @@
 # Nuove linee del tram: SIR3 e SIR2 (ricerca e prova dei tracciati)
 
 Ricerca sperimentale per portare nel gioco le linee in costruzione. Stato al 9 novembre 2026. **Il gioco e la
-pipeline della mappa non sono cambiati**: qui ci sono le fonti verificate, una prova di instradamento sui binari
-OSM (`scripts/tram_percorsi.py`, fuori da `build_map.py`) e il piano. Un'altra sessione sta lavorando alla mappa: le
-tappe del piano sono ordinate per toccare il meno possibile `build_map.py`, `street_surfaces.py` e `city.js`.
+pipeline della mappa non sono cambiati**: qui ci sono le fonti, una prova di instradamento sui binari OSM
+(`scripts/tram_percorsi.py`, fuori da `build_map.py`) e il piano. Un'altra sessione lavora alla mappa: le tappe del
+piano sono ordinate per toccare il meno possibile `build_map.py`, `street_surfaces.py` e `city.js`.
 
-![Binari OSM (blu SIR1, rosso SIR2, arancio SIR3), fermate ufficiali e percorsi trovati](img/linee-tram-nuove.png)
+![Binari OSM (blu SIR1, rosso SIR2, arancio SIR3; tratteggio: in cantiere), percorsi trovati e fermate OSM](img/linee-tram-nuove.png)
 
-## Fonti verificate
+## Fonti
 
-Lette direttamente il 9 novembre 2026 (il sito trampadova.it via la sua API WordPress, Wikipedia in wikitesto):
+Lette direttamente il 9 novembre 2026:
 
-* **trampadova.it** (sito del Comune per il tram): pagine delle linee, FAQ sul percorso del SIR3, notizie dei
-  cantieri e le **mappe KML ufficiali** delle due linee con tracciato e fermate
-  (`https://www.trampadova.it/wp-content/themes/hello-theme-child-master/assets/SIR3.kml`, `SIR2.kml`). Le fermate
-  sono copiate in [`data/tram-fermate-nuove.json`](../data/tram-fermate-nuove.json).
+* **trampadova.it**, il sito del Comune per il tram (via la sua API WordPress): pagine delle linee, FAQ sul percorso
+  del SIR3, notizie dei cantieri e le **mappe KML** delle due linee
+  (`https://www.trampadova.it/wp-content/themes/hello-theme-child-master/assets/SIR3.kml`, `SIR2.kml`).
+* **Presentazione "Cantieri SIR2 e SIR3"** di APS Holding e Comune di Padova, 2 dicembre 2025, sul sito del MIT:
+  https://www.mit.gov.it/nfsmitgov/files/media/notizia/2025-12/01%20Presentazione%20Sistema%20SMART%20-%20Galiazzo.pdf
+  (schede delle linee, schema della rete SMART con i nomi delle fermate, mappa dei cantieri a novembre 2025).
+* **OpenStreetMap**, export Overpass del 9 novembre 2026 con
+  [`scripts/overpass-tram-cantiere.ql`](../scripts/overpass-tram-cantiere.ql), salvato in
+  [`data/osm-padova-tram-cantiere.json`](../data/osm-padova-tram-cantiere.json).
 * **Wikipedia** "Tranvia di Padova" e "Trams in Padua".
-* Non raggiungibili da qui: padovanet.it (pagina solo JavaScript), mit.gov.it (certificato TLS incompleto),
-  Overpass (connessione rifiutata). Claude in Chrome non è disponibile nelle sessioni cloud.
+* Indicazione di chi gestisce il progetto: **il SIR2 prenderà il posto della linea di autobus 10** e avrà **convogli
+  da 4 casse**.
+
+Le fermate dei KML e quelle di OSM, in ordine lungo i percorsi, sono in
+[`data/tram-fermate-nuove.json`](../data/tram-fermate-nuove.json).
 
 ### SIR3 Stazione – Voltabarozzo
 
-* **13 fermate** (KML ufficiale): Stazione sud, Pace, Gozzi, Morgagni, Ospedale, Sografi, Forcellini, Gregorianum,
-  Parco Iris, Cornaro, Nani, Piovese, Capolinea Voltabarozzo. Wikipedia ne conta 12, la pagina della linea 13.
+* **Dati del progetto** (trampadova.it, 22 marzo 2023): 5,496 km, **13 fermate** a 450 m in media, 3 sottostazioni
+  elettriche, **7 convogli da 25 m a 3 casse**, **18 minuti** di percorrenza, 18 km/h di velocità commerciale.
+  Presentazione di dicembre 2025: operativa dal 2026, 7 veicoli, **un tram ogni 8 minuti**, 12 fermate (senza contare
+  la stazione).
+* **Mezzi**: 5 tram a 3 casse sono arrivati al deposito di Voltabarozzo nel 2025 (trampadova.it, 29 gennaio 2025);
+  tutti i mezzi nuovi successivi sono a 4 casse e il progetto del SIR3 è stato adattato ai mezzi più lunghi. All'avvio
+  il SIR3 va quindi a **3 moduli** (come il SIR1), con banchine pronte per 4.
+* **Fermate** (KML): Stazione sud, Pace, Gozzi, Morgagni, Ospedale, Sografi, Forcellini, Gregorianum, Parco Iris,
+  Cornaro, Nani, Piovese, Capolinea Voltabarozzo. Nello schema SMART Ospedale si chiama "Ospedale Civile",
+  Gregorianum "Sant'Antonio" e il capolinea "Voltabarozzo".
 * **Percorso** (FAQ di trampadova.it): stazione, via Gozzi, ponte Omizzolo, via Morgagni, via Giustiniani, via
   Sografi, passeggiata Bianchini, liceo Cornaro, nuovo ponte sullo Scaricatore, Voltabarozzo. Al parcheggio tra via
   Nani e via Michiel si divide: **verso il capolinea per via Giardinetto e via Zeno, verso il centro per via
   Piovese**; i due rami si riuniscono alla rotonda tra via Balestra, via Zeno e via Piovese. Capolinea a destra poco
   prima della tangenziale, con il **deposito di Voltabarozzo** (via Piovese).
-* **Stato**: piattaforma finita a marzo 2026 (circa 6 km di linea e 12 km di piattaforma col deposito); prime prove
-  dalla stazione il 4 maggio 2026, primo viaggio fino alla stazione il 5 giugno 2026; obiettivo PNRR certificato il 2
-  agosto 2026 (6,3 km di linea e il deposito); da settembre 2026 asfaltature e finiture (via Falloppio, via
-  Giustiniani, Largo Meneghetti, via Gozzi, stazione). Obiettivo dichiarato: **servizio entro la fine del 2026**.
-* **Mezzi**: Translohr come il SIR1, batterie LTO; 5 tram nel deposito di Voltabarozzo (giugno 2026).
+* **Stato**: piattaforma finita a marzo 2026; prime prove dalla stazione il 4 maggio 2026; primo viaggio fino alla
+  stazione il 5 giugno; posa dei cavi e linea aerea a luglio; obiettivo PNRR certificato il 2 agosto (6,3 km di linea
+  e il deposito); da settembre asfaltature e finiture. Obiettivo dichiarato: **servizio entro la fine del 2026**.
 
 ### SIR2 Rubano – Busa di Vigonza
 
-* **36 fermate** nel KML (con l'avviso "le fermate e le denominazioni saranno definite in base al progetto
-  esecutivo"), capolinea intermedi Caserma Romagnoli e Nuovo Ospedale San Lazzaro. Wikipedia: 18,25 km e 34 fermate;
-  la pagina della linea: 17,5 km e 36 fermate.
-* **Percorso** (Wikipedia): Sarmeola, via della Provvidenza, via Chiesanuova, corso Milano, Corso del Popolo,
-  stazione, via Tommaseo (Fiera, Università), Stanga, via Venezia, via San Marco, Ponte di Brenta, Busa di Vigonza.
-* **Stato**: obiettivo PNRR certificato il 2 agosto 2026: 21,3 km di piattaforma, rotaia posata su oltre 16 km,
-  deposito di Rubano. Settembre 2026: asfaltature in corso Milano e a Chiesanuova, fermata sud di via Vicenza da
-  finire, via Tommaseo dalla stazione alla Stanga tra circa un mese. Apertura prevista dal 2027 (presentazione SMART
-  di dicembre 2025, letta solo dai risultati di ricerca).
-* **Mezzi**: Wikipedia indica 10 tram da 3 moduli e 20 da 4.
+* **Dati** (presentazione di dicembre 2025): operativa dal 2027, circa 17,5 km, 26 veicoli, 37 fermate, **un tram
+  ogni 6-8 minuti**. Capolinea intermedi sui rami: **Romagnoli** (Chiesanuova) e **Ospedale San Lazzaro** (dopo Net
+  Center). Mezzi a **4 casse** (il mezzo n. 31 della flotta SMART, a 4 casse, è arrivato a Rubano il 23 giugno 2026).
+* **Sostituisce la linea 10** (Sarmeola/Caselle – Stazione – Ponte di Brenta), che nel gioco c'è già.
+* **Percorso**: Rubano, Sarmeola, via Chiesanuova, Cimitero Maggiore, via Vicenza, corso Milano, via Dante, Corso
+  Garibaldi, Eremitani, stazione, Pace, via Tommaseo (Fiera, Università), Stanga, via Venezia, via San Marco, Ponte di
+  Brenta, Busa di Vigonza.
+* **Fermate**: il KML del sito ha un elenco vecchio ("le fermate e le denominazioni saranno definite in base al
+  progetto esecutivo": Verdi e Insurrezione al posto delle attuali). L'elenco in OSM corrisponde allo schema SMART:
+  Rubano, Municipio Rubano, Quartiere Europa, Z.I. Rubano, Quartiere Fatima, Via Borromeo, Sarmeola, Brentella,
+  Brentella Est, Chiesanuova, Pierobon, Cimitero Maggiore, Via Vicenza, Savonarola, Via S. Pietro, Via Dante,
+  Garibaldi, Eremitani, (De Gasperi, Stazione), Pace, Tribunale/Fiera, Università, Stanga, Anelli, Venezia, Savelli,
+  Net Center, Palasport S. Lazzaro, San Marco, Ippodromo, Dante di Nanni, Ponte di Brenta, Villa Breda, Busa di
+  Vigonza. I nomi dello schema SMART a volte sono diversi (Via S. Pietro è "Milano", Stanga è "Stanga - Questura").
+* **Stato**: obiettivo PNRR certificato il 2 agosto 2026 (21,3 km di piattaforma, rotaia su oltre 16 km, deposito di
+  Rubano); settembre 2026: asfaltature in corso Milano e a Chiesanuova, fermata sud di via Vicenza da finire, via
+  Tommaseo dalla stazione alla Stanga a seguire.
 
-### Stazione e SIR1
+### Stazione e rete SMART
 
-* Estate 2025: nel piazzale della stazione costruito l'**anello ad alta capacità** per tutte le 8 linee SMART (un tram
-  ogni 4 minuti). Il SIR1 verso nord lo percorre già tutto; mancano ancora la linea aerea nell'anello (tram a
-  batteria) e **due fermate nuove dentro l'anello, una a nord e una a sud** (le "Stazione nord/sud" del KML).
-* La fermata **Trieste** del SIR1 è chiusa da settembre 2025: la sostituisce **De Gasperi**, a pochi metri, adatta
-  ai tram più lunghi del SIR2. Il SIR1 è stato fermo per i lavori ed è ripartito a settembre 2026.
+* Estate 2025: nel piazzale della stazione è stato costruito l'**anello ad alta capacità** per tutte le linee SMART (un
+  tram ogni 4 minuti). Alla fine i binari formeranno **due quasi-ovali concentrici, uno interno e uno esterno**,
+  percorsi in senso antiorario (verso ovest sul lato nord, verso est sul lato sud). **Oggi il SIR1 usa quello
+  esterno.** Le due fermate nuove, **Stazione nord** e **Stazione sud**, stanno sui due lati lunghi del piazzale e
+  servono entrambi gli anelli (disegno del progetto con le due fermate sui binari affiancati). Mancano ancora la
+  linea aerea nell'anello e le fermate stesse, che in OSM non ci sono.
+* In OSM l'anello esterno è la way 966705982 (`oneway=yes`, SIR1); l'interno è mappato come `service=siding`, senza
+  senso unico, con raccordi corti. **Senza l'anello esterno nessuna delle quattro prove riesce**: l'anello interno in
+  OSM non è collegato in modo percorribile alle uscite verso Pace e Corso del Popolo. Per il gioco la geometria della
+  stazione va disegnata dal progetto (o aspettata in OSM), con la scelta dell'anello per ogni linea.
+* La fermata **Trieste** del SIR1 è chiusa da settembre 2025: la sostituisce **De Gasperi**, a pochi metri, adatta ai
+  tram più lunghi del SIR2. Neanche De Gasperi è in OSM.
+* Lo schema SMART di dicembre 2025 prevede linee passanti che combinano i binari di SIR1, SIR2 e SIR3 (T1 Pontevigodarzere
+  – Guizza, T2 Rubano – Vigonza, T4 Rubano – Legnaro, T6 Ospedale San Lazzaro – Legnaro, T7 Pontevigodarzere – Legnaro,
+  T11 Vigonza – Guizza, T12 Ospedale San Lazzaro – Guizza, T21 Romagnoli – Ospedale San Lazzaro, T22 Romagnoli –
+  Vigonza), con prolungamenti a Legnaro e oltre Vigonza. Per il gioco bastano per ora SIR2 e SIR3 come linee proprie;
+  il grafo dei binari (piano, tappa 2) deve però permettere queste combinazioni.
 
-## Cosa c'è già nei dati del progetto
+## Cosa c'è nei dati
 
-**GTFS.** Il feed Busitalia (BusOne, valido dal 4 novembre al 3 dicembre 2026) ha solo `TPD_SIR1`: niente
-tracciati, fermate né orari per SIR2 e SIR3. Gli orari vanno generati dalla frequenza (SIR3: 8 minuti e 7 mezzi
-secondo la presentazione SMART, letta solo dai risultati di ricerca).
+**GTFS.** Il feed Busitalia (BusOne, valido dal 4 novembre al 3 dicembre 2026) ha solo `TPD_SIR1`: niente tracciati,
+fermate né orari per SIR2 e SIR3. Gli orari vanno generati dalla frequenza.
 
-**OSM** (`data/osm-padova-tram.json`, 5 novembre 2026). I binari delle due linee sono già mappati come
-`railway=tram`, con nomi non uniformi ("SIR 3", "SIR3", "Linea SIR3", "Linea 3 …", "SIR 2 Rubano-Vigonza") e senza
-`ref`; solo i binari del SIR1 hanno `oneway`.
+**OSM** (`data/osm-padova-tram-cantiere.json`):
+
+| | Binari `railway=tram` | In cantiere | Fermate (`railway=tram_stop`) |
+|---|---|---|---|
+| SIR3 | circa 10,6 km (doppio binario, deposito) | – | 12 nomi, una per verso, sul binario; manca la stazione |
+| SIR2 | circa 30,7 km (doppio binario da Rubano alla Busa di Vigonza) | 2,8 km: i rami di Romagnoli e Ospedale San Lazzaro | 33 nomi, una per verso, sul binario; mancano De Gasperi e la stazione |
+
+Nessuna relazione `route=tram` per SIR2 e SIR3 (solo per il SIR1). I nomi delle way non sono uniformi ("SIR 3",
+"SIR3", "Linea SIR3", "SIR 2 Rubano-Vigonza") e non hanno `ref`. L'export che usa oggi il gioco
+(`data/osm-padova-tram.json`, 5 novembre) prende solo un riquadro attorno al centro e solo `railway=tram`.
 
 ## Prova di instradamento
 
-`scripts/tram_percorsi.py` costruisce il grafo dei binari OSM (sensi unici del SIR1 rispettati, niente curve oltre 60°
-ai nodi) e cerca il percorso più corto che tocca le fermate del KML in ordine, con la marcia a destra dove i binari
-corrono affiancati (il binario contromano costa il triplo; il risultato dice quanti metri restano contromano).
+`scripts/tram_percorsi.py` costruisce il grafo dei binari OSM, anche quelli in cantiere (sensi unici rispettati,
+niente curve oltre 60° ai nodi), e cerca il percorso più corto che tocca le fermate del KML in ordine. Ogni fermata
+del KML si aggancia alle fermate OSM con lo stesso nome (una per verso, quindi il percorso sceglie il binario giusto);
+dove i binari corrono affiancati vale la marcia a destra (il binario contromano costa il triplo). Le fermate OSM che
+cadono sul percorso diventano l'elenco della linea.
 
 ```bash
-python3 scripts/tram_percorsi.py data/osm-padova-tram.json SIR3.kml SIR3 "Stazione sud" "Capolinea Voltabarozzo" sir3-andata.json
-python3 scripts/tram_percorsi.py data/osm-padova-tram.json SIR3.kml SIR3 "Capolinea Voltabarozzo" "Stazione sud" sir3-ritorno.json
-python3 scripts/tram_percorsi.py data/osm-padova-tram.json SIR2.kml SIR2 "Brentella Est" "Savelli" sir2-est.json
+python3 scripts/tram_percorsi.py data/osm-padova-tram-cantiere.json SIR3.kml SIR3 "Stazione sud" "Capolinea Voltabarozzo" sir3-andata.json
+python3 scripts/tram_percorsi.py data/osm-padova-tram-cantiere.json SIR3.kml SIR3 "Capolinea Voltabarozzo" "Stazione sud" sir3-ritorno.json
+python3 scripts/tram_percorsi.py data/osm-padova-tram-cantiere.json SIR2.kml SIR2 "Capolinea Rubano" "Busa Di Vigonza" sir2-est.json
+python3 scripts/tram_percorsi.py data/osm-padova-tram-cantiere.json SIR2.kml SIR2 "Busa Di Vigonza" "Capolinea Rubano" sir2-ovest.json
 ```
 
-| Prova | Esito |
-|---|---|
-| SIR3 andata | **5481 m**, tutte le 13 fermate, 10 m contromano (rumore). Ramo di via Giardinetto/Zeno come dice la FAQ |
-| SIR3 ritorno | **5685 m**, tutte le fermate, 25 m contromano. Ramo di via Piovese; alla stazione entra nell'anello dal raccordo nord-est, lo gira e si ferma a "Stazione sud" |
-| SIR2 Brentella Est → Savelli | 7849 m, ma **2401 m contromano** da Pace alla Stanga e a Savelli |
-| SIR2 Savelli → Brentella Est | **bloccato** alla stazione (tra le due fermate dell'anello) |
+| Prova | Lunghezza | Contromano | Fermate OSM sul percorso |
+|---|---|---|---|
+| SIR3 Stazione → Voltabarozzo | 5350 m | 10 m | 11 (il percorso finisce al punto del KML, poco prima della fermata del capolinea) |
+| SIR3 Voltabarozzo → Stazione | 5569 m | 25 m | 12 |
+| SIR2 Rubano → Busa di Vigonza | 16 276 m | 45 m | 33 |
+| SIR2 Busa di Vigonza → Rubano | 16 660 m | 58 m | 33 |
 
-Le lunghezze del SIR3 tornano con i 5,5 km dichiarati. Le fermate cadono a meno di 25 m dal percorso, tranne **Pace**:
-nel KML del SIR3 è oltre il bivio, sui binari del SIR2 dove il SIR3 non passa. Nella prova è spostata alla posizione
-della Pace del SIR2, sul tratto comune prima del bivio; la posizione vera va controllata.
+* Le lunghezze tornano: 5,5 km per il SIR3; per il SIR2 16,3-16,7 km sulla linea principale, contro i 17,5 km
+  dichiarati con i rami. I pochi metri contromano sono scambi e incroci.
+* Il SIR3 segue i due rami di Voltabarozzo come dice la FAQ (Giardinetto/Zeno all'andata, Piovese al ritorno).
+* Il SIR2 tra Garibaldi e la stazione usa i binari del SIR1 (Corso Garibaldi, Corso del Popolo) e passa dall'anello.
+* Con l'export del 5 novembre (solo il centro) il SIR2 era coperto da Brentella a Savelli e andava contromano per
+  2,4 km da Pace alla Stanga; con quello del 9 novembre lo scambio di Pace c'è e la linea è completa.
+* Correzioni a mano rimaste: la fermata Pace del KML del SIR3 è oltre il bivio, sui binari del SIR2 (lo script usa la
+  Pace OSM sul tratto comune); le fermate della stazione si agganciano per posizione, perché in OSM non ci sono.
+* In stazione tutte e quattro le prove passano dall'**anello esterno**, l'unico percorribile in OSM: il tratto della
+  stazione è quindi provvisorio finché non c'è la geometria dei due anelli (vedi sopra).
 
-**SIR2: cosa manca.**
-
-* Copertura: solo **19 fermate su 36** (da Brentella Est a Savelli) sono vicine ai binari dell'export. Rubano e
-  Sarmeola a ovest, Net Center, Nuovo Ospedale, San Marco, Ponte di Brenta e Vigonza a est sono fuori dal riquadro
-  della query (`scripts/overpass-tram.ql`) o mappati come cantiere.
-* **Nodo Pace** (via Tommaseo / SIR3): in OSM i binari che arrivano dalla stazione si collegano verso est solo al
-  binario nord di via Tommaseo, per questo il percorso va contromano fino alla Stanga. Manca lo scambio, o il raccordo
-  è mappato in modo diverso dal reale.
-* **Anello della stazione**: le due fermate nuove dentro l'anello non sono in OSM; nel KML "Stazione sud" è 85 m
-  fuori dai binari. I sensi unici dell'anello in OSM sono quelli del SIR1 di oggi (fase transitoria).
-* Tra Garibaldi e la stazione il SIR2 usa i binari del SIR1 (Corso Garibaldi, Corso del Popolo): fermate in comune
-  Eremitani e De Gasperi (ex Trieste).
-
-**Area di gioco.** Delle fermate del SIR3 solo quelle fino a Cornaro cadono nella rete stradale del gioco: Nani,
-Piovese, il capolinea e il deposito di Voltabarozzo sono a sud-est, fuori dai riquadri `FOCUS` e `FOCUS_SUD` di
-`build_map.py`. L'export OSM `data/osm-padova.json` invece arriva fin là (lat 45,32–45,67, lon 11,69–11,99), come la
-query della segnaletica. Il SIR2 dentro il gioco va da Chiesanuova (lon 11,852) a Savelli (lon 11,912).
+**Area di gioco.** Dentro la rete stradale del gioco ci sono le fermate del SIR3 da Pace a Cornaro (Gregorianum e Parco
+Iris sono sulla passeggiata Bianchini, senza strade attorno ma dentro il riquadro `FOCUS`); Nani, Piovese, il
+capolinea e il deposito sono fuori, a sud-est. Del SIR2 ci sono le fermate da Cimitero Maggiore a Savelli; Rubano e
+Chiesanuova a ovest, Net Center, San Lazzaro, Ponte di Brenta e Vigonza a est sono fuori. L'export OSM delle strade
+`data/osm-padova.json` arriva fin là (lat 45,32–45,67, lon 11,69–11,99): allargare l'area è una scelta dei riquadri
+`FOCUS` di `build_map.py`, non dei dati.
 
 ## Piano
 
-Prima il SIR3 (i dati sono completi e la linea apre per prima), poi il SIR2 quando OSM sarà più completo.
+Prima il SIR3 (apre per primo e la parte nel gioco è quasi tutta già dentro la mappa), poi il SIR2.
 
-1. **Dati delle linee, senza toccare la mappa.** Uno script nuovo (sulla base di `tram_percorsi.py`) scrive
-   `data/tram-linee-nuove.json`: per ogni linea e verso il percorso sui binari OSM (lat/lon) e le fermate in ordine
-   con le distanze progressive. Fermate dal KML, corrette dove serve (Pace). Orari generati: ogni 8 minuti, tempi tra
-   le fermate dalla velocità media del SIR1. Rischio di conflitto nullo: file nuovi.
+1. **Dati delle linee, senza toccare la mappa.** Uno script nuovo, sulla base di `tram_percorsi.py`, scrive
+   `data/tram-linee-nuove.json`: per linea e verso il percorso sui binari (lat/lon), le fermate OSM in ordine con la
+   progressiva, il numero di moduli (**SIR3: 3**, **SIR2: 4**) e l'orario generato (SIR3 ogni 8 minuti e 18 minuti da
+   capolinea a capolinea; SIR2 ogni 6-8 minuti, tempi tra le fermate dalla velocità commerciale). Aggiunge a mano le
+   fermate che OSM non ha (Stazione nord/sud, De Gasperi). Rischio di conflitto nullo: file nuovi.
 2. **Grafo dei binari nel gioco.** `TramTrack` (in `src/tram/tram.js`) oggi è un solo tracciato con due versi, costruito
    da `net.tram`. Diventa una sede per linea (`city.tramTracks[id]`), con `city.tramTrack` che resta il SIR1, così il
-   resto del codice non cambia subito. Poi un grafo vero (rami e scambi) per l'anello della stazione condiviso. Tocca
-   `tram.js`, `traffic.js` (TramSim), `main.js`, `mission.js` e la parte del tram di `city.js`.
+   resto del codice non cambia subito. Poi un grafo vero (rami e scambi) per i **due anelli della stazione** (ogni
+   linea percorre il suo, il SIR1 l'esterno; le fermate Stazione nord e Stazione sud servono entrambi) e per i tratti
+   comuni (SIR2 sul SIR1 tra Garibaldi e la stazione, SIR2 e SIR3 fino a Pace). Gli anelli si disegnano dal progetto
+   del piazzale, perché in OSM l'interno non è collegato alle uscite. Tocca `tram.js`, `traffic.js` (TramSim),
+   `main.js`, `mission.js` e la parte del tram di `city.js`. I convogli a 4 moduli (circa 32 m) sono già previsti
+   da `modules` (vedi `docs/prompt-tram.md`): vanno provati sulle curve dell'anello e di via Tommaseo.
 3. **Sede tranviaria nella pianta delle strade.** `build_map.py` passa a `street_surfaces.surfaces()` le corsie del
-   tram: vanno aggiunte quelle del SIR3, e i bus non devono trovarsi la sede in corsia (verifica del CLAUDE.md). Questa
-   è la tappa che si sovrappone di più al lavoro sulla mappa: farla **dopo** che l'altra sessione ha unito il suo.
+   tram: vanno aggiunte quelle di SIR3 e SIR2, e i bus non devono trovarsi la sede in corsia (verifica del CLAUDE.md).
+   È la tappa che si sovrappone di più al lavoro sulla mappa: farla **dopo** che l'altra sessione ha unito il suo.
 4. **Area di Voltabarozzo.** Un riquadro `FOCUS` in più (circa lon 11,885–11,912, lat 45,372–45,392) per avere strade,
    edifici e deposito fino al capolinea; vanno controllati gli altri dati (DBGT, DTM, segnaletica) su quell'area.
    Anche questa tocca `build_map.py`: dopo la tappa 3. In alternativa, in un primo tempo il SIR3 si guida fino a
    Cornaro ("tratto in città"), come già si fa per il SIR1 verso la Guizza.
-5. **SIR3 nel gioco**: linea nel menu del tram (4 moduli o 3? da verificare quali mezzi girano sul SIR3), tram
-   automatici dall'orario generato, fermate con banchina, scambio all'uscita dell'anello.
-6. **SIR2**, quando ci saranno i dati:
-   * lanciare dal browser [`scripts/overpass-tram-cantiere.ql`](../scripts/overpass-tram-cantiere.ql) (area più
-     larga, binari in cantiere, fermate e relazioni `route=tram`) e rifare la prova;
-   * sistemare in OSM (o con una correzione locale) lo scambio del nodo Pace e le fermate dell'anello;
-   * nel gioco la parte da Chiesanuova a Savelli, con i binari in comune col SIR1 tra Garibaldi e la stazione.
+5. **SIR3 nel gioco**: linea nel menu del tram (3 moduli), tram automatici dall'orario generato, fermate con banchina,
+   scambio all'uscita dell'anello.
+6. **SIR2 nel gioco**: il tratto da Cimitero Maggiore a Savelli (come "tratto in città"), 4 moduli, binari in comune
+   col SIR1 e col SIR3. **La linea 10 esce di servizio** quando c'è il SIR2: serve uno scenario (per esempio "oggi"
+   con SIR1 e linea 10, "rete SMART" con SIR1, SIR2, SIR3 e senza linea 10) oppure si toglie la 10 quando il SIR2
+   entra nel gioco. I rami di Romagnoli e Ospedale San Lazzaro (ancora in cantiere in OSM) e i capolinea fuori dalla
+   mappa vengono dopo.
 
-Domande aperte: le linee nuove vanno in gioco come già aperte (scenario "SMART") o con i cantieri? Il SIR3 usa tram da
-3 o da 4 moduli?
+Domanda aperta: le linee nuove vanno in gioco come già aperte (scenario "rete SMART") o accanto alla rete di oggi, con
+la scelta nel menu?
