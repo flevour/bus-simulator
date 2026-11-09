@@ -3,6 +3,32 @@ import { fmtDelay } from './mission.js';
 
 const $ = (id) => document.getElementById(id);
 
+// navigatore: freccia e frasi per la manovra di Mission.navInfo
+const side = (dir) => (dir === 'left' ? 'sinistra' : 'destra');
+function navArrow(nav) {
+  if (nav.dir === 'roundabout') return '↺';
+  if (nav.dir === 'uturn') return '↶';
+  if (nav.dir === 'straight') return '⬆';
+  if (nav.keep) return nav.dir === 'left' ? '⬉' : '⬈';
+  if (nav.sharp) return nav.dir === 'left' ? '↰' : '↱';
+  return nav.dir === 'left' ? '⬅' : '➡';
+}
+// la manovra in poche parole: "a destra", "alla rotonda 2ª uscita", ...
+function navWhat(m) {
+  if (m.dir === 'roundabout') return `alla rotonda ${m.exit}ª uscita`;
+  if (m.dir === 'uturn') return 'inversione a U';
+  return `${m.keep ? 'tieni la' : 'a'} ${side(m.dir)}`;
+}
+function navText(nav) {
+  const m = Math.round(nav.dist / 10) * 10;
+  if (nav.dir === 'straight') return nav.dist > 1500 ? 'Prosegui dritto' : `Prosegui per ${m} m`;
+  if (nav.inside) return nav.exit > 1 ? `Esci alla ${nav.exit}ª uscita` : 'Esci alla prossima uscita';
+  if (nav.dist > 1200) return `Prosegui, poi ${navWhat(nav)} tra ${(nav.dist / 1000).toFixed(1)} km`;
+  if (nav.dir === 'roundabout') return `Tra ${m} m alla rotonda ${nav.exit}ª uscita`;
+  if (nav.dir === 'uturn') return `Tra ${m} m inversione a U`;
+  return `Tra ${m} m ${nav.keep ? 'tieni la' : 'svolta a'} ${side(nav.dir)}`;
+}
+
 export class HUD {
   constructor() {
     this.toastsEl = $('toasts');
@@ -78,10 +104,9 @@ export class HUD {
     // navigazione
     $('nav').style.display = m.free ? 'none' : '';
     const nav = m.free ? { dist: 0, dir: 'straight', street: '' } : m.navInfo();
-    const arrows = { left: '⬅', right: '➡', straight: '⬆' };
-    $('nav-arrow').textContent = nav.sharp ? (nav.dir === 'left' ? '↰' : '↱') : arrows[nav.dir];
-    $('nav-dist').textContent = nav.dir === 'straight' ? (nav.dist > 1500 ? 'Prosegui dritto' : `Prosegui per ${Math.round(nav.dist / 10) * 10} m`) : nav.dist > 1200 ? `Prosegui, poi a ${nav.dir === 'left' ? 'sinistra' : 'destra'} tra ${(nav.dist / 1000).toFixed(1)} km` : `Tra ${Math.round(nav.dist / 10) * 10} m svolta a ${nav.dir === 'left' ? 'sinistra' : 'destra'}`;
-    $('nav-street').textContent = nav.street;
+    $('nav-arrow').textContent = navArrow(nav);
+    $('nav-dist').textContent = navText(nav);
+    $('nav-street').textContent = nav.then ? `${nav.street ? nav.street + ', ' : ''}poi ${navWhat(nav.then)}` : nav.street;
     $('nav').classList.toggle('warn', m.proj && m.proj.d > 40);
     $('offroute').style.display = !m.free && m.proj && m.proj.d > 40 ? 'block' : 'none';
 

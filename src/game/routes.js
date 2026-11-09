@@ -1,8 +1,36 @@
 import { LINES } from '../data/padova.js';
 
-// Costruisce un percorso da una variante GTFS: polilinea sui vertici della rete + fermate reali
+// Costruisce un percorso da una variante GTFS: polilinea sui vertici della rete + fermate reali.
+// Le andate e ritorni nella stessa via senza fermate (A-B-A: tracciato GTFS agganciato male, o linea che esce dalla
+// mappa e rientra) si tolgono: il bus dovrebbe fare inversione in mezzo alla strada, e il navigatore ce lo manderebbe.
+// Restano quelle con una fermata (capolinea al bordo della mappa) e quelle agli estremi del percorso.
 export function buildRoute(net, variant) {
-  const seq = net.expandSeq(variant.nodes);
+  let seq = net.expandSeq(variant.nodes);
+  for (let pass = 0; pass < 4; pass++) {
+    const route = routeOn(net, variant, seq), cut = spurs(route);
+    if (!cut.length) return route;
+    seq = seq.filter((_, i) => !cut.some(([a, b]) => i > a && i <= b));
+  }
+  return routeOn(net, variant, seq);
+}
+
+// tratti [a, b] del percorso con seq[a + k] === seq[b - k] (andata e ritorno), senza fermate in mezzo e senza
+// sovrapporsi (quelli sovrapposti al giro dopo). Andata, ritorno e di nuovo andata (linea 42 in Via Madonna della
+// Salute) sono due tratti sovrapposti: se il primo ha la fermata, si toglie il secondo.
+function spurs(route) {
+  const { seq, cum, stops } = route, out = [];
+  for (let i = 1; i < seq.length - 1; i++) {
+    if (seq[i - 1] !== seq[i + 1]) continue;
+    let k = 1;
+    while (i - k - 1 >= 0 && i + k + 1 < seq.length && seq[i - k - 1] === seq[i + k + 1]) k++;
+    const a = i - k, b = i + k;
+    if (a < 1 || b > seq.length - 2 || (out.length && a < out[out.length - 1][1])) continue;
+    if (!stops.some((st) => st.s > cum[a] + 1 && st.s < cum[b] - 1)) out.push([a, b]);
+  }
+  return out;
+}
+
+function routeOn(net, variant, seq) {
   const pts = seq.map((id) => ({ x: net.nodes[id].x, z: net.nodes[id].z }));
   const cum = [0];
   const segs = [];
@@ -184,6 +212,91 @@ export function pointAt(route, s) {
   const seg = route.segs[i];
   const t = s - route.cum[i];
   return { x: route.pts[i].x + seg.dx * t, z: route.pts[i].z + seg.dz * t, dx: seg.dx, dz: seg.dz, seg, segIndex: i };
+}
+
+// Manovre del navigatore lungo un percorso del bus, calcolate una volta. Si annunciano le svolte dove c'è da scegliere
+// (agli incroci, non le curve della strada), i bivi dove si tiene la destra o la sinistra, le rotatorie con il numero
+// dell'uscita e le inversioni. Ogni manovra: s (dove comincia), dir ('left' | 'right' | 'uturn' | 'roundabout'), keep
+// (bivio), sharp, street (la via dopo); per le rotatorie sEnd (uscita), exit (numero) ed exits (progressive delle uscite
+// fino alla nostra compresa).
+const TURN = 35 * Math.PI / 180, FORK = 30 * Math.PI / 180, SHARP = 115 * Math.PI / 180, BACK = 165 * Math.PI / 180;
+export function routeManeuvers(net, route) {
+  const { seq, cum, segs } = route, n = seq.length, out = [];
+  if (n < 3) return out;
+  const angle = (a, b) => Math.atan2(a.dx * b.dz - a.dz * b.dx, a.dx * b.dx + a.dz * b.dz); // > 0 a destra
+  const heading = (s0, s1) => {
+    const a = pointAt(route, s0), b = pointAt(route, s1), l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { dx: (b.x - a.x) / l, dz: (b.z - a.z) / l };
+  };
+  const leaving = (e, u) => (e.a === u ? { dx: e.dx, dz: e.dz } : { dx: -e.dx, dz: -e.dz });
+  // strade su cui si può proseguire dal nodo u arrivando da ein: niente vie pedonali, sensi vietati, strade di servizio
+  // e passi carrai, tranne quella del percorso
+  const ways = (i) => {
+    const u = seq[i], ein = segs[i - 1].edge, eout = segs[i].edge;
+    return net.nodes[u].edges.filter((e) => e !== ein && (e === eout || (busCan(e, u) && e.cls < 7)));
+  };
+  const junction = (i) => seq[i - 1] === seq[i + 1] || segs[i].edge.roundabout || ways(i).length >= 2;
+  const streetAfter = (i) => {
+    for (let j = i; j < segs.length && cum[j] - cum[i] < 150; j++) if (segs[j].edge.name) return segs[j].edge.name;
+    return '';
+  };
+  let last = 0; // ultimo incrocio: la direzione d'arrivo si misura da lì (o 15 m prima)
+  for (let i = 1; i < n - 1; i++) {
+    const ein = segs[i - 1].edge, eout = segs[i].edge;
+    if (ein.roundabout) continue; // dentro la rotatoria o alla sua uscita
+    if (eout.roundabout) {
+      // in OSM qualche pezzo dell'anello non è segnato come rotatoria ma ne porta il nome (Rotonda Rosetta Molinari)
+      const ring = eout.name, onRing = (j) => {
+        const e = segs[j].edge;
+        return e.roundabout || (ring && e.name === ring && e.len < 30 && net.nodes[seq[j + 1]].edges.some((x) => x.roundabout));
+      };
+      let j = i + 1;
+      while (j < n - 1 && onRing(j)) j++;
+      if (j >= n - 1) break; // il percorso finisce nella rotatoria
+      const exits = [];
+      for (let k = i + 1; k < j; k++) {
+        const u = seq[k];
+        for (const e of net.nodes[u].edges) if (!e.roundabout && e !== segs[k].edge && e !== segs[k - 1].edge && busCan(e, u) && e.cls < 7) exits.push(cum[k]);
+      }
+      exits.push(cum[j]);
+      out.push({ s: cum[i], sEnd: cum[j], dir: 'roundabout', exit: exits.length, exits, street: streetAfter(j) });
+      last = i = j;
+      continue;
+    }
+    if (seq[i - 1] === seq[i + 1]) {
+      out.push({ s: cum[i], dir: 'uturn', street: streetAfter(i) });
+      last = i;
+      continue;
+    }
+    const opts = ways(i);
+    if (opts.length < 2) continue; // curva della strada: non c'è da scegliere
+    let j = i + 1;
+    while (j < n - 1 && cum[j] - cum[i] < 15 && !junction(j)) j++;
+    const din = heading(Math.min(cum[i] - 2, Math.max(cum[i] - 15, cum[last])), cum[i]);
+    const ang = angle(din, heading(cum[i], Math.max(cum[i] + 2, Math.min(cum[i] + 15, cum[j]))));
+    last = i;
+    const street = streetAfter(i);
+    if (Math.abs(ang) > BACK) { out.push({ s: cum[i], dir: 'uturn', street }); continue; }
+    if (Math.abs(ang) >= TURN) { out.push({ s: cum[i], dir: ang > 0 ? 'right' : 'left', sharp: Math.abs(ang) > SHARP, ang, street }); continue; }
+    // quasi dritto: bivio se un'altra strada va quasi nello stesso verso o più dritta della nostra
+    const a0 = angle(din, leaving(eout, seq[i]));
+    let rival = null;
+    for (const e of opts) {
+      if (e === eout) continue;
+      const a = angle(din, leaving(e, seq[i]));
+      if ((Math.abs(a - a0) < FORK || Math.abs(a) < Math.abs(a0)) && (!rival || Math.abs(a - a0) < Math.abs(rival - a0))) rival = a;
+    }
+    if (rival !== null) out.push({ s: cum[i], dir: a0 > rival ? 'right' : 'left', keep: true, street });
+  }
+  // una svolta divisa su due nodi vicini (incroci sfalsati, carreggiate separate) è una sola
+  for (let k = out.length - 1; k > 0; k--) {
+    const a = out[k - 1], b = out[k];
+    if (a.ang && b.ang && a.dir === b.dir && b.s - a.s < 20) {
+      a.ang += b.ang; a.sharp = Math.abs(a.ang) > SHARP; a.street = b.street;
+      out.splice(k, 1);
+    }
+  }
+  return out;
 }
 
 // Proiezione di un punto sul percorso cercando vicino a sHint. Con h (direzione del mezzo) si segue chi guida: dove il

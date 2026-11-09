@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRoute, buildTramRoute, pointAt, projectOnRoute, alignStops, planTransfer } from './routes.js';
+import { buildRoute, buildTramRoute, pointAt, projectOnRoute, alignStops, planTransfer, routeManeuvers } from './routes.js';
 import { personGeometry } from '../world/traffic.js';
 import { zoneOf } from '../world/city.js';
 import { fmtHM } from '../data/padova.js';
@@ -69,6 +69,7 @@ export class Mission {
       st.x = st.cx + st.rx * half; st.z = st.cz + st.rz * half;
     }
     if (!this.tram && city && city.stopPlacements) alignStops(this.route, city.stopPlacements);
+    this.maneuvers = this.tram ? [] : routeManeuvers(net, this.route);
     this.dest = this.stops[this.stops.length - 1].name;
     this.departure = departure;
     this.clock = departure - 25; // poco prima della partenza
@@ -570,16 +571,18 @@ export class Mission {
       const ns = this.stops[this.nextStop];
       return { dist: ns ? Math.max(0, ns.s - this.s - 6) : r.length - this.s, dir: 'straight', street: ns ? 'Fermata ' + ns.name : 'Capolinea' };
     }
-    for (let i = 1; i < r.pts.length - 1; i++) {
-      if (r.cum[i] < this.s - 5) continue;
-      const a = r.segs[i - 1], b = r.segs[i];
-      const cross = a.dx * b.dz - a.dz * b.dx, dot = a.dx * b.dx + a.dz * b.dz;
-      const ang = Math.atan2(cross, dot);
-      const dist = r.cum[i] - this.s;
-      if (Math.abs(ang) > 0.45) return { dist, dir: ang > 0 ? 'right' : 'left', sharp: Math.abs(ang) > 1.9, street: b.edge.name };
-    }
-    const end = r.length - this.s;
-    return { dist: end, dir: 'straight', street: r.segs[Math.min(r.segs.length - 1, this.proj ? this.proj.segIndex : 0)].edge.name };
+    // la prossima manovra (vedi routeManeuvers), o quella in corso: dentro la rotatoria si contano le uscite che restano
+    const M = this.maneuvers, s = this.s;
+    let k = 0;
+    while (k < M.length && (M[k].sEnd ?? M[k].s) < s - 5) k++;
+    const m = M[k];
+    if (!m) return { dist: r.length - s, dir: 'straight', street: r.segs[Math.min(r.segs.length - 1, this.proj ? this.proj.segIndex : 0)].edge.name };
+    const nav = { dist: Math.max(0, m.s - s), dir: m.dir, sharp: m.sharp, keep: m.keep, exit: m.exit, street: m.street };
+    if (m.dir === 'roundabout' && s > m.s - 3) Object.assign(nav, { inside: true, dist: Math.max(0, m.sEnd - s), exit: m.exits.filter((x) => x > s + 2).length || 1 });
+    // due manovre ravvicinate: si dice anche la seconda
+    const nx = M[k + 1];
+    if (nx && nx.s - (m.sEnd ?? m.s) < 60) nav.then = nx;
+    return nav;
   }
 
   finish() {
@@ -632,6 +635,7 @@ export class Transfer extends Mission {
     const p = pointAt(route, s), hw = p.seg.hw, rx = -p.dz, rz = p.dx;
     Object.assign(b, { s, x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw, sched: this.stops ? this.stops[1].sched : 0 });
     this.route = route;
+    this.maneuvers = routeManeuvers(this.net, route);
     this.stops = route.stops;
     for (const st of this.stops) st.waiting = [];
     const a = this.stops[0];
