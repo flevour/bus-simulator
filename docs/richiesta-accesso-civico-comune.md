@@ -83,6 +83,7 @@ conviene guardare il registro degli accessi e i bandi in Amministrazione traspar
 * Piani semaforici: fasi e durate vere al posto del ciclo di 60 s del gioco (`src/world/traffic.js`).
 * Licenza: riportare l'attribuzione nel gioco e nel README come per gli altri dati.
 
-Anche la **Regione del Veneto** ha dati utili non scaricabili dal sito: le tessere del **DTM LiDAR a 5 m** (40 su
-Padova; l'elenco c'è, il download risponde "Parametri mancanti"). Si possono chiedere allo stesso modo alla Direzione
-Pianificazione Territoriale della Regione (indirizzi sul sito della Regione, area Cartografia).
+Le tessere del **DTM LiDAR a 5 m** della Regione del Veneto (40 sul Comune) si scaricano dal downloader IDT2 con il
+parametro `dataDtmLidarId` e sono già nel repository (`data/lidar5`). Se servono rilievi più fitti (LiDAR a 1 m, modello
+delle superfici con edifici e alberi) si possono chiedere allo stesso modo alla Direzione Pianificazione Territoriale
+della Regione (indirizzi sul sito della Regione, area Cartografia).
