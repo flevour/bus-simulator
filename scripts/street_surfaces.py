@@ -607,10 +607,13 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     D = decks(nodes, edges, heights, drive, tram)
     up = unary_union([pieces[k] for k in drive if elev(edges[k])])
     islands = islands.difference(up).difference(D)
-    # la sede del tram nello spartitraffico (Via Aspetti, Via Guizza) resta libera: l'isola è solo il verde ai lati
+    # la sede del tram nello spartitraffico (Via Aspetti, Via Guizza) e nelle rotonde che il tram attraversa resta
+    # libera: l'isola è solo il verde ai lati (prima l'isola rialzata copriva binari e sede rossa)
     lanes = [LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE, quad_segs=2) for t in tram if len(t) >= 4]
+    # (i varchi più stretti di 3 m tra le sedi dei due binari si chiudono: restava una striscia d'erba tra i binari)
+    S = unary_union(lanes).buffer(1.5, quad_segs=2).buffer(-1.5, quad_segs=2).difference(up).difference(D) if lanes else Polygon()
     if lanes:
-        islands = islands.difference(unary_union(lanes))
+        islands = islands.difference(S)
     # marciapiede solo dove la via ce l'ha (flag 64 sinistra, 128 destra): su entrambi i lati una fascia intorno al
     # tratto, su un lato solo una fascia da quel lato
     # larghezza: quella misurata (CTRN o DBGT) da quel lato, altrimenti SIDEWALK
@@ -632,6 +635,11 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
     walk = unary_union([*bands, ped, dbgt_m, P]).difference(U).difference(islands)
     walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
+    # sotto la sede del tram asfalto, anche dove OSM la mette sul marciapiede o in una zona pedonale (il marciapiede
+    # rialzato copriva la corsia rossa)
+    if not S.is_empty:
+        walk = walk.difference(S)
+        U = unary_union([U, S.difference(W.difference(bridges))]).buffer(0)
     # verde del DBGT (prati, aree alberate, aiuole): sta sotto marciapiedi e carreggiate (il gioco lo disegna più in
     # basso), quindi non si ritaglia, se non sull'acqua; ritagliarlo moltiplicava i vertici
     verde = Polygon()
@@ -815,6 +823,34 @@ def terrain_for_game(dtm, nodes, edges, heights):
             sub = hv[sl]
             sub[m] = np.maximum(sub[m], ah + (bh - ah) * t)
 
+    def adjust_heights(hts):
+        """Quote dei nodi delle rampe dove la variante "via" riempie la striscia spianata sotto la rampa fino alla
+        quota del terrapieno intorno: si toglie il riempimento, così la strada sta alla più alta tra terrapieno e rampa
+        invece di sommarli (Cavalcavia Chiesanuova: rampa ovest a 12,5 m invece di 7, impalcato che spuntava sopra
+        asfalto e sede del tram). L'impalcato resta alla sua quota sopra la variante "via" (sotto, binari e strade
+        stanno sul riempimento) e la correzione cresce con la distanza dall'impalcato, piena a 40 m."""
+        fill = np.maximum(hv - h, 0)
+
+        def at(a, x, z):
+            fx = min(max((x - x0) / step, 0), nx - 1.001)
+            fz = min(max((z - z0) / step, 0), nz - 1.001)
+            i, j = int(fx), int(fz)
+            tx, tz = fx - i, fz - j
+            return (a[j, i] * (1 - tx) + a[j, i + 1] * tx) * (1 - tz) + (a[j + 1, i] * (1 - tx) + a[j + 1, i + 1] * tx) * tz
+        deck_nodes = [n for n in {n for e in edges if e[5] & 4 and e[7] >= 1 for n in e[:2]} if n in hts]
+        D = {n for n in deck_nodes}
+        out, lowered = {}, 0
+        for n, hn in hts.items():
+            if n in D:
+                out[n] = hn
+                continue
+            d = min((math.dist(nodes[n], nodes[k]) for k in deck_nodes), default=1e9)
+            nh = max(0.0, hn - float(at(fill, *nodes[n])) * min(1.0, d / 40.0))
+            lowered += nh < hn - 0.05
+            if nh > 0.001:
+                out[n] = round(nh, 2)
+        return out, lowered
+
     def hfun(x, z):
         fx = min(max((x - x0) / step, 0), nx - 1.001)
         fz = min(max((z - z0) / step, 0), nz - 1.001)
@@ -826,4 +862,4 @@ def terrain_for_game(dtm, nodes, edges, heights):
     out = np.clip(np.round((h - lo) / scale), 0, 255).astype(np.uint8)
     g.update({'scale': round(scale, 5), 'offset': round(lo, 3), 'data': base64.b64encode(out.tobytes()).decode(), 'bridges': bridges,
               'close': TERRAIN_CLOSE})
-    return g, {'celle_spianate': flat, 'ponti': len(bridges)}, hfun
+    return g, {'celle_spianate': flat, 'ponti': len(bridges)}, hfun, adjust_heights

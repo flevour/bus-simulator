@@ -17,6 +17,7 @@ Dati © OpenStreetMap contributors (ODbL) e Busitalia Veneto (GTFS, feed BusOne)
 import heapq
 import json
 import math
+import os
 import re
 import sys
 from collections import Counter, defaultdict
@@ -1200,7 +1201,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     heights = street_surfaces.overpass_heights(nodes, edges, rails)
     terrain = hfun = None
     if dtm_path:
-        terrain, tst, hfun = street_surfaces.terrain_for_game(json.load(open(dtm_path)), nodes, edges, heights)
+        terrain, tst, hfun, adjust = street_surfaces.terrain_for_game(json.load(open(dtm_path)), nodes, edges, heights)
+        heights, tst['nodi_abbassati'] = adjust(heights)
         print('terreno:', tst)
     green = json.load(open(green_path, encoding='utf-8')) if green_path else None
     streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
@@ -1224,7 +1226,16 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     lt[0], lt[1] = min(lt[0], 1), min(lt[1], 1)
                     edge_lanes[k] = tuple(lt)
         print('corsie ristrette tra le banchine:', narrowed)
-    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, tram if tram_lanes else [], bus_edges, edge_walk, hfun, green, streets, platforms)
+    # binari delle linee nuove del tram (SIR2 e SIR3: data/tram-linee-nuove.json di scripts/tram_linee.py, accanto
+    # all'export dei binari): la loro sede è nella pianta delle strade come quella del SIR1
+    new_tram = []
+    nt_path = os.path.join(os.path.dirname(tram_path), 'tram-linee-nuove.json') if tram_path else None
+    if nt_path and os.path.exists(nt_path):
+        for L in json.load(open(nt_path, encoding='utf-8'))['linee']:
+            for v in L['versi']:
+                new_tram.append([round(c, 1) for la, lo in v['percorso'] for c in xz(la, lo)])
+        print('binari delle linee nuove nella pianta delle strade:', len(new_tram))
+    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms)
     print('pianta delle strade:', st)
 
     nodes_flat = []

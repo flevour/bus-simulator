@@ -2289,6 +2289,8 @@ export class City {
         const x = mx + -e.dz * side * off, z = mz + e.dx * side * off;
         if (dbgt.length && inDbgt(x, z)) continue;
         if (this.clearance(x, z, ['road', 'tram']) < 1.8) continue;
+        // fuori dall'asfalto vero, come i lampioni
+        if (this.asphRings && this.surfaceOff(x, z) < 0.5) continue;
         if (Math.hypot(...lamps.length ? [lamps[lamps.length - 1].x - x, lamps[lamps.length - 1].z - z] : [99, 99]) < 4) continue;
         trees.push({ x, z });
         this.addObstacle(x, z, 0.35, 0.35, 0, 'tree');
@@ -2299,6 +2301,7 @@ export class City {
       const x = (rnd() - 0.5) * 9000, z = (rnd() - 0.5) * 9000;
       if (dbgt.length && inDbgt(x, z)) continue;
       if (this.clearance(x, z) < 8) continue;
+      if (this.asphRings && this.surfaceOff(x, z) < 1) continue; // piazzali e parcheggi asfaltati fuori dal grafo
       trees.push({ x, z, big: true });
     }
     const trunkG = new THREE.CylinderGeometry(0.18, 0.28, 3, 6);

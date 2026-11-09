@@ -260,7 +260,9 @@ export class TramTrack {
         raw.push(h);
       }
       const sm = raw.map((_, i) => { let a = 0, n = 0; for (let k = -5; k <= 5; k++) { const v = raw[i + k]; if (v != null) { a += v; n++; } } return a / n; });
-      this.h[d] = sm.map((v) => (v < 0.25 ? 0 : v));
+      // la media smussa i raccordi in basso, ma non abbassa il binario sotto la strada che segue: in cima alle rampe
+      // finiva sotto l'impalcato e la sede rossa spariva a pezzi (Cavalcavia Chiesanuova sul SIR2)
+      this.h[d] = sm.map((v, i) => { const w = Math.max(v, raw[i]); return w < 0.25 ? 0 : w; });
     }
   }
   heightAt(dir, s) {

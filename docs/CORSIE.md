@@ -173,13 +173,20 @@ riga che separa i versi (`TrafficLights.placeApproach`); in `main.js` e `mission
 dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.js`; in `buses.js` (`buildLane` e
 `ahead`) i bus automatici lasciano il binario del verso opposto prima di tutto (o vanno su quello del loro verso se la
 carreggiata non basta: da 6.460 a 635 punti di corsia sopra un binario opposto, quasi tutti incroci obliqui) e si
-fermano davanti a un tram che arriva (passavano come direzione dei pezzi del tram la loro quota).
+fermano davanti a un tram che arriva (passavano come direzione dei pezzi del tram la loro quota); in `tram.js` la
+media delle quote del binario non lo porta sotto la strada (`setHeights`); in `city.js` gli alberi dei viali e quelli
+sparsi fuori dall'asfalto vero (`buildTreesAndLamps`).
 
 Prossimo lavoro, in quest'ordine:
 
-- sede di SIR3 e SIR2 nella pianta delle strade (richiesta di `tram-reti`, sopra): le corsie dei bus passano sopra i
-  binari nuovi o a meno di 2,5 m (i bus automatici ora non vanno più contromano sui binari, ma la sede resta disegnata
-  sopra l'asfalto); poi le rotonde con l'isola sopra i binari (anche SIR1) e il cavalcavia di Chiesanuova (sopra);
+- sede di SIR3 e SIR2 nella pianta delle strade: fatta per isole, marciapiedi, edifici e impalcati (i binari di
+  `data/tram-linee-nuove.json` entrano in `street_surfaces.surfaces` come quelli del SIR1; la sede di tutte le linee
+  è asfalto, fuori da isole e marciapiedi: rotonde attraversate dal tram a posto). Cavalcavia di Chiesanuova: rampe
+  senza il terrapieno contato due volte (`adjust_heights` in `terrain_for_game`) e binario mai sotto la strada che
+  segue (`TramTrack.setHeights` in `tram.js`). Restano: le carreggiate dei bus accanto ai binari nuovi, che OSM
+  disegna sopra la sede futura (larghezze e corsie da rivedere quando OSM avrà le strade rifatte); a Chiesanuova
+  qualche scaglia nello svincolo ovest e un tratto di binario sotto un triangolo dell'asfalto in quota (suddiviso
+  ogni 20 m in `buildRoads`);
 - le 9 fermate dove il bus fermo tocca una facciata e le 11 agganciate lontano (richieste di `verifiche`, sopra);
 - svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
 - le fermate senza palina e gli 11 tratti A-B-A con una fermata rimasti (3 in Via Bembo, 4 in Via Gramsci, 16 e 24

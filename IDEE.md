@@ -47,9 +47,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      sospeso e una gobba dove passa la 24 (vedi "Fatto"); restano i sottopassi che nella realtà scendono sotto il
      piano della strada (Corso Australia su Via Cignaroli, Corso Tredici Giugno su Via Rienza: il gioco non abbassa
      le strade) e la posizione dei fiumi;
-   - [ ] cavalcavia di Chiesanuova sul SIR2 (9 novembre): impalcato a pezzi, asfalto e sede del tram storti (corsia
-     `mappa`);
-   - [ ] rotonde attraversate dal tram: l'isola verde copre binari e sede (9 novembre, corsia `mappa`);
+   - [x] cavalcavia di Chiesanuova sul SIR2 (9 novembre): impalcato a pezzi, asfalto e sede del tram storti (vedi
+     "Fatto"; restano scaglie piccole nello svincolo ovest)
+   - [x] rotonde attraversate dal tram: l'isola verde copre binari e sede (9 novembre, vedi "Fatto");
    - [x] bus automatici contromano sul binario del tram in Via Tommaseo (Pace) e in Piazza Garibaldi, con il muso dentro
      il tram (9 novembre, vedi "Fatto");
    - [ ] mappa più grande (corsia `capolinea`);
@@ -212,6 +212,14 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   - **bus automatici e binari del tram** (`buses.js`): lasciano il binario del verso opposto prima di tutto, o vanno
     su quello del loro verso dove la carreggiata non basta; si fermano davanti a un tram che arriva. Punti di corsia
     sopra un binario opposto da 6.460 a 635 (incroci obliqui), contatti bus-tram in dieci minuti di servizio da 6 a 1.
+  - **sede del tram nella pianta delle strade** per tutte le linee (anche SIR2 e SIR3 da `data/tram-linee-nuove.json`):
+    asfalto sotto la sede, fuori da isole e marciapiedi; nelle rotonde attraversate dal tram i binari passano in mezzo
+    all'isola (prima: 575 m di binario del SIR2 e 80 del SIR3 sotto le isole, 701 m del SIR1 sotto i marciapiedi);
+    alberi dei viali fuori dall'asfalto (nel rapporto da 4-6 a 0);
+  - **Cavalcavia di Chiesanuova**: la variante "via" del terreno riempiva la striscia spianata sotto la rampa fino al
+    terrapieno e la strada lo contava due volte (rampa ovest a 12,5 m invece di 7, impalcato sopra asfalto e sede del
+    tram): le quote dei nodi delle rampe tolgono il riempimento, gradualmente fino a 40 m dall'impalcato (197 nodi, i
+    punti ripidi delle strade restano 69 come prima); il binario del tram non scende più sotto la strada che segue.
 - [x] Passeggeri sugli altri autobus: dai finestrini dei bus automatici si vedono i passeggeri seduti e in piedi (di
   sera con l'interno illuminato); vicino al giocatore, alle fermate dove si fermano, qualcuno aspetta, sale dalla
   porta anteriore e scende da quella centrale, e il bus aspetta che abbiano finito.

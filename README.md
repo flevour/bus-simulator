@@ -67,7 +67,9 @@ La mappa unisce due fonti aperte:
   segue i binari veri, uno per verso. Lo shape GTFS corre su uno dei due binari e ha punti radi: viene campionato ogni
   2 m e agganciato al binario OSM vicino e parallelo. Le fermate vanno sul nodo OSM dove si ferma il tram
   (`railway=tram_stop`, `stop_position`), a metà della banchina vera, oppure al centro della banchina OSM: le fermate GTFS
-  stanno in fondo alla banchina, circa 10 m più avanti.
+  stanno in fondo alla banchina, circa 10 m più avanti. I binari delle linee nuove (SIR2, SIR3) li legge da
+  `data/tram-linee-nuove.json`, accanto all'export dei binari: la loro sede entra nella pianta delle strade come quella
+  del SIR1 (asfalto, fuori da isole e marciapiedi).
 * **GTFS ufficiale di Busitalia Veneto** (feed BusOne, `https://proxy.busone.app/biv/gtfs.zip`): le 22 linee urbane
   con le varianti di percorso, le fermate reali e gli orari delle corse di un mercoledì (feriale) e di una domenica
   (festivo). Partenza e arrivo sono quelli reali; i passaggi intermedi il gioco li ripartisce secondo il tempo di guida
