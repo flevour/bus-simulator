@@ -22,6 +22,7 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   aggiungi in cima una riga in italiano semplice (cosa cambia per chi guida, non come è fatto), con `n` successivo e la
   data del giorno, nello stesso commit della modifica.
 * `docs/prompt-tram.md`: specifica del tram SIR1 guidabile.
+* `docs/linee-tram-nuove.md`: ricerca sui tracciati delle linee in costruzione SIR2 e SIR3.
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,

@@ -20,6 +20,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 2. [ ] **Nuovo piazzale della stazione** con gli anelli (ovali concentrici) del tram, per le linee future
    **SIR2, SIR3, SIR4, SIR5**. La geometria del tram dovrà gestire più linee, gli anelli e i deviatoi, non una sola
    sede: modellarla come grafo di binari (rami e scambi) su cui ogni linea ha il suo percorso.
+   - ricerca sui tracciati di SIR2 e SIR3 (fonti, binari già in OSM, cosa manca):
+     [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md).
 3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
    "Fatto"). Restano:
    - fermate del tram dai nodi OSM (`tram_stop`);
