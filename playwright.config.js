@@ -5,6 +5,9 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests',
   fullyParallel: true,
+  // Ogni Chromium con SwiftShader prende circa 4 core mentre carica la città, e più corsie lanciano npm test insieme:
+  // in locale 3 worker (ognuno carica il gioco una volta), in CI quelli che sceglie Playwright (2 su ubuntu-latest).
+  workers: process.env.CI ? undefined : 3,
   globalSetup: './tests/setup.js',
   timeout: 240_000,
   expect: { timeout: 20_000 },

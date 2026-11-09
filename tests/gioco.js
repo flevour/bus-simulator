@@ -10,7 +10,7 @@ export async function apriGioco(page) {
   // annunci a voce muti: su macOS la sintesi vocale passa dal sistema e si sentirebbe anche con --mute-audio
   await page.addInitScript(() => { if ('speechSynthesis' in window) window.speechSynthesis.speak = () => {}; });
   await page.goto(process.env.GIOCO_URL);
-  await page.waitForFunction(() => window.__game, null, { timeout: 120_000 });
+  await page.waitForFunction(() => window.__game, null, { timeout: 270_000 });
   await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
   return errori;
 }
@@ -24,7 +24,7 @@ export const test = base.extend({
     let da = 0;
     await use({ page, inizio: () => { da = tutti.length; }, errori: () => tutti.slice(da) });
     await page.close();
-  }, { scope: 'worker', timeout: 180_000 }],
+  }, { scope: 'worker', timeout: 300_000 }],
   // prima di ogni prova si azzera l'elenco degli errori
   pagina: async ({ gioco }, use) => { gioco.inizio(); await use(gioco.page); },
 });
