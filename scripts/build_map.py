@@ -113,6 +113,104 @@ def psv_lane(tags):
     return psv and (tags.get('access') in ('no', 'private') or tags.get('motor_vehicle') in ('no', 'psv'))
 
 
+def _num(v):
+    try:
+        return int(float(v.split(';')[0])) if v else None
+    except ValueError:
+        return None
+
+
+def lane_tags(t, ow, width):
+    """Corsie di una via dai tag OSM, nel verso della way (avanti) e contro (indietro): (corsie avanti, corsie indietro,
+    di cui dei bus avanti, dei bus indietro, sorpasso vietato avanti, indietro, segnaletica). Le corsie dei bus sono
+    contate in lanes (wiki OSM) e stanno a destra di chi le percorre; segnaletica: 0 non detta, 1 sì, 2 no
+    (lane_markings). Una via a doppio senso con lanes=1 ha zero corsie: niente mezzeria. None se OSM non dice niente."""
+    keys = ('lanes', 'lanes:forward', 'lanes:backward', 'busway', 'busway:right', 'busway:left', 'busway:both',
+            'lanes:psv', 'lanes:psv:forward', 'lanes:psv:backward', 'lanes:bus', 'lanes:bus:forward', 'lanes:bus:backward',
+            'psv:lanes', 'psv:lanes:forward', 'psv:lanes:backward', 'bus:lanes', 'bus:lanes:forward', 'bus:lanes:backward',
+            'overtaking', 'overtaking:forward', 'overtaking:backward', 'lane_markings')
+    if not any(k in t for k in keys):
+        return None
+    lanes, lf, lb = _num(t.get('lanes')), _num(t.get('lanes:forward')), _num(t.get('lanes:backward'))
+    # corsie dei bus per verso: contate (lanes:psv...), per posizione (psv:lanes = yes|designated) o busway
+    bf = bb = 0
+    for pre in ('lanes:psv', 'lanes:bus'):
+        if _num(t.get(pre)):
+            if ow >= 0:
+                bf = 1
+            if ow <= 0:
+                bb = 1
+        bf = max(bf, min(1, _num(t.get(pre + ':forward')) or 0))
+        bb = max(bb, min(1, _num(t.get(pre + ':backward')) or 0))
+    for pre in ('psv:lanes', 'bus:lanes'):
+        if 'designated' in t.get(pre, '').split('|'):
+            bf, bb = (1, bb) if ow >= 0 else (bf, 1)
+        bf = max(bf, 1 if 'designated' in t.get(pre + ':forward', '').split('|') else 0)
+        bb = max(bb, 1 if 'designated' in t.get(pre + ':backward', '').split('|') else 0)
+    counted = bf or bb
+    lane_v = ('lane', 'yes')
+    bw, right, left, both = t.get('busway'), t.get('busway:right'), t.get('busway:left'), t.get('busway:both')
+    contra = 'opposite_lane' in (bw, left, t.get('psv'), t.get('bus')) or (left in lane_v and t.get('busway:left:oneway') == '-1')
+    if bw in lane_v or both in lane_v:
+        bf, bb = (1, bb) if ow > 0 else (bf, 1) if ow < 0 else (1, 1)
+    if right in lane_v:
+        bf = 1
+    if left in lane_v and not contra:
+        bb, bf = (1, bf) if not ow else (bb, 1)
+    if contra:
+        if ow > 0:
+            bb = 1
+        elif ow < 0:
+            bf = 1
+        else:
+            bb = 1  # doppio senso con la corsia "in controsenso": quella dell'altro verso è dei bus
+    if lf is not None or lb is not None:
+        nf = lf if lf is not None else max(0, (lanes or 0) - (lb or 0)) or 1
+        nb = lb if lb is not None else max(0, (lanes or 0) - nf) or 1
+    elif ow:
+        n = lanes or 1
+        # corsia dei bus in controsenso: contata in lanes solo se la carreggiata non basta per una corsia in più
+        k = bb if ow > 0 else bf
+        if k and lanes and lanes >= 2 and width < (lanes + 1) * 3.0:
+            n = lanes - 1
+        nf, nb = (n, k) if ow > 0 else (k, n)
+    elif lanes == 1:
+        nf = nb = 0
+    else:
+        nf = nb = max(1, (lanes or 2) // 2)
+        if lanes and lanes % 2:
+            nf += 1
+    # con busway (non con le corsie contate) nel verso delle auto almeno una corsia oltre a quella dei bus: busway=lane
+    # spesso non è contata in lanes; il verso della corsia in controsenso è solo dei bus
+    if not counted and bf and nf and nf <= bf and ow >= 0:
+        nf = bf + 1
+    if not counted and bb and nb and nb <= bb and ow <= 0 and not contra:
+        nb = bb + 1
+    bf, bb = min(bf, nf), min(bb, nb)
+    ovf = 1 if 'no' in (t.get('overtaking'), t.get('overtaking:forward')) else 0
+    ovb = 1 if 'no' in (t.get('overtaking'), t.get('overtaking:backward')) else 0
+    mark = {'yes': 1, 'no': 2}.get(t.get('lane_markings'), 0)
+    return (min(nf, 7), min(nb, 7), bf, bb, ovf, ovb, mark)
+
+
+def lane_code(lt):
+    """Corsie di un arco in un intero: 3 bit per le corsie avanti e indietro, poi corsie dei bus avanti e indietro,
+    sorpasso vietato avanti e indietro, segnaletica (2 bit)."""
+    nf, nb, bf, bb, ovf, ovb, mark = lt
+    return nf | nb << 3 | bf << 6 | bb << 7 | ovf << 8 | ovb << 9 | mark << 10
+
+
+def turn_tags(t, ow):
+    """Frecce a terra da turn:lanes nel verso della way e contro (stringhe 'left|through', '' se non ci sono)."""
+    f, b = t.get('turn:lanes:forward', ''), t.get('turn:lanes:backward', '')
+    if 'turn:lanes' in t:
+        if ow < 0:
+            b = b or t['turn:lanes']
+        else:
+            f = f or t['turn:lanes']
+    return f, b
+
+
 def speed_of(tags):
     m = re.match(r'(\d+)', tags.get('maxspeed', ''))
     return int(m.group(1)) if m else 0
@@ -209,6 +307,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
     edges = []  # a, b, cls, width, name, flags, speed, layer
     edge_walk = []  # per ogni arco: marciapiede misurato a sinistra e a destra (0 = non misurato)
+    edge_lanes = {}  # arco -> corsie dai tag OSM (lane_tags), nel verso a -> b
+    turns = []  # [arco, frecce nel verso a -> b, frecce contro]: sull'ultimo arco della via in ciascun verso
     n_meas = 0
     way_geo = []  # per ogni strada: id OSM dei nodi, punti, posizioni tenute, nodi del grafo, senso unico, tag
     for w in roads:
@@ -242,6 +342,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             cum = [0.0]
             for p, q in zip(pts, pts[1:]):
                 cum.append(cum[-1] + math.hypot(q[0] - p[0], q[1] - p[1]))
+        first = len(edges)
         for k, (a, b) in enumerate(zip(ids, ids[1:])):
             if a != b:
                 # carreggiata misurata nel tratto che contiene il punto medio dell'arco
@@ -250,10 +351,22 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 if pc and pc[2] and cls != 8:
                     we = round(max(3.0, min(25.0, pc[2])), 1)
                     n_meas += 1
+                lt = lane_tags(t, ow, we)
+                if lt:
+                    edge_lanes[len(edges)] = lt
                 edges.append([a, b, cls, we, nm, flags, sp, layer])
                 edge_walk.append((pc[3], pc[4]) if pc else (0.0, 0.0))
+        tf, tb = turn_tags(t, ow)
+        if (tf or tb) and len(edges) > first:
+            # turn:lanes vale alla fine della via: frecce sull'ultimo arco in ciascun verso
+            if tf:
+                turns.append([len(edges) - 1, tf, ''])
+            if tb:
+                turns.append([first, '', tb])
     if measures:
         print(f'archi con la carreggiata misurata: {n_meas} su {len(edges)}')
+    print(f'corsie dai tag OSM: {len(edge_lanes)} archi, con la corsia dei bus {sum(1 for v in edge_lanes.values() if v[2] or v[3])}, '
+          f'sorpasso vietato {sum(1 for v in edge_lanes.values() if v[4] or v[5])}, frecce {len(turns)}')
 
     signage = osm_signage(sign_els, ped_gap, way_geo, node_id, nodes, edges) if nodes_path else {}
 
@@ -733,6 +846,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'stops': gt['stops'], 'lines': lines_out,
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramStops': tram_stops,
         'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
+        # corsie dai tag OSM: [arco, codice] (lane_code), e frecce a terra [arco, avanti, indietro]
+        'lanes': [v for k, lt in sorted(edge_lanes.items()) for v in (k, lane_code(lt))], 'turnLanes': turns,
         'tramLines': [build_gtfs.load_tram(gtfs_dir, keep=tram_keep)],
         **({'terrain': terrain} if terrain else {}),
         **signage,

@@ -294,3 +294,57 @@ export function pantographSignTexture() {
   }
   return makeTex(c, false);
 }
+
+// Segnaletica a terra (atlante 8 x 1 celle da 128 x 256 px, bianco su trasparente; il colore lo dà il materiale): frecce
+// 0 dritto, 1 sinistra, 2 destra, 3 dritto e sinistra, 4 dritto e destra, 5 sinistra e destra, 6 tutte e tre; 7 la
+// scritta BUS. In basso il lato di chi arriva
+export const MARK_CELL = { through: 0, left: 1, right: 2, 'left;through': 3, 'through;right': 4, 'left;right': 5, 'left;through;right': 6, bus: 7 };
+export function roadMarkAtlas() {
+  const W = 128, H = 256;
+  const [c, x] = canvas(W * 8, H);
+  x.fillStyle = x.strokeStyle = '#fff';
+  x.lineWidth = 20;
+  x.lineCap = 'butt';
+  x.lineJoin = 'round';
+  // punta lunga 50 px e larga 56 a partire da (px, py), verso (dx, dy); tutto resta dentro la cella
+  const head = (px, py, dx, dy) => {
+    const l = Math.hypot(dx, dy), ux = dx / l, uy = dy / l;
+    x.beginPath();
+    x.moveTo(px + ux * 50, py + uy * 50);
+    x.lineTo(px - uy * 28, py + ux * 28);
+    x.lineTo(px + uy * 28, py - ux * 28);
+    x.closePath();
+    x.fill();
+  };
+  const line = (pts) => { x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.stroke(); };
+  const arrows = (k, through, left, right) => {
+    const cx = k * W + W / 2;
+    if (through) { line([[cx, 250], [cx, 60]]); head(cx, 62, 0, -1); }
+    // svolte: dal fusto (o dal basso) verso il lato, con la punta in fuori e un po' in avanti
+    for (const [on, s] of [[left, -1], [right, 1]]) {
+      if (!on) continue;
+      const y0 = through ? 190 : 130, x1 = cx + s * 10;
+      if (!through) line([[cx, 250], [cx, y0 + 4]]);
+      line([[cx, y0 + 8], [x1, y0 - 6]]);
+      head(x1, y0 - 6, s, -0.6);
+    }
+  };
+  arrows(0, true, false, false);
+  arrows(1, false, true, false);
+  arrows(2, false, false, true);
+  arrows(3, true, true, false);
+  arrows(4, true, false, true);
+  arrows(5, false, true, true);
+  arrows(6, true, true, true);
+  // BUS: lettere allungate nel verso di marcia, come quelle dipinte sulla strada
+  x.save();
+  x.translate(7 * W + W / 2, H / 2);
+  x.scale(1, 3.2);
+  x.font = 'bold 50px Arial';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText('BUS', 0, 2, W - 8);
+  x.restore();
+  const t = makeTex(c, false);
+  return t;
+}

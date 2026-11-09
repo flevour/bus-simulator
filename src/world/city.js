@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
-import { LINES } from '../data/padova.js';
+import { LINES, laneLayout, laneSpan } from '../data/padova.js';
 import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 import { applyTerrain } from './terrain.js';
@@ -520,12 +520,28 @@ export class City {
     const curb = [];
     const marks = new GeoBuilder();
     const style = (e) => (e.ped ? ped : e.cls >= 5 && !e.routes ? plain : e.oneway ? roadOw : road);
+    // righe tra le corsie da disegnare: tutte dove OSM dice lane_markings=yes, altrimenti sulle strade principali e sui
+    // percorsi dei bus (non su piazzali, capolinea e parcheggi, né nelle rotatorie); quelle gialle delle corsie dei bus
+    // sempre, anche con lane_markings=no
+    const painted = (e) => {
+      if (e.ped || e.roundabout) return [];
+      const m = e.osmLanes ? e.osmLanes.mark : 0, all = m === 1 || (m === 0 && !e.service && style(e) !== plain);
+      return laneLayout(e).lines.filter((l) => all || l.kind === 'bus');
+    };
+    // corsie viste da chi percorre l'arco partendo dal nodo from: i tratti di una catena devono averle uguali
+    const laneKey = (e, from) => {
+      const lay = laneLayout(e), fw = from === e.a, ln = painted(e);
+      const ls = fw ? lay.lanes : lay.lanes.slice().reverse();
+      return ls.map((l) => (l.d > 0 === fw ? '>' : '<') + (l.bus ? 'b' : '')).join('') + (fw ? ln : ln.slice().reverse()).map((l) => l.kind).join();
+    };
     const trimAt = (N, e) => (N.joint ? 0 : N.trim ? N.trim.get(e) : N.radius * 0.6);
     const walkW = (e) => e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2);
     // con la pianta delle strade (net.surfaces) asfalto, marciapiedi e isole sono aree: qui restano le righe e i
     // tratti in quota; senza, il vecchio disegno a nastri, dischi e ventagli
     const surf = !!this.net.surfaces;
     const lines = new GeoBuilder();
+    const yellow = new GeoBuilder(); // righe delle corsie riservate ai bus
+    const paint = new GeoBuilder(), paintBus = new GeoBuilder(); // frecce a terra e scritte BUS (atlante TX.roadMarkAtlas)
     const dashes = (pts, on, period) => {
       const out = [];
       let s = 0, cur = null;
@@ -540,6 +556,65 @@ export class City {
       }
       return out.filter((d) => d.length > 1);
     };
+    // riga tra due corsie lungo pts: tratteggio urbano 3 + 3 m (art. 138), continua dove il sorpasso è vietato, gialla e
+    // più larga accanto alle corsie dei bus; put(builder, tratto, larghezza) la disegna spostata di lato
+    const laneLine = (ln, pts, put) => {
+      const bus = ln.kind === 'bus', dashed = ln.kind === 'dash' || ln.kind === 'center';
+      for (const d of dashed ? dashes(pts, 3, 6) : [pts]) put(bus ? yellow : lines, d, bus ? 0.25 : ln.kind.startsWith('center') ? 0.13 : 0.12);
+    };
+    // segno dipinto a terra (cella dell'atlante) centrato in (cx, cz), nel verso di marcia (dx, dz): w di traverso, len
+    // lungo la strada
+    const markQuad = (g, cx, cz, dx, dz, w, len, cell) => {
+      const hx = (dx * len) / 2, hz = (dz * len) / 2, wx = (-dz * w) / 2, wz = (dx * w) / 2, y = Y_ROAD + 0.016, u0 = cell / 8, u1 = (cell + 1) / 8;
+      g.quad([cx - hx - wx, y, cz - hz - wz], [cx - hx + wx, y, cz - hz + wz], [cx + hx - wx, y, cz + hz - wz], [cx + hx + wx, y, cz + hz + wz], [u0, 0, u1, 0, u0, 1, u1, 1]);
+    };
+    // scritta BUS sulle corsie riservate: all'inizio del tratto e ogni 70 m, leggibile da chi le percorre
+    const busWriting = (pts, lay) => {
+      if (!lay.lanes.some((l) => l.bus)) return;
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+      const tot = cum[cum.length - 1];
+      const at = (s) => {
+        let i = 0;
+        while (i < pts.length - 2 && cum[i + 1] < s) i++;
+        const a = pts[i], b = pts[i + 1], l = cum[i + 1] - cum[i] || 1, t = (s - cum[i]) / l;
+        return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, dx: (b.x - a.x) / l, dz: (b.z - a.z) / l };
+      };
+      for (const l of lay.lanes) {
+        if (!l.bus) continue;
+        for (let s = 6; s + 4.5 <= tot - 4; s += 70) {
+          const p = at(l.d > 0 ? s + 2.25 : tot - s - 2.25);
+          markQuad(paintBus, p.x - p.dz * l.off, p.z + p.dx * l.off, p.dx * l.d, p.dz * l.d, Math.min(2.2, lay.w - 0.6), 4.5, TX.MARK_CELL.bus);
+        }
+      }
+    };
+    // frecce a terra da turn:lanes: punta 6 m prima dell'incrocio o delle strisce pedonali (art. 147), più un'altra 30 m
+    // prima se il tratto è lungo. Le corsie di OSM sono da sinistra a destra per chi guida
+    const turnCell = (v) => {
+      const k = new Set();
+      for (const t of (v || '').split(';')) if (!t.startsWith('merge')) k.add(t.endsWith('left') ? 'left' : t.endsWith('right') ? 'right' : t);
+      return TX.MARK_CELL[['left', 'through', 'right'].filter((t) => k.has(t)).join(';')];
+    };
+    const turnArrows = (e, A, B) => {
+      const lay = laneLayout(e);
+      for (const [list, d] of [[e.turn.f, 1], [e.turn.b, -1]]) {
+        if (!list) continue;
+        const mine = lay.lanes.filter((l) => l.d === d);
+        if (d < 0) mine.reverse();
+        if (mine.length !== list.length) continue;
+        const from = d > 0 ? trimAt(A, e) : trimAt(B, e);
+        let end = e.len - (d > 0 ? trimAt(B, e) : trimAt(A, e));
+        for (const c of e.cross) { const sc = d > 0 ? c : e.len - c; if (sc > e.len / 2) end = Math.min(end, sc - 2); }
+        for (const tip of [end - 6, end - 36]) {
+          if (tip - 4.5 < from + 2) break;
+          const s = d > 0 ? tip - 2.25 : e.len - tip + 2.25, px = A.x + e.dx * s, pz = A.z + e.dz * s;
+          mine.forEach((l, i) => {
+            const cell = turnCell(list[i]);
+            if (cell !== undefined) markQuad(paint, px - e.dz * l.off, pz + e.dx * l.off, e.dx * d, e.dz * d, 1.8, 4.5, cell);
+          });
+        }
+      }
+    };
     // rotatorie ad anello chiuso e quasi circolari: corona d'asfalto, marciapiede solo fuori, isola al centro
     const rings = this.findRoundabouts();
     // Catene: i tratti consecutivi della stessa via (nodo intermedio con due archi, stesso tipo e larghezza, curva
@@ -549,6 +624,7 @@ export class City {
       if (!n.joint || n.bend > 1.2) return null;
       const f = n.edges[0] === e ? n.edges[1] : n.edges[0];
       if (!f || f === e || f.elev || chained.has(f) || style(f) !== style(e) || Math.abs(f.width - e.width) > 0.05 || walkW(f) !== walkW(e) || f.roundabout !== e.roundabout) return null;
+      if (laneKey(f, n.id) !== laneKey(e, e.a === n.id ? e.b : e.a)) return null;
       return f;
     };
     for (const e0 of edges) {
@@ -575,9 +651,12 @@ export class City {
       road2[0] = trim(pts[0], pts[1], trimAt(back.end, back.edge));
       road2[road2.length - 1] = trim(pts[pts.length - 1], pts[pts.length - 2], trimAt(fwd.end, fwd.edge));
       if (surf) {
-        // mezzeria tratteggiata sul doppio senso; le righe di bordo seguono il bordo dell'asfalto (buildSurfaces)
-        // (non sulle strade di servizio: piazzali, capolinea, parcheggi non hanno la mezzeria)
-        if (!e0.roundabout && !e0.service && style(e0) === road) for (const d of dashes(road2, 3, 7.5)) lines.strip(d, 0.13, Y_ROAD + 0.012, 1, 0);
+        // righe tra le corsie (mezzeria, divisorie, corsie dei bus) e scritte BUS; le righe di bordo seguono il bordo
+        // dell'asfalto (buildSurfaces)
+        if (!e0.ped && !e0.roundabout) {
+          for (const ln of painted(e0)) laneLine(ln, road2, (g, d, w) => g.strip(d, w, Y_ROAD + 0.012, 1, ln.off));
+          busWriting(road2, laneLayout(e0));
+        }
         continue;
       }
       style(e0).strip(road2, e0.width, Y_ROAD, e0.ped ? 6 : 12);
@@ -603,7 +682,10 @@ export class City {
         if (surf && this.net.surfaces.up) {
           // asfalto in quota e righe di bordo dalla pianta delle strade (buildSurfaces): qui la mezzeria, alla quota della
           // rampa, e le pile
-          if (style(e) === road) for (const d of dashes([{ x: A.x, z: A.z }, { x: B.x, z: B.z }], 3, 7.5)) lines.ribbon(d[0].x, d[0].z, d[d.length - 1].x, d[d.length - 1].z, 0.13, Y_ROAD + 0.012, 1, 0, hFn);
+          for (const ln of painted(e)) {
+            const ox = -e.dz * ln.off, oz = e.dx * ln.off;
+            laneLine(ln, [{ x: A.x, z: A.z }, { x: B.x, z: B.z }], (g, d, w) => g.ribbon(d[0].x + ox, d[0].z + oz, d[d.length - 1].x + ox, d[d.length - 1].z + oz, w, Y_ROAD + 0.012, 1, 0, hFn));
+          }
           this.buildOverpass(e, A, curb);
           continue;
         }
@@ -633,6 +715,7 @@ export class City {
           marks.quad([cx - hx - wx, Y_ROAD + 0.02, cz - hz - wz], [cx - hx + wx, Y_ROAD + 0.02, cz - hz + wz], [cx + hx - wx, Y_ROAD + 0.02, cz + hz - wz], [cx + hx + wx, Y_ROAD + 0.02, cz + hz + wz], [0, 0, 1, 0, 0, 1, 1, 1]);
         }
       }
+      if (surf && e.turn && !(e.osmLanes && e.osmLanes.mark === 2)) turnArrows(e, A, B);
     }
     const inter = new GeoBuilder(), joints = new GeoBuilder(), walkDisc = new GeoBuilder();
     for (const n of Object.values(nodes)) {
@@ -680,6 +763,12 @@ export class City {
     const mk = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4));
     this.group.add(rm, im, wm, cm, mk);
     if (lines.pos.length) this.group.add(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4)));
+    if (yellow.pos.length) this.group.add(new THREE.Mesh(yellow.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe6b422 }), 4)));
+    if (paint.pos.length || paintBus.pos.length) {
+      const atlas = TX.roadMarkAtlas(), mat = (color) => layer(new THREE.MeshLambertMaterial({ map: atlas, color, alphaTest: 0.5 }), 5);
+      if (paint.pos.length) this.group.add(new THREE.Mesh(paint.build(), mat(0xe8e8e2)));
+      if (paintBus.pos.length) this.group.add(new THREE.Mesh(paintBus.build(), mat(0xe6b422)));
+    }
   }
 
   // pianta delle strade (scripts/street_surfaces.py): carreggiate, marciapiedi e isole a riquadri, triangolate qui.
@@ -1614,7 +1703,9 @@ export class City {
         if (roundabout) plate(2, px, y0 + h + 1.65, pz, ang, 0.7);
         // linea di arresto (STOP) o tratteggio (precedenza) sulla corsia di chi arriva
         if (kind === 0 || kind === 1) {
-          const w0 = q.arc.oneway ? -hw + 0.3 : 0.1, w1 = hw - 0.3, lw = kind === 0 ? 0.25 : 0.15;
+          // con le corsie di OSM dalla riga che separa i versi (anche quella gialla di una corsia dei bus in controsenso)
+          const span = q.arc.osmLanes ? laneSpan(q.arc, dx * q.arc.dx + dz * q.arc.dz < 0) : null;
+          const w0 = span && span[0] > -hw ? span[0] + 0.1 : q.arc.oneway ? -hw + 0.3 : 0.1, w1 = hw - 0.3, lw = kind === 0 ? 0.25 : 0.15;
           const P = (a, w) => [q.x + dx * a + dz * w, yl + h, q.z + dz * a - dx * w];
           const seg = (a0, a1, wa, wb) => lines.quad(P(a0, wa), P(a0, wb), P(a1, wa), P(a1, wb), [0, 0, 1, 0, 0, 1, 1, 1]);
           if (kind === 0) seg(-lw, lw, w1, w0);

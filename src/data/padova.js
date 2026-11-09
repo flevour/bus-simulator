@@ -183,6 +183,7 @@ export function buildNetwork() {
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
   const edges = [];
   const E = MAP.edges;
+  const byK = []; // indice dell'arco nella mappa -> arco (gli archi più corti di 0,3 m si saltano)
   for (let k = 0; k < E.length; k += 8) {
     const A = nodes[E[k]], B = nodes[E[k + 1]];
     const dx = B.x - A.x, dz = B.z - A.z;
@@ -198,7 +199,15 @@ export function buildNetwork() {
     A.edges.push(e);
     B.edges.push(e);
     edges.push(e);
+    byK[k / 8] = e;
   }
+  // corsie dai tag OSM (scripts/build_map.py, lane_code), nel verso a -> b; frecce a terra da turn:lanes
+  const LN = MAP.lanes || [];
+  for (let i = 0; i < LN.length; i += 2) {
+    const e = byK[LN[i]], c = LN[i + 1];
+    if (e) e.osmLanes = { nf: c & 7, nb: (c >> 3) & 7, bf: (c >> 6) & 1, bb: (c >> 7) & 1, ovf: (c >> 8) & 1, ovb: (c >> 9) & 1, mark: (c >> 10) & 3 };
+  }
+  for (const [k, f, b] of MAP.turnLanes || []) if (byK[k]) byK[k].turn = { f: f ? f.split('|') : null, b: b ? b.split('|') : null };
   const edgeBetween = (a, b) => nodes[a].edges.find((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a));
   // quante linee bus percorrono ogni tratto
   for (const L of LINES) {
@@ -242,6 +251,63 @@ export function buildNetwork() {
   let bb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
   return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, terrain: MAP.terrain || null };
+}
+
+const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m
+// Corsie di un arco nel verso a -> b, da sinistra a destra: { lanes: [{ d, bus, off }], lines: [{ off, kind }], w }.
+// d = 1 nel verso a -> b, -1 contro; off: distanza dall'asse verso destra (verso a -> b); kind delle righe tra due
+// corsie: 'dash' (stesso verso), 'solid' (stesso verso, sorpasso vietato), 'center' e 'centerSolid' (mezzeria), 'bus'
+// (riga gialla della corsia riservata); w: larghezza delle corsie. Senza tag OSM una corsia per verso (una sola sui
+// sensi unici). Sulle carreggiate
+// strette (meno di 2,6 m a corsia, 3 per quelle dei bus) si tolgono le corsie in più: prima nel verso che ne ha di più,
+// poi quelle dei bus; un doppio senso sotto i 5,2 m resta senza mezzeria.
+export function laneLayout(e) {
+  if (e.layout) return e.layout;
+  const L = e.osmLanes;
+  let nf, nb, bf = 0, bb = 0;
+  if (L) ({ nf, nb, bf, bb } = L);
+  else if (e.oneway) { nf = e.oneway > 0 ? 1 : 0; nb = e.oneway < 0 ? 1 : 0; }
+  else nf = nb = 1;
+  const fits = () => (nf - bf + nb - bb) * LANE_MIN + (bf + bb) * BUS_LANE_MIN <= e.width;
+  while (nf + nb > 1 && !fits()) {
+    const gf = nf - bf, gb = nb - bb;
+    if (gf > 1 || gb > 1) { if (gf >= gb) nf--; else nb--; }
+    else if (bf || bb) { if (bf) { bf = 0; nf--; } else { bb = 0; nb--; } }
+    else { nf = nb = 0; }
+  }
+  const lanes = [];
+  for (let i = 0; i < nb; i++) lanes.push({ d: -1, bus: i < bb });
+  for (let i = 0; i < nf; i++) lanes.push({ d: 1, bus: i >= nf - bf });
+  // corsie larghe al più 3,75 m, centrate; quelle dei bus stanno contro il cordolo, e l'avanzo resta dall'altra parte
+  // (sosta). Con le corsie dei bus da tutte e due le parti riempiono la carreggiata
+  const n = lanes.length, lb = n && lanes[0].bus, rb = n && lanes[n - 1].bus;
+  const w = n ? (lb && rb ? e.width / n : Math.min(e.width / n, LANE_MAX)) : 0;
+  const x0 = lb ? -e.width / 2 : rb ? e.width / 2 - n * w : (-n * w) / 2;
+  lanes.forEach((l, i) => { l.off = x0 + (i + 0.5) * w; });
+  const lines = [];
+  for (let i = 0; i < n - 1; i++) {
+    const p = lanes[i], q = lanes[i + 1], off = x0 + (i + 1) * w;
+    const noPass = !!L && ((L.ovf && (p.d > 0 || q.d > 0)) || (L.ovb && (p.d < 0 || q.d < 0)));
+    const kind = p.bus !== q.bus || (p.bus && p.d !== q.d) ? 'bus' : p.d !== q.d ? (noPass ? 'centerSolid' : 'center') : noPass ? 'solid' : 'dash';
+    lines.push({ off, kind });
+  }
+  e.layout = { lanes, lines, w };
+  return e.layout;
+}
+
+// distanza dall'asse, a destra di chi va, della corsia più a destra che non è dei bus, nel verso a -> b (fwd) o contro;
+// null se in quel verso non ci sono corsie per le auto
+export function driveOffset(e, fwd) {
+  const d = fwd ? 1 : -1, mine = laneLayout(e).lanes.filter((l) => l.d === d && !l.bus);
+  if (!mine.length) return null;
+  return fwd ? mine[mine.length - 1].off : -mine[0].off;
+}
+
+// corsie di un verso (fwd: a -> b) come distanze dall'asse a destra di chi va: [bordo sinistro, bordo destro]; null se
+// in quel verso non ci sono corsie. Per le linee d'arresto, che partono dalla mezzeria
+export function laneSpan(e, fwd) {
+  const lay = laneLayout(e), d = fwd ? 1 : -1, offs = lay.lanes.filter((l) => l.d === d).map((l) => (fwd ? l.off : -l.off));
+  return offs.length ? [Math.min(...offs) - lay.w / 2, Math.max(...offs) + lay.w / 2] : null;
 }
 
 // ponti stradali sopra la ferrovia o sopra un'altra strada: impalcato in quota con rampe di accesso

@@ -5,6 +5,7 @@ import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
 import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
+import { driveOffset, laneSpan } from '../data/padova.js';
 
 // ------------------------------------------------------------------
 // Semafori
@@ -222,7 +223,10 @@ export class TrafficLights {
     // linea d'arresto: continua, larga 50 cm, sulle corsie di chi arriva (art. 144)
     const er = edgeAt(p.x, p.z, 1);
     const el = e.oneway ? edgeAt(p.x, p.z, -1) : null;
-    ap.line = { x: p.x, z: p.z, fx, fz, w0: e.oneway ? -((el ?? hw) - 0.3) : 0.15, w1: (er ?? hw) - 0.3, y: h };
+    // con le corsie di OSM dalla riga che separa i versi (anche quella gialla di una corsia dei bus in controsenso)
+    const span = e.osmLanes ? laneSpan(e, e.b === n.id) : null;
+    const w0 = span && span[0] > -hw ? span[0] + 0.15 : e.oneway ? -((el ?? hw) - 0.3) : 0.15;
+    ap.line = { x: p.x, z: p.z, fx, fz, w0, w1: (er ?? hw) - 0.3, y: h };
   }
 
   // onda verde: lungo una via, l'impianto a valle accende il verde quando arriva chi è partito col verde da quello a
@@ -474,7 +478,8 @@ export class Traffic {
     const e = car.edge, n = this.net.nodes;
     const from = car.fwd ? n[e.a] : n[e.b], to = car.fwd ? n[e.b] : n[e.a];
     const dx = car.fwd ? e.dx : -e.dx, dz = car.fwd ? e.dz : -e.dz;
-    const off = e.oneway && e.width < 8 ? 0 : e.width / 4;
+    // sulle vie con le corsie in OSM la corsia più a destra (non quella dei bus), altrimenti un quarto della carreggiata
+    const off = (e.osmLanes && driveOffset(e, car.fwd)) ?? (e.oneway && e.width < 8 ? 0 : e.width / 4);
     const rx = -dz * off, rz = dx * off;
     const s0 = from.radius * 0.8, s1 = e.len - to.radius * 0.8;
     return { from, to, dx, dz, rx, rz, s0, s1, sx: from.x + rx, sz: from.z + rz };
