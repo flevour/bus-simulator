@@ -447,7 +447,9 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         Uc = unary_union([U, dbgt_c]).buffer(1.5)
         shapely.prepare(Uc)
         msel = [c for c in dbgt_polys(streets.get('marciapiedi', [])) if Uc.intersects(c)]
-        dbgt_m = unary_union(msel).difference(bld).difference(upe).buffer(0) if msel else Polygon()
+        # aree pedonali e piazze (A_PED, AC_PED): lastricate, se toccano una strada o un marciapiede di oggi
+        psel = [c for c in dbgt_polys(streets.get('pedonali', [])) if Uc.intersects(c)]
+        dbgt_m = unary_union(msel + psel).difference(bld).difference(upe).buffer(0) if msel or psel else Polygon()
     U = unary_union([U, *fillets, dbgt_c]).difference(unary_union([ring_islands, *kept])).buffer(0)
     islands = [ring_islands] if not ring_islands.is_empty else []
     for p in ([U] if isinstance(U, Polygon) else list(U.geoms)):

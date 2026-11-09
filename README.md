@@ -97,7 +97,8 @@ uniscono non si incrociano.
   ricavato dalle vie OSM si uniscono i poligoni di carreggiata del DBGT (`AC_VEI`) che toccano una via di oggi (piazze,
   golfi di fermata, corsie di sosta, anelli dei capolinea, angoli veri degli incroci; un poligono grande solo se per
   almeno il 30% sta già sulle strade di oggi), mai dentro gli edifici o sotto le rampe; ai marciapiedi quelli di
-  `AR_MARC` accanto. I passi carrai con il nome di una via restano nel grafo (Largo Claude Debussy).
+  `AR_MARC` accanto, e le aree pedonali e le piazze (`A_PED`, `AC_PED`) lastricate. I passi carrai con il nome di
+  una via restano nel grafo (Largo Claude Debussy).
 * **Isole, verde e alberi del DBGT** (`data/dbgt-verde.json`, da `scripts/dbgt_green.py`): gli spartitraffico
   (`SPART`) diventano isole dove stanno dentro l'asfalto di oggi o tra due carreggiate, mai sulle corsie delle auto,
   sulle carreggiate e agli incroci dei bus o sulla sede del tram; prati, aree alberate e aiuole (`AR_VRD`) sono uno

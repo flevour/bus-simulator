@@ -7,7 +7,8 @@ Uso:
 
 street_surfaces.surfaces unisce all'asfalto ricavato dalle vie OSM i poligoni di carreggiata che toccano una via OSM
 di oggi (piazze, golfi di fermata, anelli dei capolinea, angoli veri degli incroci) e al marciapiede quelli di
-marciapiede accanto: la forma vera dove c'è, la rete di oggi (OSM) a decidere dove sono le strade.
+marciapiede accanto: la forma vera dove c'è, la rete di oggi (OSM) a decidere dove sono le strade. Le aree pedonali
+(A_PED, AC_PED: piazze, zone pedonali) diventano pavimentazione, fuori da carreggiate ed edifici.
 La mappa serve solo a ritagliare l'area di gioco.
 """
 import json
@@ -27,14 +28,14 @@ def main(aree, map_path, dst):
     xs, zs = m['nodes'][0::2], m['nodes'][1::2]
     area = box(min(xs), min(zs), max(xs), max(zs))
     out = {'fonte': 'DBGT della Regione del Veneto, lotto Comune di Padova (volo 2007, IODL 2.0)'}
-    for name, key in (('AC_VEI', 'carreggiate'), ('AR_MARC', 'marciapiedi')):
+    for name, key in (('AC_VEI', 'carreggiate'), ('AR_MARC', 'marciapiedi'), ('A_PED', 'pedonali'), ('AC_PED', 'pedonali_circ')):
         g, _ = shp(aree, name)
         g = g[~shapely.is_missing(g)]
         g = dbgt_to_game(shapely.make_valid(g), DBGT_SHIFT)
         g = g[shapely.intersects(g, area)]
         polys = [p.simplify(0.2) for q in g for p in shapely.get_parts(q) if p.geom_type == 'Polygon' and p.area >= 2]
-        out[key] = [rings(p) for p in polys if not p.is_empty and p.geom_type == 'Polygon']
-        print(f'{key}: {len(out[key])}')
+        out.setdefault(key.replace('_circ', ''), []).extend(rings(p) for p in polys if not p.is_empty and p.geom_type == 'Polygon')
+        print(f'{name}: {len(polys)}')
     with open(dst, 'w', encoding='utf-8') as f:
         json.dump(out, f, separators=(',', ':'))
 

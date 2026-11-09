@@ -55,7 +55,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
   - [ ] corsie e segnaletica orizzontale, svolte a sinistra protette ai semafori;
   - [x] portici veri dai volumi del DBGT (vedi "Fatto");
   - [ ] paline e pensiline da OSM;
-  - [ ] zone pedonali e piazze lastricate;
+  - [x] zone pedonali e piazze lastricate (aree pedonali del DBGT); resta la ZTL;
   - [ ] quote stradali del DBGT e sottopassi; tessere LiDAR da chiedere alla Regione;
   - [ ] rapporto di verifica nel build e test in CI;
   - [ ] mappa più leggera (dati separati e compressi);
