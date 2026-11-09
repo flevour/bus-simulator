@@ -1,0 +1,264 @@
+{
+ "fonte": "trampadova.it (Comune di Padova), mappe KML delle linee: wp-content/themes/hello-theme-child-master/assets/SIR2.kml e SIR3.kml, lette il 9 novembre 2026. Posizioni indicative del progetto; * = capolinea intermedio.",
+ "linee": {
+  "SIR3": [
+   [
+    "Stazione sud",
+    45.41658,
+    11.880614
+   ],
+   [
+    "Pace",
+    45.415158,
+    11.884392
+   ],
+   [
+    "Gozzi",
+    45.412478,
+    11.882916
+   ],
+   [
+    "Morgagni",
+    45.407551,
+    11.885386
+   ],
+   [
+    "Ospedale",
+    45.40321,
+    11.88824
+   ],
+   [
+    "Sografi",
+    45.40037,
+    11.89041
+   ],
+   [
+    "Forcellini",
+    45.397469,
+    11.892883
+   ],
+   [
+    "Gregorianum",
+    45.395187,
+    11.894934
+   ],
+   [
+    "Parco Iris",
+    45.39292,
+    11.896908
+   ],
+   [
+    "Cornaro",
+    45.388421,
+    11.89811
+   ],
+   [
+    "Nani",
+    45.38007,
+    11.90343
+   ],
+   [
+    "Piovese",
+    45.3769,
+    11.9057
+   ],
+   [
+    "Capolinea Voltabarozzo",
+    45.37484,
+    11.907589
+   ]
+  ],
+  "SIR2": [
+   [
+    "Capolinea Rubano",
+    45.433847,
+    11.779754
+   ],
+   [
+    "Comune di Rubano",
+    45.426641,
+    11.787447
+   ],
+   [
+    "Rubano V.le Europa",
+    45.425794,
+    11.794079
+   ],
+   [
+    "Zona industriale Rubano",
+    45.422709,
+    11.801538
+   ],
+   [
+    "Quartiere Fatima",
+    45.421664,
+    11.808021
+   ],
+   [
+    "Via Borromeo",
+    45.420912,
+    11.812342
+   ],
+   [
+    "Sarmeola",
+    45.41939,
+    11.821202
+   ],
+   [
+    "Brentella",
+    45.417733,
+    11.825922
+   ],
+   [
+    "Brentella Est",
+    45.41666,
+    11.82926
+   ],
+   [
+    "*Romagnoli",
+    45.415429,
+    11.832657
+   ],
+   [
+    "Chiesanuova",
+    45.414426,
+    11.8356
+   ],
+   [
+    "Pierobon",
+    45.412892,
+    11.839705
+   ],
+   [
+    "Cimitero Maggiore",
+    45.4108,
+    11.8489
+   ],
+   [
+    "Vicenza",
+    45.411479,
+    11.860939
+   ],
+   [
+    "Savonarola",
+    45.411937,
+    11.864543
+   ],
+   [
+    "Verdi",
+    45.40932,
+    11.87277
+   ],
+   [
+    "Insurrezione",
+    45.409247,
+    11.87611
+   ],
+   [
+    "Garibaldi",
+    45.41015,
+    11.878107
+   ],
+   [
+    "Eremitani",
+    45.412104,
+    11.878617
+   ],
+   [
+    "Trieste",
+    45.414205,
+    11.878987
+   ],
+   [
+    "Stazione nord",
+    45.41659,
+    11.88044
+   ],
+   [
+    "Stazione sud",
+    45.41588,
+    11.8804
+   ],
+   [
+    "Pace",
+    45.41542,
+    11.88308
+   ],
+   [
+    "Tribunale/Fiera",
+    45.41364,
+    11.88862
+   ],
+   [
+    "Università",
+    45.411865,
+    11.893377
+   ],
+   [
+    "Stanga",
+    45.409259,
+    11.900576
+   ],
+   [
+    "Anelli",
+    45.410845,
+    11.902257
+   ],
+   [
+    "Venezia",
+    45.410508,
+    11.906824
+   ],
+   [
+    "Savelli",
+    45.411997,
+    11.910951
+   ],
+   [
+    "Net Center",
+    45.41566,
+    11.92032
+   ],
+   [
+    "*Nuovo Ospedale San Lazzaro",
+    45.41632,
+    11.922149
+   ],
+   [
+    "Palasport San Lazzaro",
+    45.417354,
+    11.924726
+   ],
+   [
+    "San Marco",
+    45.420072,
+    11.933584
+   ],
+   [
+    "Ippodromo",
+    45.421977,
+    11.938101
+   ],
+   [
+    "Dante de Nanni",
+    45.423472,
+    11.942136
+   ],
+   [
+    "Ponte Di Brenta",
+    45.425484,
+    11.947749
+   ],
+   [
+    "Villa Breda",
+    45.426363,
+    11.949747
+   ],
+   [
+    "Busa Di Vigonza",
+    45.428219,
+    11.953358
+   ]
+  ]
+ }
+}
