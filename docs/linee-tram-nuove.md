@@ -176,5 +176,6 @@ Prima il SIR3 (apre per primo e la parte nel gioco è quasi tutta già dentro la
    entra nel gioco. I rami di Romagnoli e Ospedale San Lazzaro (ancora in cantiere in OSM) e i capolinea fuori dalla
    mappa vengono dopo.
 
-Domanda aperta: le linee nuove vanno in gioco come già aperte (scenario "rete SMART") o accanto alla rete di oggi, con
-la scelta nel menu?
+Deciso il 9 novembre: le linee nuove vanno accanto alla rete di oggi, nello stesso elenco del SIR1 nel menu del tram,
+con un'indicazione che le distingue (linea in costruzione). Niente scenario "rete SMART" per ora: la linea 10 resta
+tra gli autobus.

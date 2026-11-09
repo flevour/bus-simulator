@@ -2,6 +2,7 @@
 
 Elenco a cui attingere per i prossimi lavori. Quando un'idea viene realizzata si sposta in fondo, in **Fatto**.
 Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
+Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/CORSIE.md).
 
 ## Prossimi passi
 
@@ -24,7 +25,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
      [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md);
    - in stazione due quasi-ovali concentrici, interno ed esterno (oggi il SIR1 usa l'esterno), con le fermate
      Stazione nord e Stazione sud che servono entrambi;
-   - SIR3 con tram a 3 moduli; SIR2 con tram a 4 moduli, al posto della linea di autobus 10.
+   - SIR3 con tram a 3 moduli; SIR2 con tram a 4 moduli, al posto della linea di autobus 10;
+   - nel menu SIR2 e SIR3 stanno nell'elenco del SIR1, segnate come linee in costruzione; la linea 10 resta.
 3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
    "Fatto"). Restano:
    - fermate del tram dai nodi OSM (`tram_stop`);
@@ -40,7 +42,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
    - [x] fermate date per saltate prima di averle attraversate (vedi "Fatto");
    - [x] semafori in mezzo alla strada e orientati male (vedi "Fatto");
    - [x] profilo altimetrico delle strade (terreno dal DTM della Regione, vedi "Fatto");
-   - [ ] zone pedonali;
+   - [x] zone pedonali (piazze e aree pedonali lastricate dal DBGT); resta la ZTL;
    - [ ] navigatore sulle linee 22, 13, 25 (in parte era lo stesso salto della posizione, da ricontrollare);
    - [ ] zona Plebiscito: strade e fermate;
    - [ ] cavalcavia da migliorare e posizione dei fiumi;
@@ -59,7 +61,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
   isole e alberi del DBGT; i prossimi passi in ordine sono nel piano (sezione 7, "Prossimi passi"):
   - [ ] corsie e segnaletica orizzontale, svolte a sinistra protette ai semafori;
   - [x] portici veri dai volumi del DBGT (vedi "Fatto");
-  - [ ] paline e pensiline da OSM;
+  - [x] paline e pensiline da OSM (vedi "Fatto");
   - [x] zone pedonali e piazze lastricate (aree pedonali del DBGT); resta la ZTL;
   - [ ] quote stradali del DBGT e sottopassi; tessere LiDAR da chiedere alla Regione;
   - [ ] rapporto di verifica nel build e test in CI;
@@ -91,8 +93,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
   tracciato GTFS): toglierle o capire quali sono vere.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
   `src/data/padova-map.json`.
-- [~] Edifici: altezze misurate dal DBGT della Regione (fatto, vedi "Fatto"); restano tetti più vari e i portici veri
-  (nel DBGT ci sono i volumi sopra i portici, con l'altezza libera).
+- [~] Edifici: altezze misurate dal DBGT della Regione e portici veri (fatti, vedi "Fatto"); restano tetti più vari.
 - [ ] Piste ciclabili e ciclisti; sottopassi pedonali.
 - [ ] Ampliare l'area di gioco oltre Centro e Arcella (linee oggi tagliate "tratto in città"): linee complete fino ai
   capolinea veri, con un corridoio di 130 km² attorno ai tracciati. Valutazione e piano in
@@ -100,7 +101,7 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Veicoli e guida
 
-- [ ] Tram SIR1 (3 moduli), poi linee tram future con 4 moduli (vedi prompt).
+- [~] Tram: SIR1 a 3 moduli fatto (vedi "Fatto"); restano SIR3 a 3 moduli e SIR2 a 4 moduli (prossimi passi, punto 2).
 - [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
 - [ ] Volante e pedaliera o gamepad (Gamepad API).
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
