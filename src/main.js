@@ -121,7 +121,7 @@ function buildWorld() {
   city = new City(scene, net);
   lights = new TrafficLights(scene, net, city);
   city.buildSigns();
-  trams = new TramSim(scene, net, { track: city.tramTrack });
+  trams = new TramSim(scene, net, { track: city.tramTrack, tracks: city.tramTracks });
   // incroci con la sede: precedenza al tram e semafori a barre
   tramSignals = new TramSignals(scene, city, lights);
   trams.signals = tramSignals;
@@ -312,10 +312,20 @@ function onKeyPress(code) {
 // Tram: cambio cabina. Al capolinea (o in giro libero alle estremità) si passa alla corsia del verso opposto.
 function changeTramCab() {
   if (Math.abs(bus.v) > 0.05 || !bus.doorsClosed || bus.doorTarget > 0) { hud.toast('Fermati con le porte chiuse per cambiare cabina', 'bad'); return; }
-  const P = bus.path, sf = bus.sFront;
-  if (sf < P.len - 70 && sf > 70) { hud.toast('Si cambia cabina solo al capolinea', 'info'); return; }
+  const P = bus.path, sf = bus.sFront, T = bus.track, nd = -bus.dirSig, np = T.path(nd);
+  // capolinea ad anello (SIR3 in stazione): negli ultimi 200 m il binario dell'altro verso continua davanti al muso, si
+  // riparte senza cambiare cabina
+  const head = P.at(sf), pr = sf > P.len - 200 && np.projectNear(head.x, head.z, 1.5);
+  if (!pr && sf < P.len - 70 && sf > 70) { hud.toast('Si cambia cabina solo al capolinea', 'info'); return; }
+  if (pr && np.at(pr.s).dx * head.dx * bus.facing + np.at(pr.s).dz * head.dz * bus.facing > 0.7) {
+    bus.setPath(np, nd, 0);
+    bus.setFront(pr.s);
+    bus.parking = true;
+    hud.toast('🔁 Fine dell\'anello: si riparte verso l\'altro capolinea, senza cambiare cabina', 'info');
+    return;
+  }
   // binario dell'altro verso (lungo tutta la linea), col muso dove ora c'è la coda: si passa dallo scambio
-  const T = city.tramTrack, tail = P.at(sf - bus.length), nd = -bus.dirSig, np = T.path(nd);
+  const tail = P.at(sf - bus.length);
   bus.setPath(np, nd, 0);
   bus.setFront(np.project(tail.x, tail.z).s);
   bus.parking = true;
@@ -654,7 +664,8 @@ function refreshTurno() {
 // elenco delle linee del mezzo scelto (autobus o tram)
 function renderLines() {
   const tram = settings.vehicle === 'tram';
-  $('line-list').innerHTML = ALL_LINES.filter((L) => !!L.tram === tram).map((L) => `<div class="line-card${L.tram ? ' tram' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.headsign}</div><div class="nt">${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive${ARTICULATED_LINES.has(L.id) && !L.tram ? ' · 🚌 snodato 18 m' : ''}</div></div></div>`).join('');
+  // le linee del tram in costruzione (SIR2, SIR3) stanno nello stesso elenco, segnate a parte
+  $('line-list').innerHTML = ALL_LINES.filter((L) => !!L.tram === tram).map((L) => `<div class="line-card${L.tram ? ' tram' : ''}${L.building ? ' building' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.headsign}${L.building ? ' <span class="cantiere">🚧 in costruzione</span>' : ''}</div><div class="nt">${L.building ? `${L.name}, qui il tratto in città · ` : ''}${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive${ARTICULATED_LINES.has(L.id) && !L.tram ? ' · 🚌 snodato 18 m' : ''}</div></div></div>`).join('');
   const pick = (el) => {
     settings.line = ALL_LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0];
     // lo snodato della linea 10 parte con la livrea Busitalia Veneto (si può comunque cambiare)
@@ -780,8 +791,8 @@ function startMission(resume = null) {
   const V = curVariant();
   const destName = V.stops[V.stops.length - 1].name;
   if (L.tram) {
-    // tram: la corsia del verso di marcia (in giro libero tutta la linea)
-    const T = city.tramTrack;
+    // tram: la corsia del verso di marcia sulla sede della linea (in giro libero tutta la linea)
+    const T = city.tramTracks[L.id] || city.tramTrack;
     const tr = tramRoute(T, V, L.modules, settings.mode !== 'service');
     V.trackPath = tr.path;
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
@@ -1229,9 +1240,9 @@ let lastT = performance.now();
 // posizione dei tram lungo la sede (per gli incroci): automatici e, se c'è, quello del giocatore
 const playerOcc = { player: true, front: 0, dir: 1, len: 0, v: 0, dwell: false };
 function tramOccupancy() {
-  const occ = trams.trams.map((tr) => ({ front: tr.s, dir: tr.dir, len: trams.L, v: tr.v, dwell: tr.wait > 0 }));
+  const occ = trams.trams.map((tr) => ({ front: tr.s, dir: tr.dir, track: tr.track, len: tr.L, v: tr.v, dwell: tr.wait > 0 }));
   if (bus && bus.isTram) {
-    Object.assign(playerOcc, { front: bus.pathOffset + bus.sFront, dir: bus.dirSig, len: bus.length, v: bus.v, dwell: bus.doorsAnyOpen });
+    Object.assign(playerOcc, { front: bus.pathOffset + bus.sFront, dir: bus.dirSig, track: bus.track, len: bus.length, v: bus.v, dwell: bus.doorsAnyOpen });
     occ.push(playerOcc);
   }
   return occ;

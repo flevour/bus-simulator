@@ -36,6 +36,33 @@ export class TrackPath {
     pts.push(this.at(s1));
     return new TrackPath(pts.map((p) => ({ x: p.x, z: p.z })));
   }
+  // come project, ma solo sui tratti entro r metri (griglia di 16 m, costruita alla prima chiamata); null se non ce ne sono
+  projectNear(x, z, r) {
+    const G = 16;
+    if (!this.grid) {
+      this.grid = new Map();
+      for (let i = 0; i < this.pts.length - 1; i++) {
+        const a = this.pts[i], b = this.pts[i + 1];
+        for (let gx = Math.floor(Math.min(a.x, b.x) / G); gx <= Math.floor(Math.max(a.x, b.x) / G); gx++)
+          for (let gz = Math.floor(Math.min(a.z, b.z) / G); gz <= Math.floor(Math.max(a.z, b.z) / G); gz++) {
+            const k = gx + ',' + gz;
+            if (!this.grid.has(k)) this.grid.set(k, []);
+            this.grid.get(k).push(i);
+          }
+      }
+    }
+    let best = null;
+    for (let gx = Math.floor((x - r) / G); gx <= Math.floor((x + r) / G); gx++)
+      for (let gz = Math.floor((z - r) / G); gz <= Math.floor((z + r) / G); gz++)
+        for (const i of this.grid.get(gx + ',' + gz) || []) {
+          const a = this.pts[i], b = this.pts[i + 1];
+          const ex = b.x - a.x, ez = b.z - a.z, l2 = ex * ex + ez * ez || 1e-6;
+          const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l2));
+          const d = Math.hypot(x - a.x - ex * t, z - a.z - ez * t);
+          if (d < r && (!best || d < best.d)) best = { s: this.cum[i] + Math.sqrt(l2) * t, d };
+        }
+    return best;
+  }
   // proiezione di un punto: s, distanza e scostamento laterale (positivo a destra del verso del tracciato)
   project(x, z) {
     let best = { s: 0, d: Infinity, lat: 0 };
@@ -96,7 +123,10 @@ export function tramRoute(track, variant, modules = 3, full = false) {
 // affiancati (doppio binario) i binari sono le due corsie della sede comune, a ±1,7 m dall'asse del tracciato verso nord.
 // Dove si separano (l'anello della stazione percorso solo verso nord, i tratti su vie diverse a sud) ogni verso segue il
 // suo tracciato GTFS a binario singolo. I passaggi tra doppio e singolo sono raccordati su ~25 m.
-// Primo passo verso un grafo di binari per le linee future (SIR2-5, ovali concentrici della stazione).
+// Grafo dei binari: una sede per linea (city.tramTracks[id]; city.tramTrack è il SIR1). Le linee in costruzione hanno i
+// binari OSM dei due versi; dove corrono sopra il binario di una sede già posata, nello stesso verso, ne prendono la
+// geometria (tratti in comune: i tram delle due linee vanno sulla stessa rotaia). Ai capi del tratto in comune c'è uno
+// scambio: il binario che si stacca si raccorda in 20 m. I tratti in comune li disegna la sede che c'era già.
 function rampWeights(flags, step, ramp) {
   const n = flags.length, out = flags.slice();
   // via i tratti troppo corti (rumore dei tracciati GTFS)
@@ -111,19 +141,26 @@ function rampWeights(flags, step, ramp) {
 const STEP = 3, NEAR = 9;
 const sampleS = (len) => { const out = []; for (let s = 0; s < len; s += STEP) out.push(s); out.push(len); return out; };
 export class TramTrack {
-  constructor(net) {
-    const raw = net.tram || [];
-    this.tramStops = net.tramStops || [];
+  // net: la rete (net.tram, net.tramLanes, net.tramStops: la sede del SIR1). Per le altre linee opts: id, lanes (i binari
+  // OSM dei versi +1 e -1), lines (le linee che ci corrono), over (sedi già posate, per i tratti in comune)
+  constructor(net, opts = {}) {
+    this.id = opts.id || 'SIR1';
+    const raw = opts.lanes || net.tram || [], osm = opts.lanes ? true : net.tramLanes;
+    this.lines = opts.lines || TRAM_LINES.filter((L) => !L.building);
+    this.tramStops = opts.lanes ? [] : net.tramStops || [];
+    // binari delle sedi già posate, con il loro verso
+    const others = (opts.over || []).flatMap((T) => [1, -1].map((d) => ({ T, dir: d, P: T.paths[d] })));
+    const nearOther = (p) => others.some((o) => o.P.projectNear(p.x, p.z, NEAR));
     const C = (this.C = new TrackPath(raw[0]));
     const S = raw[1] && raw[1].length > 1 ? new TrackPath(raw[1]) : null;
     // verso nord: lungo l'asse, a destra di 1,7 m dove c'è l'altro verso (con i binari OSM: il suo binario)
     const ns = sampleS(C.len);
-    const wN = rampWeights(ns.map((s) => { const p = C.at(s); return S && S.project(p.x, p.z).d < NEAR ? 1 : 0; }), STEP, 25);
-    const north = ns.map((s, i) => { const p = C.at(s), o = net.tramLanes ? 0 : TRAM.lane * wN[i]; return { x: p.x - p.dz * o, z: p.z + p.dx * o }; });
+    const wN = rampWeights(ns.map((s) => { const p = C.at(s); return (S && S.project(p.x, p.z).d < NEAR) || nearOther(p) ? 1 : 0; }), STEP, 25);
+    const north = ns.map((s, i) => { const p = C.at(s), o = osm ? 0 : TRAM.lane * wN[i]; return { x: p.x - p.dz * o, z: p.z + p.dx * o }; });
     let south, wS;
-    if (S && net.tramLanes) {
+    if (S && osm) {
       const ss = sampleS(S.len);
-      wS = rampWeights(ss.map((s) => { const p = S.at(s); return C.project(p.x, p.z).d < NEAR ? 1 : 0; }), STEP, 25);
+      wS = rampWeights(ss.map((s) => { const p = S.at(s); return C.project(p.x, p.z).d < NEAR || nearOther(p) ? 1 : 0; }), STEP, 25);
       south = ss.map((s) => { const p = S.at(s); return { x: p.x, z: p.z }; });
     } else if (S) {
       const ss = sampleS(S.len), cs = [], flags = [];
@@ -141,17 +178,48 @@ export class TramTrack {
     // i punti GTFS fitti e rumorosi (anello della stazione, Borgomagno) lasciano spigoli che i raccordi non tolgono:
     // media mobile su ±9 m, due passate, estremi fermi. Una curva vera di 28 m si sposta di circa mezzo metro
     smoothLane(north); smoothLane(south);
-    this.paths = { 1: new TrackPath(dedup(north)), '-1': new TrackPath(dedup(south)) };
+    // tratti in comune con le sedi già posate e scambi ai loro capi
+    this.shared = { 1: [], '-1': [] };
+    this.switches = [];
+    this.paths = {};
+    for (const [d, pts] of [[1, north], [-1, south]]) {
+      // il verso -1 può correre anche sul binario +1 della stessa linea (capolinea ad anello: SIR3 in stazione)
+      const hit = snapShared(pts, d > 0 ? others : [...others, { T: this, dir: 1, P: this.paths[1] }]), keep = dedupIdx(pts);
+      const P = (this.paths[d] = new TrackPath(keep.map((i) => pts[i])));
+      const h = keep.map((i) => hit[i]);
+      for (let i = 0; i < h.length;) {
+        if (!h[i]) { i++; continue; }
+        let j = i;
+        while (j + 1 < h.length && h[j + 1] && h[j + 1].o === h[i].o) j++;
+        this.shared[d].push([P.cum[i], P.cum[j]]);
+        // scambio dove il binario si unisce a quello dell'altra sede e dove se ne stacca (non agli estremi del percorso)
+        for (const [k, kind] of [[i, 'unione'], [j, 'diramazione']]) {
+          if (k === 0 || k === h.length - 1) continue;
+          const p = P.pts[k];
+          this.switches.push({ dir: d, s: P.cum[k], x: p.x, z: p.z, kind, other: { id: h[k].o.T.id, dir: h[k].o.dir, s: h[k].s } });
+        }
+        i = j + 1;
+      }
+    }
     // doppio binario lungo ogni percorso (0..1), campionato come i punti
     this.dbl = { 1: resampleW(this.paths[1], north, wN), '-1': resampleW(this.paths[-1], south, wS) };
     this.h = { 1: null, '-1': null };
-    // fermate per verso: dalle fermate reali di tutte le corse
+    // fermate per verso: dalle fermate reali di tutte le corse. Sul tratto in comune la fermata è quella della sede che
+    // c'era già, se ce n'è una a meno di 30 m nello stesso verso: la corsa si ferma alla stessa banchina (shared)
     this.stopsDir = { 1: [], '-1': [] };
-    for (const L of TRAM_LINES) for (const v of L.variants) {
+    for (const L of this.lines) for (const v of L.variants) {
       const d = this.dirOf(v), P = this.paths[d];
       for (const st of v.stops) {
-        const sp = P.project(st.x, st.z).s;
-        if (!this.stopsDir[d].some((o) => Math.abs(o.s - sp) < 20)) this.stopsDir[d].push({ s: sp, name: st.name });
+        let sp = P.project(st.x, st.z).s, shared = false;
+        if (this.sharedAt(d, sp)) {
+          const p = P.at(sp);
+          for (const o of [...others, { T: this, dir: 1, P: this.paths[1] }]) for (const os of o.T.stopsDir[o.dir]) {
+            const q = o.P.at(os.s);
+            if (shared || Math.hypot(q.x - p.x, q.z - p.z) > 30 || q.dx * p.dx + q.dz * p.dz < 0.9) continue;
+            st.x = os.x; st.z = os.z; sp = P.project(st.x, st.z).s; shared = true;
+          }
+        }
+        if (!this.stopsDir[d].some((o) => Math.abs(o.s - sp) < 20)) this.stopsDir[d].push({ s: sp, name: st.name, x: st.x, z: st.z, side: st.side || 1, shared });
       }
     }
     for (const d of [1, -1]) this.stopsDir[d].sort((a, b) => a.s - b.s);
@@ -159,6 +227,8 @@ export class TramTrack {
     this.gaps = { 1: [], '-1': [] };
     for (const d of [1, -1]) for (const st of this.stopsDir[d]) if (/prato/i.test(st.name)) this.gaps[d].push([st.s - CATENARY_GAP_HALF, st.s + CATENARY_GAP_HALF]);
   }
+  // s sul binario del verso dir è in un tratto in comune con una sede già posata?
+  sharedAt(dir, s) { return this.shared[dir > 0 ? 1 : -1].some(([a, b]) => s >= a && s <= b); }
   path(dir) { return this.paths[dir > 0 ? 1 : -1]; }
   // la fermata vicina a (x, z) ha una banchina centrale, tra i due binari e comune ai due versi (dalle banchine OSM)
   centralAt(x, z) {
@@ -210,7 +280,41 @@ function smoothLane(pts, k = 3, passes = 2) {
     }
   }
 }
-function dedup(pts) { return pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 0.05); }
+function dedupIdx(pts) { const out = []; pts.forEach((p, i) => { if (i === 0 || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 0.05) out.push(i); }); return out; }
+// Binario che corre sopra quello di un'altra sede, nello stesso verso (entro 1,5 m, per almeno 20 m): i punti diventano
+// quelli dell'altro binario, con un raccordo di 20 m ai capi (lo scambio). Restituisce per ogni punto { o, s } (binario
+// e progressiva su cui corre) o null.
+const SHARE = 1.5, SHARE_MIN = 20, SWITCH_LEN = 20;
+function snapShared(pts, others) {
+  const n = pts.length, hit = new Array(n).fill(null);
+  if (!others.length) return hit;
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    for (const o of others) {
+      const pr = o.P.projectNear(pts[i].x, pts[i].z, SHARE);
+      if (!pr) continue;
+      const q = o.P.at(pr.s);
+      if ((q.dx * (b.x - a.x) + q.dz * (b.z - a.z)) / l > 0.9) { hit[i] = { o, s: pr.s }; break; }
+    }
+  }
+  // via i tratti più corti (binari che si incrociano o si sfiorano)
+  const minRun = Math.ceil(SHARE_MIN / STEP);
+  for (let i = 0; i < n;) {
+    let j = i;
+    while (j < n && !!hit[j] === !!hit[i]) j++;
+    if (hit[i] && j - i < minRun) for (let k = i; k < j; k++) hit[k] = null;
+    i = j;
+  }
+  const ref = hit.slice(), w = hit.map((h) => (h ? 1 : 0)), k = STEP / SWITCH_LEN;
+  for (let i = 1; i < n; i++) if (w[i - 1] - k > w[i]) { w[i] = w[i - 1] - k; ref[i] = ref[i - 1]; }
+  for (let i = n - 2; i >= 0; i--) if (w[i + 1] - k > w[i]) { w[i] = w[i + 1] - k; ref[i] = ref[i + 1]; }
+  for (let i = 0; i < n; i++) {
+    if (!w[i]) continue;
+    const P = ref[i].o.P, q = P.at(hit[i] ? hit[i].s : P.project(pts[i].x, pts[i].z).s);
+    pts[i] = { x: pts[i].x + (q.x - pts[i].x) * w[i], z: pts[i].z + (q.z - pts[i].z) * w[i] };
+  }
+  return hit;
+}
 function resampleW(P, pts, w) {
   // pesi per vertice del percorso (dopo dedup i vertici possono essere meno dei campioni)
   const out = [];

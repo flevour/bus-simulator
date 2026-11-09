@@ -2,6 +2,7 @@
 // orari dal GTFS Busitalia Veneto, con i tracciati agganciati alle strade OSM.
 // Generata da scripts/build_map.py. Dati © OpenStreetMap contributors (ODbL), Busitalia Veneto.
 import MAP from './padova-map.json' with { type: 'json' };
+import NEW_TRAM from '../../data/tram-linee-nuove.json' with { type: 'json' };
 
 const ORIGIN = { lat: MAP.origin[0], lon: MAP.origin[1] };
 const M_PER_LAT = 111130;
@@ -47,7 +48,7 @@ export const LINES = MAP.lines.map((l) => {
 }
 
 // Linee del tram (SIR1): fermate proprie e orari reali; il percorso segue la sede tranviaria (vedi src/tram/tram.js)
-export const TRAM_LINES = (MAP.tramLines || []).map((l) => {
+const SIR1_LINES = (MAP.tramLines || []).map((l) => {
   const variants = l.variants.map((v, i) => {
     const stops = v.stops.map(([x, z, name], k) => ({ id: `${l.id}:${i}:${k}`, x, z, name, street: name, importance: 2 }));
     const last = stops[stops.length - 1].name;
@@ -67,6 +68,84 @@ export const TRAM_LINES = (MAP.tramLines || []).map((l) => {
     headsign: `${a.stops[0].name} ↔ ${a.stops[a.stops.length - 1].name}`, name: 'Tram',
   };
 });
+
+// Linee del tram in costruzione (SIR3, SIR2): percorso sui binari OSM e orario generato (data/tram-linee-nuove.json, da
+// scripts/tram_linee.py). Nel gioco c'è il tratto in città: la serie più lunga di fermate di fila con una strada della
+// mappa entro 120 m; i binari arrivano 150 m oltre le fermate estreme (il convoglio fermo, il cambio cabina).
+// building: linea in costruzione; lanes: i binari dei due versi (verso +1 il primo del file), tagliati sul tratto in città
+const roadWithin = (() => {
+  const C = 100, cells = new Map();
+  for (let i = 0; i < MAP.nodes.length; i += 2) {
+    const k = Math.floor(MAP.nodes[i] / C) + ',' + Math.floor(MAP.nodes[i + 1] / C);
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(MAP.nodes[i], MAP.nodes[i + 1]);
+  }
+  return (x, z, r) => {
+    const n = Math.ceil(r / C), cx = Math.floor(x / C), cz = Math.floor(z / C);
+    for (let a = -n; a <= n; a++) for (let b = -n; b <= n; b++) {
+      const c = cells.get(cx + a + ',' + (cz + b));
+      if (c) for (let i = 0; i < c.length; i += 2) if (Math.hypot(c[i] - x, c[i + 1] - z) < r) return true;
+    }
+    return false;
+  };
+})();
+function polyS(pts, x, z) {
+  let best = Infinity, s = 0, acc = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], ex = b.x - a.x, ez = b.z - a.z, l = Math.hypot(ex, ez) || 1e-6;
+    const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / (l * l)));
+    const d = Math.hypot(a.x + ex * t - x, a.z + ez * t - z);
+    if (d < best) { best = d; s = acc + l * t; }
+    acc += l;
+  }
+  return s;
+}
+function polyCut(pts, s0, s1) {
+  const out = [];
+  let acc = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z), at = (s) => ({ x: a.x + ((b.x - a.x) * (s - acc)) / (l || 1), z: a.z + ((b.z - a.z) * (s - acc)) / (l || 1) });
+    if (acc + l >= s0 && acc <= s1) {
+      if (!out.length) out.push(at(Math.max(s0, acc)));
+      out.push(acc + l <= s1 ? b : at(s1));
+    }
+    acc += l;
+  }
+  return out;
+}
+const NEW_TRAM_LINES = NEW_TRAM.linee.map((l) => {
+  const versi = l.versi.map((v) => {
+    const path = v.percorso.map(([la, lo]) => toXZ(la, lo));
+    const stops = v.fermate.map((f) => ({ ...toXZ(f.lat, f.lon), name: f.nome, side: f.lato || 1 }));
+    let i0 = 0, i1 = -1;
+    for (let i = 0, run = 0; i < stops.length; i++) {
+      run = roadWithin(stops[i].x, stops[i].z, 120) ? run + 1 : 0;
+      if (run > i1 - i0 + 1) { i1 = i; i0 = i - run + 1; }
+    }
+    return { v, path, stops, i0, i1 };
+  });
+  const variants = versi.map(({ v, stops, i0, i1 }, i) => {
+    const o0 = v.offsets[i0], dur = v.offsets[i1] - o0, D = v.durata;
+    const st = stops.slice(i0, i1 + 1).map((s, k) => ({ id: `${l.id}:${i}:${k}`, x: s.x, z: s.z, name: s.name, street: s.name, importance: 2, side: s.side }));
+    const last = st[st.length - 1].name;
+    return {
+      idx: i, headsign: i1 < stops.length - 1 ? `${last} (per ${v.headsign})` : v.headsign, tram: true, stops: st,
+      offsets: v.offsets.slice(i0, i1 + 1).map((o) => o - o0), duration: dur,
+      feriale: v.fer.map(([t, d]) => ({ t: t + (o0 * d) / D, d: (dur * d) / D })),
+      festivo: v.fes.map(([t, d]) => ({ t: t + (o0 * d) / D, d: (dur * d) / D })),
+    };
+  });
+  const lanes = versi.map(({ path, stops, i0, i1 }) => {
+    const s0 = polyS(path, stops[i0].x, stops[i0].z), s1 = polyS(path, stops[i1].x, stops[i1].z);
+    return polyCut(path, s0 - 150, s1 + 150);
+  });
+  const a = variants[0];
+  return {
+    id: l.id, color: l.colore, tram: true, building: true, modules: l.moduli, variants, pair: [0, 1], lanes,
+    headsign: `${a.stops[0].name} ↔ ${a.stops[a.stops.length - 1].name}`, name: l.nome,
+  };
+});
+export const TRAM_LINES = [...SIR1_LINES, ...NEW_TRAM_LINES];
 
 // Prato della Valle è una piazza-parco: non è un edificio OSM, lo modelliamo noi
 export const LANDMARKS = { prato: [45.39814, 11.8766] };
@@ -180,6 +259,8 @@ export function buildNetwork() {
     return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], buildings, k === 0 && !lanes ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
   });
   const tramStops = (MAP.tramStops || []).map(([x, z, name, central]) => ({ x, z, name, central: !!central }));
+  // linee in costruzione: binari OSM per verso, curve raccordate e fuori dagli edifici come quelli del SIR1
+  const tramLines = NEW_TRAM_LINES.map((L) => ({ id: L.id, lanes: L.lanes.map((t) => clearOfBuildings(smoothTrack(t), buildings, [-1.4, 0, 1.4])) }));
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
   const edges = [];
   const E = MAP.edges;
@@ -250,7 +331,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, terrain: MAP.terrain || null };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, terrain: MAP.terrain || null };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m

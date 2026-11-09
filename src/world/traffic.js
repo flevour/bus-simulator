@@ -848,20 +848,25 @@ export class Walkers {
 }
 
 // ------------------------------------------------------------------
-// Tram SIR1 (Translohr): i convogli in servizio secondo l'orario, sulla sede tranviaria, con le fermate delle loro corse
+// Tram (Translohr): i convogli in servizio secondo l'orario, ognuno sulla sede della sua linea, con le fermate delle corse
 // ------------------------------------------------------------------
 // Viaggi dei tram dall'orario GTFS (giorno 'feriale' | 'festivo'). Il GTFS pubblica ogni viaggio anche spezzato in tratti
 // (Guizza → Cavalletto, Stazione → Pontevigodarzere, Santo → Pontevigodarzere…) che si sovrappongono alla corsa intera:
 // un tratto la cui prima e ultima fermata sono servite da una corsa più lunga, nello stesso verso, entro 3 minuti è lo
 // stesso tram. Restano i viaggi veri: nei feriali 12-13 tram in servizio per quasi tutto il giorno.
-export function tramRuns(lines, track, day) {
+// trackOf(L): la sede della linea (TramTrack)
+export function tramRuns(lines, trackOf, day) {
   const runs = [];
-  for (const L of lines) for (const v of L.variants) {
-    const dir = track.dirOf(v), P = track.path(dir);
-    // progressiva del muso fermo a fine banchina (12 m oltre la palina), sempre crescente lungo la corsa
-    const ss = [];
-    for (const st of v.stops) ss.push(Math.max(ss.length ? ss[ss.length - 1] : -Infinity, P.project(st.x, st.z).s + 12));
-    for (const { t, d } of v[day] || []) runs.push({ line: L, v, t, d, dir, ss, times: v.offsets.map((o) => t + (o * d) / v.duration) });
+  for (const L of lines) {
+    const track = trackOf(L);
+    if (!track) continue;
+    for (const v of L.variants) {
+      const dir = track.dirOf(v), P = track.path(dir);
+      // progressiva del muso fermo a fine banchina (12 m oltre la palina), sempre crescente lungo la corsa
+      const ss = [];
+      for (const st of v.stops) ss.push(Math.max(ss.length ? ss[ss.length - 1] : -Infinity, P.project(st.x, st.z).s + 12));
+      for (const { t, d } of v[day] || []) runs.push({ line: L, track, v, t, d, dir, ss, times: v.offsets.map((o) => t + (o * d) / v.duration) });
+    }
   }
   runs.sort((a, b) => a.t - b.t);
   const passAt = (c, st) => {
@@ -870,7 +875,7 @@ export function tramRuns(lines, track, day) {
     return best;
   };
   const near = (a, b) => a != null && Math.abs(a - b) <= 180;
-  const covers = (c, k) => c !== k && c.dir === k.dir && c.v.stops.length > k.v.stops.length && c.t <= k.t + 180 && c.t + c.d >= k.t + k.d - 180 &&
+  const covers = (c, k) => c !== k && c.line === k.line && c.dir === k.dir && c.v.stops.length > k.v.stops.length && c.t <= k.t + 180 && c.t + c.d >= k.t + k.d - 180 &&
     near(passAt(c, k.v.stops[0]), k.t) && near(passAt(c, k.v.stops[k.v.stops.length - 1]), k.t + k.d);
   let lo = 0;
   return runs.filter((k) => {
@@ -883,12 +888,14 @@ export function tramRuns(lines, track, day) {
 export class TramSim {
   // tram automatici sulla sede: ognuno sulla corsia di destra del suo verso, fermate con il muso a fine banchina.
   // Con l'orario (setService) i tram sono quelli in servizio a quell'ora, ognuno sulla sua corsa; senza, opts.starts:
-  // [[s del muso, verso], ...] che girano tra i capolinea. opts.modules: moduli del convoglio
-  // track: binari per verso (TramTrack della città); s di ogni tram è lungo il binario del suo verso
+  // [[s del muso, verso], ...] del SIR1 che girano tra i capolinea. opts.modules: moduli del convoglio del SIR1
+  // track: binari per verso del SIR1 (TramTrack della città); tracks: le sedi di tutte le linee per id. s di ogni tram è
+  // lungo il binario del suo verso, sulla sede della sua linea (tr.track)
   constructor(scene, net, opts = {}) {
     this.trams = [];
     this.track = opts.track;
     if (!this.track) return;
+    this.tracks = opts.tracks || { SIR1: this.track };
     this.modules = opts.modules || 3;
     this.L = tramLength(this.modules);
     this.stopsDir = { 1: this.track.stopsDir[1].map((p) => p.s), '-1': this.track.stopsDir[-1].map((p) => p.s) };
@@ -903,9 +910,11 @@ export class TramSim {
     starts = starts || [[this.track.path(1).len * 0.25, 1], [this.track.path(-1).len * 0.3, -1]];
     for (const [s0, dir] of starts) this.add(s0, dir, dir > 0 ? 'Pontevigodarzere' : 'Guizza');
   }
-  add(s, dir, dest) {
-    const c = buildTramConvoy(this.scene, this.modules, 'SIR1', dest);
-    const tr = { s, dir, v: 0, wait: 0, mods: c.mods, bellows: c.bellows, parts: [], served: null, panto: 1, run: null, k: 0, waveT: 0 };
+  // line: la linea (senza, il SIR1)
+  add(s, dir, dest, line = null) {
+    const id = line ? line.id : 'SIR1', modules = line ? line.modules || 3 : this.modules;
+    const c = buildTramConvoy(this.scene, modules, id, dest);
+    const tr = { id: (this.nextId = (this.nextId || 0) + 1), s, dir, v: 0, wait: 0, mods: c.mods, bellows: c.bellows, parts: [], served: null, panto: 1, run: null, k: 0, waveT: 0, line: id, track: this.tracks[id] || this.track, L: tramLength(modules) };
     // il guidatore al centro della cabina di testa (il pavimento del tram è più alto di quello del bus)
     tr.driver = driverFigure();
     tr.driver.group.position.set(0.12, 0.2, TRAM.cab / 2 - 1.75);
@@ -922,10 +931,11 @@ export class TramSim {
   // automatico (e nemmeno la corsa intera che la contiene)
   setService(lines, day, mine = null) {
     while (this.trams.length) this.remove(this.trams[0]);
-    let runs = tramRuns(lines, this.track, day);
-    if (mine) {
-      const st0 = mine.v.stops[0], dir = this.track.dirOf(mine.v);
-      runs = runs.filter((r) => r.dir !== dir || !r.v.stops.some((s, i) => Math.hypot(s.x - st0.x, s.z - st0.z) < 150 && Math.abs(r.times[i] - mine.t) <= 180));
+    let runs = tramRuns(lines, (L) => this.tracks[L.id], day);
+    const ml = mine && lines.find((L) => L.variants.includes(mine.v)), mt = ml && this.tracks[ml.id];
+    if (mt) {
+      const st0 = mine.v.stops[0], dir = mt.dirOf(mine.v);
+      runs = runs.filter((r) => r.line !== ml || r.dir !== dir || !r.v.stops.some((s, i) => Math.hypot(s.x - st0.x, s.z - st0.z) < 150 && Math.abs(r.times[i] - mine.t) <= 180));
     }
     this.runs = runs;
     this.lastClock = null;
@@ -937,7 +947,7 @@ export class TramSim {
     let k = 0;
     while (k < times.length - 2 && times[k + 1] <= clock) k++;
     const f = Math.max(0, Math.min(1, (clock - times[k]) / Math.max(1, times[k + 1] - times[k])));
-    const tr = this.add(ss[k] + (ss[k + 1] - ss[k]) * f, run.dir, this.destOf(run));
+    const tr = this.add(ss[k] + (ss[k + 1] - ss[k]) * f, run.dir, this.destOf(run), run.line);
     tr.run = run; tr.k = k + 1; tr.v = f > 0 ? 6 : 0;
     run.tram = tr;
     return tr;
@@ -955,25 +965,32 @@ export class TramSim {
     }
     this.lastClock = clock;
   }
-  // fine corsa: al capolinea il tram prende la prossima corsa che parte da lì entro 20 minuti, altrimenti esce
+  // fine corsa: al capolinea il tram prende la prossima corsa della sua linea che parte da lì entro 20 minuti, altrimenti
+  // esce
   endRun(tr, clock) {
     const last = tr.run.v.stops[tr.run.v.stops.length - 1];
     let next = null;
     for (const r of this.runs) {
-      if (r.tram || r.t < clock - 30 || r.t > clock + 1200) continue;
+      if (r.tram || r.line !== tr.run.line || r.t < clock - 30 || r.t > clock + 1200) continue;
       const s0 = r.v.stops[0];
       if (Math.hypot(s0.x - last.x, s0.z - last.z) < 60 && (!next || r.t < next.t)) next = r;
     }
     if (!next) { this.remove(tr); return; }
-    // cambio cabina: il muso diventa l'altra estremità, sul binario della nuova corsa
-    const tail = this.track.path(tr.dir).at(tr.s - this.L);
-    tr.dir = next.dir; tr.s = this.track.path(tr.dir).project(tail.x, tail.z).s;
+    const T = tr.track, P = T.path(tr.dir), N = T.path(next.dir), head = P.at(tr.s), pr = N.projectNear(head.x, head.z, 1.5);
+    if (pr && N.at(pr.s).dx * head.dx + N.at(pr.s).dz * head.dz > 0.7) {
+      // capolinea ad anello (SIR3 in stazione): il binario della nuova corsa continua quello d'arrivo, niente cambio cabina
+      tr.dir = next.dir; tr.s = pr.s;
+    } else {
+      // cambio cabina: il muso diventa l'altra estremità, sul binario della nuova corsa
+      const tail = P.at(tr.s - tr.L);
+      tr.dir = next.dir; tr.s = N.project(tail.x, tail.z).s;
+    }
     tr.run = next; tr.k = 1; tr.v = 0; tr.wait = Math.max(30, next.t - clock);
     next.tram = tr;
     this.setDest(tr, this.destOf(next));
   }
-  lanePoint(s, dir) {
-    const p = this.track.path(dir).at(s);
+  lanePoint(s, dir, track = this.track) {
+    const p = track.path(dir).at(s);
     return { x: p.x, z: p.z, fx: p.dx, fz: p.dz };
   }
   // clock: ora del gioco (secondi), per il servizio dall'orario
@@ -990,7 +1007,7 @@ export class TramSim {
     const ended = [];
     for (const tr of this.trams) {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
-      const P = this.track.path(tr.dir);
+      const T = tr.track, P = T.path(tr.dir);
       let vt = 8.5;
       if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
       else if (tr.run) {
@@ -1016,20 +1033,41 @@ export class TramSim {
       }
       // segnale del tram a via impedita: si rallenta per fermarsi alla linea
       if (this.signals) {
-        const d = this.signals.stopAhead(tr.s, tr.dir);
+        const d = this.signals.stopAhead(tr.s, tr.dir, T);
         if (d < 60) vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d - 0.5)));
       }
-      // chi è sulla stessa corsia davanti (bus, tram del giocatore, altri tram): ci si ferma a distanza
-      const head = this.lanePoint(tr.s, tr.dir);
-      const obst = [];
-      for (const o of others) if (o) { if (o.isTram && o.trackPoints) obst.push(...o.trackPoints()); else obst.push(o); }
-      for (const t2 of this.trams) if (t2 !== tr) for (const p of t2.parts) obst.push(p);
-      for (const o of obst) {
+      // chi è sulla stessa corsia davanti: ci si ferma a distanza. Il mezzo del giocatore conta anche appena a fianco del
+      // muso; un bus automatico solo se è tutto davanti al muso (quello accanto, anche solo in parte, aspetta il tram che
+      // ha la precedenza: dove la corsia del bus sfiora il binario aspetterebbero tutti e due, per sempre)
+      const head = this.lanePoint(tr.s, tr.dir, T);
+      const ahead = (o) => (o.x - head.x) * head.fx + (o.z - head.z) * head.fz;
+      const obst = [], beside = new Set();
+      for (const o of others) if (o && o.isBus && ahead(o) < 1.5) beside.add(o.bus);
+      tr.ignoreBusT = Math.max(0, (tr.ignoreBusT || 0) - dt);
+      for (const o of others) {
+        if (!o || (o.isBus && (beside.has(o.bus) || tr.ignoreBusT > 0))) continue;
+        if (o.isTram && o.trackPoints) for (const p of o.trackPoints()) obst.push({ p, min: -2 });
+        else obst.push({ p: o, min: -2, bus: o.isBus });
+      }
+      // gli altri tram contano se hanno il muso davanti al nostro (agli scambi cede chi arriva dietro); se ognuno vede
+      // l'altro davanti (incroci a raso, rami che si uniscono) cede il tram entrato in servizio dopo
+      for (const t2 of this.trams) {
+        if (t2 === tr || !t2.parts.length || ahead(t2.parts[0]) < -0.5) continue;
+        const h2 = this.lanePoint(t2.s, t2.dir, t2.track);
+        if (t2.id > tr.id && (head.x - h2.x) * h2.fx + (head.z - h2.z) * h2.fz > -0.5 && Math.hypot(head.x - h2.x, head.z - h2.z) < 30) continue;
+        for (const p of t2.parts) obst.push({ p, min: -2 });
+      }
+      let byBus = false;
+      for (const { p: o, min, bus } of obst) {
         const rx = o.x - head.x, rz = o.z - head.z;
         if (Math.abs(rx) > 60 || Math.abs(rz) > 60) continue;
-        const ahead = rx * head.fx + rz * head.fz, lat = Math.abs(rx * -head.fz + rz * head.fx);
-        if (lat < 2.2 && ahead > -2 && ahead < 30) vt = Math.min(vt, Math.max(0, (ahead - 7) * 0.5));
+        const a = rx * head.fx + rz * head.fz, lat = Math.abs(rx * -head.fz + rz * head.fx), v2 = Math.max(0, (a - 7) * 0.5);
+        if (lat < 2.2 && a > min && a < 30 && v2 < vt) { vt = v2; byBus = !!bus; }
       }
+      // dove la corsia del bus incrocia il binario quasi di striscio (o ci corre sopra) un bus fermo sui binari e il tram
+      // possono aspettarsi a vicenda: dopo 20 s il tram passa lo stesso, per 10 s non guarda i bus
+      tr.busT = byBus && tr.v < 0.1 ? (tr.busT || 0) + dt : 0;
+      if (tr.busT > 20) { tr.ignoreBusT = 10; tr.busT = 0; }
       tr.v += Math.max(-2.5, Math.min(1.0, vt - tr.v)) * dt * 2;
       tr.v = Math.max(0, tr.v);
       tr.s += tr.v * dt;
@@ -1037,8 +1075,8 @@ export class TramSim {
       if (tr.s >= P.len - 2) {
         if (tr.run) { tr.s = P.len - 2; tr.v = 0; if (!ended.includes(tr)) ended.push(tr); }
         else {
-          const tail = P.at(tr.s - this.L);
-          tr.dir *= -1; tr.s = this.track.path(tr.dir).project(tail.x, tail.z).s; tr.wait = 30; tr.v = 0; tr.served = null;
+          const tail = P.at(tr.s - tr.L);
+          tr.dir *= -1; tr.s = T.path(tr.dir).project(tail.x, tail.z).s; tr.wait = 30; tr.v = 0; tr.served = null;
         }
       }
       if (tr.waveT > 0) tr.waveT = Math.max(0, tr.waveT - dt);
@@ -1046,7 +1084,7 @@ export class TramSim {
       // nel tratto senza linea aerea il pantografo si abbassa
       const pm = tr.mods[1];
       if (pm && pm.panto) {
-        const want = this.track.wireAt(tr.dir, tr.s - (TRAM.cab + TRAM.gap + TRAM.mid / 2)) ? 1 : 0;
+        const want = T.wireAt(tr.dir, tr.s - (TRAM.cab + TRAM.gap + TRAM.mid / 2)) ? 1 : 0;
         tr.panto += Math.sign(want - tr.panto) * Math.min(Math.abs(want - tr.panto), dt / 4);
         setPantograph(pm.panto, tr.panto);
       }
@@ -1054,8 +1092,8 @@ export class TramSim {
       let off = 0;
       tr.mods.forEach((m, k) => {
         const sa = tr.s - off, sb = sa - m.len;
-        const a = this.lanePoint(sa, tr.dir), b = this.lanePoint(sb, tr.dir);
-        const ha = this.track.heightAt(tr.dir, sa), hb = this.track.heightAt(tr.dir, sb);
+        const a = this.lanePoint(sa, tr.dir, T), b = this.lanePoint(sb, tr.dir, T);
+        const ha = T.heightAt(tr.dir, sa), hb = T.heightAt(tr.dir, sb);
         m.group.position.set((a.x + b.x) / 2, Y_ROAD + (ha + hb) / 2, (a.z + b.z) / 2);
         m.group.rotation.order = 'YXZ';
         m.group.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
@@ -1063,7 +1101,7 @@ export class TramSim {
         const h = m.group.rotation.y;
         for (const f of [0.15, 0.5, 0.85]) tr.parts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, h, isTram: true, bump: 0 });
         if (k < tr.mods.length - 1) {
-          const j = this.lanePoint(sb - TRAM.gap / 2, tr.dir);
+          const j = this.lanePoint(sb - TRAM.gap / 2, tr.dir, T);
           tr.bellows[k].position.set(j.x, Y_ROAD + 1.41 + hb, j.z);
           tr.bellows[k].rotation.y = h;
         }
@@ -1074,7 +1112,7 @@ export class TramSim {
   }
   // indicatore di linea e destinazione sulle due cabine
   setDest(tr, dest) {
-    for (const m of tr.mods) if (m.led) { m.led.material.map.dispose(); m.led.material.map = ledTexture('SIR1', dest); m.led.material.needsUpdate = true; }
+    for (const m of tr.mods) if (m.led) { m.led.material.map.dispose(); m.led.material.map = ledTexture(tr.line, dest); m.led.material.needsUpdate = true; }
   }
   // di notte fanali accesi in testa e luci rosse in coda
   setNight(f) {
@@ -1087,8 +1125,8 @@ export class TramSim {
   // colleghi da salutare: la cabina di testa di ogni tram
   colleagues(out = []) {
     for (const tr of this.trams) if (tr.parts.length) {
-      const p = this.lanePoint(tr.s - 2, tr.dir);
-      out.push({ ref: tr, x: p.x, z: p.z, h: tr.parts[0].h, line: 'SIR1', tram: true });
+      const p = this.lanePoint(tr.s - 2, tr.dir, tr.track);
+      out.push({ ref: tr, x: p.x, z: p.z, h: tr.parts[0].h, line: tr.line, tram: true });
     }
     return out;
   }
@@ -1103,16 +1141,17 @@ export class TramSim {
 // Quando un tram si avvicina (o è sull'incrocio) le auto si fermano prima della sede; il segnale del tram passa da
 // barra orizzontale (via impedita) a barra verticale (via libera) dopo qualche secondo, a incrocio sgombro; quando il
 // tram è passato mostra il triangolo (attenzione) e torna alla barra orizzontale.
+// Gli incroci si cercano sui binari di tutte le sedi; nei tratti in comune tra più linee l'incrocio è uno solo e ha un
+// riferimento (refs: sede, verso, progressiva) per ogni linea che ci passa.
 export class TramSignals {
   constructor(scene, city, lights) {
     this.list = [];
     this.byEdge = new Map();
     this.violations = [];
-    const T = city.tramTrack;
-    if (!T) return;
+    if (!city.tramTrack) return;
     const q = [];
     // incroci a raso tra il binario di ogni verso e le strade
-    for (const dir of [1, -1]) {
+    for (const T of Object.values(city.tramTracks || { SIR1: city.tramTrack })) for (const dir of [1, -1]) {
       const C = T.path(dir);
       for (let i = 0; i < C.pts.length - 1; i++) {
         const a = C.pts[i], b = C.pts[i + 1];
@@ -1131,9 +1170,13 @@ export class TramSignals {
           if (sinA < 0.3) continue; // strade che corrono accanto alla sede, non la attraversano
           const sT = C.cum[i] + t * tl, tE = u * el;
           if (T.heightAt(dir, sT) > 1.5) continue; // binario in quota: la strada passa sotto
-          if (this.list.some((x) => x.dir === dir && Math.abs(x.sT - sT) < 6)) continue;
+          const px = a.x + (b.x - a.x) * t, pz = a.z + (b.z - a.z) * t;
+          // lo stesso incrocio sulla rotaia di un'altra sede (tratto in comune)
+          const same = this.list.find((x) => x.e === e && Math.hypot(x.px - px, x.pz - pz) < 2 && x.tdx * tdx + x.tdz * tdz > 0.9);
+          if (same) { if (!same.refs.some((r) => r.track === T && r.dir === dir)) same.refs.push({ track: T, dir, sT }); continue; }
+          if (this.list.some((x) => x.track === T && x.dir === dir && Math.abs(x.sT - sT) < 6)) continue;
           const x = {
-            dir, e, tE, sT, px: a.x + (b.x - a.x) * t, pz: a.z + (b.z - a.z) * t,
+            track: T, dir, e, tE, sT, px, pz, tdx, tdz, refs: [{ track: T, dir, sT }],
             halfE: Math.min(10, (TRAM.lane + 0.6) / sinA), halfT: Math.min(14, (e.width / 2 + 1) / sinA),
             req: 0, state: 'H', after: 0, prev: new Map(),
           };
@@ -1151,12 +1194,12 @@ export class TramSignals {
       x.sig = best;
       if (best) this.sigs.add(best);
     }
-    this.buildHeads(scene, T);
+    this.buildHeads(scene);
   }
   // un segnale per incrocio, a destra del binario, prima della strada: lanterna a tre luci in colonna (dall'alto barra
   // orizzontale bianca = via impedita, triangolo arancione = attenzione, barra verticale bianca = via libera); ne è
   // accesa una sola, le altre si vedono spente (lente scura, simbolo appena visibile, visiera)
-  buildHeads(scene, T) {
+  buildHeads(scene) {
     const n = this.list.length;
     if (!n) return;
     const statics = [], lenses = [];
@@ -1169,7 +1212,7 @@ export class TramSignals {
     this.heads = [];
     const Y0 = 3.25, DY = 0.36;
     for (const x of this.list) {
-      const s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s);
+      const T = x.track, s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s);
       const px = p.x - p.dz * (TRAM.lane + 0.35), pz = p.z + p.dx * (TRAM.lane + 0.35), ang = Math.atan2(-p.dx, -p.dz);
       const fx = Math.sin(ang), fz = Math.cos(ang), y = Y_ROAD + h + Y0;
       statics.push(new THREE.CylinderGeometry(0.05, 0.06, y - DY * 1.5 - Y_ROAD - h, 6).translate(px, (y - DY * 1.5 + Y_ROAD + h) / 2, pz));
@@ -1207,15 +1250,17 @@ export class TramSignals {
     });
     if (dirty) for (const m of [this.hBar, this.vBar, this.tri]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
-  // occ: tram presenti [{ front (s lungo la sede), dir, len, v, dwell, player }]; cars: auto vicine per sapere se l'incrocio è sgombro
+  // occ: tram presenti [{ front (s lungo il binario), dir, track (la sede), len, v, dwell, player }]; cars: auto vicine per
+  // sapere se l'incrocio è sgombro
   update(dt, occ, traffic) {
     this.violations.length = 0;
     for (const sg of this.sigs) sg._call = false;
     for (const x of this.list) {
       let need = false;
       for (const o of occ) {
-        if (o.dir !== x.dir) continue;
-        const d = x.sT - o.front; // distanza del muso dall'incrocio lungo il binario (positiva se davanti)
+        const r = x.refs.find((r) => r.dir === o.dir && r.track === o.track);
+        if (!r) continue;
+        const d = r.sT - o.front; // distanza del muso dall'incrocio lungo il binario (positiva se davanti)
         const on = d > -(o.len + x.halfT) && d <= x.halfT;
         const coming = d > x.halfT && d < 25 + o.v * 6 && !o.dwell;
         if (on || coming) need = true;
@@ -1260,12 +1305,14 @@ export class TramSignals {
     }
     return gap;
   }
-  // per i tram automatici: distanza dalla prossima linea d'arresto a via impedita
-  stopAhead(s, dir) {
+  // per i tram automatici: distanza dalla prossima linea d'arresto a via impedita (track: la sede del tram)
+  stopAhead(s, dir, track) {
     let best = Infinity;
     for (const x of this.list) {
-      if (x.state === 'V' || x.dir !== dir) continue;
-      const d = x.sT - (x.halfT + 1.5) - s;
+      if (x.state === 'V') continue;
+      const r = x.refs.find((r) => r.dir === dir && r.track === track);
+      if (!r) continue;
+      const d = r.sT - (x.halfT + 1.5) - s;
       if (d > -0.5 && d < best) best = d;
     }
     return best;

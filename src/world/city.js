@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
-import { LINES, laneLayout, laneSpan } from '../data/padova.js';
+import { LINES, TRAM_LINES, laneLayout, laneSpan } from '../data/padova.js';
 import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 import { applyTerrain } from './terrain.js';
@@ -417,6 +417,7 @@ export class City {
     // sede del tram: attorno all'asse dei due binari, o attorno a ogni binario (binari OSM)
     const thw = this.net.tramLanes ? TRAM.lane + 0.3 : TRAM_HW;
     for (const t of this.net.tram || []) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, thw, 'tram');
+    for (const T of this.net.tramLines || []) for (const t of T.lanes) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, TRAM.lane + 0.3, 'tram');
   }
   // distanza libera (positiva = fuori) dalle feature
   clearance(x, z, kinds = null, r = 40) {
@@ -1093,7 +1094,13 @@ export class City {
     // binari per verso (doppio binario dove i versi corrono affiancati, singolo dove si separano) e quote del cavalcavia
     const track = (this.tramTrack = new TramTrack(this.net));
     this.tramCenter = track.C;
-    track.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz));
+    // una sede per linea: quelle in costruzione si appoggiano alle sedi già posate nei tratti in comune
+    this.tramTracks = { [track.id]: track };
+    for (const T of this.net.tramLines || []) {
+      this.tramTracks[T.id] = new TramTrack(this.net, { id: T.id, lanes: T.lanes, lines: TRAM_LINES.filter((L) => L.id === T.id), over: Object.values(this.tramTracks) });
+    }
+    const tracks = Object.values(this.tramTracks);
+    for (const T of tracks) T.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz));
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
     const deck = [], piers = [], poles = [], wires = [];
     const L = TRAM.lane;
@@ -1101,7 +1108,7 @@ export class City {
     // si costruiscono dopo). spanAnchor: dal centro (cx, cz) verso (nx, nz), oltre half metri, la prima facciata entro
     // 14 m; se non c'è, un palo sul bordo della strada
     const FC = 20, fac = new Map(), nearTrack = new Set(), ck = (x, z) => Math.floor(x / FC) + ',' + Math.floor(z / FC);
-    for (const d of [1, -1]) { const P = track.path(d); for (let s = 0; s <= P.len; s += 10) { const p = P.at(s); for (const ox of [-1, 0, 1]) for (const oz of [-1, 0, 1]) nearTrack.add(ck(p.x + ox * FC, p.z + oz * FC)); } }
+    for (const T of tracks) for (const d of [1, -1]) { const P = T.path(d); for (let s = 0; s <= P.len; s += 10) { const p = P.at(s); for (const ox of [-1, 0, 1]) for (const oz of [-1, 0, 1]) nearTrack.add(ck(p.x + ox * FC, p.z + oz * FC)); } }
     for (const b of this.net.buildings) {
       if (!b.pts.some((p) => nearTrack.has(ck(p.x, p.z)))) continue;
       for (let i = 0; i < b.pts.length; i++) {
@@ -1125,7 +1132,8 @@ export class City {
       while (k < 9 && this.clearance(cx + nx * k, cz + nz * k, ['road', 'tram'], 12) < 0.6) k += 0.5;
       return { x: cx + nx * k, z: cz + nz * k, pole: true };
     };
-    for (const dir of [1, -1]) {
+    // ogni binario una volta: i tratti in comune li disegna la sede che c'era già
+    for (const track of tracks) for (const dir of [1, -1]) {
       const P = track.path(dir);
       let lastPole = -1e9, prevWire = null;
       // tratto di binario da a a b (progressive sa, sb)
@@ -1157,7 +1165,7 @@ export class City {
       for (let i = 0; i < P.pts.length - 1; i++) {
         const a = P.pts[i], b = P.pts[i + 1], sa = P.cum[i], sb = P.cum[i + 1];
         const l = sb - sa;
-        if (l < 0.05) continue;
+        if (l < 0.05 || track.sharedAt(dir, (sa + sb) / 2)) continue;
         // in quota i tratti lunghi vanno spezzati ogni 5 m: la rampa disegnata segue la quota su cui corre il tram
         let up = false;
         for (let s = sa; s < sb + 5 && !up; s += 5) up = track.heightAt(dir, Math.min(s, sb)) > 0.05;
@@ -1170,7 +1178,7 @@ export class City {
       // linea aerea: un filo sopra ogni binario, retto ogni 30 m da un tirante trasversale (facciate o pali a lato)
       for (let sp = 0; sp <= P.len; sp += 6) {
         const p = P.at(sp), h = track.heightAt(dir, sp);
-        if (!track.wireAt(dir, sp)) { prevWire = null; continue; }
+        if (!track.wireAt(dir, sp) || track.sharedAt(dir, sp)) { prevWire = null; continue; }
         if (prevWire) {
           const wl = Math.hypot(p.x - prevWire.x, p.z - prevWire.z);
           wires.push(new THREE.BoxGeometry(0.035, 0.035, wl).rotateY(Math.atan2(p.x - prevWire.x, p.z - prevWire.z)).translate((p.x + prevWire.x) / 2, Y_ROAD + CATENARY_HEIGHT + (h + prevWire.h) / 2, (p.z + prevWire.z) / 2));
@@ -1178,10 +1186,12 @@ export class City {
         prevWire = { x: p.x, z: p.z, h };
         if (sp - lastPole < 30) continue;
         lastPole = sp;
-        const dbl = track.doubleAt(dir, sp) > 0.5;
-        if (dbl && dir < 0) continue; // sul doppio binario il tirante lo mette il verso nord, per tutti e due i fili
+        // sul doppio binario il tirante lo mette il verso nord, per tutti e due i fili (non dove il binario accanto è di
+        // un'altra linea)
+        const O = track.path(-dir), q0 = track.doubleAt(dir, sp) > 0.5 ? O.at(O.project(p.x, p.z).s) : null;
+        const q = q0 && Math.hypot(q0.x - p.x, q0.z - p.z) < 10 ? q0 : null;
+        if (q && dir < 0) continue;
         // tirante trasversale sopra i fili, agganciato alle facciate o a pali ai lati della strada
-        const O = track.path(-dir), q = dbl ? O.at(O.project(p.x, p.z).s) : null;
         const cx = q ? (p.x + q.x) / 2 : p.x, cz = q ? (p.z + q.z) / 2 : p.z, half = (q ? Math.hypot(p.x - q.x, p.z - q.z) / 2 : 0) + L + 0.6;
         const ends = [-1, 1].map((side) => spanAnchor(cx, cz, -p.dz * side, p.dx * side, half));
         const y = Y_ROAD + h + CATENARY_HEIGHT + 0.3;
@@ -1200,7 +1210,7 @@ export class City {
     if (wires.length) this.group.add(new THREE.Mesh(mergeGeometries(wires), new THREE.MeshBasicMaterial({ color: 0x2a2d30 })));
     // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per ogni verso
     const pan = [], panTex = TX.pantographSignTexture();
-    for (const dir of [1, -1]) {
+    for (const track of tracks) for (const dir of [1, -1]) {
       const P = track.path(dir);
       for (const [g0, g1] of track.gaps[dir]) for (const [sAt, up] of [[g0 - 60, 0], [g1 + 8, 1]]) {
         const p = P.at(sAt), px = p.x - p.dz * (L + 1.9), pz = p.z + p.dx * (L + 1.9), h = track.heightAt(dir, sAt);
@@ -1216,12 +1226,15 @@ export class City {
       this.group.add(new THREE.Mesh(mergeGeometries(pan.filter((x) => x.mat === 'pole').map((x) => x.g)), new THREE.MeshLambertMaterial({ color: 0x8f9497 })));
       this.group.add(new THREE.Mesh(mergeGeometries(pan.filter((x) => x.mat === 'sign').map((x) => x.g)), new THREE.MeshLambertMaterial({ map: panTex, side: THREE.DoubleSide })));
     }
-    // banchine: a destra del binario di chi le serve, con la linea bianca di fermata a fine banchina
-    const plat = [], roofs = [], stopLines = new GeoBuilder();
-    for (const dir of [1, -1]) {
+    // banchine: a destra del binario di chi le serve (a sinistra dove la fermata lo dice), con la linea bianca di fermata
+    // a fine banchina. Le fermate in comune tra più linee hanno una banchina sola
+    const plat = [], roofs = [], stopLines = new GeoBuilder(), built = [];
+    for (const track of tracks) for (const dir of [1, -1]) {
       const P = track.path(dir);
       for (const st of track.stopsDir[dir]) {
-        const p = P.at(st.s), dx = p.dx, dz = p.dz, rx = -dz, rz = dx, ang = Math.atan2(dx, dz), h = track.heightAt(dir, st.s);
+        const p = P.at(st.s), dx = p.dx, dz = p.dz, sd = st.side < 0 ? -1 : 1, rx = -dz * sd, rz = dx * sd, ang = Math.atan2(dx, dz), h = track.heightAt(dir, st.s);
+        if (st.shared || built.some((b) => Math.hypot(b.x - p.x, b.z - p.z) < 15 && b.dx * dx + b.dz * dz > 0.9)) continue;
+        built.push(p);
         // banchina piena se c'è spazio, altrimenti più stretta e attaccata alla sede (dove la sede corre accanto alla strada)
         if (track.centralAt(p.x, p.z)) {
           // banchina centrale tra i due binari, comune ai due versi (la mette il verso nord), pensilina al centro
@@ -1249,10 +1262,12 @@ export class City {
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
     // scambi ai capolinea (cambio cabina): un deviatoio che collega i due binari nel tratto tronco
     const xo = new GeoBuilder();
-    const N = track.path(1), S = track.path(-1);
-    for (const [A, sA, B] of [[N, N.len - 40, S], [S, S.len - 40, N]]) {
-      const pa = A.at(sA), tgt = A.at(sA + 24), sb = B.project(tgt.x, tgt.z).s, pb = B.at(Math.min(B.len, Math.max(0, sb)));
-      if (Math.hypot(pb.x - pa.x, pb.z - pa.z) < 40) xo.ribbon(pa.x, pa.z, pb.x, pb.z, 0.22, Y_ROAD + 0.055, 8);
+    for (const track of tracks) {
+      const N = track.path(1), S = track.path(-1);
+      for (const [A, sA, B] of [[N, N.len - 40, S], [S, S.len - 40, N]]) {
+        const pa = A.at(sA), tgt = A.at(sA + 24), sb = B.project(tgt.x, tgt.z).s, pb = B.at(Math.min(B.len, Math.max(0, sb)));
+        if (Math.hypot(pb.x - pa.x, pb.z - pa.z) < 40) xo.ribbon(pa.x, pa.z, pb.x, pb.z, 0.22, Y_ROAD + 0.055, 8);
+      }
     }
     this.group.add(new THREE.Mesh(xo.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)));
   }

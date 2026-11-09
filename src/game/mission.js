@@ -62,10 +62,17 @@ export class Mission {
     this.tram = !!route.tram;
     this.route = this.tram ? buildTramRoute(route.trackPath, route) : buildRoute(net, route);
     this.stops = this.route.stops;
-    // tram: alle fermate con la banchina centrale (comune ai due versi) si sale e si scende a sinistra
-    if (this.tram && city && city.tramTrack) for (const st of this.stops) {
-      if (!city.tramTrack.centralAt(st.cx, st.cz)) continue;
-      const O = city.tramTrack.path(-city.tramTrack.dirOf(route)), q = O.at(O.project(st.cx, st.cz).s), half = Math.hypot(q.x - st.cx, q.z - st.cz) / 2 || 2.2;
+    // tram: alle fermate con la banchina centrale (comune ai due versi) si sale e si scende a sinistra; a sinistra anche
+    // dove la banchina sta dall'altra parte (in stazione le linee nuove hanno la banchina dentro l'anello)
+    const T = this.tram && city && ((city.tramTracks && city.tramTracks[line.id]) || city.tramTrack);
+    if (T) for (const st of this.stops) {
+      if (st.gtfs.side < 0) {
+        Object.assign(st, { side: -1, rx: -st.rx, rz: -st.rz });
+        st.x = st.cx + st.rx * (st.hw + 1.6); st.z = st.cz + st.rz * (st.hw + 1.6);
+        continue;
+      }
+      if (!T.centralAt(st.cx, st.cz)) continue;
+      const O = T.path(-T.dirOf(route)), q = O.at(O.project(st.cx, st.cz).s), half = Math.hypot(q.x - st.cx, q.z - st.cz) / 2 || 2.2;
       Object.assign(st, { side: -1, rx: -st.rx, rz: -st.rz });
       st.x = st.cx + st.rx * half; st.z = st.cz + st.rz * half;
     }
