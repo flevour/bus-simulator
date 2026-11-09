@@ -38,7 +38,18 @@ SKIP_SERVICE = {'parking_aisle', 'driveway', 'drive-through', 'emergency_access'
 FOCUS = (11.852, 45.390, 11.912, 45.449)
 # fascia sud lungo il tram SIR1, da Bassanello al capolinea della Guizza
 FOCUS_SUD = (11.855, 45.362, 11.885, 45.392)
-FOCUS_BOXES = [FOCUS, FOCUS_SUD]
+# piccoli riquadri dove i percorsi GTFS escono dall'area per poche centinaia di metri e rientrano: senza le strade il map
+# matching li collegava con giri di chilometri (linea 22 in Via Madonna della Salute, 9 e 42 a est, 4, 13 e 17 a nord,
+# 21 a ovest, 11 a sud)
+FOCUS_BORDI = [
+    (11.9125, 45.4250, 11.9165, 45.4350),  # Via Madonna della Salute e Cavalcavia Mortise (22)
+    (11.9125, 45.4185, 11.9155, 45.4210),  # 9 e 42 verso l'Ippodromo
+    (11.8720, 45.4485, 11.8780, 45.4525),  # 13 e 17 verso Altichiero
+    (11.8960, 45.4485, 11.9070, 45.4550),  # 4 verso Cadoneghe
+    (11.8470, 45.4245, 11.8525, 45.4280),  # 21 verso Ponterotto
+    (11.8850, 45.3875, 11.8905, 45.3905),  # 11 e 11B verso Due Palazzi
+]
+FOCUS_BOXES = [FOCUS, FOCUS_SUD] + FOCUS_BORDI
 WATER_W = {'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
 
 
@@ -304,6 +315,46 @@ def onto_platforms(stops, platforms, reach=6.0):
             s[0], s[1] = round(q.x, 1), round(q.y, 1)
             moved += 1
     return moved
+
+
+def cut_path(seq, nodes, stops, margin=60.0):
+    """Cammino seq (nodi del grafo) da margin metri prima della prima fermata a margin metri dopo l'ultima. Le fermate
+    (x, z) vanno sui tratti del cammino in ordine, con la somma delle distanze più piccola (programmazione dinamica): le
+    linee ad anello passano due volte accanto al capolinea, e la prima fermata è quella della partenza."""
+    def d(p, i):
+        (ax, az), (bx, bz) = nodes[seq[i]], nodes[seq[i + 1]]
+        dx, dz = bx - ax, bz - az
+        t = max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - az) * dz) / (dx * dx + dz * dz or 1e-9)))
+        return math.hypot(p[0] - ax - dx * t, p[1] - az - dz * t)
+    seg = lambda i: math.dist(nodes[seq[i]], nodes[seq[i + 1]])
+    S = len(seq) - 1
+    if S < 2 or not stops:
+        return seq
+    # cost[i]: fermate fin qui sistemate, l'ultima sul tratto i; back[k][i]: tratto della fermata precedente
+    cost = [d(stops[0], i) for i in range(S)]
+    back = []
+    for p in stops[1:]:
+        best, arg, b, new = 1e18, 0, [], []
+        for i in range(S):
+            if cost[i] < best:
+                best, arg = cost[i], i
+            b.append(arg)
+            new.append(best + d(p, i))
+        back.append(b)
+        cost = new
+    idx = min(range(S), key=lambda i: cost[i])
+    i1 = i0 = idx
+    for b in reversed(back):
+        i0 = b[i0]
+    a, L = i0, 0.0
+    while a > 0 and L < margin:
+        a -= 1
+        L += seg(a)
+    b, L = i1 + 1, 0.0
+    while b < S and L < margin:
+        L += seg(b)
+        b += 1
+    return seq[a:b + 1]
 
 
 def measured_piece(meas, s):
@@ -817,7 +868,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 print(f'  scartata {line["id"]} {v["headsign"]}: agganciato {Lm:.0f} m su {Lg:.0f} m')
                 failed += 1
                 continue
-            # tieni solo le fermate lungo il tratto agganciato (le linee che escono dalla mappa vengono tagliate)
+            # fermate lungo il tratto agganciato (le linee che escono dalla mappa vengono tagliate)
             def dist_to_path(px, pz):
                 best = 1e18
                 for a, b in zip(seq, seq[1:]):
@@ -827,7 +878,16 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     tt = max(0, min(1, ((px - ax) * dx + (pz - az) * dz) / l2))
                     best = min(best, math.hypot(px - ax - dx * tt, pz - az - dz * tt))
                 return best
-            keep = [i for i, si in enumerate(v['stops']) if dist_to_path(gt['stops'][si][0], gt['stops'][si][1]) < 60]
+            # si tiene il tratto più lungo di fermate consecutive: una fermata isolata oltre un pezzo fuori dall'area
+            # lasciava in mezzo chilometri di giro
+            ok = [dist_to_path(gt['stops'][si][0], gt['stops'][si][1]) < 60 for si in v['stops']]
+            keep, run = [], []
+            for i, o in enumerate(ok + [False]):
+                if o:
+                    run.append(i)
+                elif run:
+                    keep = run if len(run) > len(keep) else keep
+                    run = []
             if len(keep) < 3:
                 failed += 1
                 continue
@@ -843,7 +903,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 'fer': [[t + o0 * d / v['duration'], dur * d / v['duration']] for t, d in v['fer']],
                 'fes': [[t + o0 * d / v['duration'], dur * d / v['duration']] for t, d in v['fes']],
             }
-            v2['nodes'] = seq
+            # percorso delle linee tagliate solo attorno al tratto tenuto: prima della prima fermata il giro fuori
+            # dall'area spostava tutte le fermate (il gioco le cerca entro 2,5 km di percorso dalla precedente)
+            v2['nodes'] = cut_path(seq, nodes, [gt['stops'][si][:2] for si in v2['stops']]) if trimmed else seq
             variants.append(v2)
         if variants:
             lines_out.append({'id': line['id'], 'color': line['color'], 'variants': variants})

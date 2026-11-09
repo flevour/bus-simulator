@@ -48,7 +48,9 @@ SOGLIE = {
     'edifici_sui_percorsi': 0,
     'fermate_lontane': 13,
     'fermate_spostate': 33,
-    'marciapiedi_stretti_m2': 169000,
+    # 9 novembre, area allargata ai bordi (Via Madonna della Salute e altri cinque riquadri): 56.000 m² di marciapiede
+    # in più, di cui 2.200 stretti
+    'marciapiedi_stretti_m2': 171300,
 }
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',

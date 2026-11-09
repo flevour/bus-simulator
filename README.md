@@ -187,7 +187,10 @@ uniscono non si incrociano.
   nere, denti bianchi sulle rampe. Presi troppo forte (oltre 25-40 km/h secondo il tipo) scuotono il bus e i
   passeggeri.
 * Il **tram SIR1** è guidabile sulla sua linea, da Guizza Capolinea a Pontevigodarzere (vedi sotto).
-* **Area di gioco** allargata a sud lungo il tram, fino al capolinea della Guizza.
+* **Area di gioco** allargata a sud lungo il tram, fino al capolinea della Guizza, e con sei piccoli riquadri ai bordi
+  dove i percorsi escono e rientrano (Via Madonna della Salute per la 22, verso l'Ippodromo per la 9 e la 42, a nord per
+  la 4, la 13 e la 17, a ovest per la 21, a sud per la 11). Le linee che escono dalla mappa tengono il tratto più lungo
+  di fermate consecutive, e il percorso comincia e finisce attorno a quelle.
 
 Per rigenerare i dati:
 
