@@ -2,6 +2,7 @@
 // lato porte, in un renderer a parte che poi viene liberato. Le immagini restano in cache (bus da 12 m e snodato).
 import * as THREE from 'three';
 import { Bus } from '../bus/bus.js';
+import { suspendTerrain, resumeTerrain } from '../world/terrain.js';
 
 const cache = new Map();
 
@@ -39,7 +40,10 @@ export function liveryPreviews(ids, articulated, { w = 320, h = 150 } = {}) {
   for (const id of ids) {
     const bus = new Bus(scene, { id: articulated ? '10' : '', color: '#ffffff', dest: 'Padova', livery: id, articulated });
     bus.place(0, 0, 0);
+    // il bus sta a quota zero: senza il terreno, che altrimenti lo alzerebbe fuori dall'inquadratura
+    const was = suspendTerrain();
     renderer.render(scene, cam);
+    resumeTerrain(was);
     out[id] = renderer.domElement.toDataURL('image/png');
     scene.remove(bus.group);
     disposeTree(bus.group);

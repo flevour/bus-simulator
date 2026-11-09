@@ -51,6 +51,10 @@ export function applyTerrain(sh, ground = false) {
     .replace('#include <project_vertex>', PROJECT)
     .replace('#include <worldpos_vertex>', WORLDPOS);
 }
+// le uniform sono condivise da tutti i materiali: chi disegna fuori dal mondo (anteprime dei bus nel menu) spegne il
+// terreno e poi lo rimette com'era
+export function suspendTerrain() { const was = K.value.z; K.value.z = 0; return was; }
+export function resumeTerrain(was) { K.value.z = was; }
 THREE.Material.prototype.onBeforeCompile = function (sh) { applyTerrain(sh, !!(this.userData && this.userData.terrainGround)); };
 
 export class Terrain {
