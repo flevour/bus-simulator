@@ -76,8 +76,9 @@ Chiusa il 9 novembre 2026. Cosa c'è (dettagli nel README, sezione "Verifiche"):
 
 ### mappa
 
-Unica corsia che rigenera la mappa. Primo lavoro: **corsie e segnaletica orizzontale** (IDEE, prossimi passi 4;
-piano del modello della città, prossimi passi 1).
+Unica corsia che rigenera la mappa (venv con `shapely` e `pyarrow`, comandi in `CLAUDE.md`). File: `scripts/build_map.py`,
+`scripts/street_surfaces.py`, le query e i filtri OSM (`scripts/overpass-*.ql`, `scripts/filter_osm_*.py`), la parte
+delle strade di `src/world/city.js`, `src/data/padova.js`, `src/data/padova-map.json`.
 
 - Dai tag OSM già nell'export (`lanes` su ~5.400 vie, `lanes:forward/backward`, `overtaking`, `turn:lanes` su 40,
   `lanes:psv`/`bus:lanes`): numero di corsie e linee divisorie sulla carreggiata misurata, mezzeria continua con
@@ -138,9 +139,8 @@ piano del modello della città, prossimi passi 1).
   2 e 3 i bus arrivano alla corsia giusta con il giro legale dall'entrata est: i due passaggi veri (x = 231 e
   x = 190) restano da aggiungere alla rete come archi propri. Con i sensi unici la linea 2 (Diretto Piazze) ora si
   aggancia, ma come la 6 e la 12 (già prima, 3,2 km) fa un giro di 3,5 km lontano dal tracciato GTFS attorno a
-  (-1547, 497), nel corridoio di Via Sorio: manca una strada o un passaggio nella rete. I lampioni stanno a metà
-  larghezza dell'arco più 1,9 m senza guardare l'asfalto vero: sono i 1121 lampioni in carreggiata del rapporto (uno
-  in più nel piazzale per le corsie ristrette); basterebbe scartarli dove `surfaceOff` dice asfalto.
+  (-1547, 497), nel corridoio di Via Sorio: manca una strada o un passaggio nella rete. I lampioni in carreggiata
+  li ha poi tolti la corsia mappa (spostati fuori dall'asfalto vero con `surfaceOff`).
 - Richieste della corsia `tram-reti` (dettagli in [`linee-tram-nuove.md`](linee-tram-nuove.md), sezione "Nel gioco"):
   - **sede di SIR3 e SIR2 nella pianta delle strade** (tappa 3): i binari sono `net.tramLines` in gioco, da
     `data/tram-linee-nuove.json`, tagliati sul tratto in città. Oggi stanno sopra l'asfalto e le corsie dei bus ci
@@ -150,6 +150,27 @@ piano del modello della città, prossimi passi 1).
     striscio e i bus si fermavano sopra i binari. Due fermate dei bus sono senza palina perché cadrebbe sui binari:
     Sografi 31 (via Sografi, SIR3) e Grassi (Cittadella) (via Venezia, SIR2);
   - **area di Voltabarozzo** (tappa 4): riquadro `FOCUS` fino al capolinea e al deposito, poi il SIR3 intero.
+Fatto il 9 novembre (dettagli in IDEE, "Fatto"): corsie e segnaletica orizzontale dai tag OSM, fermate del tram sui
+nodi `tram_stop`, dossi e attraversamenti rialzati, `highway=busway` (niente da fare), area ai bordi e linee tagliate
+(la 22 in Via Madonna della Salute), inversioni a U, corsie di servizio dei capolinea (Capolinea
+Plebiscito), lampioni fuori dall'asfalto. Strumenti nuovi in `build_map.py`: `FOCUS_BORDI`, `cut_path`,
+`no_uturns`, `gtfs_cover`; nei dati `lanes`, `turnLanes` e `calming`. Il piazzale della stazione l'ha sistemato la
+sessione cloud (sopra): la mia versione con l'area 47586895 come banchina e i due passaggi aggiunti è stata lasciata
+cadere nel rebase, le banchine vere di OSM sono una fonte migliore.
+
+Fuori dai miei file, piccoli e segnalati: in `traffic.js` le auto stanno nella corsia più a destra sulle vie con le
+corsie in OSM (`Traffic.laneGeom`, con `driveOffset` di `padova.js`) e le linee d'arresto dei semafori partono dalla
+riga che separa i versi (`TrafficLights.placeApproach`); in `main.js` e `mission.js` lo scossone e il comfort sui
+dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.js`.
+
+Prossimo lavoro, in quest'ordine:
+
+- svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
+- le 25 fermate senza palina e i 17 tratti A-B-A con una fermata rimasti (elenchi in IDEE, "Mappa e dati");
+- cavalcavia e posizione dei fiumi (segnalazione del 6 novembre, senza dettagli);
+- zona Plebiscito: sistemato il Capolinea Plebiscito; per il resto servono i dettagli di chi l'ha segnalata;
+- gli 11 salti senza strada rimasti sono ai bordi (13 ad Altichiero, 19 a Saletto, 24 a Mandriola): li risolve il
+  caricamento per aree (onda 3).
 
 ### tram-reti (chiusa il 9 novembre)
 
@@ -189,7 +210,8 @@ Dopo la chiusura i dati del piazzale sono stati sistemati dalla sessione cloud (
 Onda 2, quando le corsie dell'onda 1 si chiudono:
 
 - `traffico`: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza; penalità per chi
-  non dà precedenza; traffico più lento con pioggia e nebbia; corsie preferenziali vere (dopo le corsie di `mappa`).
+  non dà precedenza; traffico più lento con pioggia e nebbia; corsie preferenziali vere (le corsie ci sono: `laneLayout`
+  e `driveOffset` in `padova.js` danno corsie, corsie dei bus e scostamenti per verso).
 - `tram-turni`: turni del tram e deposito della Guizza, binario tronco, semafori del tram coordinati. Può partire:
   gli scambi tra le sedi sono in `track.switches`, quelli ai capolinea si disegnano in `buildTramway`.
 - `esplorazione`: panoramica e giro libero senza mezzo, poi l'ortofoto AGEA (M5).

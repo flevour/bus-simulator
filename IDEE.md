@@ -27,26 +27,22 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - i rami del SIR2 per Romagnoli e per l'Ospedale San Lazzaro, ancora in cantiere in OSM;
    - SIR4 e SIR5, e le linee passanti della rete SMART (T1, T2 e le altre) sugli stessi binari;
    - la linea 10 resta tra gli autobus (deciso il 9 novembre); quando il SIR2 sarà in servizio si potrà toglierla.
-3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
-   "Fatto"). Restano:
-   - fermate del tram dai nodi OSM (`tram_stop`);
-   - dossi (`traffic_calming`) e corsie riservate (`highway=busway`);
-   - istruzioni: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
-4. [ ] **Segnaletica orizzontale dai tag OSM già presenti** (`lanes` su ~5400 strade, `lanes:forward/backward`,
-   `overtaking`, `turn:lanes`, `lanes:psv`):
-   - numero di corsie e linee divisorie;
-   - mezzeria continua dove `overtaking=no`;
-   - frecce a terra da `turn:lanes`;
-   - corsie preferenziali gialle con la scritta BUS da `lanes:psv` / `bus:lanes`.
+3. [x] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza, strisce pedonali, fermate del tram,
+   dossi e corsie (vedi "Fatto"). `highway=busway`: nell'area ci sono 3 vie, due doppioni della corsia in controsenso
+   di Corso Garibaldi già nei dati, niente da fare. Istruzioni:
+   [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
+4. [~] **Segnaletica orizzontale dai tag OSM**: corsie, divisorie, mezzeria continua, frecce e corsie dei bus fatte
+   (vedi "Fatto"). Restano le svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta
+   (`TrafficLights` in `traffic.js`), le corsie nelle rotatorie a due corsie e le auto che non usano le corsie dei bus
+   (corsia del traffico, onda 2).
 5. [~] **Segnalazioni dal gioco** (modulo Richieste; il 6 novembre dalla linea 42 in Via Madonna della Salute):
    - [x] fermate date per saltate prima di averle attraversate (vedi "Fatto");
    - [x] semafori in mezzo alla strada e orientati male (vedi "Fatto");
    - [x] profilo altimetrico delle strade (terreno dal DTM della Regione, vedi "Fatto");
    - [x] zone pedonali (piazze e aree pedonali lastricate dal DBGT); resta la ZTL;
-   - [~] navigatore sulle linee 22, 13, 25: rifatto (vedi "Fatto"); sulla 22 verso Mandria resta il percorso
-     sbagliato, perché Via Madonna della Salute verso Mortise è fuori dall'area della mappa (richiesta alla corsia
-     `mappa` in [`docs/CORSIE.md`](docs/CORSIE.md));
-   - [ ] zona Plebiscito: strade e fermate;
+   - [x] navigatore sulle linee 22, 13, 25 (vedi "Fatto"); la 22 verso Mandria ora ha Via Madonna della Salute;
+   - [~] zona Plebiscito: al Capolinea Plebiscito la 16 e la 24 saltavano in linea retta sul prato (vedi "Fatto");
+     la segnalazione non dice altro: se resta qualcosa servono i dettagli da chi gioca;
    - [ ] cavalcavia da migliorare e posizione dei fiumi;
    - [ ] mappa più grande;
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
@@ -54,18 +50,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
        deposito (oggi dietro la sbarra c'è prato), il tram (deposito della Guizza, punto 1) e i turni che cambiano
        linea;
-     - [~] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
-       Controllato linea per linea in [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md): 19 partenze o
-       arrivi su 38 sono nella corsia sbagliata per i dati della mappa (banchina delle corsie 1 e 2 asfaltata, due
-       passaggi tra le corsie che mancano, fermata Ex Catasto, partenze agganciate dopo la fermata); le correzioni
-       sono chieste alla corsia `mappa`.
+     - [x] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
+       Controllato linea per linea e corretto nei dati (vedi "Fatto" e
+       [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md)).
 
 ## Mappa e dati
 
 - [~] **Modello della città coerente con la realtà**: piano con fonti, misure dalle norme, pipeline a strati, semafori,
   fermate, verifiche e tappe in [`docs/PIANO_MODELLO_CITTA.md`](docs/PIANO_MODELLO_CITTA.md). Fatte M1–M4 e verde,
   isole e alberi del DBGT; i prossimi passi in ordine sono nel piano (sezione 7, "Prossimi passi"):
-  - [ ] corsie e segnaletica orizzontale, svolte a sinistra protette ai semafori;
+  - [~] corsie e segnaletica orizzontale fatte (vedi "Fatto"); restano le svolte a sinistra protette ai semafori;
   - [x] portici veri dai volumi del DBGT (vedi "Fatto");
   - [x] paline e pensiline da OSM (vedi "Fatto");
   - [x] zone pedonali e piazze lastricate (aree pedonali del DBGT); resta la ZTL;
@@ -96,9 +90,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   - licenza: Google e Bing non permettono di ricavarne dati; le ortofoto della Regione Veneto sono da verificare;
   - alberi, ombre e auto coprono le strisce;
   - dai container cloud i server della Regione sono bloccati.
-- [ ] 30 fermate servite su 403 non hanno palina (il posizionamento viene scartato): capire caso per caso.
-- [ ] Capolinea: tratti del percorso GTFS senza strada corrispondente (map matching). Aggiungere le strade di servizio
-  e le aree dei capolinea.
+- [ ] 25 fermate servite su 484 non hanno palina (il posizionamento viene scartato; Corsia 1 e Corsia 2 della stazione
+  ne hanno una sola, a 1,8 m in OSM): Garibaldi Eremitani, Borgomagno, Largo Europa, T. Aspetti 141 e fr. 240, Bronzetti
+  4, Crescini 6, Facciolati CTO, Capolinea Pontecorvo e altre ai bordi della mappa. Capire caso per caso.
+- [~] Capolinea: tratti del percorso GTFS senza strada. Le corsie di servizio dove passa un bus entrano nella rete
+  (vedi "Fatto"); restano 11 salti, tutti ai bordi della mappa (13 ad Altichiero, 19 a Saletto, 24 a Mandriola).
 - [ ] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
   bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
   capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa).
@@ -109,8 +105,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   legale dall'entrata est. Corsia 1 e Corsia 2 hanno la stessa palina (OSM le mette a 1,8 m l'una dall'altra); la 4
   per il Capolinea Nord parte dalla corsia sud e fa il giro del piazzale. La banchina sud è del tram.
 - [~] Percorsi con brevi deviazioni avanti e indietro in una via laterale (179 tratti A-B-A, errori di aggancio del
-  tracciato GTFS): tolti già nei dati quelli senza fermate; restano 44, con una fermata nella via laterale (quasi
-  tutti vie tagliate al bordo della mappa), da capire caso per caso. Tratti contromano da oltre mille a 127.
+  tracciato GTFS): quelli senza fermate li tolgono già i dati (`drop_spurs`); con i giri nelle rotatorie e le linee tagliate senza andata e
+  ritorno ai capi (vedi "Fatto") ne restano 17 con una fermata: la 3 in Via Bembo (749 m), la 4 in Piazzale
+  Castagnara e in Via Gramsci, la 6 al Liceo Codalunga, la 15B e la 16 ai giardini di Corso Garibaldi, la 24 al
+  Capolinea Plebiscito. Da capire caso per caso (alcuni possono essere veri).
 - [ ] Corsie bus in controsenso (flag 256): il gioco le conosce per i percorsi, ma i bus le percorrono al centro della
   strada; servirebbe una corsia propria sul lato giusto, e le auto non dovrebbero usarla.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
@@ -184,6 +182,22 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   corsie a senso unico rispettate (ogni capolinea si raggiunge sulla corsia della sua banchina), corsie ristrette allo
   spazio tra le banchine. Paline per nome (Via Giotto), niente paline doppie (erano 28), andate e ritorno A-B-A da 179
   a 44, tratti contromano da oltre mille a 127.
+- [x] Mappa, 9 novembre (corsia `mappa`):
+  - **corsie e segnaletica orizzontale dai tag OSM**: numero di corsie per verso (`lanes`, `lanes:forward/backward`)
+    sulla carreggiata misurata, tratteggio 3 + 3 m tra le corsie, mezzeria continua con `overtaking=no`, nessuna riga
+    con `lane_markings=no`, corsie dei bus (`busway`, `lanes:psv`, `psv:lanes`, `bus:lanes`, anche in controsenso) con
+    la riga gialla e la scritta BUS, frecce a terra da `turn:lanes`; linee d'arresto dalla riga che separa i versi; le
+    auto nella corsia più a destra;
+  - **fermate del tram** sui nodi OSM `tram_stop`, a metà della banchina vera (le fermate GTFS stanno in fondo);
+  - **dossi e attraversamenti rialzati** da `traffic_calming` (nodi e vie rialzate): strisce gialle e nere, denti
+    sulle rampe, scossone e comfort se presi troppo forte;
+  - **area ai bordi**: sei riquadri dove i percorsi escono e rientrano (Via Madonna della Salute per la 22, Ippodromo,
+    Altichiero, Cadoneghe, Ponterotto, Due Palazzi); le linee tagliate tengono il tratto più lungo di fermate
+    consecutive e il percorso attorno a quelle: fermate agganciate nel punto sbagliato da 121 a 10;
+  - **inversioni a U**: giro nella rotatoria al posto della manovra (Rotonda Galante sulla 9 e sulla 42), linee
+    tagliate senza andata e ritorno ai capi;
+  - **corsie di servizio dove passa un bus** (anelli dei capolinea nei parcheggi): il Capolinea Plebiscito senza salti;
+  - **lampioni** fuori dall'asfalto vero: da 1.116 in carreggiata a nessuno.
 - [x] Passeggeri sugli altri autobus: dai finestrini dei bus automatici si vedono i passeggeri seduti e in piedi (di
   sera con l'interno illuminato); vicino al giocatore, alle fermate dove si fermano, qualcuno aspetta, sale dalla
   porta anteriore e scende da quella centrale, e il bus aspetta che abbiano finito.

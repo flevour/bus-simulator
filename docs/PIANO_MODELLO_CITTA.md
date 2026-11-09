@@ -402,9 +402,10 @@ una build e l'altra:
 Fatte le tappe M1–M4 e, del DBGT, anche isole (`SPART`: 166 aggiunte fuori dalle corsie), verde (`AR_VRD` prati, aree
 alberate e aiuole, 6,6 km²) e alberi veri (13.171 da filari, aree alberate e boschi). In ordine di resa per chi gioca:
 
-1. **Corsie e segnaletica orizzontale**: numero di corsie da `lanes` e `lanes:forward/backward`, mezzeria continua con
-   `overtaking=no`, frecce da `turn:lanes`, corsie dei bus gialle; ora le carreggiate hanno la larghezza misurata, e
-   le corsie si possono dividere davvero. Con le corsie, ai semafori le svolte a sinistra protette (resto di M1).
+1. **Corsie e segnaletica orizzontale** ✔ (9 novembre): numero di corsie da `lanes` e `lanes:forward/backward` sulla
+   carreggiata misurata, mezzeria continua con `overtaking=no`, frecce da `turn:lanes`, corsie dei bus gialle con la
+   scritta BUS (`laneLayout` in `src/data/padova.js`). Restano, ai semafori, le svolte a sinistra protette (resto di
+   M1).
 2. **Portici veri**: il DBGT ha i volumi sopra i portici (`UN_VOL_POR` = 03) con l'altezza libera (`UN_VOL_INH`, 2,5–6
    m). Al posto dei portici a caso del centro, quelli veri lungo le vie, con l'altezza giusta.
 3. **Fermate da OSM** (5.2): la palina OSM `highway=bus_stop` dove sta entro 25 m dalla fermata GTFS e dal lato giusto
