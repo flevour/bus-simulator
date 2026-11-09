@@ -5,7 +5,7 @@ import { mulberry32, distToSeg } from './spatial.js';
 import { ledTexture } from './textures.js';
 import { TrackPath } from '../tram/tram.js';
 import { buildRoute, alignStops, busCan } from '../game/routes.js';
-import { scheduleFor } from '../game/mission.js';
+import { scheduleFor, isPeak, Crowd } from '../game/mission.js';
 import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
 
 // ------------------------------------------------------------------
@@ -14,6 +14,8 @@ import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
 // qualche minuto prima della partenza, aspettano a porte aperte, fermano alle fermate (non a tutte: sono a richiesta),
 // rispettano semafori, incroci col tram e chi hanno davanti; dopo l'ultima fermata escono "fuori servizio".
 // Si muovono tutti lungo la corsia del loro percorso; solo quelli vicini al giocatore hanno un modello 3D.
+// A bordo c'è gente (si vede dai finestrini); vicino al giocatore alle fermate qualcuno aspetta, sale dalla porta
+// anteriore e scende da quella centrale.
 // ------------------------------------------------------------------
 
 const LEAD = 260, EXIT = 320; // metri di strada prima del capolinea di partenza e dopo quello di arrivo
@@ -24,6 +26,8 @@ const R_VIS = 560, MAX_VIS = 16; // modelli: entro questa distanza dal giocatore
 const NEAR = 700; // oltre questa distanza non si guarda chi c'è davanti (nessuno lo vede)
 const DOOR_T = 1.6; // secondi per aprire o chiudere le porte
 const DRIVER = [0.62, 0, 4.5]; // autista: seduto a sinistra, dietro al cruscotto
+const PAX_CAP = 70; // passeggeri a bordo al massimo
+const R_PAX = 260; // gente alle fermate solo entro questa distanza dal giocatore
 
 // corsia del bus: sui doppi sensi quella di destra, sui sensi unici stretti il centro
 const laneLat = (e) => (!e ? 1.8 : e.oneway ? (e.width < 8 ? 0 : e.width / 2 - 2) : Math.max(e.width / 4, e.width / 2 - 2.2));
@@ -153,7 +157,11 @@ function buildLane(net, city, v, tramSignals) {
   // fermate: muso a fine zona di fermata, accostato al marciapiede
   const stops = route.stops.map((st) => {
     const k = segAt(c0 + st.s), sg = segs[k];
-    return { fs: ls(c0 + st.s) - 0.5, extra: Math.max(0, (st.kl ?? st.kerb ?? st.hw) - Math.max(0, st.ks || 0) * 12 - 1.7 - sg.lat), name: st.name, importance: st.importance, terminal: st.terminal };
+    return {
+      fs: ls(c0 + st.s) - 0.5, extra: Math.max(0, (st.kl ?? st.kerb ?? st.hw) - Math.max(0, st.ks || 0) * 12 - 1.7 - sg.lat), name: st.name, importance: st.importance, terminal: st.terminal,
+      // dove si aspetta: sul marciapiede alla palina, verso di marcia (dx, dz) e normale verso il marciapiede (rx, rz)
+      wx: st.x, wz: st.z, dx: st.dx, dz: st.dz, rx: st.rx, rz: st.rz,
+    };
   });
   // semafori: linea d'arresto prima del nodo, solo dove c'è una lanterna per chi arriva da quell'arco
   const signals = [];
@@ -257,15 +265,15 @@ function busGeometry(livery) {
   const L = LIV[livery] || LIV.moderna, dark = 0x1d1f22, glass = 0x1d2a33;
   // due porte (anteriore e centrale), tre solo per le livree arancio (storica) e rossa (aps)
   const DOORS = L.threeDoors ? DOOR_Z : DOOR_Z.slice(0, 2);
-  const body = [], doors = [], lights = [];
+  const body = [], doors = [], lights = [], wins = [];
   const arches = [3.3, -2.6].map((a) => [a - 0.62, a + 0.62]);
   for (const side of [1, -1]) {
     const x = side * (HW - 0.03), dex = side < 0 ? DOORS : [];
     for (const [a, b] of pieces(dex)) body.push(boxG(0.06, YB - 0.9, b - a, L.lower, x, (YB + 0.9) / 2, (a + b) / 2));
     for (const [a, b] of pieces([...arches, ...dex])) body.push(boxG(0.06, 0.9 - Y0, b - a, L.lower, x, (0.9 + Y0) / 2, (a + b) / 2));
     for (const [a, b] of pieces(dex)) body.push(boxG(0.02, 0.16, b - a, L.stripe, x + side * 0.03, 1.0, (a + b) / 2));
-    // finestrini scuri; a sinistra quello del posto guida è un vetro vero (si vede l'autista)
-    for (const [a, b] of pieces(side > 0 ? [[3.7, 6]] : dex)) body.push(boxG(0.06, YW - YB, b - a, glass, x, (YW + YB) / 2, (a + b) / 2));
+    // finestrini: vetri veri (si vedono i passeggeri); a sinistra quello del posto guida è a parte
+    for (const [a, b] of pieces(side > 0 ? [[3.7, 6]] : dex)) wins.push(new THREE.PlaneGeometry(b - a, YW - YB).rotateY((side * Math.PI) / 2).translate(x + side * 0.035, (YW + YB) / 2, (a + b) / 2));
     for (const [a, b] of pieces([], -L2 + 0.05, L2 - 0.05)) body.push(boxG(0.06, YT - YW, b - a, L.upper, x, (YW + YT) / 2, (a + b) / 2));
     if (side < 0) for (const [a, b] of DOORS) body.push(boxG(0.06, YT - YW + 0.1, b - a, L.upper, x, (YW + YT) / 2 - 0.05, (a + b) / 2));
     if (L.electric) body.push(boxG(0.02, 0.12, 2 * L2 - 0.4, L.roof, side * (HW + 0.01), Y0 + 0.1, 0));
@@ -273,8 +281,6 @@ function busGeometry(livery) {
   body.push(boxG(2 * HW, 0.08, 2 * L2 - 0.1, L.upper, 0, YT - 0.04, 0));
   if (L.electric) body.push(boxG(2.2, 0.5, 9.2, L.roof, 0, YT + 0.25, -0.4), boxG(2.0, 0.35, 1.2, L.roof, 0, YT + 0.17, 4.6));
   else body.push(boxG(1.6, 0.32, 2.8, 0xe0e0dc, 0, YT + 0.16, 0.8), boxG(1.4, 0.25, 1.6, 0xe0e0dc, 0, YT + 0.12, -4.6));
-  // interno scuro (si vede dalle porte aperte) fino alla paratia dietro al posto guida
-  body.push(boxG(2 * HW - 0.16, YW - Y0, 9.5, 0x202428, 0, (YW + Y0) / 2, -1.15));
   // frontale, retro, paraurti, specchietti, cruscotto e tergicristalli a riposo
   body.push(boxG(2 * HW, 0.62, 0.12, L.lower, 0, Y0 + 0.31, L2 - 0.06), boxG(2 * HW + 0.04, 0.25, 0.2, dark, 0, Y0 + 0.1, L2));
   body.push(boxG(2 * HW, 0.26, 0.1, L.upper, 0, YT - 0.13, L2 - 0.05));
@@ -303,9 +309,28 @@ function busGeometry(livery) {
   // vetri veri: parabrezza e finestrino del guidatore
   const ws = new THREE.PlaneGeometry(2 * HW - 0.1, 1.95).translate(0, 1.9, L2 + 0.005);
   const sw = new THREE.PlaneGeometry(2.25, YW - YB).rotateY(Math.PI / 2).translate(HW + 0.005, (YW + YB) / 2, 4.83);
-  GEO[livery] = { body: mergeGeometries(body), doors: mergeGeometries(doors), lights: mergeGeometries(lights), glass: mergeGeometries([ws, sw]) };
+  // interno fino alla paratia dietro al posto guida, visto da dentro (si vede dai finestrini e dalle porte aperte)
+  const inner = new THREE.BoxGeometry(2 * HW - 0.16, YW - Y0, 9.5).translate(0, (YW + Y0) / 2, -1.15);
+  GEO[livery] = { body: mergeGeometries(body), doors: mergeGeometries(doors), lights: mergeGeometries(lights), glass: mergeGeometries([ws, sw, ...wins]), inner };
   return GEO[livery];
 }
+
+// passeggeri a bordo: posti a sedere su due file per lato (a destra non davanti alle porte), poi in piedi nel
+// corridoio; matrici locali (seduti più bassi). Busto e testa come sul bus del giocatore.
+const PAX_SLOTS = (() => {
+  const seats = [], stands = [];
+  for (let z = 2.8; z > -5.5; z -= 0.8) {
+    for (const x of [0.85, 0.42]) seats.push(new THREE.Matrix4().makeScale(1, 0.85, 1).setPosition(x, 0.78, z));
+    if ((z < -0.1 || z > 1.7) && (z < -4.7 || z > -2.9)) for (const x of [-0.85, -0.42]) seats.push(new THREE.Matrix4().makeScale(1, 0.85, 1).setPosition(x, 0.78, z));
+  }
+  for (let z = 2.4; z > -4.6; z -= 0.55) stands.push(new THREE.Matrix4().makeScale(1, 1.55, 1).setPosition(stands.length % 2 ? 0.12 : -0.12, 0.38, z));
+  return { seats, stands, n: seats.length + stands.length };
+})();
+const paxGeometry = () => mergeGeometries([
+  new THREE.CylinderGeometry(0.17, 0.2, 0.7, 6, 1, true).translate(0, 0.35, 0),
+  new THREE.SphereGeometry(0.12, 6, 4).translate(0, 0.86, 0),
+]);
+const R_PAX_VIS = 160; // passeggeri a bordo disegnati solo sui bus più vicini (da lontano dai finestrini non si vedono)
 
 // ------------------------------------------------------------------
 export class BusSim {
@@ -320,8 +345,11 @@ export class BusSim {
     this.tex = new Map();
     this.lightMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x777777 });
     this.glassMat = new THREE.MeshLambertMaterial({ color: 0x223844, transparent: true, opacity: 0.35 });
+    this.innerMat = new THREE.MeshLambertMaterial({ color: 0x3a3f46, side: THREE.BackSide });
     this.rnd = mulberry32(7);
     this._q = [];
+    this.day = 'feriale';
+    this.crowd = new Crowd(scene, 220); // gente alle fermate dei bus automatici
   }
   lane(v) {
     let L = this.lanes.get(v);
@@ -341,6 +369,8 @@ export class BusSim {
   // servizio dall'orario; mine: corsa guidata dal giocatore { v, t } (non ha un gemello automatico)
   setService(lines, day, mine = null) {
     this.clear();
+    this.crowd.clear();
+    this.day = day;
     this.runs = busRuns(lines, day).filter((r) => !mine || r.v !== mine.v || Math.abs(r.t - mine.t) > 120);
     this.lastClock = null;
   }
@@ -396,6 +426,8 @@ export class BusSim {
       if (b.s + FRONT > L.P.len - 10) return null;
       b.dest = 'Fuori servizio';
     }
+    // a bordo: nessuno prima della partenza e fuori servizio, in linea secondo l'ora
+    b.pax = b.phase === 'line' && b.k > 0 && !b.atStop ? Math.round((3 + this.rnd() * 20) * this.demand(clock)) : 0;
     this.place(b);
     // un altro bus è già lì (capolinea comune a più linee, tratti in comune): in coda dietro di lui
     for (let k = 0; k < 4 && this.buses.some((o) => Math.hypot(o.x - b.x, o.z - b.z) < 13); k++) { b.s -= 15; this.place(b); }
@@ -448,6 +480,7 @@ export class BusSim {
     const n = cd > dt * 1.5 && cd < 60 ? Math.min(15, Math.round(cd / dt)) : 1;
     for (let i = 0; i < n; i++) this.move(dt, ctx, clock - (n - 1 - i) * dt);
     for (const b of this.buses) if (b.waveT > 0) b.waveT = Math.max(0, b.waveT - dt);
+    this.updatePax(dt, ctx);
     this.updateParts();
     this.updateModels(ctx);
   }
@@ -463,7 +496,8 @@ export class BusSim {
         b.v = 0;
         b.wait -= dt;
         const last = b.k >= st.length - 1;
-        if (b.wait <= 0) {
+        // all'orario si chiude, ma prima si aspetta chi sta salendo o scendendo (non più di 20 s)
+        if (b.wait <= 0 && !(b.paxBusy && b.wait > -20)) {
           b.doorTarget = 0;
           if (b.doors <= 0.001) {
             b.atStop = false;
@@ -548,6 +582,94 @@ export class BusSim {
   }
   doorsStep(b, dt) {
     b.doors += Math.sign(b.doorTarget - b.doors) * Math.min(Math.abs(b.doorTarget - b.doors), dt / DOOR_T);
+  }
+
+  // ---- passeggeri ----
+  // affollamento per ora e giorno, come per la corsa del giocatore
+  demand(clock) {
+    const hour = (clock / 3600) % 24;
+    return (this.day === 'festivo' ? 0.55 : 1) * (hour < 6 ? 0.35 : isPeak(hour) ? 1.7 : hour < 20 ? 1 : hour < 22 ? 0.6 : 0.35);
+  }
+  // punto a lato della porta (z: centro della porta sul bus), out metri fuori dalla fiancata destra
+  doorPoint(b, z, out) {
+    const x = -HW - out, c = Math.cos(b.h), sn = Math.sin(b.h);
+    return { x: b.x + x * c + z * sn, z: b.z - x * sn + z * c };
+  }
+  // la prossima fermata dove il bus si ferma, chi ci aspetta (deciso una volta) e, vicino al giocatore, la gente vera:
+  // arriva a piedi se il giocatore è già lì, sale dalla porta anteriore e scende da quella centrale a porte aperte
+  updatePax(dt, ctx) {
+    const player = ctx.player;
+    if (!player) return;
+    const dem = this.demand(ctx.clock);
+    for (const b of this.buses) {
+      const st = b.L.stops;
+      let k = b.k;
+      while (k < st.length && !b.serve[k]) k++;
+      if (b.phase === 'exit' || k >= st.length) { b.paxBusy = false; continue; }
+      const s0 = st[k];
+      if (b.waitK !== k) {
+        // fermata nuova: chi camminava verso la porta della precedente resta a terra
+        for (const p of b.waiting || []) if (p.boarding && !p.dead) { p.boarding = false; p.target = null; p.onArrive = null; }
+        b.waitK = k; b.waiting = []; b.alightN = null;
+        b.waitN = k === st.length - 1 ? 0 : Math.round(([0, 0.8, 2.2, 4.5][s0.importance] ?? 1) * dem + this.rnd() * 3 * dem + (k === 0 ? 3 : 0));
+      }
+      const dPlayer = Math.hypot(s0.wx - player.x, s0.wz - player.z), near = dPlayer < R_PAX;
+      if (near && b.waiting.length < b.waitN && (!b.atStop || b.alightN == null) && s0.fs - b.s < 600) {
+        while (b.waiting.length < b.waitN) b.waiting.push(this.waiter(s0, dPlayer < 120));
+      }
+      if (b.atStop && b.k === k && b.doors > 0.9) this.servePax(dt, b, s0, k === st.length - 1, near);
+      b.paxBusy = b.atStop && (b.alightN > 0 || b.waiting.some((p) => !p.dead && (p.boarding || (!p.walking && b.pax < PAX_CAP))));
+    }
+    // lontano dal giocatore la gente non serve più
+    for (const p of this.crowd.people) if (Math.abs(p.x - player.x) > 420 || Math.abs(p.z - player.z) > 420) p.dead = true;
+    this.crowd.update(dt);
+  }
+  // una persona che aspetta alla fermata (sul marciapiede, mai sui binari); walk: arriva a piedi lungo il marciapiede
+  waiter(s0, walk) {
+    const r = this.rnd, along = -1 - r() * 7;
+    let back = 0.5 + r() * 1.6;
+    const onTram = (bk) => this.city.onTramway && this.city.onTramway(s0.wx + s0.dx * along + s0.rx * bk, s0.wz + s0.dz * along + s0.rz * bk, 0.3);
+    while (back > -1.3 && onTram(back)) back -= 0.25;
+    const x = s0.wx + s0.dx * along + s0.rx * back, z = s0.wz + s0.dz * along + s0.rz * back, h = Math.atan2(-s0.rx, -s0.rz) + (r() - 0.5) * 1.5;
+    const elderly = r() < 0.14;
+    const p = this.crowd.add({
+      x, z, h, ph: 0, speed: elderly ? 0.7 : 1.2 + r() * 0.4, sc: elderly ? 0.82 : 0.85 + r() * 0.25,
+      col: elderly ? new THREE.Color(0x8a8a8a) : new THREE.Color().setHSL(r(), 0.45, 0.25 + r() * 0.4),
+    });
+    if (walk) {
+      const from = (r() < 0.5 ? 1 : -1) * (14 + r() * 12);
+      Object.assign(p, { x: x + s0.dx * from, z: z + s0.dz * from, walking: true, target: { x, z } });
+      p.onArrive = (q) => { q.walking = false; q.h = h; };
+    }
+    return p;
+  }
+  // a porte aperte: uno alla volta scende dalla porta centrale e sale da quella anteriore
+  servePax(dt, b, s0, last, near) {
+    if (b.alightN == null) {
+      b.alightN = last ? b.pax : Math.min(b.pax, Math.round(b.pax * (0.05 + 0.08 * s0.importance + this.rnd() * 0.15)));
+      b.paxT = 0.3;
+      // lontano dal giocatore (o chi non si è visto arrivare) si conta e basta
+      const unseen = near ? b.waitN - b.waiting.length : b.waitN;
+      b.pax = Math.min(PAX_CAP, b.pax + unseen);
+      if (!near) { b.pax -= b.alightN; b.alightN = 0; b.waitN = b.waiting.length; }
+    }
+    if ((b.paxT -= dt) > 0) return;
+    b.paxT = 0.45 + this.rnd() * 0.4;
+    if (b.alightN > 0) {
+      b.alightN--; b.pax--;
+      const r = this.rnd, a = this.doorPoint(b, 0.8, 0.2), c = Math.cos(b.h), sn = Math.sin(b.h);
+      const p = this.crowd.add({ x: a.x, z: a.z, h: 0, ph: 0, speed: 1.3 + r() * 0.3, sc: 0.85 + r() * 0.25, col: new THREE.Color().setHSL(r(), 0.4, 0.3 + r() * 0.3), life: 10 });
+      const off = this.doorPoint(b, 0.8 + r() * 6 - 3, 3 + r());
+      p.target = off;
+      p.onArrive = (q) => { const dir = r() < 0.5 ? 1 : -1; q.target = { x: q.x + sn * 30 * dir, z: q.z + c * 30 * dir }; };
+    }
+    const p = b.waiting.find((q) => !q.boarding && !q.dead && !q.walking);
+    if (p && b.pax < PAX_CAP) {
+      p.boarding = true;
+      p.target = this.doorPoint(b, 4.85, 0.3);
+      if (p.speed >= 1) p.speed = 1.6;
+      p.onArrive = (q) => { q.dead = true; b.pax = Math.min(PAX_CAP, b.pax + 1); };
+    }
   }
   // velocità massima nel punto s della corsia
   vcap(L, s) {
@@ -642,7 +764,15 @@ export class BusSim {
       this.scene.add(m);
       return m;
     };
-    this.inst[liv] = { body: mk(G.body, this.bodyMat, true), doors: mk(G.doors, this.bodyMat), lights: mk(G.lights, this.lightMat), glass: mk(G.glass, this.glassMat), arm: mk(D.arm, D.mat) };
+    this.inst[liv] = { body: mk(G.body, this.bodyMat, true), doors: mk(G.doors, this.bodyMat), lights: mk(G.lights, this.lightMat), glass: mk(G.glass, this.glassMat), arm: mk(D.arm, D.mat), inner: mk(G.inner, this.innerMat) };
+    // passeggeri di tutti i bus visibili, di qualunque livrea
+    if (!this.paxMesh) {
+      this.paxMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      this.paxMesh = new THREE.InstancedMesh(paxGeometry(), this.paxMat, MAX_VIS * PAX_SLOTS.n);
+      this.paxMesh.count = 0;
+      this.paxMesh.frustumCulled = false;
+      this.scene.add(this.paxMesh);
+    }
     this.slots[liv] = Array.from({ length: MAX_VIS }, () => null);
     return this.inst[liv];
   }
@@ -667,7 +797,10 @@ export class BusSim {
     led.material.map = t.tex;
     led.material.needsUpdate = true;
     this.scene.add(led);
-    b.model = { slot, liv, led, t, arm: new THREE.Object3D() };
+    // posti occupati in ordine sparso (prima a sedere, poi in piedi) e colori dei vestiti, sempre gli stessi per il bus
+    const r = mulberry32(Math.floor(b.id * 1e9)), mix = (a) => a.map((m) => [r(), m]).sort((p, q) => p[0] - q[0]).map((x) => x[1]);
+    const order = [...mix(PAX_SLOTS.seats), ...mix(PAX_SLOTS.stands)];
+    b.model = { slot, liv, led, t, arm: new THREE.Object3D(), order, col: order.map(() => new THREE.Color().setHSL(r(), 0.4 + r() * 0.3, 0.3 + r() * 0.35)) };
     b.model.arm.position.set(DRIVER[0] + ARM_PIVOT[0], DRIVER[1] + ARM_PIVOT[1], DRIVER[2] + ARM_PIVOT[2]);
   }
   release(b) {
@@ -697,6 +830,7 @@ export class BusSim {
     let used = this.buses.filter((b) => b.model).length;
     for (const b of want) { if (used >= MAX_VIS) break; this.acquire(b); used++; }
     if (!this.inst) return;
+    let np = 0;
     for (const b of this.buses) {
       const m = b.model;
       if (!m) continue;
@@ -704,7 +838,11 @@ export class BusSim {
       b.y = laneHeight(b.L, i);
       M.compose(V.set(b.x, Y_ROAD + b.y, b.z), Q.setFromAxisAngle(UP, b.h), ONE);
       const I = this.inst[m.liv];
-      for (const k of ['body', 'lights', 'glass']) I[k].setMatrixAt(m.slot, M);
+      for (const k of ['body', 'lights', 'glass', 'inner']) I[k].setMatrixAt(m.slot, M);
+      if (b._d < R_PAX_VIS) for (let i = 0; i < Math.min(b.pax, m.order.length); i++) {
+        this.paxMesh.setMatrixAt(np, M2.multiplyMatrices(M, m.order[i]));
+        this.paxMesh.setColorAt(np++, m.col[i]);
+      }
       I.doors.setMatrixAt(m.slot, b.doors < 0.3 ? M : ZERO);
       setWave(m.arm, b.waveT);
       m.arm.updateMatrix();
@@ -713,8 +851,15 @@ export class BusSim {
       m.led.matrixWorldNeedsUpdate = true;
     }
     for (const I of Object.values(this.inst)) for (const im of Object.values(I)) im.instanceMatrix.needsUpdate = true;
+    this.paxMesh.count = np;
+    this.paxMesh.instanceMatrix.needsUpdate = true;
+    if (this.paxMesh.instanceColor) this.paxMesh.instanceColor.needsUpdate = true;
   }
-  setNight(f) { this.lightMat.color.setScalar(0.35 + f * 0.65); }
+  // di notte fanali accesi e interni illuminati
+  setNight(f) {
+    this.lightMat.color.setScalar(0.35 + f * 0.65);
+    this.innerMat.emissive.setRGB(0.3, 0.28, 0.24).multiplyScalar(f);
+  }
   // colleghi da salutare: posizione, direzione e linea dei bus con il modello
   colleagues(out = []) {
     for (const b of this.buses) if (b.model) out.push({ ref: b, x: b.x + Math.sin(b.h) * 4.5, z: b.z + Math.cos(b.h) * 4.5, h: b.h, line: b.run.L.id, color: b.run.L.color, tram: false });

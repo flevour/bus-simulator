@@ -10,10 +10,11 @@ const capture = (event, properties) => {
   if (isPostHogConfigured) posthog.capture(event, properties);
 };
 
-// Persone alle fermate (in attesa / che salgono / che scendono)
-class Crowd {
-  constructor(scene) {
-    this.mesh = new THREE.InstancedMesh(personGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true }), 160);
+// Persone alle fermate (in attesa / che salgono / che scendono); anche quelle dei bus automatici (buses.js)
+export class Crowd {
+  constructor(scene, max = 160) {
+    this.max = max;
+    this.mesh = new THREE.InstancedMesh(personGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true }), max);
     this.mesh.count = 0;
     this.mesh.castShadow = true;
     this.mesh.frustumCulled = false;
@@ -35,7 +36,7 @@ class Crowd {
       if (p.dead) this.people.splice(i, 1);
     }
     const { M, Q, Y, S, P } = this;
-    const n = Math.min(this.people.length, 160);
+    const n = Math.min(this.people.length, this.max);
     for (let i = 0; i < n; i++) {
       const p = this.people[i];
       Q.setFromAxisAngle(Y, p.h);
