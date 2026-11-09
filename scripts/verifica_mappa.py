@@ -43,6 +43,7 @@ H_ELEV = 0.05  # m: nodi in quota (cavalcavia): sotto possono esserci edifici
 # e la 12 che non va più contromano: sovrapposizioni di 0,2-0,9 m tra edifici Overture e carreggiate DBGT, come le
 # altre; fermate lontane da 12 a 13 (Madonna della Salute 85 sulla 22, a 41 m, nella zona fuori area)
 SOGLIE = {
+    # 147: le corsie di servizio dove passa un bus (anelli dei capolinea) portano un edificio a 0,3 m dall'asfalto
     'edifici_in_carreggiata': 170,
     'edifici_in_carreggiata_bus': 114,
     'edifici_sui_percorsi': 0,

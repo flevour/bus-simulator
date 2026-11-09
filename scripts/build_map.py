@@ -374,6 +374,42 @@ def cut_path(seq, nodes, stops, margin=60.0):
     return seq[a:b + 1]
 
 
+def gtfs_cover(gt, step=4.0, reach=6.0, share=0.7):
+    """Funzione che dà i pezzi di una via (punti x, z) coperti dai tracciati GTFS dei bus, come coppie (primo punto,
+    ultimo punto): tratti consecutivi con almeno share dei loro punti, presi ogni step metri, a meno di reach metri da
+    un tracciato, lunghi in tutto almeno 10 m."""
+    C = reach
+    cells = set()
+    for line in gt['lines']:
+        for v in line['variants']:
+            pts = [xz(la, lo) for la, lo in v['shape_pts']]
+            for (ax, az), (bx, bz) in zip(pts, pts[1:]):
+                n = max(1, int(math.hypot(bx - ax, bz - az) // step))
+                for i in range(n + 1):
+                    cells.add((int((ax + (bx - ax) * i / n) // C), int((az + (bz - az) * i / n) // C)))
+
+    near = lambda x, z: any((int(x // C) + dx, int(z // C) + dz) in cells for dx in (-1, 0, 1) for dz in (-1, 0, 1))
+
+    def covered(pts):
+        ok = []
+        for (ax, az), (bx, bz) in zip(pts, pts[1:]):
+            n = max(1, int(math.hypot(bx - ax, bz - az) // step))
+            ok.append(sum(1 for i in range(n + 1) if near(ax + (bx - ax) * i / n, az + (bz - az) * i / n)) >= share * (n + 1))
+        runs, i = [], 0
+        while i < len(ok):
+            if not ok[i]:
+                i += 1
+                continue
+            j = i
+            while j < len(ok) and ok[j]:
+                j += 1
+            if sum(math.dist(pts[k], pts[k + 1]) for k in range(i, j)) >= 10:
+                runs.append((i, j))
+            i = j
+        return runs
+    return covered
+
+
 def measured_piece(meas, s):
     """Tratto misurato (data/misure-strade.json) della via che contiene il punto a s metri dall'inizio."""
     for p in meas or ():
@@ -390,19 +426,27 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     ways = [e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
 
     # ---------------- strade ----------------
-    roads = []
+    gt = build_gtfs.load(gtfs_dir)
+    on_gtfs = gtfs_cover(gt)
+    roads, gtfs_ways = [], set()
     for w in ways:
         t = w.get('tags', {})
         hw = t.get('highway')
         if hw not in DRIVE or t.get('area') == 'yes':
             continue
-        # i passi carrai si saltano, tranne quelli con il nome di una via: in OSM a volte le piazze e gli anelli dei
-        # capolinea sono segnati così (Largo Claude Debussy)
+        # i passi carrai e le corsie dei parcheggi si saltano, tranne quelli con il nome di una via (in OSM a volte le
+        # piazze e gli anelli dei capolinea sono segnati così, Largo Claude Debussy) e quelli dove passa un tracciato GTFS
+        # dei bus (l'anello del Capolinea Plebiscito è nel parcheggio)
         if hw == 'service' and t.get('service') in SKIP_SERVICE and not (t.get('service') == 'driveway' and t.get('name')):
+            # solo i pezzi dove passa il bus: dell'anello del parcheggio del Capolinea Plebiscito il bus fa 30 m su 380
+            for i, j in on_gtfs([xz(g['lat'], g['lon']) for g in w['geometry']]):
+                roads.append({**w, 'nodes': w['nodes'][i:j + 1], 'geometry': w['geometry'][i:j + 1]})
+                gtfs_ways.add(w['id'])
             continue
         if t.get('access') in ('no', 'private') and hw in ('service', 'pedestrian') and not psv_lane(t):
             continue
         roads.append(w)
+    print(f'corsie di servizio tenute perché ci passa un bus: {len(gtfs_ways)}')
     use = defaultdict(int)
     for w in roads:
         for i, n in enumerate(w['nodes']):
@@ -433,6 +477,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     edge_lanes = {}  # arco -> corsie dai tag OSM (lane_tags), nel verso a -> b
     turns = []  # [arco, frecce nel verso a -> b, frecce contro]: sull'ultimo arco della via in ciascun verso
     table_ways = []  # (primo arco, ultimo arco) delle vie rialzate (traffic_calming=table)
+    gtfs_edges = set()  # archi delle corsie di servizio tenute perché ci passa un bus (gli anelli dei capolinea)
     n_meas = 0
     way_geo = []  # per ogni strada: id OSM dei nodi, punti, posizioni tenute, nodi del grafo, senso unico, tag
     for w in roads:
@@ -461,7 +506,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         sp = speed_of(t)
         ids = [nid(w['nodes'][i], w['geometry'][i]['lat'], w['geometry'][i]['lon']) for i in keep]
         way_geo.append((w['nodes'], pts, keep, ids, ow, t))
-        meas = measures.get(str(w['id']))
+        meas = measures.get(str(w['id'])) if w['id'] not in gtfs_ways else None  # dei pezzi non vale la progressiva
         if meas:
             cum = [0.0]
             for p, q in zip(pts, pts[1:]):
@@ -480,6 +525,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     edge_lanes[len(edges)] = lt
                 edges.append([a, b, cls, we, nm, flags, sp, layer])
                 edge_walk.append((pc[3], pc[4]) if pc else (0.0, 0.0))
+        if w['id'] in gtfs_ways:
+            gtfs_edges.update(range(first, len(edges)))
         if t.get('traffic_calming') == 'table' and len(edges) > first:
             table_ways.append((first, len(edges) - 1))
         tf, tb = turn_tags(t, ow)
@@ -849,11 +896,12 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             return seq
         return [best[1]] + seq if at_start else seq + [best[1]]
 
-    def loop_back(T, P, limit):
+    def loop_back(T, P, limit, allow=frozenset()):
         """Giro da T a P senza inversioni a U (nemmeno la prima: non si torna subito su P), nei sensi di marcia giusti,
-        entro limit metri e solo per strade principali, rotatorie e corsie dei bus (non dentro i quartieri): [T, ..., P],
-        o None. Ricerca sugli archi orientati (nodo, nodo da cui si arriva)."""
-        ok = lambda k, frm: bus_ok(k, frm) and (edges[k][2] <= 4 or edges[k][5] & 32)
+        entro limit metri e solo per strade principali, rotatorie, corsie dei bus e anelli dei capolinea (non dentro i
+        quartieri; allow: archi (nodo, nodo) che vanno sempre bene, quelli che il percorso fa già): [T, ..., P], o None.
+        Ricerca sugli archi orientati (nodo, nodo da cui si arriva)."""
+        ok = lambda k, frm: bus_ok(k, frm) and (edges[k][2] <= 4 or edges[k][5] & 32 or k in gtfs_edges or (edges[k][0], edges[k][1]) in allow)
         pq = [(math.dist(nodes[T], nodes[w]), w, T, None) for w, _c, k in adj[T] if w != P and ok(k, T)]
         heapq.heapify(pq)
         parent = {}
@@ -885,7 +933,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     k += 1
                 spur = out[i - k:i + 1]
                 on = any(seg_dist(p, u, v)[0] < 30 for p in stops for u, v in zip(spur, spur[1:]))
-                loop = loop_back(out[i], out[i - 1], limit) if on else None
+                done = frozenset(p for u, v in zip(spur, spur[1:]) for p in ((u, v), (v, u)))
+                loop = loop_back(out[i], out[i - 1], limit, done) if on else None
                 if loop:
                     out[i:i + 2] = loop
                     n += 1
@@ -893,7 +942,6 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             i += 1
         return out, n
 
-    gt = build_gtfs.load(gtfs_dir)
     if osm_stops_path:
         osm_st = json.load(open(osm_stops_path, encoding='utf-8'))
         print('fermate spostate sulla palina OSM:', snap_stops_to_osm(gt['stops'], osm_st['fermate']))
