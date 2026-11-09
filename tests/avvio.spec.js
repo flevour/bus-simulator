@@ -1,17 +1,15 @@
 // Il gioco si carica, una corsa parte e la simulazione avanza senza errori.
-import { test, expect } from '@playwright/test';
-import { apriGioco, avviaCorsa } from './gioco.js';
+import { test, expect, avviaCorsa } from './gioco.js';
 
 for (const caso of [
   { nome: 'autobus, linea 24', linea: '24' },
   { nome: 'tram, SIR1', linea: 'SIR1', tram: true },
 ]) {
-  test(`una corsa parte e avanza: ${caso.nome}`, async ({ page }) => {
-    const errori = await apriGioco(page);
-    const corsa = await avviaCorsa(page, caso);
+  test(`una corsa parte e avanza: ${caso.nome}`, async ({ pagina, gioco }) => {
+    const corsa = await avviaCorsa(pagina, caso);
     expect(corsa.fermate).toBeGreaterThan(2);
     // 20 secondi di gioco da fermi, poi 15 con il gas: il mezzo deve muoversi
-    const stato = await page.evaluate(() => {
+    const stato = await pagina.evaluate(() => {
       const g = window.__game;
       g.sim(20, 1 / 30, true);
       const x0 = g.bus.x, z0 = g.bus.z, clock0 = g.mission.clock;
@@ -23,6 +21,6 @@ for (const caso of [
     });
     expect(stato.tempo).toBeGreaterThan(15);
     expect(stato.spostamento).toBeGreaterThan(5);
-    expect(errori).toEqual([]);
+    expect(gioco.errori()).toEqual([]);
   });
 }

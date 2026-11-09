@@ -1,4 +1,5 @@
-// Aiuti comuni alle prove: apertura del gioco, avvio di una corsa dal menu, raccolta degli errori della pagina.
+// Aiuti comuni alle prove: il gioco aperto una volta per worker, l'avvio di una corsa dal menu, gli errori della pagina.
+import { test as base, expect } from '@playwright/test';
 
 // Apre il gioco, aspetta che sia pronto (window.__game) e ferma il ciclo di requestAnimationFrame: da qui il tempo
 // avanza solo con __game.sim(). Restituisce l'elenco, che si riempie da solo, degli errori in pagina e in console.
@@ -13,6 +14,21 @@ export async function apriGioco(page) {
   await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
   return errori;
 }
+
+// Caricare la città costa decine di secondi, una corsa nuova no: ogni worker apre il gioco una volta e le prove lo
+// riusano, ognuna con la sua corsa. `gioco.errori()` dà gli errori comparsi durante la prova in corso.
+export const test = base.extend({
+  gioco: [async ({ browser }, use) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const tutti = await apriGioco(page);
+    let da = 0;
+    await use({ page, inizio: () => { da = tutti.length; }, errori: () => tutti.slice(da) });
+    await page.close();
+  }, { scope: 'worker', timeout: 180_000 }],
+  // prima di ogni prova si azzera l'elenco degli errori
+  pagina: async ({ gioco }, use) => { gioco.inizio(); await use(gioco.page); },
+});
+export { expect };
 
 // Sceglie dal menu mezzo e linea (id della scheda: '24', 'SIR1'...), il verso (0 andata, 1 ritorno) e la modalità,
 // poi avvia la corsa. La corsa resta quella che il menu propone (la più vicina alle 8:15 nei giorni feriali), senza
