@@ -43,16 +43,22 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [x] semafori in mezzo alla strada e orientati male (vedi "Fatto");
    - [x] profilo altimetrico delle strade (terreno dal DTM della Regione, vedi "Fatto");
    - [x] zone pedonali (piazze e aree pedonali lastricate dal DBGT); resta la ZTL;
-   - [ ] navigatore sulle linee 22, 13, 25 (in parte era lo stesso salto della posizione, da ricontrollare);
+   - [~] navigatore sulle linee 22, 13, 25: rifatto (vedi "Fatto"); sulla 22 verso Mandria resta il percorso
+     sbagliato, perché Via Madonna della Salute verso Mortise è fuori dall'area della mappa (richiesta alla corsia
+     `mappa` in [`docs/CORSIE.md`](docs/CORSIE.md));
    - [ ] zona Plebiscito: strade e fermate;
    - [ ] cavalcavia da migliorare e posizione dei fiumi;
    - [ ] mappa più grande;
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
-     - [ ] passeggeri anche sugli altri autobus;
+     - [x] passeggeri anche sugli altri autobus (vedi "Fatto");
      - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
        deposito (oggi dietro la sbarra c'è prato), il tram (deposito della Guizza, punto 1) e i turni che cambiano
        linea;
-     - [ ] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
+     - [~] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
+       Controllato linea per linea in [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md): 19 partenze o
+       arrivi su 38 sono nella corsia sbagliata per i dati della mappa (banchina delle corsie 1 e 2 asfaltata, due
+       passaggi tra le corsie che mancano, fermata Ex Catasto, partenze agganciate dopo la fermata); le correzioni
+       sono chieste alla corsia `mappa`.
 
 ## Mappa e dati
 
@@ -87,10 +93,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [ ] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
   bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
   capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa).
-- [ ] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificare linea per linea corsia,
-  banchina e verso di partenza e arrivo (oggi la partenza comincia sull'arco della corsia, accanto alla banchina).
-- [ ] Percorsi con brevi deviazioni avanti e indietro in una via laterale (177 tratti A-B-A, errori di aggancio del
-  tracciato GTFS): toglierle o capire quali sono vere.
+- [~] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificato linea per linea in
+  [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md); restano le correzioni ai dati (corsia `mappa`).
+- [~] Percorsi con brevi deviazioni avanti e indietro in una via laterale (179 tratti A-B-A, errori di aggancio del
+  tracciato GTFS): il gioco toglie quelli senza fermate (117); restano 62, quasi tutti vie tagliate al bordo della
+  mappa con una fermata in fondo, da capire caso per caso.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
   `src/data/padova-map.json`.
 - [~] Edifici: altezze misurate dal DBGT della Regione e portici veri (fatti, vedi "Fatto"); restano tetti più vari.
@@ -146,6 +153,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] Passeggeri sugli altri autobus: dai finestrini dei bus automatici si vedono i passeggeri seduti e in piedi (di
+  sera con l'interno illuminato); vicino al giocatore, alle fermate dove si fermano, qualcuno aspetta, sale dalla
+  porta anteriore e scende da quella centrale, e il bus aspetta che abbiano finito.
+- [x] Navigatore rifatto: svolte annunciate solo agli incroci (non le curve della strada), bivi con "tieni la
+  destra/sinistra", rotatorie con il numero dell'uscita (e dentro quante ne mancano), inversioni, la manovra dopo se è
+  vicina. Tolte dai percorsi le andate e ritorni senza fermate in una via laterale (13 a Largo Europa, 42 in Via
+  Madonna della Salute e altre).
 - [x] Paline vere da OSM (via Overture), con pensilina e panchina dove OSM le segna; capolinea con partenza e arrivo
   sullo stesso tratto (Largo Debussy lungo il giardino, corsie della stazione), una sola palina.
 - [x] Portici veri: dai volumi del DBGT sopra i portici (altezza libera misurata) per 2.198 edifici; archi alti come

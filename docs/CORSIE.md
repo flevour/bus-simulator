@@ -53,7 +53,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `verifiche` | `verifiche` | 5174 / 4174 |
 | `mappa` | `mappa` | 5175 / 4175 |
 | `tram-reti` | `tram-reti` | 5176 / 4176 |
-| `segnalazioni` | `segnalazioni` | 5177 / 4177 |
+| `segnalazioni` (chiusa il 9 novembre) | `segnalazioni` | 5177 / 4177 |
 
 ### verifiche
 
@@ -89,7 +89,7 @@ piano del modello della città, prossimi passi 1).
 - Le corsie preferenziali vere nel traffico (auto che non le usano) spettano alla corsia del traffico (onda 2).
 - Richieste della corsia `segnalazioni`:
   - **linea 22 verso Mandria (varianti 0, 3, 4, 7, 8)**: Via Madonna della Salute e il Cavalcavia Mortise tra la
-    rotonda di Mortise (45,4340 N) e Via Cardan (45,4265 N) stanno a 11,9135–11,915 E, appena fuori da `FOCUS`
+    rotonda di Mortise (45,4340 N) e Via Cardan (45,4265 N) stanno tra 11,9135 e 11,915 E, appena fuori da `FOCUS`
     (bordo est 11,912 più il margine di 0,0015), quindi mancano dalla rete. `match()` collega i due pezzi con il
     cammino minimo nella mappa: un giro di 5 km per Via del Plebiscito, Via Boves, Via Cascino e Via delle Molle, e
     le fermate dalla 2 alla 21 finiscono fino a 3,8 km dalla loro palina (la corsa non si può fare). Basta allargare
@@ -99,7 +99,15 @@ piano del modello della città, prossimi passi 1).
     ai capolinea fuori mappa;
   - i tratti A-B-A: dal 9 novembre `buildRoute` (`src/game/routes.js`) toglie in gioco quelli senza fermate (117 su
     179); restano 62: 58 con una fermata, quasi sempre una via tagliata al bordo della mappa dove il bus deve fare
-    inversione (Croce Rossa sulla 25, Rotonda Galante sulla 9 e sulla 42), e 4 all'inizio o alla fine del percorso.
+    inversione (Croce Rossa sulla 25, Rotonda Galante sulla 9 e sulla 42), e 4 all'inizio o alla fine del percorso;
+  - **piazzale della stazione** (controllo linea per linea in [`piazzale-stazione.md`](piazzale-stazione.md)): delle
+    38 partenze e arrivi per linea e fermata, 19 sono nella corsia sbagliata e 2 in parte, tutti per i dati. In ordine di effetto: (1) banchina a nord
+    della corsia nord da marciapiede invece che asfalto (area OSM 47586895, `highway=pedestrian` + `psv=yes`), senza
+    la quale le paline delle corsie 1 e 2 non si possono mettere; (2) passaggio dalla strada sud alla corsia sud verso
+    x = 231 per gli arrivi da ovest (oggi 12, 16 e 21 entrano contromano e fanno inversione); (3) attraversamento dalla
+    corsia nord alla corsia sud verso x = 190 per gli arrivi da est alla corsia 3; (4) la fermata Ex Catasto alla sua
+    posizione GTFS sulla strada sud, non alla palina OSM dell'isola; (5) partenze della 14, della 6 e della 25 che
+    comincino dalla fermata e non sulla strada sud.
 
 ### tram-reti
 
@@ -118,18 +126,22 @@ SIR3 e SIR2, tappe 1 e 2 del piano in [`linee-tram-nuove.md`](linee-tram-nuove.m
 - Dopo questa corsia viene `tram-turni` (onda 2): turni del tram e deposito della Guizza, che usano gli scambi del
   grafo.
 
-### segnalazioni
+### segnalazioni (chiusa il 9 novembre)
 
-Le richieste arrivate da chi gioca (IDEE, prossimi passi 5).
+Le richieste arrivate da chi gioca (IDEE, prossimi passi 5). Fatto:
 
-- Navigatore sulle linee 22, 13 e 25: riprovare dopo la correzione della posizione lungo il percorso e correggere
-  quello che resta (`mission.js` `navInfo`, `routes.js`).
-- Passeggeri anche sugli altri autobus: gente a bordo dei bus automatici e alle fermate dove si fermano
-  (`src/world/buses.js`).
-- Piazzale della stazione: controllare linea per linea fermata, corsia e verso di partenza e arrivo dei bus, propri
-  e automatici. Le correzioni al codice del gioco qui; quelle ai dati della mappa vanno scritte come richiesta in
-  questo file, sezione `mappa`.
-- Non tocca `build_map.py` né `padova-map.json`.
+- Navigatore: manovre calcolate una volta per percorso (`routeManeuvers` in `routes.js`, usate da `navInfo` in
+  `mission.js`, frasi in `hud.js`): svolte solo agli incroci, bivi, rotatorie con il numero dell'uscita,
+  inversioni. `buildRoute` toglie le andate e ritorni senza fermate. Sulla 13 e sulla 25 il navigatore ora va; sulla
+  22 verso Mandria il percorso resta sbagliato per i dati (richiesta nella sezione `mappa`).
+- Passeggeri sugli altri autobus (`src/world/buses.js`): a bordo, visibili dai finestrini, e alle fermate dove i bus
+  automatici si fermano vicino al giocatore. `Crowd` di `mission.js` è esportata e la usano tutti e due.
+- Piazzale della stazione: controllo linea per linea in [`piazzale-stazione.md`](piazzale-stazione.md). Nel codice
+  del gioco solo le paline delle corsie parallele (`allStopPlacements`); il resto sono dati, chiesti nella sezione
+  `mappa`.
+
+Le altre voci delle segnalazioni (zona Plebiscito, cavalcavia e fiumi, mappa più grande) sono dati della mappa:
+corsia `mappa` e onda 3.
 
 ## Onde successive
 

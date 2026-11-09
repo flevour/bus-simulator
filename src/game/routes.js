@@ -384,7 +384,9 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
     if (!best || !best.e || best.e.elev) return;
     const dx = best.ex / best.l, dz = best.ez / best.l, hw = best.e.width / 2;
     const rx = -dz, rz = dx; // la palina sta a destra della direzione di marcia
-    if (out.some((o) => Math.hypot(o.cx - best.cx, o.cz - best.cz) < 12 && o.dx * dx + o.dz * dz > 0.5)) return;
+    // una palina per tratto e verso: due fermate vicine sulla stessa corsia ne hanno una sola, ma le corsie parallele di
+    // un capolinea (stazione: corsia nord e corsia sud a 10 m) hanno ognuna la sua
+    if (out.some((o) => o.dx * dx + o.dz * dz > 0.5 && Math.abs((o.cx - best.cx) * dx + (o.cz - best.cz) * dz) < 12 && Math.abs((o.cx - best.cx) * rx + (o.cz - best.cz) * rz) < 3)) return;
     // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate, incroci):
     // se il punto esatto è occupato si sposta la fermata di qualche metro lungo la strada
     let spot = null;
