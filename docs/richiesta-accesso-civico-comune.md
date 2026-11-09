@@ -1,7 +1,8 @@
 # Richiesta di dati al Comune di Padova (accesso civico generalizzato)
 
-Il Comune ha dati che nessuna fonte aperta ha: il rilievo del 2023 delle strade (gemello digitale, mobile mapping) con
-segnaletica, semafori, marciapiedi e alberi, e i piani semaforici. Si chiedono con l'**accesso civico generalizzato**
+Il Comune ha, o può avere, dati che nessuna fonte aperta ha: l'elenco e i piani degli impianti semaforici (la
+manutenzione è affidata a una ditta, quindi l'elenco esiste), eventuali rilievi della rete stradale con segnaletica,
+marciapiedi e alberi, il catasto delle strade, il LiDAR. Si chiedono con l'**accesso civico generalizzato**
 (FOIA italiano, art. 5 comma 2 del D.Lgs. 33/2013): chiunque può chiedere dati e documenti della pubblica
 amministrazione, **senza motivarlo**, gratis (salvo il costo di eventuali supporti).
 
@@ -24,41 +25,60 @@ la risposta con il link.
 
 ## Testo da inviare
 
+Il Comune risponde solo per i dati che **detiene**: se un dato non ce l'ha lo dice, senza conseguenze. Per questo la
+richiesta chiede tutto "ove detenuto", nella forma in cui è disponibile, e non dà per scontato un rilievo preciso (non
+abbiamo trovato conferme di un rilievo mobile mapping del Comune di Padova; c'è quello di Milano). Prima di inviare
+conviene guardare il registro degli accessi e i bandi in Amministrazione trasparente ("semaforic", "rilievo",
+"mobile mapping", "catasto strade", "LiDAR"): un appalto trovato lì è la prova che i dati esistono.
+
 > **Oggetto**: Richiesta di accesso civico generalizzato ai sensi dell'art. 5, comma 2, del D.Lgs. 33/2013 — dati
 > geografici di strade, segnaletica e semafori
 >
-> Al Comune di Padova — Settore Mobilità e Sistema Informativo Territoriale (o all'ufficio che detiene i dati)
+> Al Comune di Padova — Unità Operativa Prevenzione Corruzione e Trasparenza, e per competenza al Settore Mobilità e
+> al Sistema Informativo Territoriale (o all'ufficio che detiene i dati), Via del Municipio 1, 35122 Padova
 >
-> Il/La sottoscritto/a ……………………, nato/a a …………… il ……………, residente a ……………, email ……………, PEC (se presente) ……………
+> Il/La sottoscritto/a ……………………, nato/a a …………… il ……………, residente a …………… in ……………, codice fiscale ……………,
+> email ……………
 >
-> chiede, ai sensi dell'art. 5, comma 2, del D.Lgs. 33/2013, l'accesso ai seguenti dati, **in formato aperto e
-> georeferenziato** (GeoPackage, shapefile o GeoJSON; tabelle in CSV), con l'indicazione della licenza d'uso
+> chiede, ai sensi dell'art. 5, comma 2, del D.Lgs. 33/2013, l'accesso ai seguenti dati e documenti, **ove detenuti
+> dall'Amministrazione**, preferibilmente in formato aperto e georeferenziato (GeoPackage, shapefile o GeoJSON;
+> tabelle in CSV) o comunque nella forma in cui sono disponibili, con l'indicazione della licenza d'uso
 > (preferibilmente CC BY 4.0 o IODL 2.0):
 >
-> 1. gli **strati vettoriali del rilievo della rete stradale del 2023** (cosiddetto gemello digitale, rilievo mobile
->    mapping): segnaletica verticale (tipo di cartello e posizione), segnaletica orizzontale (linee, frecce, strisce
->    pedonali, stalli), impianti semaforici e lanterne, marciapiedi e cordoli, attraversamenti, alberature, punti luce,
->    fermate e pensiline;
-> 2. l'**elenco degli impianti semaforici** con la posizione delle lanterne e dei pali e, per ciascun impianto, il
->    **piano semaforico** (fasi, durate di verde, giallo e tutto rosso, ciclo, coordinamento con gli impianti vicini,
->    priorità al tram SIR1);
-> 3. il **grafo stradale comunale** con sensi di marcia, corsie riservate al trasporto pubblico, zone a traffico
->    limitato e aree pedonali;
-> 4. il **catasto delle strade** (DM 1 giugno 2001), se disponibile, con le larghezze di carreggiate e marciapiedi;
-> 5. se disponibili, i **modelli digitali del terreno e delle superfici** (LiDAR) del territorio comunale.
+> 1. eventuali **rilievi o banche dati della rete stradale** comunale (ad esempio rilievi mobile mapping, banche dati
+>    della segnaletica o del patrimonio stradale), limitatamente agli strati vettoriali disponibili su: segnaletica
+>    verticale (tipo di cartello e posizione), segnaletica orizzontale (linee, frecce, strisce pedonali, stalli),
+>    impianti semaforici, marciapiedi e cordoli, attraversamenti pedonali, alberature, punti luce, fermate e pensiline
+>    del trasporto pubblico;
+> 2. l'**elenco degli impianti semaforici**, con la posizione dei pali e delle lanterne ove disponibile, e per
+>    ciascun impianto il **piano semaforico** (fasi, durate di verde, giallo e tutto rosso, ciclo, coordinamento con
+>    gli impianti vicini, priorità al tram SIR1), anche nella forma di schede di impianto o di documentazione tecnica;
+> 3. il **grafo stradale** comunale con i sensi di marcia e le corsie riservate al trasporto pubblico e, ove
+>    disponibili, i perimetri vigenti delle zone a traffico limitato e delle aree pedonali;
+> 4. ove esistente, il **catasto delle strade** (DM 1 giugno 2001), con le larghezze di carreggiate e marciapiedi;
+> 5. ove detenuti, i **modelli digitali del terreno e delle superfici** (LiDAR) del territorio comunale.
+>
+> La richiesta riguarda i soli dati e documenti già in possesso dell'Amministrazione, nella forma in cui sono
+> disponibili; non si chiede alcuna nuova elaborazione. Se alcuni dati non sono detenuti, si chiede di indicarlo; se
+> sono detenuti da soggetti terzi per conto del Comune (ad esempio il gestore della manutenzione degli impianti
+> semaforici), si chiede di indicare a chi rivolgersi.
 >
 > Non si chiedono immagini né dati personali: se alcuni strati li contengono, si chiede l'accesso parziale agli altri
-> (art. 5-bis, comma 4).
+> dati (art. 5-bis, comma 4, D.Lgs. 33/2013). Se parte dei dati è già pubblicata sul geoportale o sul portale open
+> data del Comune, è sufficiente l'indicazione del collegamento.
 >
-> Si chiede l'invio all'indirizzo email indicato o la pubblicazione con un link per lo scaricamento.
+> Si chiede l'invio dei dati all'indirizzo email sopra indicato, oppure la messa a disposizione di un collegamento per
+> lo scaricamento.
 >
-> Luogo e data ……………          Firma ……………
+> Si allega copia del documento d'identità.
 >
-> Allegato: copia del documento d'identità (se la richiesta non è firmata digitalmente o inviata da PEC personale)
+> Distinti saluti
+>
+> Luogo e data ……………          Nome e cognome ……………
 
 ## Cosa farne quando arrivano
 
-* Strati del gemello digitale: semafori e lanterne al posto di quelli OSM dove ci sono (tappa M7 del piano,
+* Strati dei rilievi stradali: semafori e lanterne al posto di quelli OSM dove ci sono (tappa M7 del piano,
   `docs/PIANO_MODELLO_CITTA.md`), cartelli e segnaletica orizzontale reali, cordoli per la pianta delle strade.
 * Piani semaforici: fasi e durate vere al posto del ciclo di 60 s del gioco (`src/world/traffic.js`).
 * Licenza: riportare l'attribuzione nel gioco e nel README come per gli altri dati.
