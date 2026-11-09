@@ -68,15 +68,12 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   - [x] zone pedonali e piazze lastricate (aree pedonali del DBGT); resta la ZTL;
   - [ ] quote stradali del DBGT e sottopassi; tessere LiDAR da chiedere alla Regione;
   - [x] rapporto di verifica e test in CI (vedi "Fatto"); restano i casi che ha trovato:
-    - [ ] lampioni in carreggiata: 1.121 su 5.484 stanno dentro l'asfalto misurato (il gioco li mette a metà
-      larghezza OSM più 1,9 m) e sono ostacoli per il bus: vanno messi dal bordo vero dell'asfalto, come i pali dei
-      semafori;
-    - [ ] 19 fermate dove il bus fermo tocca un ostacolo: Milano 61 (linee 6, 9, 10, 42), Tommaseo 114 (3, 7, 10, 25)
-      e Buonarroti 46 contro un edificio, Siracusa 20, Vicenza 16, Sorio 96, Maroncelli 69, Foscolo e Croce Verde
-      contro un lampione;
-    - [ ] 33 fermate agganciate a più di 40 m dalla fermata vera: Sorio fr. 96 e Via Sorio 77 (2, 6, 12, il giro nel
-      corridoio di Via Sorio), Due Palazzi e Montà (11, 11B, fino a 1,5 km), Croce Rossa (25, fino a 780 m), Bembo 95
-      (3), Montà 96 (21); le altre tra 43 e 94 m;
+    - [x] lampioni in carreggiata: da 1.121 a nessuno (stanno fuori dall'asfalto vero, vedi "Fatto");
+    - [ ] 9 fermate dove il bus fermo tocca un edificio (erano 19; i lampioni non più): Milano 61 (linee 6, 9, 10,
+      42), Tommaseo 114 (3, 7, 10, 25), Buonarroti 46 (24), facciate sul bordo dell'asfalto;
+    - [ ] 11 fermate agganciate a più di 40 m dalla fermata vera (erano 33): Bembo 95 (3, 317 m), le altre tra 43 e
+      71 m (Facciolati 160, Decorati 57, Falloppio 69, Garibaldi giardini, Armistizio 164, Volta fr. 24, Croce
+      Rossa 112);
   - [ ] mappa più leggera (dati separati e compressi);
   - [ ] ortofoto AGEA 2024 in Esplorazione; catasto, Mapillary e richiesta al Comune.
 

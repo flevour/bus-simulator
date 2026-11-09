@@ -92,17 +92,13 @@ delle strade di `src/world/city.js`, `src/data/padova.js`, `src/data/padova-map.
 - Le corsie preferenziali vere nel traffico (auto che non le usano) spettano alla corsia del traffico (onda 2).
 - Richieste della corsia `verifiche` (rapporto della mappa del 9 novembre; elenchi completi con
   `python3 scripts/verifica_mappa.py --elenco` e in `test-results/*/rapporto-mappa.json` dopo `npm test`):
-  - **lampioni in carreggiata**: 1.121 su 5.484 stanno dentro l'asfalto misurato, perché si piazzano a metà
-    larghezza OSM più 1,9 m (`city.js`, dopo gli alberi del DBGT) con il controllo sui nastri delle strade invece del
-    bordo vero dell'asfalto. Sono ostacoli: la linea 5 in partenza dall'Ospedale ne urta uno dopo un metro;
-  - **fermate dove il bus fermo tocca un ostacolo** (19): Milano 61 in Corso Milano (facciata sul bordo
-    dell'asfalto, linee 6, 9, 10, 42), Tommaseo 114 (edificio, linee 3, 7, 10, 25), Buonarroti 46 (edificio), e un
-    lampione a Siracusa 20, Vicenza 16, Sorio 96, Maroncelli 69, Foscolo e Croce Verde;
+  - **lampioni in carreggiata** (1.121): fatto, nessuno (corsia mappa, `buildTreesAndLamps` con `surfaceOff`);
+  - **fermate dove il bus fermo tocca un ostacolo**: da 19 a 9, tutte contro una facciata sul bordo dell'asfalto:
+    Milano 61 in Corso Milano (linee 6, 9, 10, 42), Tommaseo 114 (3, 7, 10, 25), Buonarroti 46 (24);
   - punti dove il giro guidato urta una facciata sul bordo dell'asfalto stando nella sua corsia, da guardare: Via
     Curtatone e Montanara all'incrocio (linee 6 e 12), Via Sberti vicino al capolinea Boccaccio (13);
-  - **fermate agganciate a più di 40 m dalla fermata vera** (33): Sorio fr. 96 e Via Sorio 77 (2, 6, 12, per il giro
-    nel corridoio di Via Sorio, sotto), Due Palazzi e Montà (11, 11B, fino a 1,5 km), Croce Rossa (25, fino a 780 m),
-    Bembo 95 (3), Montà 96 (21); le altre tra 43 e 94 m.
+  - **fermate agganciate a più di 40 m dalla fermata vera**: da 33 a 11 (area ai bordi e linee tagliate); resta
+    Bembo 95 sulla 3 a 317 m (il tratto A-B-A di Via Bembo), le altre tra 43 e 71 m.
 - Richieste della corsia `segnalazioni`:
   - **linea 22 verso Mandria (varianti 0, 3, 4, 7, 8)**: Via Madonna della Salute e il Cavalcavia Mortise tra la
     rotonda di Mortise (45,4340 N) e Via Cardan (45,4265 N) stanno tra 11,9135 e 11,915 E, appena fuori da `FOCUS`
@@ -165,6 +161,9 @@ dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.
 
 Prossimo lavoro, in quest'ordine:
 
+- sede di SIR3 e SIR2 nella pianta delle strade (richiesta di `tram-reti`, sopra): le corsie dei bus passano sopra i
+  binari nuovi o a meno di 2,5 m;
+- le 9 fermate dove il bus fermo tocca una facciata e le 11 agganciate lontano (richieste di `verifiche`, sopra);
 - svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
 - le fermate senza palina e gli 11 tratti A-B-A con una fermata rimasti (3 in Via Bembo, 4 in Via Gramsci, 16 e 24
   al Capolinea Plebiscito; elenchi in IDEE, "Mappa e dati");
