@@ -31,7 +31,7 @@ jobs:
       - name: Chromium di Playwright (in cache per versione)
         id: pw
         run: echo "versione=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: cache-pw
         with:
           path: ~/.cache/ms-playwright
@@ -43,7 +43,7 @@ jobs:
       - run: npm test
       # rapporto della mappa nel gioco e, se una prova fallisce, quello che Playwright ha raccolto
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: risultati-prove
           path: test-results/
@@ -55,13 +55,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: pip install shapely
       - run: python3 scripts/verifica_mappa.py --elenco --json rapporto-mappa.json
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rapporto-mappa
           path: rapporto-mappa.json
