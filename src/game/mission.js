@@ -192,8 +192,10 @@ export class Mission {
     this.atStop = false;
     if (st) {
       const along = sFront - st.s; // 0 = muso del bus alla palina
-      const inZone = along > -12 && along < 10 && proj.d < st.hw + 2.5;
-      const lat = Math.abs(proj.lat - (st.hw - 1.6));
+      // accostamento misurato dal cordolo vero della fermata (kerb), se c'è
+      const kerb = st.kerb ?? st.hw;
+      const inZone = along > -12 && along < 10 && proj.d < Math.max(st.hw, kerb) + 2.5;
+      const lat = Math.abs(proj.lat - (kerb - 1.6));
       this.stopInfo = { st, along, inZone, lat };
       const stopped = Math.abs(bus.v) < 0.3;
       if (inZone && stopped && bus.doorOpen[0] > 0.9) {
@@ -649,7 +651,7 @@ export class Transfer extends Mission {
     this.proj = proj;
     const sg = this.route.segs[proj.segIndex];
     const st = this.stops[1], along = this.s + 6 * Math.cos(angleDiff(Math.atan2(sg.dx, sg.dz), bus.h)) - st.s;
-    const inZone = along > -14 && along < 10 && proj.d < st.hw + 3;
+    const inZone = along > -14 && along < 10 && proj.d < Math.max(st.hw, st.kerb ?? st.hw) + 3;
     // strada sbagliata: il navigatore ricalcola da qui
     if (proj.d > 30) {
       this.offRouteT += dt;

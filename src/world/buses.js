@@ -153,7 +153,7 @@ function buildLane(net, city, v, tramSignals) {
   // fermate: muso a fine zona di fermata, accostato al marciapiede
   const stops = route.stops.map((st) => {
     const k = segAt(c0 + st.s), sg = segs[k];
-    return { fs: ls(c0 + st.s) - 0.5, extra: Math.max(0, st.hw - 1.7 - sg.lat), name: st.name, importance: st.importance, terminal: st.terminal };
+    return { fs: ls(c0 + st.s) - 0.5, extra: Math.max(0, (st.kerb ?? st.hw) - 1.7 - sg.lat), name: st.name, importance: st.importance, terminal: st.terminal };
   });
   // semafori: linea d'arresto prima del nodo, solo dove c'è una lanterna per chi arriva da quell'arco
   const signals = [];

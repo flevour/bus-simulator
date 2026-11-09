@@ -380,6 +380,28 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         return dist, prev
 
     # ---------------- GTFS ----------------
+    def extend_to_stop(seq, stop, at_start):
+        sx, sz = stop[0], stop[1]
+        near = {}
+        for d, k, _t in candidates(sx, sz, 20, 6):
+            for n in edges[k][:2]:
+                near[n] = math.hypot(nodes[n][0] - sx, nodes[n][1] - sz)
+        if not near:
+            return seq
+        n = min(near, key=near.get)
+        end = seq[0] if at_start else seq[-1]
+        ends = seq[:3] if at_start else seq[-3:]
+        if n in ends or near[n] > 20 or near[n] > math.hypot(nodes[end][0] - sx, nodes[end][1] - sz) - 5:
+            return seq
+        src, dst = (n, end) if at_start else (end, n)
+        dist, prev = dijkstra(src, 300)
+        if dst not in dist:
+            return seq
+        path = path_nodes(prev, src, dst)
+        if sum(math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1]) for a, b in zip(path, path[1:])) > 80:
+            return seq
+        return path[:-1] + seq if at_start else seq + path[1:]
+
     gt = build_gtfs.load(gtfs_dir)
     lines_out = []
     failed = 0
@@ -391,6 +413,11 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 failed += 1
                 continue
             seq, gaps = res
+            # capolinea: il tracciato GTFS parte (o finisce) alla fermata, ma l'aggancio può cominciare all'incrocio dopo
+            # (Largo Debussy: la fermata è nel piazzale, l'aggancio partiva da Via Leonardo da Vinci). Si riattacca il
+            # tratto fino al nodo vicino alla prima (o ultima) fermata, se è a pochi metri di strada
+            seq = extend_to_stop(seq, gt['stops'][v['stops'][0]], True)
+            seq = extend_to_stop(seq, gt['stops'][v['stops'][-1]], False)
             # controllo: lunghezza agganciata vs lunghezza del tracciato GTFS
             sp = [xz(la, lo) for la, lo in v['shape_pts']]
             Lg = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(sp, sp[1:]))

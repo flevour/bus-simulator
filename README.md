@@ -98,7 +98,12 @@ uniscono non si incrociano.
   golfi di fermata, corsie di sosta, anelli dei capolinea, angoli veri degli incroci; un poligono grande solo se per
   almeno il 30% sta già sulle strade di oggi), mai dentro gli edifici o sotto le rampe; ai marciapiedi quelli di
   `AR_MARC` accanto, e le aree pedonali e le piazze (`A_PED`, `AC_PED`) lastricate. I passi carrai con il nome di
-  una via restano nel grafo (Largo Claude Debussy).
+  una via restano nel grafo (Largo Claude Debussy). Parcheggi e distributori (`SV_STR`) che toccano la carreggiata sono
+  asfalto anche loro.
+* **Capolinea e fermate**: dove l'aggancio del tracciato GTFS comincia (o finisce) all'incrocio dopo la fermata, si
+  riattacca il tratto fino al nodo vicino alla prima (o ultima) fermata (al massimo 80 m). Le fermate del percorso
+  conoscono il cordolo vero (dalla palina piazzata 0,6 m oltre l'asfalto): il bus parte accostato lì, l'accostamento
+  e i passeggeri in attesa si misurano da lì.
 * **Isole, verde e alberi del DBGT** (`data/dbgt-verde.json`, da `scripts/dbgt_green.py`): gli spartitraffico
   (`SPART`) diventano isole dove stanno dentro l'asfalto di oggi o tra due carreggiate, mai sulle corsie delle auto,
   sulle carreggiate e agli incroci dei bus o sulla sede del tram; prati, aree alberate e aiuole (`AR_VRD`) sono uno

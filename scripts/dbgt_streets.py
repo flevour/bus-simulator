@@ -28,7 +28,7 @@ def main(aree, map_path, dst):
     xs, zs = m['nodes'][0::2], m['nodes'][1::2]
     area = box(min(xs), min(zs), max(xs), max(zs))
     out = {'fonte': 'DBGT della Regione del Veneto, lotto Comune di Padova (volo 2007, IODL 2.0)'}
-    for name, key in (('AC_VEI', 'carreggiate'), ('AR_MARC', 'marciapiedi'), ('A_PED', 'pedonali'), ('AC_PED', 'pedonali_circ')):
+    for name, key in (('AC_VEI', 'carreggiate'), ('AR_MARC', 'marciapiedi'), ('A_PED', 'pedonali'), ('AC_PED', 'pedonali_circ'), ('SV_STR', 'parcheggi')):
         g, _ = shp(aree, name)
         g = g[~shapely.is_missing(g)]
         g = dbgt_to_game(shapely.make_valid(g), DBGT_SHIFT)

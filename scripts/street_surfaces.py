@@ -443,6 +443,11 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         Ut, U2 = U.buffer(1.0), U.buffer(2.0)
         shapely.prepare(Ut)
         sel = [c for c in dbgt_polys(streets.get('carreggiate', [])) if Ut.intersects(c) and (c.area <= 6000 or c.intersection(U2).area >= 0.3 * c.area)]
+        # parcheggi e distributori (SV_STR) che toccano la carreggiata: asfalto anche loro (Largo Debussy è un
+        # parcheggio con l'aiuola in mezzo, non un prato dentro l'anello)
+        Us = unary_union([U, *sel]).buffer(1.0)
+        shapely.prepare(Us)
+        sel += [c for c in dbgt_polys(streets.get('parcheggi', [])) if Us.intersects(c) and c.area <= 8000]
         dbgt_c = unary_union(sel).difference(bld).difference(upe.buffer(1.0)).buffer(0) if sel else Polygon()
         Uc = unary_union([U, dbgt_c]).buffer(1.5)
         shapely.prepare(Uc)

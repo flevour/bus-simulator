@@ -23,7 +23,9 @@ export function buildRoute(net, variant) {
     const last = k === variant.stops.length - 1;
     const pr = projectOnRoute(route, g.x, g.z, sPrev, 20, last ? 1e9 : 2500);
     let s = Math.max(pr.s, sPrev + (k ? 25 : 0));
-    if (k === 0) s = Math.max(s, Math.min(28, length * 0.1));
+    // prima fermata: il bus (12-18 m) deve stare dietro la palina. Ai capolinea veri può sporgere nel piazzale, quindi
+    // bastano pochi metri; dove la linea è tagliata al bordo della mappa servono 28 m di strada
+    if (k === 0) s = Math.max(s, Math.min(variant.cutStart ? 28 : 6, length * 0.1));
     if (last) s = Math.min(Math.max(s, sPrev + 25), length - 15);
     s = Math.min(s, length - 15);
     sPrev = s;
@@ -54,11 +56,14 @@ export function alignStops(route, placements) {
       if (q.d > 6 || Math.abs(q.s - st.s) > 20 || (prev && q.s < prev.s + 15) || (next && q.s > next.s - 15) || q.s > route.length - 15) continue;
       const dir = pointAt(route, q.s);
       if (dir.dx * pl.dx + dir.dz * pl.dz < 0.5) continue; // palina del verso opposto
-      if (!pr || q.d < pr.d) pr = q;
+      if (!pr || q.d < pr.d) pr = { ...q, pl };
     }
     if (!pr) return;
     const p = pointAt(route, pr.s), hw = p.seg.hw, rx = -p.dz, rz = p.dx;
-    Object.assign(st, { s: pr.s, x: p.x + rx * (hw + 1.6), z: p.z + rz * (hw + 1.6), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw });
+    // kerb: distanza dall'asse del cordolo vero alla palina (carreggiata misurata, golfi di fermata); chi aspetta sta
+    // un metro oltre, sul marciapiede
+    const kerb = pr.pl.kerb != null ? pr.pl.kerb : hw;
+    Object.assign(st, { s: pr.s, x: p.x + rx * (kerb + 1.0), z: p.z + rz * (kerb + 1.0), cx: p.x, cz: p.z, dx: p.dx, dz: p.dz, rx, rz, hw, kerb });
   });
 }
 
@@ -246,12 +251,12 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       const off = atKerb ? k + 0.6 : hw + 1.6;
       const px = cx + rx * off, pz = cz + rz * off;
       if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6)) continue;
-      spot = { cx, cz, px, pz };
+      spot = { cx, cz, px, pz, kerb: atKerb ? k : hw };
     }
     if (!spot) return;
     out.push({
       id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw,
+      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw, kerb: spot.kerb,
     });
   }
 }
