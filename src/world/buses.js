@@ -111,30 +111,38 @@ function buildLane(net, city, v, tramSignals) {
     while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cum[m] <= cs) lo = m; else hi = m - 1; }
     return lo;
   };
-  // fuori dalla sede del tram dove la strada le corre accanto (come le auto), non sulle corsie riservate che la
-  // percorrono (Cavalcavia Borgomagno) né dove la si attraversa
+  // fuori dalla sede del tram dove la strada le corre accanto (come le auto), né dove la si attraversa. Il binario del
+  // verso opposto prima di tutto: prima i bus lasciavano il binario più vicino anche quando era quello del loro verso
+  // e finivano sull'altro, incontro al tram (Via Morgagni, Via Tommaseo, Piazza Garibaldi). Sulle corsie riservate che
+  // percorrono la sede (Cavalcavia Borgomagno, Via Tommaseo) il binario nello stesso verso si usa; dove nella
+  // carreggiata non c'è posto per lasciare quello opposto, il bus va sul binario del proprio verso (Via Belludi)
   const shift = new Float32Array(pts.length), q = [];
   for (let i = 0; i < pts.length; i++) {
     const g = segs[segAt(pts[i].cs)];
-    if (g.e && g.e.psv) continue;
+    const shared = !!(g.e && g.e.psv);
     const a = pts[Math.max(0, i - 1)], c = pts[Math.min(pts.length - 1, i + 1)], p = pts[i];
     let dx = c.x - a.x, dz = c.z - a.z;
     const l = Math.hypot(dx, dz) || 1;
     dx /= l; dz /= l;
-    let best = null;
-    for (const it of city.segGrid.query(p.x, p.z, TRAM_HW + 4, q)) {
+    // binario più vicino per verso, con lo scostamento laterale del suo asse (positivo verso -dz, dx)
+    let opp = null, own = null;
+    for (const it of city.segGrid.query(p.x, p.z, TRAM_HW + 8, q)) {
       if (it.kind !== 'tram') continue;
-      const sx = it.bx - it.ax, sz = it.bz - it.az;
-      if (Math.abs(dx * sz - dz * sx) > 0.5 * (Math.hypot(sx, sz) || 1)) continue;
+      const sx = it.bx - it.ax, sz = it.bz - it.az, sl = Math.hypot(sx, sz) || 1;
+      if (Math.abs(dx * sz - dz * sx) > 0.5 * sl) continue;
       const r = distToSeg(p.x, p.z, it.ax, it.az, it.bx, it.bz);
-      if (!best || r.d < best.d) best = { d: r.d, t: r.t, it };
+      const o = { d: r.d, hw: it.hw + 1.45, lat: (it.ax + sx * r.t - p.x) * -dz + (it.az + sz * r.t - p.z) * dx };
+      if (dx * sx + dz * sz < 0) { if (!opp || r.d < opp.d) opp = o; } else if (!own || r.d < own.d) own = o;
     }
-    const need = best ? best.it.hw + 1.45 - best.d : 0;
-    if (need <= 0) continue;
-    const { it, t } = best, qx = it.ax + (it.bx - it.ax) * t, qz = it.az + (it.bz - it.az) * t;
-    // senza uscire dalla carreggiata: dove la strada è la sede stessa (Via Belludi) si passa sui binari
-    const room = g.e ? g.e.width / 2 - 1.3 : 3;
-    shift[i] = Math.max(-room - g.lat, Math.min(room - g.lat, ((p.x - qx) * -dz + (p.z - qz) * dx >= 0 ? 1 : -1) * Math.min(3, need)));
+    if ((!opp || opp.d >= opp.hw) && (shared || !own || own.d >= own.hw)) continue;
+    const room = g.e ? g.e.width / 2 - 1.3 : 3, lo = -room - g.lat, hi = room - g.lat;
+    const cost = (sh) => (opp ? 10 * Math.max(0, opp.hw - Math.abs(opp.lat - sh)) : 0) +
+      (own && !shared ? Math.max(0, own.hw - Math.abs(own.lat - sh)) : 0) + 0.05 * Math.abs(sh);
+    let bestSh = 0, bestC = cost(0);
+    const tryAt = (sh) => { const k = cost(sh); if (k < bestC - 1e-6) { bestC = k; bestSh = sh; } };
+    for (let sh = Math.max(lo, -3); sh <= Math.min(hi, 3); sh += 0.25) tryAt(sh);
+    if (own && Math.abs(own.lat) < 8) tryAt(own.lat);
+    shift[i] = bestSh;
   }
   if (shift.some((x) => x)) {
     const sm = shift.map((_, i) => { let a = 0, n = 0; for (let j = Math.max(0, i - 5); j <= Math.min(shift.length - 1, i + 5); j++) { a += shift[j]; n++; } return a / n; });
@@ -707,7 +715,9 @@ export class BusSim {
       if (c.isBus) { if (c.bus !== b && b.ignoreBusT <= 0) test(c.x, c.z, c.h, c.v, 1.5, 2.6, { bus: c.bus }); }
       else test(c.x, c.z, c.h, c.v, 2.2, 2.3, { car: c });
     }
-    if (trams) for (const p of trams.near(fp.x, fp.z, 40)) test(p.x, p.z, p.h, 0, 1.6, 2.5, { tram: true });
+    // dei tram h è la quota, non la direzione: senza direzione il tram conta anche quando viene incontro (prima il bus
+    // lo prendeva per un mezzo nell'altra corsia e ci entrava dentro, in Piazza Garibaldi)
+    if (trams) for (const p of trams.near(fp.x, fp.z, 40)) test(p.x, p.z, null, 0, 1.6, 2.5, { tram: true });
     return best;
   }
   // pezzi dei bus per le collisioni (due cerchi per pezzo, come le auto) e per le auto che li seguono
