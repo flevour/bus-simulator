@@ -155,8 +155,11 @@ python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
 python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json
-# terreno: DTM a 5 m della Regione (GeoServer IDT2, WPS ras:CropCoverage su rv:DTM_RV_5m_3003; servono rasterio e pyproj)
-python3 scripts/dtm_grid.py dtm_rv_5m_3003_padova.tif data/dtm-padova.json
+# terreno: DTM LiDAR a 5 m della Regione (tessere in data/lidar5, scaricate con
+# https://idt2.regione.veneto.it/idt/download/layerDownload/downloadDtmLidar5?dataDtmLidarId=<idPol>, elenco in
+# data/lidar5/tessere.txt) e, fuori dal Comune, il DTM a 5 m (GeoServer IDT2, WPS ras:CropCoverage su
+# rv:DTM_RV_5m_3003); servono rasterio e pyproj
+python3 scripts/dtm_grid.py dtm_rv_5m_3003_padova.tif data/dtm-padova.json 10 data/lidar5
 # misure dal DBGT della Regione (lotto Comune di Padova, shapefile ETRF2000 dal downloader IDT2; servono pyogrio e pyproj)
 curl -o aree.zip 'https://idt2.regione.veneto.it/idt/download/layerDownload/downloadGeoDBT?lotto=LOTTO%20COMUNE%20DI%20PADOVA&rif=ETRF2000&type=aree'
 python3 scripts/measure_streets.py dbgt <cartella aree> data/osm-padova.json data/misure-strade.json

@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 43, d: '2026-11-09', t: 'Quote del terreno più precise, dal rilievo laser (LiDAR) della Regione: argini, rive e piccoli dislivelli come sono davvero.' },
   { n: 42, d: '2026-11-09', t: 'Capolinea più veri: a Largo Debussy la corsa parte dal piazzale, accanto alla fermata, e non più in mezzo a Via da Vinci; lo stesso vale per la stazione e altri capolinea. Il bus parte e si ferma accostato al marciapiede vero, i passeggeri aspettano sul marciapiede. I parcheggi sono asfaltati come quelli veri.' },
   { n: 41, d: '2026-11-09', t: 'Piazze e zone pedonali lastricate come sono davvero, invece del prato.' },
   { n: 40, d: '2026-11-09', t: 'Portici veri: sotto i palazzi che li hanno davvero (più di 2.000), con gli archi alti come quelli reali, anche fuori dal centro storico. Niente più portici a caso dove non ci sono.' },
