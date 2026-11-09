@@ -36,6 +36,9 @@ export { expect };
 export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 'service' }) {
   return page.evaluate(({ linea, tram, verso, modo }) => {
     const g = window.__game, $ = (q) => document.querySelector(q);
+    // il menu propone la corsa più vicina a quella scelta prima: senza scelta, quella delle 8:15 (giorno feriale)
+    g.settings.departure = 0;
+    g.settings.variant = 'feriale';
     $(`#vehicle button[data-k="${tram ? 'tram' : 'bus'}"]`).click();
     const card = $(`.line-card[data-id="${linea}"]`);
     if (!card) throw new Error(`linea ${linea} non presente nel menu`);
