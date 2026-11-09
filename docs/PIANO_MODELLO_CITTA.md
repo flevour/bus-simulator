@@ -397,6 +397,31 @@ una build e l'altra:
 | **M6** | Catasto (spazio pubblico tra le particelle) come controllo delle larghezze; Mapillary per i semafori mancanti | Scarico in blocco del catasto; token Mapillary | 1–2 |
 | **M7** | Semafori, segnaletica, marciapiedi e LiDAR del Comune, se la richiesta di accesso civico va a buon fine | Richiesta formale al Comune | 1–2 |
 
+### Prossimi passi (dopo M1–M4, 9 novembre)
+
+Fatte le tappe M1–M4 e, del DBGT, anche isole (`SPART`: 166 aggiunte fuori dalle corsie), verde (`AR_VRD` prati, aree
+alberate e aiuole, 6,6 km²) e alberi veri (13.171 da filari, aree alberate e boschi). In ordine di resa per chi gioca:
+
+1. **Corsie e segnaletica orizzontale**: numero di corsie da `lanes` e `lanes:forward/backward`, mezzeria continua con
+   `overtaking=no`, frecce da `turn:lanes`, corsie dei bus gialle; ora le carreggiate hanno la larghezza misurata, e
+   le corsie si possono dividere davvero. Con le corsie, ai semafori le svolte a sinistra protette (resto di M1).
+2. **Portici veri**: il DBGT ha i volumi sopra i portici (`UN_VOL_POR` = 03) con l'altezza libera (`UN_VOL_INH`, 2,5–6
+   m). Al posto dei portici a caso del centro, quelli veri lungo le vie, con l'altezza giusta.
+3. **Fermate da OSM** (5.2): la palina OSM `highway=bus_stop` dove sta entro 25 m dalla fermata GTFS e dal lato giusto
+   (393 su 473), la pensilina dove OSM ha `shelter=yes`, la panchina con `bench=yes`.
+4. **Zone pedonali e piazze**: aree pedonali del DBGT (`A_PED`, `AC_PED`) e di OSM (`area:highway`, `place=square`),
+   lastricate invece che a prato o asfalto; ZTL del centro.
+5. **Quote stradali precise e sottopassi** (resto di M4): la quota al centimetro degli assi stradali del DBGT
+   (`EL_STR`, anche sui ponti) per il profilo delle strade; i sottopassi (`EL_STR_LIV` = 02) scavati invece dei
+   cavalcavia alti 7 m. Chiedere alla Regione le tessere LiDAR a 5 m (pianificazioneterritoriale@regione.veneto.it).
+6. **Rapporto di verifica nel build** (6.1) e test in CI: pali e paline sul marciapiede, edifici fuori dalle strade,
+   marciapiedi stretti, percorsi dei bus liberi, a ogni rigenerazione della mappa; un giro dell'autopilota in headless.
+7. **Peso della mappa**: 11 MB di JSON nel bundle. Dati separati e compressi, caricati a riquadri; meno alberi e
+   chiome più semplici lontano dalla telecamera (telefoni).
+8. **Verifica visiva con l'ortofoto AGEA 2024** (M5) in modalità Esplorazione, caricata dal browser di chi gioca.
+9. **M6–M7**: catasto e Mapillary (serve un token) per i semafori mancanti; richiesta di accesso civico al Comune
+   per il gemello digitale del 2023 e i piani semaforici.
+
 Passi della conflazione della CTRN (M2):
 
 1. Scaricare i 15 fogli e correggere lo scarto di circa 2,4 m, ricalcolandolo per foglio sugli edifici.

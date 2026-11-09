@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 37, d: '2026-11-09', t: 'Più verde vero: parchi, prati e aiuole dove ci sono davvero, gli alberi dei viali e dei parchi al loro posto (filari compresi) e nuovi spartitraffico tra le carreggiate, misurati dalla Regione.' },
   { n: 36, d: '2026-11-08', t: 'Padova non è più piatta: il terreno ha le quote vere della Regione. Il centro storico sta qualche metro più in alto, i fiumi scorrono nel loro alveo tra gli argini, i ponti scavalcano l\'acqua e in salita il bus fatica un po\' di più.' },
   { n: 35, d: '2026-11-08', t: 'I bus che incontri per strada non sono più tutti uguali al tuo: ognuno ha la sua livrea, come una flotta vera (la stessa corsa ha sempre lo stesso bus).' },
   { n: 34, d: '2026-11-08', t: 'Cambi autobus anche durante la corsa: nella pausa c\'è lo stesso selettore con le anteprime, e riparti dal punto esatto in cui eri.' },

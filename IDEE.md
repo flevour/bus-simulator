@@ -49,9 +49,17 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Mappa e dati
 
-- [ ] **Modello della città coerente con la realtà**: piano con fonti, misure dalle norme, pipeline a strati, semafori,
-  fermate, verifiche e tappe in [`docs/PIANO_MODELLO_CITTA.md`](docs/PIANO_MODELLO_CITTA.md). Si parte da M0
-  (strati Overture) e M2 (carreggiate e cordoli dalla CTRN 1:5000, raggiungibile da GitHub).
+- [~] **Modello della città coerente con la realtà**: piano con fonti, misure dalle norme, pipeline a strati, semafori,
+  fermate, verifiche e tappe in [`docs/PIANO_MODELLO_CITTA.md`](docs/PIANO_MODELLO_CITTA.md). Fatte M1–M4 e verde,
+  isole e alberi del DBGT; i prossimi passi in ordine sono nel piano (sezione 7, "Prossimi passi"):
+  - [ ] corsie e segnaletica orizzontale, svolte a sinistra protette ai semafori;
+  - [ ] portici veri dai volumi del DBGT;
+  - [ ] paline e pensiline da OSM;
+  - [ ] zone pedonali e piazze lastricate;
+  - [ ] quote stradali del DBGT e sottopassi; tessere LiDAR da chiedere alla Regione;
+  - [ ] rapporto di verifica nel build e test in CI;
+  - [ ] mappa più leggera (dati separati e compressi);
+  - [ ] ortofoto AGEA 2024 in Esplorazione; catasto, Mapillary e richiesta al Comune.
 
 - [ ] **Modalità di esplorazione senza mezzo**, per controllare com'è fatta la mappa:
   - *panoramica*: vista dall'alto con trascinamento (pan) e zoom, come una mappa;
@@ -122,6 +130,9 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Isole, verde e alberi dal DBGT: spartitraffico tra le carreggiate e alle isole di traffico (fuori dalle corsie
+  e dai percorsi dei bus), prati, aree alberate e aiuole come strato verde, alberi veri dei filari e dei parchi al
+  posto di quelli generati dentro il comune.
 - [x] Terreno con le quote vere (tappa M4 del piano): DTM a 5 m della Regione del Veneto, griglia a 10 m applicata a
   tutta la scena nel vertex shader; centro storico più alto, alvei e argini, ponti raccordati tra le sponde, cavalcavia
   spianati sotto, pendenza nella guida del bus. Restano i sottopassi e il LiDAR (da chiedere alla Regione).

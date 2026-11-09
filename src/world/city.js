@@ -11,6 +11,7 @@ import { applyTerrain } from './terrain.js';
 export const Y_ROAD = 0.14;
 export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie rosse e rotaia centrale)
 const Y_SIDEWALK = 0.1;
+const Y_GREEN = 0.05; // prati e aiuole del DBGT, sopra il prato generico e sotto i marciapiedi
 const SIDEWALK = 4;
 
 // strati coplanari: spinge in avanti nel depth buffer (evita z-fighting)
@@ -666,6 +667,7 @@ export class City {
   buildSurfaces() {
     const S = this.net.surfaces, T = S.tile;
     const asph = new GeoBuilder(), walk = new GeoBuilder(), isl = new GeoBuilder(), kerb = new GeoBuilder(), side = new GeoBuilder(), islandLines = new GeoBuilder();
+    const green = new GeoBuilder(); // prati, aree alberate e aiuole del DBGT
     this.asphRings = new Map();
     this.asphEdges = new Grid(20);
     const onBorder = (ax, az, bx, bz, ix, iz) => (Math.abs(ax - bx) < 0.05 && [ix * T, (ix + 1) * T].some((v) => Math.abs(ax - v) < 0.06)) || (Math.abs(az - bz) < 0.05 && [iz * T, (iz + 1) * T].some((v) => Math.abs(az - v) < 0.06));
@@ -726,7 +728,8 @@ export class City {
         if (ok[i]) { if (!run) run = [pt(i)]; run.push(pt(i + 1)); } else if (run) { draw(run); run = null; }
       }
     });
-    for (const [ix, iz, A, W, I] of S.cells) {
+    for (const [ix, iz, A, W, I, V] of S.cells) {
+      for (const poly of V || []) green.polygon(poly, Y_GREEN, 8);
       const rings = [];
       const ib = I.map((p) => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; const r = p[0]; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); z0 = Math.min(z0, r[i + 1]); z1 = Math.max(z1, r[i + 1]); } return [x0, z0, x1, z1, p]; });
       const onIsland = (x, z) => ib.some(([x0, z0, x1, z1, p]) => x >= x0 && x <= x1 && z >= z0 && z <= z1 && inside(x, z, p));
@@ -772,6 +775,14 @@ export class City {
     im.receiveShadow = true;
     const kMat = new THREE.MeshLambertMaterial({ color: 0xc9c4ba, side: THREE.DoubleSide });
     this.group.add(am, wm, im, new THREE.Mesh(kerb.build(), layer(kMat.clone(), 3)), new THREE.Mesh(side.build(), layer(kMat, 8)));
+    if (green.pos.length) {
+      // come il prato di fondo: si disegna subito dopo e non nasconde niente (sul terreno in pendenza marciapiedi e
+      // carreggiate, con altri vertici, possono passare qualche centimetro sotto)
+      const gm = new THREE.Mesh(green.build(), new THREE.MeshLambertMaterial({ map: TX.grassTexture(), color: 0x9fbf88, depthWrite: false }));
+      gm.receiveShadow = true;
+      gm.renderOrder = -0.4;
+      this.group.add(gm);
+    }
     const lineMat = layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4);
     for (const g of [islandLines, edgeLines]) if (g.pos.length) this.group.add(new THREE.Mesh(g.build(), lineMat));
   }
@@ -2022,6 +2033,16 @@ export class City {
     const rnd = this.rnd;
     const trees = [...(this.pratoTrees || []), ...(this.fillerTrees || [])];
     const lamps = [];
+    // alberi veri del DBGT (filari, aree alberate, boschi) dentro il comune; lì non se ne generano altri
+    const SF = this.net.surfaces;
+    const dbgt = SF && SF.dbgt ? SF.dbgt.map((p) => { const r = p[0], pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); return pts; }) : [];
+    const inDbgt = (x, z) => dbgt.some((pts) => pointInPoly(x, z, pts));
+    if (SF && SF.trees) for (let i = 0; i < SF.trees.length; i += 2) {
+      const x = SF.trees[i], z = SF.trees[i + 1];
+      if (this.clearance(x, z, ['road', 'tram'], 12) < 0.8) continue;
+      trees.push({ x, z, big: true });
+      this.addObstacle(x, z, 0.35, 0.35, 0, 'tree');
+    }
     for (const e of edges) {
       const A = nodes[e.a], B = nodes[e.b];
       if (e.elev) continue;
@@ -2048,6 +2069,7 @@ export class City {
         const side = rnd() < 0.5 ? -1 : 1;
         const off = e.width / 2 + 2.4;
         const x = mx + -e.dz * side * off, z = mz + e.dx * side * off;
+        if (dbgt.length && inDbgt(x, z)) continue;
         if (this.clearance(x, z, ['road', 'tram']) < 1.8) continue;
         if (Math.hypot(...lamps.length ? [lamps[lamps.length - 1].x - x, lamps[lamps.length - 1].z - z] : [99, 99]) < 4) continue;
         trees.push({ x, z });
@@ -2057,6 +2079,7 @@ export class City {
     // alberi sparsi nei parchi/campagna
     for (let i = 0; i < 2500; i++) {
       const x = (rnd() - 0.5) * 9000, z = (rnd() - 0.5) * 9000;
+      if (dbgt.length && inDbgt(x, z)) continue;
       if (this.clearance(x, z) < 8) continue;
       trees.push({ x, z, big: true });
     }
