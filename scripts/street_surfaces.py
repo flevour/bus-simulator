@@ -559,6 +559,26 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     return out, out_b, stats
 
 
+TERRAIN_CLOSE = 4  # celle (10 m): mezza larghezza della finestra quadrata della chiusura (riempie fino a ~80 m)
+
+
+def closing(h, r):
+    """Chiusura morfologica (massimo poi minimo su una finestra quadrata di lato 2r+1, a due passate separabili):
+    riempie gli avvallamenti più stretti della finestra e lascia com'è il resto, argini compresi. Stessa regola in
+    src/world/terrain.js."""
+    import numpy as np
+
+    def filt(a, f, axis):
+        p = np.pad(a, [(r, r) if k == axis else (0, 0) for k in range(2)], mode='edge')
+        n = a.shape[axis]
+        out = np.take(p, range(0, n), axis=axis)
+        for d in range(1, 2 * r + 1):
+            out = f(out, np.take(p, range(d, d + n), axis=axis))
+        return out
+    d = filt(filt(h, np.maximum, 0), np.maximum, 1)
+    return filt(filt(d, np.minimum, 0), np.minimum, 1)
+
+
 def terrain_for_game(dtm, nodes, edges, heights):
     """Griglia delle quote per il gioco (src/world/terrain.js) dalla griglia del DTM (scripts/dtm_grid.py).
 
@@ -654,8 +674,10 @@ def terrain_for_game(dtm, nodes, edges, heights):
                 s += math.dist(pts[i - 1], p)
             flatpts += [round(p[0], 1), round(p[1], 1), round(h0 + (h1 - h0) * s / L, 2)]
         bridges.append([round(w, 1), *flatpts])
-    # quota della variante "via" (con i ponti) per infittire le superfici
-    hv = h.copy()
+    # variante "via" (strade, edifici, prato): gli avvallamenti stretti (alvei, fossi, fino a circa 80 m) riempiti alla
+    # quota delle sponde con una chiusura morfologica, così nessuna strada scende in un fiume anche dove OSM non segna
+    # il ponte; poi i ponti lunghi (Brenta). Solo acqua e sponde seguono l'alveo (variante "fondo")
+    hv = closing(h, TERRAIN_CLOSE)
     for br in bridges:
         w = br[0]
         for k in range(1, len(br) - 5, 3):
@@ -680,5 +702,6 @@ def terrain_for_game(dtm, nodes, edges, heights):
     lo, hi = float(h.min()), float(h.max())
     scale = (hi - lo) / 255 or 0.01
     out = np.clip(np.round((h - lo) / scale), 0, 255).astype(np.uint8)
-    g.update({'scale': round(scale, 5), 'offset': round(lo, 3), 'data': base64.b64encode(out.tobytes()).decode(), 'bridges': bridges})
+    g.update({'scale': round(scale, 5), 'offset': round(lo, 3), 'data': base64.b64encode(out.tobytes()).decode(), 'bridges': bridges,
+              'close': TERRAIN_CLOSE})
     return g, {'celle_spianate': flat, 'ponti': len(bridges)}, hfun

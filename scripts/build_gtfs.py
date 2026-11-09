@@ -22,7 +22,7 @@ ORIGIN_LAT, ORIGIN_LON = 45.4075, 11.8775
 M_LAT = 111130.0
 M_LON = 111320.0 * math.cos(math.radians(ORIGIN_LAT))
 RADIUS = 9000  # metri attorno al centro inclusi nella rete stradale
-FER_DATE, FES_DATE = '20261104', '20261108'  # mercoledì, domenica
+FER_DATE, FES_DATE = '20261111', '20261115'  # mercoledì, domenica (dentro il feed scaricato il 9 novembre)
 
 
 def xz(lat, lon):

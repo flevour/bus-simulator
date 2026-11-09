@@ -144,7 +144,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         hw = t.get('highway')
         if hw not in DRIVE or t.get('area') == 'yes':
             continue
-        if hw == 'service' and t.get('service') in SKIP_SERVICE:
+        # i passi carrai si saltano, tranne quelli con il nome di una via: in OSM a volte le piazze e gli anelli dei
+        # capolinea sono segnati così (Largo Claude Debussy)
+        if hw == 'service' and t.get('service') in SKIP_SERVICE and not (t.get('service') == 'driveway' and t.get('name')):
             continue
         if t.get('access') in ('no', 'private') and hw in ('service', 'pedestrian') and not psv_lane(t):
             continue

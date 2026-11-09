@@ -233,6 +233,22 @@ function polyRibbon(pts, w, y, vScale = 20) {
   return mergeGeometries(geos.map((g) => g.toNonIndexed()));
 }
 
+// sponde di un corso d'acqua: due fasce, una per lato, dal bordo dell'acqua (1 m sotto) a 8 m fuori. Un nastro unico
+// largo quanto il fiume più le sponde, con i vertici solo ai bordi, col terreno faceva da coperchio sopra l'alveo
+function bankStrips(pts, w, y) {
+  const b = new GeoBuilder(), geos = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], c = pts[i + 1], l = Math.hypot(c.x - a.x, c.z - a.z) || 1, nx = -(c.z - a.z) / l, nz = (c.x - a.x) / l;
+    for (const s of [1, -1]) {
+      const o = s * (w / 2 + 3.5);
+      b.ribbon(a.x + nx * o, a.z + nz * o, c.x + nx * o, c.z + nz * o, 9, y, 20, 0);
+    }
+  }
+  geos.push(b.build());
+  for (let i = 1; i < pts.length - 1; i++) geos.push(disc(pts[i].x, pts[i].z, w / 2 + 8, y, 20, 20));
+  return mergeGeometries(geos.map((g) => g.toNonIndexed()));
+}
+
 // ---------- materiale edifici con finestre procedurali ----------
 export function makeBuildingMaterial(uniforms, merged = false) {
   const m = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: merged });
@@ -474,7 +490,7 @@ export class City {
     // il prato è lo sfondo di tutto: si disegna per primo e non nasconde niente (con il terreno le carreggiate, che
     // hanno meno vertici, possono passare qualche centimetro sotto il prato)
     const mat = new THREE.MeshLambertMaterial({ map: tex, depthWrite: false });
-    mat.userData.terrainGround = true;
+    // il prato segue la quota di strade ed edifici (alvei riempiti): solo acqua e sponde scendono nell'alveo
     const m = new THREE.Mesh(g, mat);
     m.receiveShadow = true;
     m.frustumCulled = false;
@@ -937,7 +953,7 @@ export class City {
     const geos = [], banks = [];
     for (const w of this.net.water) {
       geos.push(polyRibbon(w.pts, w.width, 0.03, 30));
-      banks.push(polyRibbon(w.pts, w.width + 16, 0.02, 30));
+      banks.push(bankStrips(w.pts, w.width, 0.02));
     }
     this.group.add(new THREE.Mesh(mergeGeometries(geos), wMat), new THREE.Mesh(mergeGeometries(banks), bank));
     // parapetti dei ponti dove una strada attraversa un corso d'acqua

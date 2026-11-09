@@ -57,6 +57,28 @@ export function suspendTerrain() { const was = K.value.z; K.value.z = 0; return 
 export function resumeTerrain(was) { K.value.z = was; }
 THREE.Material.prototype.onBeforeCompile = function (sh) { applyTerrain(sh, !!(this.userData && this.userData.terrainGround)); };
 
+// chiusura morfologica su una finestra quadrata di lato 2r+1: massimo e poi minimo, a passate separate per righe e
+// colonne (riempie fossi e alvei più stretti della finestra, lascia argini e rilievi)
+function closing(src, nx, nz, r) {
+  if (!r) return src.slice();
+  const pass = (a, f, alongX) => {
+    const out = new Uint8Array(a.length);
+    const n = alongX ? nx : nz, m = alongX ? nz : nx;
+    for (let k = 0; k < m; k++)
+      for (let i = 0; i < n; i++) {
+        let v = f === 1 ? 0 : 255;
+        for (let d = Math.max(0, i - r); d <= Math.min(n - 1, i + r); d++) {
+          const c = alongX ? a[k * nx + d] : a[d * nx + k];
+          v = f === 1 ? (c > v ? c : v) : (c < v ? c : v);
+        }
+        out[alongX ? k * nx + i : i * nx + k] = v;
+      }
+    return out;
+  };
+  const dil = pass(pass(src, 1, true), 1, false);
+  return pass(pass(dil, 0, true), 0, false);
+}
+
 export class Terrain {
   // g: { x0, z0, step, nx, nz, scale, offset, data (base64, un byte per cella, righe lungo x) }
   constructor(g) {
@@ -65,8 +87,9 @@ export class Terrain {
     Object.assign(this, { x0: g.x0, z0: g.z0, step: g.step, nx: g.nx, nz: g.nz, scale: g.scale, offset: g.offset });
     const bin = atob(g.data), dg = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) dg[i] = bin.charCodeAt(i);
-    // variante "via": i ponti sui fiumi alzano le celle vicine alla quota del ponte (mai le abbassano)
-    const d = dg.slice();
+    // variante "via" (strade, edifici, prato): avvallamenti stretti riempiti alla quota delle sponde (chiusura
+    // morfologica, come in scripts/street_surfaces.py), poi i ponti lunghi alzano le celle vicine (mai le abbassano)
+    const d = closing(dg, g.nx, g.nz, g.close || 0);
     for (const br of g.bridges || []) {
       const w = br[0];
       for (let k = 1; k + 5 < br.length; k += 3) {

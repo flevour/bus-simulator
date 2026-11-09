@@ -100,8 +100,10 @@ uniscono non si incrociano.
 * **Terreno** (`data/dtm-padova.json`, da `scripts/dtm_grid.py`): le quote del DTM a 5 m della Regione del Veneto in
   una griglia a 10 m. Il gioco resta piano e alza ogni vertice della quota del suo punto (vertex shader,
   `src/world/terrain.js`), con la telecamera e i fari: si vedono il centro storico più alto di 4 m, gli alvei dei
-  fiumi e gli argini. Sotto i cavalcavia (che il gioco alza da sé) il terreno è spianato; i ponti sui fiumi hanno la
-  quota raccordata tra le sponde (asfalto ed edifici), mentre prato, acqua e argini seguono l'alveo. Il prato è una
+  fiumi e gli argini. Sotto i cavalcavia (che il gioco alza da sé) il terreno è spianato. Per strade, edifici e prato
+  gli avvallamenti stretti (alvei e fossi fino a circa 80 m) sono riempiti alla quota delle sponde con una chiusura
+  morfologica, e i ponti lunghi sono raccordati tra le sponde: nessuna strada scende in un fiume, anche dove OSM non
+  segna il ponte. Solo l'acqua e le sponde (due fasce per lato) seguono l'alveo. Il prato è una
   griglia che segue la telecamera; carreggiate e marciapiedi sono infittiti dove il terreno non è piano. Salite e
   discese pesano sulla guida del bus.
   La geometria è costruita a riquadri da 400 m, prima quelli vicini al bus.
