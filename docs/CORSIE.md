@@ -156,6 +156,9 @@ delle strade di `src/world/city.js`, `src/data/padova.js`, `src/data/padova-map.
   - **rotonde attraversate dal tram**: l'isola verde al centro della rotonda e l'isola triangolare all'ingresso sono
     disegnate sopra la sede rossa e i binari, che spariscono sotto l'erba ("priorità del layer sbagliata"). Va
     insieme alla sede di SIR3 e SIR2 nella pianta delle strade; da controllare anche sul SIR1.
+  - **bus automatici contromano sul binario del tram** (Via Tommaseo vicino a Viale della Pace, Piazza Garibaldi, con
+    il muso dentro il tram): fatto, vedi sotto.
+
 Fatto il 9 novembre (dettagli in IDEE, "Fatto"): corsie e segnaletica orizzontale dai tag OSM, fermate del tram sui
 nodi `tram_stop`, dossi e attraversamenti rialzati, `highway=busway` (niente da fare), area ai bordi e linee tagliate
 (la 22 in Via Madonna della Salute), inversioni a U, corsie di servizio dei capolinea (Capolinea
@@ -167,12 +170,16 @@ cadere nel rebase, le banchine vere di OSM sono una fonte migliore.
 Fuori dai miei file, piccoli e segnalati: in `traffic.js` le auto stanno nella corsia più a destra sulle vie con le
 corsie in OSM (`Traffic.laneGeom`, con `driveOffset` di `padova.js`) e le linee d'arresto dei semafori partono dalla
 riga che separa i versi (`TrafficLights.placeApproach`); in `main.js` e `mission.js` lo scossone e il comfort sui
-dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.js`.
+dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.js`; in `buses.js` (`buildLane` e
+`ahead`) i bus automatici lasciano il binario del verso opposto prima di tutto (o vanno su quello del loro verso se la
+carreggiata non basta: da 6.460 a 635 punti di corsia sopra un binario opposto, quasi tutti incroci obliqui) e si
+fermano davanti a un tram che arriva (passavano come direzione dei pezzi del tram la loro quota).
 
 Prossimo lavoro, in quest'ordine:
 
 - sede di SIR3 e SIR2 nella pianta delle strade (richiesta di `tram-reti`, sopra): le corsie dei bus passano sopra i
-  binari nuovi o a meno di 2,5 m; con le segnalazioni del cavalcavia di Chiesanuova e delle rotonde (sopra);
+  binari nuovi o a meno di 2,5 m (i bus automatici ora non vanno più contromano sui binari, ma la sede resta disegnata
+  sopra l'asfalto); poi le rotonde con l'isola sopra i binari (anche SIR1) e il cavalcavia di Chiesanuova (sopra);
 - le 9 fermate dove il bus fermo tocca una facciata e le 11 agganciate lontano (richieste di `verifiche`, sopra);
 - svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
 - le fermate senza palina e gli 11 tratti A-B-A con una fermata rimasti (3 in Via Bembo, 4 in Via Gramsci, 16 e 24

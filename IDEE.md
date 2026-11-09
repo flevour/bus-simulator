@@ -50,6 +50,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [ ] cavalcavia di Chiesanuova sul SIR2 (9 novembre): impalcato a pezzi, asfalto e sede del tram storti (corsia
      `mappa`);
    - [ ] rotonde attraversate dal tram: l'isola verde copre binari e sede (9 novembre, corsia `mappa`);
+   - [x] bus automatici contromano sul binario del tram in Via Tommaseo (Pace) e in Piazza Garibaldi, con il muso dentro
+     il tram (9 novembre, vedi "Fatto");
    - [ ] mappa più grande (corsia `capolinea`);
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
      - [x] passeggeri anche sugli altri autobus (vedi "Fatto");
@@ -207,6 +209,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
     sopra le strade in sottopasso (`tunnel` o `layer` < 0) dove la rampa è ancora alta; raccordi al 10% per le
     strade che si innestano (Via Friburgo al Cavalcavia Grassi, Via Pietro Liberi, Cavalcavia Mortise: prima fino
     al 74%).
+  - **bus automatici e binari del tram** (`buses.js`): lasciano il binario del verso opposto prima di tutto, o vanno
+    su quello del loro verso dove la carreggiata non basta; si fermano davanti a un tram che arriva. Punti di corsia
+    sopra un binario opposto da 6.460 a 635 (incroci obliqui), contatti bus-tram in dieci minuti di servizio da 6 a 1.
 - [x] Passeggeri sugli altri autobus: dai finestrini dei bus automatici si vedono i passeggeri seduti e in piedi (di
   sera con l'interno illuminato); vicino al giocatore, alle fermate dove si fermano, qualcuno aspetta, sale dalla
   porta anteriore e scende da quella centrale, e il bus aspetta che abbiano finito.
