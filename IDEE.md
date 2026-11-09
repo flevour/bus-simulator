@@ -18,15 +18,15 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      e sono già nell'export `data/osm-padova-tram.json` (35 binari di servizio), da vedere se il gioco li usa. Il
      binario tronco "che entra in un edificio" è forse l'ingresso della rimessa: da verificare;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
-2. [ ] **Nuovo piazzale della stazione** con gli anelli (ovali concentrici) del tram, per le linee future
-   **SIR2, SIR3, SIR4, SIR5**. La geometria del tram dovrà gestire più linee, gli anelli e i deviatoi, non una sola
-   sede: modellarla come grafo di binari (rami e scambi) su cui ogni linea ha il suo percorso.
-   - ricerca sui tracciati di SIR2 e SIR3 (fonti, binari già in OSM, cosa manca):
-     [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md);
-   - in stazione due quasi-ovali concentrici, interno ed esterno (oggi il SIR1 usa l'esterno), con le fermate
-     Stazione nord e Stazione sud che servono entrambi;
-   - SIR3 con tram a 3 moduli; SIR2 con tram a 4 moduli, al posto della linea di autobus 10;
-   - nel menu SIR2 e SIR3 stanno nell'elenco del SIR1, segnate come linee in costruzione; la linea 10 resta.
+2. [~] **Nuovo piazzale della stazione e linee SIR2, SIR3**: grafo dei binari con i due anelli e le due linee nel
+   gioco per il tratto in città fatti (vedi "Fatto"; dettagli in [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md)).
+   Restano:
+   - la sede di SIR2 e SIR3 nella pianta delle strade (tappa 3, corsia `mappa`): oggi i binari sono disegnati sopra
+     l'asfalto e in diversi tratti la corsia dei bus ci passa sopra o accanto (richiesta in `docs/CORSIE.md`);
+   - l'area di Voltabarozzo (tappa 4) e le linee fino ai capolinea veri (Voltabarozzo, Rubano, Busa di Vigonza);
+   - i rami del SIR2 per Romagnoli e per l'Ospedale San Lazzaro, ancora in cantiere in OSM;
+   - SIR4 e SIR5, e le linee passanti della rete SMART (T1, T2 e le altre) sugli stessi binari;
+   - la linea 10 resta tra gli autobus (deciso il 9 novembre); quando il SIR2 sarà in servizio si potrà toglierla.
 3. [~] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza e strisce pedonali fatti (vedi
    "Fatto"). Restano:
    - fermate del tram dai nodi OSM (`tram_stop`);
@@ -114,7 +114,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Veicoli e guida
 
-- [~] Tram: SIR1 a 3 moduli fatto (vedi "Fatto"); restano SIR3 a 3 moduli e SIR2 a 4 moduli (prossimi passi, punto 2).
+- [x] Tram: SIR1 e SIR3 a 3 moduli, SIR2 a 4 moduli (vedi "Fatto").
 - [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
 - [ ] Volante e pedaliera o gamepad (Gamepad API).
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
@@ -159,6 +159,12 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] Tram SIR3 e SIR2, linee in costruzione: percorsi sui binari OSM, fermate e orario generato
+  (`scripts/tram_linee.py`, `data/tram-linee-nuove.json`). Nel gioco il tratto in città, SIR3 da Stazione sud a Cornaro
+  e SIR2 (4 moduli) da Cimitero Maggiore a Savelli, nel menu del tram accanto al SIR1 con la scritta "in costruzione".
+  Grafo dei binari: una sede per linea che nei tratti in comune corre sulla rotaia di quella già posata, con gli
+  scambi ai capi; in stazione SIR2 e SIR3 sull'anello interno, con le banchine dentro l'anello. Tram automatici delle
+  tre linee, con le precedenze agli scambi, agli incroci a raso tra binari e con i bus che corrono sopra i binari.
 - [x] Piazzale della stazione: banchine vere di OSM (`highway=platform`) al posto delle isole del DBGT del 2007,
   corsie a senso unico rispettate (ogni capolinea si raggiunge sulla corsia della sua banchina), corsie ristrette allo
   spazio tra le banchine. Paline per nome (Via Giotto), niente paline doppie (erano 28), andate e ritorno A-B-A da 179

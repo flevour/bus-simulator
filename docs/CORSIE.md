@@ -52,7 +52,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | checkout principale | `bus-simulator` | 5173 / 4173 |
 | `verifiche` | `verifiche` | 5174 / 4174 |
 | `mappa` | `mappa` | 5175 / 4175 |
-| `tram-reti` | `tram-reti` | 5176 / 4176 |
+| `tram-reti` (chiusa il 9 novembre) | `tram-reti` | 5176 / 4176 |
 | `segnalazioni` (chiusa il 9 novembre) | `segnalazioni` | 5177 / 4177 |
 
 ### verifiche
@@ -126,23 +126,29 @@ piano del modello della città, prossimi passi 1).
   (-1547, 497), nel corridoio di Via Sorio: manca una strada o un passaggio nella rete. I lampioni stanno a metà
   larghezza dell'arco più 1,9 m senza guardare l'asfalto vero: sono i 1121 lampioni in carreggiata del rapporto (uno
   in più nel piazzale per le corsie ristrette); basterebbe scartarli dove `surfaceOff` dice asfalto.
+- Richieste della corsia `tram-reti` (dettagli in [`linee-tram-nuove.md`](linee-tram-nuove.md), sezione "Nel gioco"):
+  - **sede di SIR3 e SIR2 nella pianta delle strade** (tappa 3): i binari sono `net.tramLines` in gioco, da
+    `data/tram-linee-nuove.json`, tagliati sul tratto in città. Oggi stanno sopra l'asfalto e le corsie dei bus ci
+    passano sopra o a meno di 2,5 m: la linea 10 per circa 2 km sul SIR2 (Corso Milano, via Tommaseo, via Venezia), le
+    linee 6, 42, 25 e 7 tra 0,5 e 1,7 km sul SIR2, le linee 4, 5, 6, 9, 14, 15B, 24 e 42 tra 0,3 e 1,2 km sul SIR3 (via
+    Gozzi, via Morgagni, via Sografi). Verso la Stanga (x 1100, z -565) una corsia dei bus taglia il binario quasi di
+    striscio e i bus si fermavano sopra i binari. Due fermate dei bus sono senza palina perché cadrebbe sui binari:
+    Sografi 31 (via Sografi, SIR3) e Grassi (Cittadella) (via Venezia, SIR2);
+  - **area di Voltabarozzo** (tappa 4): riquadro `FOCUS` fino al capolinea e al deposito, poi il SIR3 intero.
 
-### tram-reti
+### tram-reti (chiusa il 9 novembre)
 
-SIR3 e SIR2, tappe 1 e 2 del piano in [`linee-tram-nuove.md`](linee-tram-nuove.md).
+SIR3 e SIR2, tappe 1 e 2 del piano in [`linee-tram-nuove.md`](linee-tram-nuove.md), fatte:
 
-- Tappa 1: script sulla base di `scripts/tram_percorsi.py` che scrive `data/tram-linee-nuove.json` (percorso per
-  linea e verso sui binari, fermate in ordine con la progressiva, moduli, orario generato).
-- Tappa 2: in `src/tram/tram.js` una sede per linea (`city.tramTracks[id]`, con `city.tramTrack` che resta il SIR1),
-  poi il grafo dei binari con rami e scambi per i due anelli della stazione e i tratti in comune. `TramSim` e
-  `TramSignals` in `traffic.js`, la parte del tram di `main.js`, `mission.js` e `buildTramway` in `city.js`.
-- Nel menu (deciso il 9 novembre): SIR2 e SIR3 nello stesso elenco del SIR1, con un'indicazione che le distingue
-  (linea in costruzione); la linea 10 resta tra gli autobus.
-- Non tocca `build_map.py` né `padova-map.json`: la sede del tram nella pianta delle strade e l'area di
-  Voltabarozzo (tappe 3 e 4) aspettano la corsia `mappa` o il caricamento per aree. Fino ad allora il SIR3 si guida
-  fino a Cornaro come "tratto in città".
-- Dopo questa corsia viene `tram-turni` (onda 2): turni del tram e deposito della Guizza, che usano gli scambi del
-  grafo.
+- `scripts/tram_linee.py` scrive `data/tram-linee-nuove.json`: percorso per linea e verso sui binari OSM, fermate in
+  ordine con la progressiva e il lato della banchina, moduli, orario generato.
+- `src/tram/tram.js`: una sede per linea (`city.tramTracks[id]`, `city.tramTrack` resta il SIR1) e grafo dei binari:
+  tratti in comune (`track.shared`) e scambi (`track.switches`), anello interno della stazione per SIR2 e SIR3.
+  `TramSim` e `TramSignals` in `traffic.js` lavorano su tutte le sedi.
+- Nel menu SIR3 e SIR2 stanno nell'elenco del SIR1 con la scritta "in costruzione"; si guida il tratto in città
+  (SIR3 fino a Cornaro, SIR2 da Cimitero Maggiore a Savelli). La linea 10 resta tra gli autobus.
+- Le tappe 3 e 4 (sede nella pianta delle strade, area di Voltabarozzo) sono richieste alla corsia `mappa`, nella sua
+  sezione.
 
 ### segnalazioni (chiusa il 9 novembre)
 
@@ -169,8 +175,8 @@ Onda 2, quando le corsie dell'onda 1 si chiudono:
 
 - `traffico`: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza; penalità per chi
   non dà precedenza; traffico più lento con pioggia e nebbia; corsie preferenziali vere (dopo le corsie di `mappa`).
-- `tram-turni`: turni del tram e deposito della Guizza, binario tronco, semafori del tram coordinati (dopo
-  `tram-reti`).
+- `tram-turni`: turni del tram e deposito della Guizza, binario tronco, semafori del tram coordinati. Può partire:
+  gli scambi tra le sedi sono in `track.switches`, quelli ai capolinea si disegnano in `buildTramway`.
 - `esplorazione`: panoramica e giro libero senza mezzo, poi l'ortofoto AGEA (M5).
 - `guida`: gamepad, bus elettrico con ricarica, telecamera della porta posteriore, specchietti.
 

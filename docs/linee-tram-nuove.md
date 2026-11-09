@@ -1,9 +1,10 @@
 # Nuove linee del tram: SIR3 e SIR2 (ricerca e prova dei tracciati)
 
-Ricerca sperimentale per portare nel gioco le linee in costruzione. Stato al 9 novembre 2026. **Il gioco e la
-pipeline della mappa non sono cambiati**: qui ci sono le fonti, una prova di instradamento sui binari OSM
-(`scripts/tram_percorsi.py`, fuori da `build_map.py`) e il piano. Un'altra sessione lavora alla mappa: le tappe del
-piano sono ordinate per toccare il meno possibile `build_map.py`, `street_surfaces.py` e `city.js`.
+Ricerca e piano per portare nel gioco le linee in costruzione. Stato al 9 novembre 2026: qui ci sono le fonti, una
+prova di instradamento sui binari OSM (`scripts/tram_percorsi.py`, fuori da `build_map.py`), i dati delle linee
+(tappa 1) e il piano. **SIR3 e SIR2 sono nel gioco per il tratto in città** (tappa 2, sezione "Nel gioco"); la pipeline
+della mappa non è cambiata. Le tappe del piano sono ordinate per toccare il meno possibile `build_map.py`,
+`street_surfaces.py` e `city.js`, che sono della corsia `mappa`.
 
 ![Binari OSM (blu SIR1, rosso SIR2, arancio SIR3; tratteggio: in cantiere), percorsi trovati e fermate OSM](img/linee-tram-nuove.png)
 
@@ -147,9 +148,10 @@ Chiesanuova a ovest, Net Center, San Lazzaro, Ponte di Brenta e Vigonza a est so
 ## Dati delle linee (tappa 1)
 
 `scripts/tram_linee.py` scrive [`data/tram-linee-nuove.json`](../data/tram-linee-nuove.json): per linea (colore dei KML
-del Comune, moduli, frequenza) e per verso il percorso sui binari OSM (lat/lon, con 90-160 m di binario prima della
-prima fermata e dopo l'ultima), le fermate in ordine con la progressiva `s` in metri, gli `offsets` in secondi e le
-partenze feriali e festive `[ora, durata]` come le linee della mappa.
+del Comune, moduli, frequenza) e per verso il percorso sui binari OSM (lat/lon, con da 90 a 160 m di binario prima
+della prima fermata e dopo l'ultima), le fermate in ordine con la progressiva `s` in metri e il lato della banchina
+(`lato`, -1 a sinistra), gli `offsets` in secondi e le partenze feriali e festive `[ora, durata]` come le linee della
+mappa.
 
 ```bash
 python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-fermate-nuove.json data/tram-linee-nuove.json
@@ -162,9 +164,13 @@ python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-ferma
   Stazione sud, da dove riparte; il SIR2 verso est ferma a Stazione sud, verso ovest a Stazione nord e poi scende sul
   binario del SIR1 nel Corso del Popolo.
 * **De Gasperi** è sul Corso del Popolo dove il KML del SIR2 aveva Trieste, un nodo per binario.
+* **Banchine**: a destra del verso di marcia, come le poche banchine delle linee nuove già in OSM; in stazione stanno
+  dentro l'anello interno, quindi a sinistra (porte a sinistra).
 * **Orario**: SIR3 ogni 8 minuti, 18 minuti da capolinea a capolinea; SIR2 ogni 7 minuti, 54 minuti a 18 km/h
   (velocità commerciale del SIR3, quella del SIR2 non è pubblicata). Dalle 5.40 alle 7 e dalle 21 ogni 15 minuti, dalle
-  20 alle 21 ogni 10; festivi ogni 15 minuti, ogni 30 dopo le 21. Sosta di 20 s a ogni fermata.
+  20 alle 21 ogni 10; festivi ogni 15 minuti, ogni 30 dopo le 21. Sosta di 20 s a ogni fermata. Il ritorno del SIR3
+  arriva in stazione un minuto prima di una partenza dell'andata e il tram riparte subito: la sosta lunga la fa a
+  Voltabarozzo, non sulla banchina di Stazione sud che usa anche il SIR2.
 
 | Linea e verso | Percorso | Fermate |
 |---|---|---|
@@ -173,16 +179,49 @@ python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-ferma
 | SIR2 → Busa di Vigonza | 16 277 m | 35 |
 | SIR2 → Rubano | 16 318 m | 35 |
 
+## Nel gioco (tappa 2)
+
+* **Una sede per linea**: `city.tramTracks[id]` (`TramTrack` in `src/tram/tram.js`), con `city.tramTrack` che resta il
+  SIR1. Le sedi del SIR3 e del SIR2 partono dai binari di `data/tram-linee-nuove.json` (in `src/data/padova.js`
+  `TRAM_LINES` comprende le due linee, con `building: true`, e `net.tramLines` i loro binari).
+* **Grafo dei binari**: le sedi si posano una dopo l'altra (SIR1, SIR3, SIR2). Dove il binario di una linea corre sopra
+  quello di una sede già posata, nello stesso verso, entro 1,5 m e per almeno 20 m, ne prende i punti (`track.shared`):
+  i tram delle due linee viaggiano sulla stessa rotaia, che si disegna una volta sola, e le fermate in comune
+  (Eremitani, Stazione sud e Stazione nord) hanno una banchina sola. Ai capi del tratto in comune c'è uno scambio
+  (`track.switches`: verso, progressiva, punto, unione o diramazione, binario dell'altra sede), con un raccordo di 20 m
+  sul binario che si stacca. Il verso -1 di una linea può correre anche sul suo verso +1 (l'anello del SIR3).
+* **Tratto in città**: le fermate con una strada della mappa entro 120 m, la serie più lunga di fila. SIR3 da Stazione
+  sud a Cornaro (10 e 11 fermate), SIR2 da Cimitero Maggiore a Savelli (16 fermate); i binari arrivano 150 m oltre.
+  Le corse tagliate si chiamano come quelle del SIR1, per esempio "Cornaro (per Voltabarozzo)".
+* **Menu**: SIR3 e SIR2 nell'elenco del tram dopo il SIR1, con la scritta "in costruzione" e il nome della linea intera.
+* **Tram automatici** dall'orario generato, ognuno sulla sede della sua linea e con i suoi moduli. Al capolinea ad
+  anello del SIR3 il tram prosegue sul binario della corsa dopo senza cambiare cabina; il giocatore fa lo stesso con B
+  negli ultimi 200 m dell'anello.
+* **Incroci con le strade** cercati su tutte le sedi; nei tratti in comune l'incrocio è uno solo, con un riferimento
+  per ogni linea che ci passa.
+* **Precedenze tra tram**: agli scambi cede chi ha il muso dietro; se ognuno vede l'altro davanti (rami che si uniscono,
+  incroci a raso tra binari) cede il tram entrato in servizio dopo. Incroci a raso tra linee: SIR2 verso est sul
+  binario del SIR1 verso sud in Corso Garibaldi, ritorno del SIR3 sul SIR2 verso est a Pace.
+* **Tram e bus**: finché la sede non è nella pianta delle strade (tappa 3) i binari sono disegnati sopra l'asfalto e
+  in diversi tratti la corsia dei bus ci passa sopra o a meno di 2,5 m (linea 10 per circa 2 km sul SIR2; linee 4, 5,
+  6, 9, 14, 15B, 24 e 42 tra 0,3 e 1,2 km sul SIR3), come già succede col SIR1 in Corso del Popolo e sulle Riviere. Un
+  tram aspetta un bus solo se il bus è tutto davanti al muso; dopo 20 s fermo dietro un bus passa lo stesso. Senza
+  queste due regole bus e tram affiancati si aspettavano a vicenda per sempre. Due fermate dei bus restano senza
+  palina perché la palina cadrebbe sui binari: Sografi 31 (via Sografi, SIR3) e Grassi (Cittadella) (via Venezia,
+  SIR2).
+* **Prove** (40 minuti di gioco alle 8.15 e alle 17.30, il giocatore lontano dai binari): nessun tram fermo fuori dalle
+  fermate; corse guidate intere del SIR3 nei due versi (fino all'anello) e del SIR2 nei due versi.
+
 ## Piano
 
 Prima il SIR3 (apre per primo e la parte nel gioco è quasi tutta già dentro la mappa), poi il SIR2.
 
-1. **Dati delle linee, senza toccare la mappa.** Uno script nuovo, sulla base di `tram_percorsi.py`, scrive
+1. **Dati delle linee, senza toccare la mappa** (fatto, vedi sopra). Uno script nuovo, sulla base di `tram_percorsi.py`, scrive
    `data/tram-linee-nuove.json`: per linea e verso il percorso sui binari (lat/lon), le fermate OSM in ordine con la
    progressiva, il numero di moduli (**SIR3: 3**, **SIR2: 4**) e l'orario generato (SIR3 ogni 8 minuti e 18 minuti da
    capolinea a capolinea; SIR2 ogni 6-8 minuti, tempi tra le fermate dalla velocità commerciale). Aggiunge a mano le
    fermate che OSM non ha (Stazione nord/sud, De Gasperi). Rischio di conflitto nullo: file nuovi.
-2. **Grafo dei binari nel gioco.** `TramTrack` (in `src/tram/tram.js`) oggi è un solo tracciato con due versi, costruito
+2. **Grafo dei binari nel gioco** (fatto, vedi sopra). `TramTrack` (in `src/tram/tram.js`) oggi è un solo tracciato con due versi, costruito
    da `net.tram`. Diventa una sede per linea (`city.tramTracks[id]`), con `city.tramTrack` che resta il SIR1, così il
    resto del codice non cambia subito. Poi un grafo vero (rami e scambi) per i **due anelli della stazione** (ogni
    linea percorre il suo, il SIR1 l'esterno; le fermate Stazione nord e Stazione sud servono entrambi) e per i tratti
@@ -197,9 +236,9 @@ Prima il SIR3 (apre per primo e la parte nel gioco è quasi tutta già dentro la
    edifici e deposito fino al capolinea; vanno controllati gli altri dati (DBGT, DTM, segnaletica) su quell'area.
    Anche questa tocca `build_map.py`: dopo la tappa 3. In alternativa, in un primo tempo il SIR3 si guida fino a
    Cornaro ("tratto in città"), come già si fa per il SIR1 verso la Guizza.
-5. **SIR3 nel gioco**: linea nel menu del tram (3 moduli), tram automatici dall'orario generato, fermate con banchina,
+5. **SIR3 nel gioco** (fatto per il tratto in città): linea nel menu del tram (3 moduli), tram automatici dall'orario generato, fermate con banchina,
    scambio all'uscita dell'anello.
-6. **SIR2 nel gioco**: il tratto da Cimitero Maggiore a Savelli (come "tratto in città"), 4 moduli, binari in comune
+6. **SIR2 nel gioco** (fatto per il tratto in città): il tratto da Cimitero Maggiore a Savelli (come "tratto in città"), 4 moduli, binari in comune
    col SIR1 e col SIR3. **La linea 10 esce di servizio** quando c'è il SIR2: serve uno scenario (per esempio "oggi"
    con SIR1 e linea 10, "rete SMART" con SIR1, SIR2, SIR3 e senza linea 10) oppure si toglie la 10 quando il SIR2
    entra nel gioco. I rami di Romagnoli e Ospedale San Lazzaro (ancora in cantiere in OSM) e i capolinea fuori dalla
