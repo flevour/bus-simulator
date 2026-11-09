@@ -4,8 +4,9 @@ progressiva, numero di moduli e orario generato. Scrive data/tram-linee-nuove.js
 Si appoggia a scripts/tram_percorsi.py (grafo dei binari, instradamento per fermate, marcia a destra) con in più:
 * l'anello interno della stazione percorso in senso antiorario, come quello esterno: le way dell'anello e i quattro
   raccordi tra i due anelli (in OSM `service=siding`, senza senso unico) diventano a senso unico;
-* le fermate che OSM non ha (Stazione nord e Stazione sud sui lati lunghi dell'anello interno, De Gasperi sul Corso
-  del Popolo dove c'era Trieste): un nodo nuovo sul binario, che il percorso deve toccare;
+* le fermate che OSM non ha (Stazione nord e Stazione sud sui lati lunghi dell'anello interno, con la banchina dentro
+  l'anello, a sinistra; De Gasperi sul Corso del Popolo dove c'era Trieste): un nodo nuovo sul binario, che il percorso
+  deve toccare;
 * i tratti di binario prima della prima fermata e dopo l'ultima (ci sta il convoglio, si cambia cabina);
 * l'orario: frequenza per fascia oraria e tempi tra le fermate dalla velocità commerciale.
 
@@ -36,15 +37,17 @@ MANUAL = {
     'Stazione sud': ((45.416695, 11.880405), [966705987]),    # lato sud dell'anello interno
     'De Gasperi': ((45.414205, 11.878987), [966705981, 966705984]),  # al posto di Trieste (KML del SIR2)
 }
+# fermate con la banchina a sinistra del verso di marcia: in stazione le banchine stanno dentro l'anello interno
+LEFT = {'Stazione nord', 'Stazione sud'}
 # corse per linea e verso: le fermate del KML in ordine (quelle con "*" sono i capolinea intermedi dei rami, saltati)
 KML_SKIP = {'Trieste', 'Stazione nord', 'Stazione sud'}
 LINES = [
-    {'id': 'SIR3', 'nome': 'Stazione – Voltabarozzo', 'colore': '#e65100', 'moduli': 3, 'durata': 18 * 60, 'ogni': 8,
+    {'id': 'SIR3', 'nome': 'Stazione ↔ Voltabarozzo', 'colore': '#e65100', 'moduli': 3, 'durata': 18 * 60, 'ogni': 8, 'anello': True,
      'versi': [
          ('Voltabarozzo', lambda k: ['Stazione sud'] + k),
          ('Stazione', lambda k: k[::-1] + ['Stazione nord', 'Stazione sud']),
      ]},
-    {'id': 'SIR2', 'nome': 'Rubano – Busa di Vigonza', 'colore': '#0097a7', 'moduli': 4, 'kmh': 18, 'ogni': 7,
+    {'id': 'SIR2', 'nome': 'Rubano ↔ Busa di Vigonza', 'colore': '#0097a7', 'moduli': 4, 'kmh': 18, 'ogni': 7,
      'versi': [
          ('Busa di Vigonza', lambda k: ins(k, 'Eremitani', ['De Gasperi', 'Stazione sud'])),
          ('Rubano', lambda k: ins(k, 'Eremitani', ['De Gasperi', 'Stazione nord'])[::-1]),
@@ -213,7 +216,8 @@ def main(osm, stops_json, out):
             st = [s for s in tp.stops_on(full, pos, osm_stops + manual_stops)
                   if s0 - 3 <= s['s'] <= s0 + Lp + 3 or (s['s'] < s0 and tp.norm(s['name']) & ends[0])
                   or (s['s'] > s0 + Lp and tp.norm(s['name']) & ends[1])]
-            st = [{'nome': s['name'], 's': round(s['s']), 'lat': s['lat'], 'lon': s['lon'], 'osm': s['name'] not in MANUAL} for s in st]
+            st = [{'nome': s['name'], 's': round(s['s']), 'lat': s['lat'], 'lon': s['lon'], 'osm': s['name'] not in MANUAL,
+                   'lato': -1 if s['name'] in LEFT else 1} for s in st]
             versi.append({'headsign': headsign, 'lunghezza': round(Lp), 'contromano': round(wrong), 'cantiere': round(building),
                           'inizio': round(s0), 'percorso': [list(n) for n in full], 'fermate': st})
             print(f'{L["id"]} → {headsign}: {Lp:.0f} m (+{s0:.0f} m prima), contromano {wrong:.0f} m, in cantiere '
@@ -228,10 +232,16 @@ def main(osm, stops_json, out):
             v['durata'] = D
         hw = headways(L['ogni'])
         for i, v in enumerate(versi):
-            # il verso di ritorno parte metà frequenza dopo
-            sh = i * L['ogni'] * 30
+            D = v['durata']
             for day in ('fer', 'fes'):
-                v[day] = [[t + sh, v['durata']] for t in hw[day]]
+                if i and L.get('anello'):
+                    # capolinea ad anello (SIR3 in stazione): ogni ritorno arriva un minuto prima di una partenza
+                    # dell'andata e il tram riparte subito; la sosta lunga la fa all'altro capolinea, così non tiene
+                    # occupata la banchina che usa anche il SIR2
+                    v[day] = [[t - 60 - D, D] for t in hw[day]]
+                else:
+                    # il verso di ritorno parte metà frequenza dopo
+                    v[day] = [[t + i * L['ogni'] * 30, D] for t in hw[day]]
         res['linee'].append({'id': L['id'], 'nome': L['nome'], 'colore': L['colore'], 'moduli': L['moduli'],
                              'stato': 'in costruzione', 'ogni': L['ogni'], 'versi': versi})
     json.dump(res, open(out, 'w'), ensure_ascii=False, separators=(',', ':'))
