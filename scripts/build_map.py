@@ -839,6 +839,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     nxs, nzs = nodes_flat[0::2], nodes_flat[1::2]
     bx0, bx1, bz0, bz1 = min(nxs) + 80, max(nxs) - 80, min(nzs) + 80, max(nzs) - 80
     tram_keep = lambda x, z: bx0 <= x <= bx1 and bz0 <= z <= bz1
+    tram_line = build_gtfs.load_tram(gtfs_dir, keep=tram_keep)
+    if tram_path and tram_lanes:
+        print('fermate del tram sui nodi OSM: %d su %d' % snap_tram_stops(tram_path, tram, tram_stops, tram_line))
     data = {
         'source': 'OpenStreetMap contributors (ODbL) + GTFS Busitalia Veneto (BusOne)',
         'origin': [ORIGIN_LAT, ORIGIN_LON], 'ferDate': build_gtfs.FER_DATE, 'fesDate': build_gtfs.FES_DATE,
@@ -848,7 +851,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
         # corsie dai tag OSM: [arco, codice] (lane_code), e frecce a terra [arco, avanti, indietro]
         'lanes': [v for k, lt in sorted(edge_lanes.items()) for v in (k, lane_code(lt))], 'turnLanes': turns,
-        'tramLines': [build_gtfs.load_tram(gtfs_dir, keep=tram_keep)],
+        'tramLines': [tram_line],
         **({'terrain': terrain} if terrain else {}),
         **signage,
     }
@@ -883,7 +886,7 @@ def central_platforms(path, stops, lanes):
     70 m dalla fermata sta tra i due binari, a meno di 4 m da ciascuno."""
     plats = []
     for e in json.load(open(path, encoding='utf-8'))['elements']:
-        if e['tags'].get('railway') == 'tram':
+        if e['type'] != 'way' or e['tags'].get('railway') == 'tram':
             continue
         pts = [xz(g['lat'], g['lon']) for g in e['geometry']]
         plats.append((sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)))
@@ -911,6 +914,53 @@ def central_platforms(path, stops, lanes):
                 central = True
         out.append(1 if central else 0)
     return out
+
+
+def _dist_line(p, line):
+    """Distanza del punto p dalla spezzata line ([(x, z)]) e progressiva del punto più vicino."""
+    best, s0, bs = 1e18, 0.0, 0.0
+    for (ax, az), (bx, bz) in zip(line, line[1:]):
+        dx, dz = bx - ax, bz - az
+        l2 = dx * dx + dz * dz or 1e-9
+        t = max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - az) * dz) / l2))
+        d = math.hypot(p[0] - ax - dx * t, p[1] - az - dz * t)
+        if d < best:
+            best, bs = d, s0 + t * math.sqrt(l2)
+        s0 += math.sqrt(l2)
+    return best, bs
+
+
+def snap_tram_stops(path, tram, tram_stops, tram_lines, reach=25.0):
+    """Fermate del tram sul nodo OSM dove si ferma il tram (railway=tram_stop, stop_position) entro reach metri dalla
+    fermata GTFS: per ogni corsa quello sul binario del suo verso (tram: i due binari, il primo nel verso dello shape
+    principale). I nodi OSM stanno a metà banchina, le fermate GTFS in fondo (circa 10 m più avanti); dove manca il nodo
+    vale il centro della banchina OSM, e senza nemmeno quella resta il GTFS. Restituisce (spostate, fermate)."""
+    els = json.load(open(path, encoding='utf-8'))['elements']
+    nodes = [xz(e['lat'], e['lon']) for e in els if e['type'] == 'node']
+    for e in els:
+        if e['type'] == 'way' and e['tags'].get('railway') != 'tram':
+            pts = [xz(g['lat'], g['lon']) for g in e['geometry']]
+            nodes.append((sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)))
+    lines = [[(t[i], t[i + 1]) for i in range(0, len(t), 2)] for t in tram]
+    moved = total = 0
+
+    def snap(st, line):
+        nonlocal moved, total
+        total += 1
+        cand = [(_dist_line(n, line)[0] + 0.1 * math.dist(n, st[:2]), n) for n in nodes if math.dist(n, st[:2]) <= reach]
+        if cand:
+            n = min(cand)[1]
+            st[0], st[1] = round(n[0], 1), round(n[1], 1)
+            moved += 1
+    for st in tram_stops:
+        snap(st, lines[0])
+    for v in tram_lines['variants']:
+        st = v['stops']
+        # verso della corsa: la progressiva delle fermate sul primo binario cresce nel verso dello shape principale
+        fwd = len(lines) < 2 or _dist_line(st[-1][:2], lines[0])[1] >= _dist_line(st[0][:2], lines[0])[1]
+        for x in st:
+            snap(x, lines[0 if fwd else 1])
+    return moved, total
 
 
 def tram_lane(flat, segs, grid, cell):
