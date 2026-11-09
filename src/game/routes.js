@@ -256,7 +256,7 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
     if (!spot) return;
     out.push({
       id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw, kerb: spot.kerb,
+      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, dx, dz, rx, rz, hw, kerb: spot.kerb, shelter: st.shelter, bench: st.bench,
     });
   }
 }

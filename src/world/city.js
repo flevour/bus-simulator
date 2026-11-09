@@ -1446,11 +1446,15 @@ export class City {
       grp.rotation.y = ang;
       grp.updateMatrixWorld();
       const put = (g, x, y, z, arr) => { const gg = g.clone(); gg.translate(x, y, z); gg.applyMatrix4(grp.matrixWorld); arr.push(gg); };
-      // locale: z = direzione strada, +x = verso la carreggiata
-      put(new THREE.BoxGeometry(1.9, 0.12, 5), 0, 2.45, -3, frames);
-      put(new THREE.BoxGeometry(0.06, 2.1, 5), -0.85, 1.25, -3, glasses);
-      put(new THREE.BoxGeometry(0.45, 0.08, 3.2), -0.55, 0.5, -3, benches);
-      for (const dz of [-5.4, -0.6]) for (const dx of [-0.85, 0.85]) put(new THREE.BoxGeometry(0.08, 2.45, 0.08), dx, 1.22, dz, frames);
+      // locale: z = direzione strada, +x = verso la carreggiata. La pensilina c'è dove OSM la segna (o non dice
+      // niente); dove OSM dice che non c'è, solo la palina e, se c'è, la panchina
+      const shelter = st.shelter !== 0;
+      if (shelter) {
+        put(new THREE.BoxGeometry(1.9, 0.12, 5), 0, 2.45, -3, frames);
+        put(new THREE.BoxGeometry(0.06, 2.1, 5), -0.85, 1.25, -3, glasses);
+        for (const dz of [-5.4, -0.6]) for (const dx of [-0.85, 0.85]) put(new THREE.BoxGeometry(0.08, 2.45, 0.08), dx, 1.22, dz, frames);
+      }
+      if (shelter || st.bench === 1) put(new THREE.BoxGeometry(0.45, 0.08, 3.2), -0.55, 0.5, -3, benches);
       // palina gialla con cartello (texture atlas condivisa)
       frames.push(poleG.clone().translate(st.x, Y_SIDEWALK + 1.5, st.z));
       const k = signs.length;
@@ -1469,7 +1473,7 @@ export class City {
       bg.translate(st.x, Y_SIDEWALK + 3.2, st.z);
       yellows.push(bg);
       // obstacle pensilina
-      if (this.clearance(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, ['road'], 20) > 0.8) this.addObstacle(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, 2.6, 1.0, Math.atan2(-st.dz, st.dx), 'shelter');
+      if (shelter && this.clearance(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, ['road'], 20) > 0.8) this.addObstacle(grp.position.x - st.dx * 3, grp.position.z - st.dz * 3, 2.6, 1.0, Math.atan2(-st.dz, st.dx), 'shelter');
       // segnaletica gialla della fermata (stile italiano): zig-zag all'ingresso e all'uscita,
       // linea tratteggiata lato corsia e la scritta BUS, leggibile da chi arriva
       const lx = st.cx + st.rx * (st.hw - 1.6), lz = st.cz + st.rz * (st.hw - 1.6);

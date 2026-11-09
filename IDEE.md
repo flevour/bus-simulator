@@ -77,6 +77,13 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 - [ ] 30 fermate servite su 403 non hanno palina (il posizionamento viene scartato): capire caso per caso.
 - [ ] Capolinea: tratti del percorso GTFS senza strada corrispondente (map matching). Aggiungere le strade di servizio
   e le aree dei capolinea.
+- [ ] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
+  bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
+  capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa).
+- [ ] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificare linea per linea corsia,
+  banchina e verso di partenza e arrivo (oggi la partenza comincia sull'arco della corsia, accanto alla banchina).
+- [ ] Percorsi con brevi deviazioni avanti e indietro in una via laterale (177 tratti A-B-A, errori di aggancio del
+  tracciato GTFS): toglierle o capire quali sono vere.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
   `src/data/padova-map.json`.
 - [~] Edifici: altezze misurate dal DBGT della Regione (fatto, vedi "Fatto"); restano tetti più vari e i portici veri
@@ -130,6 +137,8 @@ Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 
 ## Fatto
 
+- [x] Paline vere da OSM (via Overture), con pensilina e panchina dove OSM le segna; capolinea con partenza e arrivo
+  sullo stesso tratto (Largo Debussy lungo il giardino, corsie della stazione), una sola palina.
 - [x] Portici veri: dai volumi del DBGT sopra i portici (altezza libera misurata) per 2.198 edifici; archi alti come
   quelli reali; quelli a caso restano solo fuori dall'area misurata. Forma vera di carreggiate e marciapiedi dal
   DBGT; ponti e rive senza strade che scendono nell'alveo; Largo Debussy con l'anello del capolinea.

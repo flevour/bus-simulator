@@ -122,6 +122,37 @@ def in_focus(lat, lon, m=0.0):
     return any(b[0] - m <= lon <= b[2] + m and b[1] - m <= lat <= b[3] + m for b in FOCUS_BOXES)
 
 
+def snap_stops_to_osm(stops, osm, reach=25.0):
+    """Fermate GTFS sulla palina OSM (highway=bus_stop, data/osm-fermate.json) più vicina entro reach metri, una palina
+    per fermata (prima le coppie più vicine: le due direzioni non si scambiano la palina). Aggiunge in fondo pensilina
+    e panchina di OSM (1, 0 o None). Restituisce quante fermate sono state spostate."""
+    C = 50
+    grid = defaultdict(list)
+    for j, o in enumerate(osm):
+        grid[(int(o[0] // C), int(o[1] // C))].append(j)
+    pairs = []
+    for i, s in enumerate(stops):
+        for gx in range(int((s[0] - reach) // C), int((s[0] + reach) // C) + 1):
+            for gz in range(int((s[1] - reach) // C), int((s[1] + reach) // C) + 1):
+                for j in grid.get((gx, gz), ()):
+                    d = math.hypot(osm[j][0] - s[0], osm[j][1] - s[1])
+                    if d <= reach:
+                        pairs.append((d, i, j))
+    used_s, used_o, moved = set(), set(), 0
+    for d, i, j in sorted(pairs):
+        if i in used_s or j in used_o:
+            continue
+        used_s.add(i)
+        used_o.add(j)
+        s, o = stops[i], osm[j]
+        s[0], s[1] = o[0], o[1]
+        while len(s) < 4:
+            s.append('')
+        s[4:] = [o[4], o[5]]
+        moved += d > 0.5
+    return moved
+
+
 def measured_piece(meas, s):
     """Tratto misurato (data/misure-strade.json) della via che contiene il punto a s metri dall'inizio."""
     for p in meas or ():
@@ -130,7 +161,7 @@ def measured_piece(meas, s):
     return None
 
 
-def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None, dtm_path=None, green_path=None, streets_path=None):
+def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None, dtm_path=None, green_path=None, streets_path=None, osm_stops_path=None):
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     # larghezze misurate di carreggiate e marciapiedi (scripts/measure_streets.py), per via OSM
     measures = json.load(open(measures_path, encoding='utf-8'))['vie'] if measures_path else {}
@@ -402,7 +433,49 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             return seq
         return path[:-1] + seq if at_start else seq + path[1:]
 
+    def bus_ok(k, frm):
+        """Il bus può percorrere l'arco k partendo da frm (sensi unici rispettati, niente vie pedonali)."""
+        a, b, cls, _w, _n, flags = edges[k][:6]
+        if cls == 8:
+            return False
+        if flags & 1:
+            return frm == a
+        if flags & 2:
+            return frm == b
+        return True
+
+    def seg_dist(stop, u, v):
+        """Distanza (m) della fermata dal tratto u->v e posizione della sua proiezione lungo il tratto (0-1)."""
+        (ax, az), (bx, bz) = nodes[u], nodes[v]
+        dx, dz = bx - ax, bz - az
+        l2 = dx * dx + dz * dz or 1e-9
+        t = ((stop[0] - ax) * dx + (stop[1] - az) * dz) / l2
+        tc = max(0.0, min(1.0, t))
+        return math.hypot(stop[0] - ax - dx * tc, stop[1] - az - dz * tc), t
+
+    def stop_edge(seq, stop, at_start, reach=12.0):
+        """Capolinea: il tracciato GTFS può cominciare (o finire) al nodo vicino alla fermata invece che sul tratto dove
+        il bus sta fermo (Largo Debussy: si arriva lungo il prato e si riparte dallo stesso punto, ma la partenza
+        comincia all'angolo dopo). Se la fermata sta lungo un arco che entra nel primo nodo (o esce dall'ultimo), più
+        vicina che al primo (o ultimo) tratto, quell'arco si aggiunge al percorso: arrivo e partenza hanno la stessa
+        palina e il bus parte da dove sta davvero, nel verso del tracciato."""
+        s0, s1 = (seq[0], seq[1]) if at_start else (seq[-1], seq[-2])
+        d_cur = seg_dist(stop, s1, s0)[0]
+        best = None
+        for w, _c, k in adj[s0]:
+            if w == s1 or w in seq[:4] or w in seq[-4:] or not bus_ok(k, w if at_start else s0):
+                continue
+            d, t = seg_dist(stop, w, s0) if at_start else seg_dist(stop, s0, w)
+            # la fermata deve cadere dentro l'arco (non oltre il nodo) e ben più vicina del tratto attuale
+            if d < reach and d < d_cur - 3 and (0.15 < t < 0.97 if at_start else 0.03 < t < 0.85) and (best is None or d < best[0]):
+                best = (d, w)
+        if not best:
+            return seq
+        return [best[1]] + seq if at_start else seq + [best[1]]
+
     gt = build_gtfs.load(gtfs_dir)
+    if osm_stops_path:
+        print('fermate spostate sulla palina OSM:', snap_stops_to_osm(gt['stops'], json.load(open(osm_stops_path, encoding='utf-8'))['fermate']))
     lines_out = []
     failed = 0
     for line in gt['lines']:
@@ -418,6 +491,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             # tratto fino al nodo vicino alla prima (o ultima) fermata, se è a pochi metri di strada
             seq = extend_to_stop(seq, gt['stops'][v['stops'][0]], True)
             seq = extend_to_stop(seq, gt['stops'][v['stops'][-1]], False)
+            # e si comincia (o si finisce) sull'arco lungo cui sta la fermata del capolinea
+            seq = stop_edge(seq, gt['stops'][v['stops'][0]], True)
+            seq = stop_edge(seq, gt['stops'][v['stops'][-1]], False)
             # controllo: lunghezza agganciata vs lunghezza del tracciato GTFS
             sp = [xz(la, lo) for la, lo in v['shape_pts']]
             Lg = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(sp, sp[1:]))
@@ -1290,4 +1366,5 @@ if __name__ == '__main__':
          pick(lambda a: a.endswith('.json') and 'nodes' in a), pick(lambda a: a.endswith('.json') and 'tram' in a),
          pick(lambda a: a.endswith('.json') and 'misure' in a), pick(lambda a: a.endswith('.json') and 'volumi' in a),
          pick(lambda a: a.endswith('.json') and 'dtm' in a), pick(lambda a: a.endswith('.json') and 'verde' in a),
-         pick(lambda a: a.endswith('.json') and 'strade' in a and 'misure' not in a))
+         pick(lambda a: a.endswith('.json') and 'strade' in a and 'misure' not in a),
+         pick(lambda a: a.endswith('.json') and 'fermate' in a))

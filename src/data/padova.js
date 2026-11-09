@@ -15,7 +15,8 @@ export const MAP_SOURCE = MAP.source;
 // classi OSM: 0 trunk, 1 primary, 2 secondary, 3 tertiary, 4 unclassified, 5 residential, 6 living_street, 7 service, 8 pedestrian
 export const ROAD_CLASS = ['trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service', 'pedestrian'];
 
-export const STOPS = MAP.stops.map(([x, z, name, street], i) => ({ id: i, x, z, name, street }));
+// shelter, bench: pensilina e panchina secondo OSM (1 sì, 0 no, null/undefined non detto)
+export const STOPS = MAP.stops.map(([x, z, name, street, shelter, bench], i) => ({ id: i, x, z, name, street, shelter, bench }));
 
 export const LINES = MAP.lines.map((l) => {
   const variants = l.variants.map((v, i) => ({

@@ -103,7 +103,12 @@ uniscono non si incrociano.
 * **Capolinea e fermate**: dove l'aggancio del tracciato GTFS comincia (o finisce) all'incrocio dopo la fermata, si
   riattacca il tratto fino al nodo vicino alla prima (o ultima) fermata (al massimo 80 m). Le fermate del percorso
   conoscono il cordolo vero (dalla palina piazzata 0,6 m oltre l'asfalto): il bus parte accostato lì, l'accostamento
-  e i passeggeri in attesa si misurano da lì.
+  e i passeggeri in attesa si misurano da lì. Se la fermata del capolinea sta lungo l'arco che entra nel primo nodo
+  (o esce dall'ultimo), quell'arco si aggiunge al percorso: a Largo Debussy e alla stazione la corsa parte dal punto
+  in cui il bus sta fermo, nel verso del tracciato, e arrivo e partenza hanno la stessa palina.
+* **Paline OSM** (`data/osm-fermate.json`, da `scripts/osm_stops.py`): le fermate `highway=bus_stop` di OSM, dallo
+  strato Overture `base/infrastructure` che riporta i tag originali. Ogni fermata GTFS si sposta sulla palina OSM più
+  vicina entro 25 m (una palina per fermata); la pensilina e la panchina ci sono dove OSM le segna o non dice niente.
 * **Isole, verde e alberi del DBGT** (`data/dbgt-verde.json`, da `scripts/dbgt_green.py`): gli spartitraffico
   (`SPART`) diventano isole dove stanno dentro l'asfalto di oggi o tra due carreggiate, mai sulle corsie delle auto,
   sulle carreggiate e agli incroci dei bus o sulla sede del tram; prati, aree alberate e aiuole (`AR_VRD`) sono uno
@@ -154,7 +159,9 @@ curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tr
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json
+# paline OSM (strato Overture base/infrastructure, scaricato con scripts/overture_layers.py)
+python3 scripts/osm_stops.py <base-infrastructure.parquet> data/osm-fermate.json
 # terreno: DTM LiDAR a 5 m della Regione (tessere in data/lidar5, scaricate con
 # https://idt2.regione.veneto.it/idt/download/layerDownload/downloadDtmLidar5?dataDtmLidarId=<idPol>, elenco in
 # data/lidar5/tessere.txt) e, fuori dal Comune, il DTM a 5 m (GeoServer IDT2, WPS ras:CropCoverage su
