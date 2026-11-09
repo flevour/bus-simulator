@@ -6,6 +6,8 @@ export async function apriGioco(page) {
   const errori = [];
   page.on('pageerror', (e) => errori.push(`eccezione: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') errori.push(`console: ${m.text()}`); });
+  // annunci a voce muti: su macOS la sintesi vocale passa dal sistema e si sentirebbe anche con --mute-audio
+  await page.addInitScript(() => { if ('speechSynthesis' in window) window.speechSynthesis.speak = () => {}; });
   await page.goto(process.env.GIOCO_URL);
   await page.waitForFunction(() => window.__game, null, { timeout: 120_000 });
   await page.evaluate(() => { window.requestAnimationFrame = () => 0; });

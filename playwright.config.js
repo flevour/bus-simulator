@@ -13,7 +13,8 @@ export default defineConfig({
   use: {
     browserName: 'chromium',
     viewport: { width: 1280, height: 720 },
-    // WebGL in software (SwiftShader): va anche senza scheda grafica, come nei container e in CI
-    launchOptions: { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+    // WebGL in software (SwiftShader): va anche senza scheda grafica, come nei container e in CI.
+    // Senza audio: i suoni del gioco (Web Audio) non escono dagli altoparlanti (la voce la spegne apriGioco)
+    launchOptions: { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--mute-audio'] },
   },
 });
