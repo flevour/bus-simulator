@@ -1,0 +1,69 @@
+# Verifiche a ogni push su main: build, prove nel browser (npm test) e rapporto di verifica sulla mappa.
+# Non ferma la pubblicazione su GitHub Pages (pages.yml): dice se l'ultimo push ha rotto qualcosa.
+name: Verifiche
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# un push nuovo rende inutili le verifiche del precedente
+concurrency:
+  group: verifiche-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # senza chiavi PostHog: le prove non mandano eventi (il setup delle prove compila comunque senza)
+      - run: npm run build
+      - name: Chromium di Playwright (in cache per versione)
+        id: pw
+        run: echo "versione=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: cache-pw
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.versione }}
+      - if: steps.cache-pw.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps --only-shell chromium
+      - if: steps.cache-pw.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - run: npm test
+      # rapporto della mappa nel gioco e, se una prova fallisce, quello che Playwright ha raccolto
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risultati-prove
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  mappa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install shapely
+      - run: python3 scripts/verifica_mappa.py --elenco --json rapporto-mappa.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapporto-mappa
+          path: rapporto-mappa.json
+          if-no-files-found: ignore
+          retention-days: 14
