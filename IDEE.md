@@ -70,7 +70,15 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   - [x] paline e pensiline da OSM (vedi "Fatto");
   - [x] zone pedonali e piazze lastricate (aree pedonali del DBGT); resta la ZTL;
   - [ ] quote stradali del DBGT e sottopassi; tessere LiDAR da chiedere alla Regione;
-  - [ ] rapporto di verifica nel build e test in CI;
+  - [x] rapporto di verifica e test in CI (vedi "Fatto"); restano i casi che ha trovato:
+    - [ ] lampioni in carreggiata: 1.120 su 5.475 stanno dentro l'asfalto misurato (il gioco li mette a metà
+      larghezza OSM più 1,9 m) e sono ostacoli per il bus: vanno messi dal bordo vero dell'asfalto, come i pali dei
+      semafori;
+    - [ ] 20 fermate dove il bus fermo tocca un ostacolo: Milano 61 (linee 6, 9, 10, 42) e Tommaseo 114 contro un
+      edificio, Giotto Centro Strada contro un muro, Siracusa 20, Vicenza 16, Sorio 96, Maroncelli 69, Foscolo e Croce
+      Verde contro un lampione;
+    - [ ] 47 fermate agganciate a più di 40 m dalla fermata vera, quasi tutte sulla linea 22 verso Mandria (Via
+      Madonna della Salute fuori dall'area, già chiesto alla corsia `mappa`) e ai capolinea fuori mappa (11, 11B, 6, 12);
   - [ ] mappa più leggera (dati separati e compressi);
   - [ ] ortofoto AGEA 2024 in Esplorazione; catasto, Mapillary e richiesta al Comune.
 
@@ -155,10 +163,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [ ] Bundle da 13,5 MB (12,4 MB di mappa): rete sempre caricata, strade ed edifici a riquadri scaricati vicino al bus.
   Piano nella sezione 4 di [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md).
 - [ ] Prestazioni su mobile.
-- [ ] Test automatici in CI (build + giro dell'autopilota in headless).
+- [ ] Pilota delle prove (`tests/guida.js`) più bravo nelle svolte a T e in quelle strette a destra (oggi sbaglia
+  dopo il capolinea sulle linee 9 e 21), per allargare il giro guidato a tutte le linee; casi di prova dalle
+  segnalazioni di chi gioca (coordinate da ricontrollare a ogni build, sezione 6.2 del piano della città).
 
 ## Fatto
 
+- [x] Verifiche automatiche: `npm test` con Playwright (il gioco si carica, corse del bus e del tram che avanzano,
+  giro guidato con un pilota scritto nella prova sulle linee 24, 10, 3, 14 e sul SIR1 nei due versi), rapporto di
+  verifica sulla mappa (`scripts/verifica_mappa.py` sul JSON, `tests/mappa.spec.js` nel gioco) con soglie sui valori
+  del 9 novembre, workflow Verifiche in CI a ogni push su `main`. Prove senza audio e senza eventi PostHog.
 - [x] Tram SIR3 e SIR2, linee in costruzione: percorsi sui binari OSM, fermate e orario generato
   (`scripts/tram_linee.py`, `data/tram-linee-nuove.json`). Nel gioco il tratto in città, SIR3 da Stazione sud a Cornaro
   e SIR2 (4 moduli) da Cimitero Maggiore a Savelli, nel menu del tram accanto al SIR1 con la scritta "in costruzione".

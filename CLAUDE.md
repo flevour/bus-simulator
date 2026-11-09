@@ -48,6 +48,7 @@ Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e b
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
 python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json
+python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore sopra le soglie
 ```
 
 `data/misure-strade.json` (larghezze misurate di carreggiate e marciapiedi) e `data/dbgt-volumi.json` (altezze degli
@@ -69,8 +70,13 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
 
 * `npm test` lancia le prove di `tests/` (Playwright, dipendenza di sviluppo): build senza PostHog in una cartella
   temporanea, servita su una porta libera, Chromium con
-  `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`. Si lancia prima di ogni push su `main`.
-  Le prove nuove usano gli aiuti di `tests/gioco.js` (apertura del gioco, avvio di una corsa dal menu).
+  `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --mute-audio`. Si lancia prima di ogni push
+  su `main`; il workflow `.github/workflows/verifiche.yml` la ripete in CI. Le prove nuove usano gli aiuti di
+  `tests/gioco.js` (gioco aperto una volta per worker, avvio di una corsa dal menu, errori della pagina) e, per
+  guidare, il pilota di `tests/guida.js`.
+* Rapporto di verifica sulla mappa: `python3 scripts/verifica_mappa.py` sul JSON (dopo ogni rigenerazione) e
+  `tests/mappa.spec.js` nel gioco. Escono con errore sopra le soglie in testa ai due file: se un numero scende, si
+  abbassa la soglia nello stesso commit; se sale per una buona ragione, si alza scrivendo il perché nel commit.
 * `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
   `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.

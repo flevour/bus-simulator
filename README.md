@@ -12,7 +12,27 @@ npm install
 npm run dev        # server di sviluppo su http://localhost:5173
 npm run build      # build di produzione in dist/
 npm run build:single  # un unico file HTML autosufficiente in dist-single/index.html
+npm test           # prove nel browser headless (Playwright); la prima volta: npx playwright install --only-shell chromium
 ```
+
+### Verifiche
+
+`npm test` compila il gioco senza PostHog in una cartella temporanea, lo serve su una porta libera e lancia le prove
+di `tests/` in Chromium headless (WebGL in software):
+
+* `avvio.spec.js`: il gioco si carica, una corsa del bus e una del tram partono e avanzano senza errori;
+* `giro.spec.js`: giro guidato su linee campione, bus e tram, fino alle fermate successive. Il pilota automatico sta
+  nella prova (`tests/guida.js`), si guida senza traffico; la prova fallisce se una fermata non si raggiunge o il
+  mezzo urta un ostacolo fisso;
+* `mappa.spec.js`: rapporto di verifica sulla mappa nel gioco: pali dei semafori, paline, lampioni, alberi e
+  pensiline rispetto al bordo dell'asfalto, e il bus fermo in ogni fermata di tutte le varianti (ostacoli, ruote
+  oltre il cordolo, fermate agganciate lontano dalla fermata vera).
+
+`python3 scripts/verifica_mappa.py` (serve `shapely`) controlla il JSON della mappa: edifici in carreggiata e nella
+corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m.
+Script e rapporto nel gioco escono con errore quando un numero supera la sua soglia, fissata sui valori del 9
+novembre 2026 (in testa ai due file). Il workflow `.github/workflows/verifiche.yml` lancia build, `npm test` e lo
+script a ogni push su `main`.
 
 ### Pubblicazione su GitHub Pages
 

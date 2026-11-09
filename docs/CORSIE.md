@@ -17,7 +17,11 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
    ```
    `npm test` compila il gioco senza PostHog in una cartella temporanea, lo serve su una porta libera e lancia le
    prove di Playwright in `tests/`. La prima volta (o quando il rebase porta una versione nuova di Playwright):
-   `npm install` e `npx playwright install --only-shell chromium`.
+   `npm install` e `npx playwright install --only-shell chromium`. La corsia `mappa`, dopo ogni rigenerazione,
+   lancia anche `python3 scripts/verifica_mappa.py --elenco` (venv con `shapely`). Il rapporto della mappa
+   (`tests/mappa.spec.js` e lo script) ha soglie fissate sui valori del 9 novembre: se un numero scende si abbassa
+   la soglia nello stesso commit, se sale per una buona ragione si alza scrivendo il perché nel commit. Lo stesso
+   controllo gira in CI (workflow Verifiche) a ogni push su `main`.
 4. Conflitti nel rebase:
    - `src/data/novita.js` e `IDEE.md`: si tengono le righe di tutti; in `novita.js` la riga nuova va in cima con
      `n` successivo all'ultimo di `main`;
@@ -50,27 +54,25 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | Corsia | Workspace herdr | Porte dev / preview |
 |---|---|---|
 | checkout principale | `bus-simulator` | 5173 / 4173 |
-| `verifiche` | `verifiche` | 5174 / 4174 |
+| `verifiche` (chiusa il 9 novembre) | `verifiche` | 5174 / 4174 |
 | `mappa` | `mappa` | 5175 / 4175 |
 | `tram-reti` (chiusa il 9 novembre) | `tram-reti` | 5176 / 4176 |
 | `segnalazioni` (chiusa il 9 novembre) | `segnalazioni` | 5177 / 4177 |
 
 ### verifiche
 
-Obiettivo: un controllo automatico che ogni corsia lancia prima del push, e lo stesso in CI.
+Chiusa il 9 novembre 2026. Cosa c'è (dettagli nel README, sezione "Verifiche"):
 
-- Test nel browser headless con Playwright (flag e uso di `window.__game` in `CLAUDE.md`): il gioco si carica, una
-  corsa parte con `startMission()`, `sim()` avanza senza errori in console. Playwright come dipendenza di sviluppo
-  del progetto, con uno script `npm test`.
-- Un giro guidato in headless: il gioco non ha un autopilota, va scritto nel test (sterzo verso il punto successivo
-  del percorso con `keys`, oppure comandi diretti sul bus) e deve arrivare alla fermata successiva su alcune linee
-  campione, bus e tram.
-- Rapporto di verifica sulla mappa (sezione 6.1 di [`PIANO_MODELLO_CITTA.md`](PIANO_MODELLO_CITTA.md)) come script a
-  parte che legge `src/data/padova-map.json`: pali e paline sul marciapiede, edifici fuori dalle strade, percorsi
-  dei bus liberi, fermate raggiungibili. Esce con errore sopra soglie fissate sui valori di oggi.
-- Workflow GitHub che lancia build e test a ogni push su `main`.
-- Non tocca il codice del gioco. File: `tests/`, `scripts/verifica_mappa.py`, `.github/workflows/`, `package.json`.
-- Finito il lavoro, aggiunge in questo file il comando di test al punto 3 delle regole.
+- `npm test` (Playwright, dipendenza di sviluppo): il gioco si carica e una corsa del bus e una del tram avanzano
+  senza errori (`tests/avvio.spec.js`); giro guidato fino alle fermate successive sulle linee 24, 10 (snodato), 3,
+  14 e sul SIR1 nei due versi, con un pilota scritto nella prova (`tests/guida.js`), senza traffico
+  (`tests/giro.spec.js`); rapporto di verifica sulla mappa nel gioco (`tests/mappa.spec.js`). Ogni worker apre il
+  gioco una volta; in tutto circa 2 minuti.
+- `scripts/verifica_mappa.py`: rapporto sul JSON della mappa, in pochi secondi.
+- `.github/workflows/verifiche.yml`: build, `npm test` e lo script a ogni push su `main`, con i rapporti come
+  artefatti. Non ferma la pubblicazione su GitHub Pages.
+- Se si riapre: pilota più bravo nelle svolte a T e in quelle strette (sbaglia sulle linee 9 e 21) per allargare il
+  giro guidato a tutte le linee; casi di prova dalle segnalazioni di chi gioca.
 
 ### mappa
 
@@ -87,6 +89,18 @@ piano del modello della città, prossimi passi 1).
   zona Plebiscito; cavalcavia e posizione dei fiumi; correzioni del piazzale della stazione segnalate dalla corsia
   `segnalazioni`. Svolte a sinistra protette ai semafori (`TrafficLights` in `traffic.js`) quando ci sono le corsie.
 - Le corsie preferenziali vere nel traffico (auto che non le usano) spettano alla corsia del traffico (onda 2).
+- Richieste della corsia `verifiche` (rapporto della mappa del 9 novembre; elenchi completi con
+  `python3 scripts/verifica_mappa.py --elenco` e in `test-results/*/rapporto-mappa.json` dopo `npm test`):
+  - **lampioni in carreggiata**: 1.120 su 5.475 stanno dentro l'asfalto misurato, perché si piazzano a metà
+    larghezza OSM più 1,9 m (`city.js`, dopo gli alberi del DBGT) con il controllo sui nastri delle strade invece del
+    bordo vero dell'asfalto. Sono ostacoli: la linea 5 in partenza dall'Ospedale ne urta uno dopo un metro;
+  - **fermate dove il bus fermo tocca un ostacolo** (20): Milano 61 in Corso Milano (facciata sul bordo
+    dell'asfalto, linee 6, 9, 10, 42), Tommaseo 114 (edificio), Buonarroti 46 (edificio), Giotto Centro Strada (muro),
+    e un lampione a Siracusa 20, Vicenza 16, Sorio 96, Maroncelli 69, Foscolo e Croce Verde;
+  - punti dove il giro guidato urta una facciata sul bordo dell'asfalto stando nella sua corsia, da guardare: Via
+    Curtatone e Montanara all'incrocio (linee 6 e 12), Via Sberti vicino al capolinea Boccaccio (13);
+  - **fermate agganciate a più di 40 m dalla fermata vera** (47): oltre alla linea 22 verso Mandria (sotto), Due
+    Palazzi e Montà (11, 11B, fino a 1,5 km), Sorio fr. 96 e Via Sorio 77 (6, 12), Bembo 95 (3), Montà 96 (21).
 - Richieste della corsia `segnalazioni`:
   - **linea 22 verso Mandria (varianti 0, 3, 4, 7, 8)**: Via Madonna della Salute e il Cavalcavia Mortise tra la
     rotonda di Mortise (45,4340 N) e Via Cardan (45,4265 N) stanno tra 11,9135 e 11,915 E, appena fuori da `FOCUS`
