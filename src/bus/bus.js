@@ -85,13 +85,13 @@ export class Bus {
     // e blu e argento, ispirata agli snodati Busitalia Veneto della linea 10 (argento, fascia alta e tetto blu, filetti blu e giallo).
     // Come da CLAUDE.md si riprendono colori e stile, non loghi o marchi aziendali.
     // Campi facoltativi: belt (filetto sotto i finestrini), roofBand (fascia sotto il tetto), accent2 (secondo filetto basso),
-    // glass (vetri scuri), logo (scritta sulla fascia alta), wave (decorazione a onda), electric.
+    // glass (vetri scuri), logo (scritta sulla fascia alta), wave (decorazione a onda), electric, threeDoors (terza porta in coda).
     const LIV = {
       moderna: { lower: 0xc3c7cc, upper: 0xd8dbdf, stripe: 0xa6d22e, door: 0x7a1f2b, accent: 0x1d3b8f, roof: 0x2a56c6, electric: true, label: '100% ELETTRICO', fleet: '46' + String(100 + ((lineInfo.id.charCodeAt(0) * 7) % 900)).padStart(3, '0') },
-      storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, accent: 0x5a5f66, roof: 0xe0e0dc, label: '', fleet: String(800 + ((lineInfo.id.charCodeAt(0) * 3) % 90)) },
-      aps: { lower: 0xf4f4f2, upper: 0xd42430, stripe: 0x141517, door: 0x141517, accent: 0x141517, roof: 0xf0f0ee, label: '', fleet: String(600 + ((lineInfo.id.charCodeAt(0) * 5) % 60)),
+      storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, accent: 0x5a5f66, roof: 0xe0e0dc, threeDoors: true, label: '', fleet: String(800 + ((lineInfo.id.charCodeAt(0) * 3) % 90)) },
+      aps: { lower: 0xf4f4f2, upper: 0xd42430, stripe: 0x141517, door: 0x141517, accent: 0x141517, roof: 0xf0f0ee, threeDoors: true, label: '', fleet: String(600 + ((lineInfo.id.charCodeAt(0) * 5) % 60)),
         glass: 0x0c0d0f, logo: { text: 'Padova', y: 2.84, z: 2.6, bg: '#d42430', fg: '#ffffff' } },
-      blu: { lower: 0xe4e7ec, upper: 0x2a44c4, stripe: 0x2a44c4, belt: 0x141517, door: 0xc22a30, accent: 0x2a44c4, accent2: 0xf2c200, roof: 0x2a44c4, electric: true, twoDoors: true, doorColors: [0x3aa845, 0xc22a30],
+      blu: { lower: 0xe4e7ec, upper: 0x2a44c4, stripe: 0x2a44c4, belt: 0x141517, door: 0xc22a30, accent: 0x2a44c4, accent2: 0xf2c200, roof: 0x2a44c4, electric: true, doorColors: [0x3aa845, 0xc22a30],
         glass: 0x0c0d0f, label: 'ELETTRICO', labelFg: '#2a44c4', fleet: String(80 + ((lineInfo.id.charCodeAt(0) * 3) % 20)) },
       busitalia: { lower: 0xf3f3f0, upper: 0xa9cf2c, stripe: 0xa9cf2c, belt: 0xa9cf2c, roofBand: 0x141517, door: 0x24272b, accent: 0xa9cf2c, roof: 0xeeeeea, electric: true,
         glass: 0x0c0d0f, label: 'ELETTRICO', labelFg: '#4a7d1a', fleet: '7' + String((lineInfo.id.charCodeAt(0) * 11) % 100).padStart(2, '0'),
@@ -103,8 +103,9 @@ export class Bus {
     const liv = LIV[lineInfo.livery] || LIV.moderna;
     this.livery = lineInfo.livery || 'moderna';
     this.electric = !!liv.electric;
-    // porte: u = 0 motrice, 1 rimorchio. Alcune livree hanno solo anteriore (salita) e centrale (discesa)
-    this.doors = this.articulated ? ART.doors : BUS.doors.slice(0, liv.twoDoors ? 2 : 3).map((d) => ({ ...d, u: 0 }));
+    // porte: u = 0 motrice, 1 rimorchio. Il 12 m ha solo anteriore (salita) e centrale (discesa), tranne le livree
+    // arancio (storica) e rossa (aps) che hanno anche la porta posteriore
+    this.doors = this.articulated ? ART.doors : BUS.doors.slice(0, liv.threeDoors ? 3 : 2).map((d) => ({ ...d, u: 0 }));
     this.doorOpen = this.doors.map(() => 0);
     const paint = lam(liv.upper);
     const lower = lam(liv.lower);

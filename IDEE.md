@@ -213,7 +213,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [x] Sede tranviaria del SIR1 con corsie rosse e rotaia; tram automatici dall'orario GTFS (quanti ne sono in servizio
   a quell'ora, ognuno sulla sua corsa; al capolinea prendono la corsa successiva).
 - [x] Livree: moderna elettrica (argento, tetto blu, verde lime) e storica arancione e bianca; poi rosso e bianco,
-  elettrico blu a due porte (salita verde, discesa rossa), elettrico verde lime, blu e argento.
+  elettrico blu (salita dalla porta verde, discesa dalla rossa), elettrico verde lime, blu e argento. Il 12 m ha due
+  porte, davanti e in mezzo; la terza in fondo solo sull'arancione e sul rosso.
 - [x] Bus snodato da 18 m sulla linea 10 (rimorchio che segue la ralla, quattro porte, soffietto).
 - [x] Comandi touch per smartphone: volante e pedali analogici, pulsanti a video, HUD compatto.
 - [x] Sguardo col mouse (trascinamento), V o doppio clic per tornare avanti.

@@ -226,12 +226,12 @@ function liveryFor(line, idx, t) {
 const HW = 1.275, L2 = 6, Y0 = 0.32, YB = 1.12, YW = 2.62, YT = 3.05;
 const M = new THREE.Matrix4(), M2 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-const DOORS = [[4.25, 5.45], [0.2, 1.4], [-4.4, -3.2]];
+const DOOR_Z = [[4.25, 5.45], [0.2, 1.4], [-4.4, -3.2]];
 const LIV = {
   moderna: { lower: 0xc3c7cc, upper: 0xd8dbdf, stripe: 0xa6d22e, door: 0x7a1f2b, roof: 0x2a56c6, electric: true },
-  storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, roof: 0xe0e0dc, electric: false },
+  storica: { lower: 0xf2992b, upper: 0xebebe7, stripe: 0xf2992b, door: 0xf2992b, roof: 0xe0e0dc, electric: false, threeDoors: true },
   // versioni semplificate delle livree di src/bus/bus.js (stessi colori, sempre 12 m)
-  aps: { lower: 0xf4f4f2, upper: 0xd42430, stripe: 0x141517, door: 0x141517, roof: 0xf0f0ee, electric: false },
+  aps: { lower: 0xf4f4f2, upper: 0xd42430, stripe: 0x141517, door: 0x141517, roof: 0xf0f0ee, electric: false, threeDoors: true },
   blu: { lower: 0xe4e7ec, upper: 0x2a44c4, stripe: 0x141517, door: 0xc22a30, roof: 0x2a44c4, electric: true },
   busitalia: { lower: 0xf3f3f0, upper: 0xa9cf2c, stripe: 0xa9cf2c, door: 0x24272b, roof: 0xeeeeea, electric: true },
   veneto: { lower: 0xc7cbd2, upper: 0x2c3fbf, stripe: 0x23262c, door: 0x2a2d33, roof: 0x3550d6, electric: true },
@@ -255,6 +255,8 @@ const GEO = {};
 function busGeometry(livery) {
   if (GEO[livery]) return GEO[livery];
   const L = LIV[livery] || LIV.moderna, dark = 0x1d1f22, glass = 0x1d2a33;
+  // due porte (anteriore e centrale), tre solo per le livree arancio (storica) e rossa (aps)
+  const DOORS = L.threeDoors ? DOOR_Z : DOOR_Z.slice(0, 2);
   const body = [], doors = [], lights = [];
   const arches = [3.3, -2.6].map((a) => [a - 0.62, a + 0.62]);
   for (const side of [1, -1]) {

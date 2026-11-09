@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 46, d: '2026-11-09', t: 'Gli autobus da 12 metri hanno due porte, quella davanti per salire e quella in mezzo per scendere; solo l\'arancione storico e il rosso e bianco hanno ancora la terza porta in fondo. Vale anche per i bus che incontri per strada.' },
   { n: 45, d: '2026-11-09', t: 'Alle fermate il bus si accosta parallelo al marciapiede vero anche dove il marciapiede è storto rispetto alla strada (Largo Debussy), senza salirci sopra; le strisce gialle della fermata stanno dove si ferma il bus. Niente più mezzeria tratteggiata nei piazzali.' },
   { n: 44, d: '2026-11-09', t: 'Fermate al loro posto vero, prese dalle paline di OpenStreetMap, con la pensilina solo dove c\'è davvero. A Largo Debussy il bus aspetta lungo il giardino, come nella realtà, e arrivo e partenza hanno una sola fermata; alla stazione si parte dalla corsia accanto alla banchina.' },
   { n: 43, d: '2026-11-09', t: 'Quote del terreno più precise, dal rilievo laser (LiDAR) della Regione: argini, rive e piccoli dislivelli come sono davvero.' },
