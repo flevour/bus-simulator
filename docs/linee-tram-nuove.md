@@ -144,6 +144,35 @@ Chiesanuova a ovest, Net Center, San Lazzaro, Ponte di Brenta e Vigonza a est so
 `data/osm-padova.json` arriva fin là (lat 45,32–45,67, lon 11,69–11,99): allargare l'area è una scelta dei riquadri
 `FOCUS` di `build_map.py`, non dei dati.
 
+## Dati delle linee (tappa 1)
+
+`scripts/tram_linee.py` scrive [`data/tram-linee-nuove.json`](../data/tram-linee-nuove.json): per linea (colore dei KML
+del Comune, moduli, frequenza) e per verso il percorso sui binari OSM (lat/lon, con 90-160 m di binario prima della
+prima fermata e dopo l'ultima), le fermate in ordine con la progressiva `s` in metri, gli `offsets` in secondi e le
+partenze feriali e festive `[ora, durata]` come le linee della mappa.
+
+```bash
+python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-fermate-nuove.json data/tram-linee-nuove.json
+```
+
+* **Stazione**: SIR2 e SIR3 passano dall'anello interno, il SIR1 resta sull'esterno. In OSM l'anello interno e i quattro
+  raccordi tra i due anelli ci sono e sono collegati, ma senza senso unico: lo script li percorre in senso antiorario.
+  Stazione nord e Stazione sud stanno sui lati lunghi dell'anello interno, tra i raccordi (55 m di rettilineo, ci sta
+  un convoglio da 4 casse). Il SIR3 arriva da Pace sul lato nord, ferma a Stazione nord, gira l'anello e finisce a
+  Stazione sud, da dove riparte; il SIR2 verso est ferma a Stazione sud, verso ovest a Stazione nord e poi scende sul
+  binario del SIR1 nel Corso del Popolo.
+* **De Gasperi** è sul Corso del Popolo dove il KML del SIR2 aveva Trieste, un nodo per binario.
+* **Orario**: SIR3 ogni 8 minuti, 18 minuti da capolinea a capolinea; SIR2 ogni 7 minuti, 54 minuti a 18 km/h
+  (velocità commerciale del SIR3, quella del SIR2 non è pubblicata). Dalle 5.40 alle 7 e dalle 21 ogni 15 minuti, dalle
+  20 alle 21 ogni 10; festivi ogni 15 minuti, ogni 30 dopo le 21. Sosta di 20 s a ogni fermata.
+
+| Linea e verso | Percorso | Fermate |
+|---|---|---|
+| SIR3 → Voltabarozzo | 5390 m | 13, da Stazione sud a Voltabarozzo |
+| SIR3 → Stazione | 5531 m | 14, da Voltabarozzo a Stazione nord e Stazione sud |
+| SIR2 → Busa di Vigonza | 16 277 m | 35 |
+| SIR2 → Rubano | 16 318 m | 35 |
+
 ## Piano
 
 Prima il SIR3 (apre per primo e la parte nel gioco è quasi tutta già dentro la mappa), poi il SIR2.
