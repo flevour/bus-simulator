@@ -23,8 +23,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [~] **girare nei depositi con gli scambi** (chiesto l'11 novembre): rete dei binari con i bivi, dove il tram di chi
      gioca prosegue sul ramo su cui è messo lo scambio (in servizio da soli secondo la linea, in Esplorazione e Giro
      libero con N, anche tra le linee): fatti i bivi tra le linee e i depositi della Guizza e di Voltabarozzo (vedi
-     "Fatto"); restano Rubano, la seconda comunicazione di Voltabarozzo e l'uscita dal deposito e il rientro nei turni.
-     Corsia `tram-scambi`;
+     "Fatto"), con l'uscita dalla rimessa e il rientro nei turni; restano Rubano e la seconda comunicazione di
+     Voltabarozzo. Corsia `tram-scambi`;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
 2. [~] **Nuovo piazzale della stazione e linee SIR2, SIR3**: grafo dei binari con i due anelli e le due linee nel
    gioco per il tratto in città fatti (vedi "Fatto"; dettagli in [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md)).
@@ -108,8 +108,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        lanterne stradali della corsia riservata di Via Tommaseo, che nessuna logica del tram guardava; ora sono il suo
        segnale (chiamata del verde, stop dei tram automatici, penalità col rosso);
      - [~] capolinea della Guizza come in OSM (comunicazione prima delle banchine, anello di ritorno, deposito con
-       8-9 binari e anello esterno), corsia `tram-scambi`: fatto il deposito, guidabile in Esplorazione e Giro libero
-       (vedi "Fatto"); restano l'uscita della prima corsa del turno e il rientro dell'ultima;
+       8-9 binari e anello esterno), corsia `tram-scambi`: fatti il deposito, guidabile in Esplorazione e Giro libero,
+       e in servizio l'uscita dalla rimessa della prima corsa del turno e il rientro dopo l'ultima (vedi "Fatto");
      - [~] binari di Voltabarozzo come in OSM (comunicazioni, anello di ritorno, rimessa) e segnale dello scambio che
        mostra la posizione (all'arrivo è un pannello nero), corsia `tram-turni`: fatti la comunicazione dopo le
        banchine e il segnale con la posizione (il pannello nero è il retro di una lanterna del tram, segnalato a
@@ -265,6 +265,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Uscita dalla rimessa e rientro del tram nei turni** (corsia `tram-scambi`, 11 novembre): in servizio, con
+  "Parti dal deposito", la prima corsa di un turno da un capolinea col deposito (Guizza, Voltabarozzo) comincia su un
+  binario della rimessa, fuori servizio, 5 minuti prima della partenza: gli scambi li mette il gioco fino alla porta del
+  binario di partenza (`TramYard.plan`) e uscendo il tram passa sul percorso della corsa. Dopo l'ultima corsa del turno
+  verso uno di questi capolinea il riepilogo ha "Fine turno: rientra in rimessa": scambi messi fino in fondo a un binario
+  della rimessa, e lì il riepilogo del turno. Navigatore e display dicono "fuori servizio"; la corsa non si salva.
+  Prova in `tests/depositi-tram.spec.js`.
 - [x] **Depositi del tram della Guizza e di Voltabarozzo** (corsia `tram-scambi`, 11 novembre): i binari di servizio di
   OSM (`scripts/tram_depositi.py` → `data/tram-depositi.json`, senza le comunicazioni dei capolinea) diventano il grafo
   del deposito (`TramYard` in `src/tram/tram.js`): rami tra i nodi, porte alla fine dei binari della linea, scambi dove

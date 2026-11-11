@@ -187,6 +187,8 @@ export class Mission {
     if (this.finished) { this.crowd.update(dt); return; }
     const front = bus.toWorld(0, 6);
     if (this.free) { this.updateFree(dt, bus, ctx, front); return; }
+    // tram in uscita dalla rimessa, fuori servizio: ancora fuori dal percorso della corsa (main.js, tramDepotExit)
+    if (this.depotOut) { this.updateFree(dt, bus, ctx, front); return; }
     const proj = projectOnRoute(this.route, bus.x, bus.z, this.s, 80, 400, bus.h);
     if (proj.d < 60) this.s = proj.s;
     this.proj = proj;

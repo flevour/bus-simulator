@@ -556,6 +556,38 @@ export class TramYard {
   }
   // capo della porta al suo nodo: si arriva da lì entrando nel deposito dal binario della linea
   portEnd(pt) { return this.nodes[pt.node].ends.findIndex((x) => x.port === pt); }
+  // il capo E (un ramo) porta in fondo a un binario tronco?
+  deadEnd(E) { const { n, i } = this.endAt(E.e, E.at === 'a'); return !this.through(n, i).length; }
+  // dove può stare un tram lungo len, col verso in cui ripartire ({ e, fwd }): prima i binari della rimessa
+  // (building_passage) e, tra quelli, i tronchi col fondo dietro al tram
+  parking(len) {
+    const out = [];
+    for (const e of this.edges) for (const fwd of [true, false]) {
+      if (e.len < len || e.service === 'linea') continue;
+      const n = fwd ? e.a : e.b, i = this.nodes[n].ends.findIndex((x) => x.e === e && x.at === (fwd ? 'a' : 'b'));
+      out.push({ e, fwd, rank: (e.tunnel ? 0 : 2) + (this.through(n, i).length ? 1 : 0) });
+    }
+    return out.sort((p, q) => p.rank - q.rank);
+  }
+  // posizioni degli scambi per andare dal nodo n, arrivando dal capo i, fino a prendere un capo E con ok(E): [[sw, k]]
+  // (k: indice in sw.options), o null se non ci si arriva
+  plan(n, i, ok) {
+    const seen = new Set();
+    const go = (n, i, acc) => {
+      if (seen.has(n + ':' + i)) return null;
+      seen.add(n + ':' + i);
+      const sw = this.switches.get(n + ':' + i);
+      for (const k of this.through(n, i)) {
+        const E = this.nodes[n].ends[k], acc2 = sw ? [...acc, [sw, sw.options.indexOf(k)]] : acc;
+        if (ok(E)) return acc2;
+        if (E.port) continue;
+        const nx = this.endAt(E.e, E.at === 'a'), r = go(nx.n, nx.i, acc2);
+        if (r) return r;
+      }
+      return null;
+    };
+    return go(n, i, []);
+  }
 }
 // Percorso del tram di chi gioca nel deposito: pezzi di binario della linea ({ main: T, dir, s0, s1, portAt: 0 o 1, il
 // capo del pezzo dov'è la porta }) e rami ({ e, fwd }), in fila nel verso in cui il tram si muove. Il tram ci corre come su
@@ -1089,10 +1121,10 @@ export class Tram {
   }
   // il tram su un altro percorso, col muso della cabina attiva a sFront e in marcia verso facing (+1: s crescente): la
   // stessa cabina attiva e la stessa velocità
-  reseat(track, dir, path, sFront, facing) {
+  reseat(track, dir, path, sFront, facing, offset = 0) {
     const wasA = this.activeCab === this.modules[0], v = this.v;
     this.track = track;
-    this.setPath(path, dir, 0, null);
+    this.setPath(path, dir, offset, null);
     this.facing = facing;
     this.aFwd = wasA ? facing : -facing;
     this.sA = facing === this.aFwd ? sFront : sFront + this.aFwd * this.length;
@@ -1104,7 +1136,7 @@ export class Tram {
   // tram tutto oltre la comunicazione passa su quel binario davvero, all'indietro: così la porta è quella del suo capo
   yardEnter() {
     if (!this.yards || this.yard) return false;
-    const sf = this.sFront, fw = this.facing > 0;
+    const sf = this.pathOffset + this.sFront, fw = this.facing > 0; // sul binario intero (in servizio il percorso è un pezzo)
     // tutto il tram sul tratto dello scambio del capolinea dove corre sull'altro binario, andando verso il tronco: ci passa
     // davvero (oltre la comunicazione 'avanti' dal binario d'arrivo, prima di quella 'dopo' dal binario di partenza)
     const t = this.xend || this.xover;
@@ -1120,7 +1152,7 @@ export class Tram {
       if (pt.T !== this.track || pt.dir !== this.dirSig || (pt.kind === 'end') !== fw) continue;
       const d = fw ? pt.s - sf : sf - pt.s;
       if (d < -1 || d > 3) continue;
-      const back = fw ? Math.max(0, sf - this.length - 30) : Math.min(this.path.len, sf + this.length + 30);
+      const back = fw ? Math.max(0, sf - this.length - 30) : Math.min(pt.T.path(pt.dir).len, sf + this.length + 30);
       const r = Y.route(pt.node, Y.portEnd(pt));
       this.yardGo(Y, [{ main: pt.T, dir: pt.dir, s0: back, s1: pt.s, portAt: 1 }], r, (run) => run.bounds[1] - d, 1);
       return true;
@@ -1138,8 +1170,15 @@ export class Tram {
     }
     const run = new YardRun(Y, pieces, []);
     run.sws = r.sws.map((x) => ({ sw: x.sw, y: run.bounds[keep.length] + x.at }));
+    // finito su un binario tronco: non si rifà più finché non cambia qualcosa
+    run.done = !last || (!last.port && r.len < 800);
     this.yard = run;
     this.reseat(run, 1, run.P, y(run), facing);
+  }
+  // il tram nel deposito su un ramo (piece: { e, fwd }, nel verso di marcia), col muso a y metri dal suo inizio
+  yardStart(Y, piece, y) {
+    const { n, i } = Y.endAt(piece.e, piece.fwd);
+    this.yardGo(Y, [piece], Y.route(n, i), () => y, 1);
   }
   // nel deposito, a ogni passo: tutto il tram su un pezzo di binario della linea, andando via dalla porta, si torna sul
   // binario intero; a meno di 40 m dalla fine del percorso fatto, o dopo un cambio cabina o uno scambio girato, si rifà
@@ -1159,6 +1198,7 @@ export class Tram {
       // quello di partenza; lo scostamento dello scambio torna quando il tram è tutto prima della comunicazione
       const xe = this.xend, tb = this.sFront - this.facing * this.length;
       if (xe && (xe.off(this.sFront) || xe.off(tb))) { this.xendHold = xe; this.xend = null; }
+      if (this.onYardExit) this.onYardExit();
       return;
     }
     const ahead = m > 0 ? Y.P.len - sf : sf;
@@ -1183,9 +1223,6 @@ export class Tram {
       r = Y.yard.route(n, i);
     }
     this.yardGo(Y.yard, keep, r, y, 1);
-    // finito su un binario tronco: non si rifà più finché non cambia qualcosa
-    const last = r.pieces[r.pieces.length - 1];
-    this.yard.done = !last || (!last.port && r.len < 800);
   }
   // il prossimo scambio del deposito preso di punta davanti al muso, entro max metri: { sw, d } o null. Sul binario della
   // linea quello dopo la porta verso cui si va
@@ -1197,7 +1234,7 @@ export class Tram {
       return best;
     }
     if (!this.yards) return null;
-    const sf = this.sFront, fw = this.facing > 0;
+    const sf = this.pathOffset + this.sFront, fw = this.facing > 0;
     for (const Y of this.yards) for (const pt of Y.ports) {
       if (pt.T !== this.track || pt.dir !== this.dirSig || (pt.kind === 'end') !== fw) continue;
       const d = fw ? pt.s - sf : sf - pt.s;

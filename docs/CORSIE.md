@@ -819,9 +819,12 @@ In quest'ordine:
    tram di chi gioca (`bus.yards`, solo fuori servizio): `Tram.yardEnter`, `yardStep`, `yardRebuild`, `yardAhead` (per
    N), `reseat`. Fuori servizio, ai capolinea con lo scambio, tutto il tram sul tratto dove corre sull'altro binario e in
    marcia verso il tronco passa davvero su quel binario (`yardEnter`), e uscendo dal deposito sul tronco d'arrivo lo
-   scostamento dello scambio aspetta che il tram sia tutto prima della comunicazione (`xendHold`). Restano: uscita della
-   prima corsa del turno dalla rimessa e rientro dell'ultima, in servizio (con `tram-turni` per l'orario: le prime corse
-   dei turni entrano alla banchina di partenza, le ultime escono a quella d'arrivo); la seconda comunicazione di
+   scostamento dello scambio aspetta che il tram sia tutto prima della comunicazione (`xendHold`). Fatte anche, in
+   servizio, l'uscita della prima corsa del turno dalla rimessa e il rientro dopo l'ultima (`tramDepotExit`,
+   `tramToDepot`, `tramDepotCheck` in `main.js`; `Mission.depotOut` in `mission.js`; per `tram-turni`: le corse sono quelle
+   di `turnoOf`, l'uscita comincia 5 minuti prima della partenza, il rientro è un pulsante del riepilogo come per il bus,
+   `showShiftEnd` dice "tram in rimessa"; nel menu `refreshTurno` mostra "Esci dal deposito" e la nota della rimessa anche
+   per il tram). Restano la seconda comunicazione di
    Voltabarozzo (053, tra i due binari verso sud: tocca il binario di partenza a metà, va fatta come porta a metà
    binario); i tram automatici nel deposito.
 4. **Voltabarozzo** sulla stessa rete: anello di ritorno e rimessa (quattro binari nel capannone più uno a est) dallo

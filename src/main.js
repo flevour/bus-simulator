@@ -461,6 +461,8 @@ function closeTramResults() {
 // e a fine corsa la manovra al capolinea fino al punto dove B fa partire la corsa dopo
 function tramNav() {
   if (mission.free || mission.transfer) return null;
+  if (mission.depotOut) return { dist: 0, dir: 'straight', text: 'Esci dalla rimessa', street: `Fuori servizio fino alla banchina di ${mission.stops[0].name}` };
+  if (tramRientro) return { dist: bus.yard ? Math.max(0, bus.yard.P.len - bus.sFront) : 0, dir: 'straight', text: 'Rientro in rimessa', street: 'Avanti fino in fondo al binario della rimessa' };
   if (!mission.finished) return bus.facing < 0 ? { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: `Si guida all'indietro: la corsa per ${mission.dest} è dall'altra parte` } : null;
   const t = nextOfTurno(), next = t && t.next;
   if (!next) return { dist: 0, dir: 'straight', text: 'Ultima corsa del turno', street: 'Dal menu (Esc) scegli una corsa nuova' };
@@ -472,6 +474,68 @@ function tramNav() {
   if (tramAtTerminal(term) != null) return { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: `Si riparte sull'altro binario, ${after}` };
   const tail = bus.pathOffset + bus.sFront - bus.length, need = Math.max(1, (term.field === 'arr' ? term.heel : term.link) - tail + 1);
   return { dist: need, dir: 'straight', text: `Avanti ${Math.ceil(need)} m: tutto il tram oltre lo scambio`, street: 'Poi cambia cabina (B)' };
+}
+// Tram e rimessa (TramYard): la prima corsa del turno da un capolinea col deposito esce dalla rimessa, fuori servizio fino
+// alla banchina di partenza; dopo l'ultima si può rientrare. Gli scambi del deposito li mette il gioco (plan)
+let tramRientro = null; // { Y } mentre il tram torna in rimessa a fine turno
+function tramDepotPort(T, dir, kind) {
+  for (const Y of city.tramYards || []) { const pt = Y.ports.find((p) => p.T === T && p.dir === (dir > 0 ? 1 : -1) && p.kind === kind); if (pt) return { Y, pt }; }
+  return null;
+}
+// il tram su un binario della rimessa (TramYard.parking: in fondo a un tronco o su un passante), col muso verso l'uscita,
+// e gli scambi messi fino alla porta del binario di partenza della corsa; all'uscita il tram passa sul percorso della
+// corsa. false se non c'è il deposito o la strada
+function tramDepotExit(V) {
+  const d = tramDepotPort(bus.track, bus.dirSig, 'start');
+  if (!d) return false;
+  const { Y, pt } = d;
+  for (const pk of Y.parking(bus.length + 2)) {
+    const out = { e: pk.e, fwd: pk.fwd }, { n, i } = Y.endAt(pk.e, pk.fwd), ch = Y.plan(n, i, (E) => E.port === pt);
+    if (!ch) continue;
+    for (const [sw, k] of ch) { sw.state = k; sw.sign.update(); }
+    const path = bus.path, dir = bus.dirSig, offset = bus.pathOffset;
+    bus.yardStart(Y, out, bus.length + 1);
+    bus.onYardExit = () => {
+      bus.onYardExit = null;
+      bus.reseat(bus.track, dir, path, bus.sFront - offset, bus.facing, offset);
+      mission.depotOut = false;
+      mission.s = Math.max(0, bus.sFront - TRAM.ref);
+      bus.setDestination(settings.line.id, mission.dest);
+      hud.setLine(settings.line, mission.dest);
+      hud.toast(`In linea: alla banchina di ${mission.stops[0].name} apri le porte (F)`, 'info');
+    };
+    return true;
+  }
+  return false;
+}
+// fine turno: dal capolinea d'arrivo in fondo a un binario della rimessa, con gli scambi messi; lì il turno finisce
+function tramToDepot() {
+  const d = tramDepotPort(bus.track, bus.dirSig, 'end');
+  if (!d) return;
+  const { Y, pt } = d, need = bus.length + 2;
+  const tunnel = Y.edges.some((e) => e.tunnel);
+  const ch = Y.plan(pt.node, Y.portEnd(pt), (E) => !!E.e && Y.deadEnd(E) && E.e.len >= need && (!tunnel || !!E.e.tunnel));
+  if (!ch) { hud.toast('In rimessa non c\'è un binario libero', 'bad'); return; }
+  for (const [sw, k] of ch) { sw.state = k; sw.sign.update(); }
+  // il tram resta sul suo binario fino alla porta: lo scambio del capolinea diritto
+  const term = bus.track.terminals[bus.dirSig > 0 ? 1 : -1];
+  if (term && term.field === 'arr') setSwitch(term, 'diritto');
+  bus.yards = [Y];
+  tramRientro = { Y };
+  $('results').classList.add('hidden');
+  bus.setDestination('', 'Fuori servizio');
+  hud.setLine({ id: settings.line.id, color: OFF_COLOR }, 'Fuori servizio → Rimessa ' + Y.name);
+  hud.toast(`🅿️ Rientro in rimessa ${Y.name}: avanti fino in fondo al binario, gli scambi sono già messi`, 'info');
+  clearSave();
+}
+// rientro: fermo in fondo al binario della rimessa, il turno finisce
+function tramDepotCheck() {
+  const R = bus.yard;
+  if (!tramRientro || !R || !R.done || Math.abs(bus.v) > 0.05 || R.P.len - bus.sFront > 3) return;
+  const pc = R.pieces[R.pieces.length - 1];
+  if (!pc.e) return;
+  tramRientro = null;
+  showShiftEnd();
 }
 // Tram: N gira lo scambio più vicino davanti al tram: un bivio tra le linee preso di punta sul binario, entro 250 m
 // (TramNet), o lo scambio del capolinea entro 120 m. In servizio si girano da soli; non si girano mentre il tram ci passa
@@ -734,7 +798,8 @@ function togglePause(force) {
 // ------------------------------------------------------------------
 const SAVE_KEY = 'padova-bus-sim-save-v2';
 function saveGame() {
-  if (!running || !mission || !bus || mission.finished || mission.transfer) return false;
+  // fuori servizio (deposito del bus, rimessa del tram) non si salva
+  if (!running || !mission || !bus || mission.finished || mission.transfer || mission.depotOut || tramRientro) return false;
   const m = mission;
   const data = {
     v: 2,
@@ -919,13 +984,17 @@ function refreshTurno() {
   if (tn) {
     const mezzo = L.tram ? 'tram' : 'bus';
     txt = tn.of === 1 ? `Corsa unica del turno del ${mezzo}` : `Corsa ${tn.n} di ${tn.of} del turno del ${mezzo}`;
-    const out = tn.first && canLeaveDepot(curVariant());
-    if (out) txt += ' · esce dal deposito della Stanga';
-    if (tn.last && depot && !L.tram) txt += out ? ' e poi ci rientra' : ' · l\'ultima: poi si rientra in deposito';
+    // tram: la rimessa del capolinea da cui parte (prima corsa) o dove arriva (ultima), se c'è (TramYard)
+    const T = L.tram && city.tramTracks && city.tramTracks[L.id], d = T && T.dirOf(curVariant());
+    const fuori = T && tramDepotPort(T, d, 'start'), dentro = T && tramDepotPort(T, d, 'end');
+    const out = tn.first && (L.tram ? !!fuori : canLeaveDepot(curVariant()));
+    if (out) txt += L.tram ? ` · esce dalla rimessa ${fuori.Y.name}` : ' · esce dal deposito della Stanga';
+    if (tn.last && (L.tram ? dentro : depot)) txt += out ? ' e poi ci rientra' : L.tram ? ' · l\'ultima: poi si rientra in rimessa' : ' · l\'ultima: poi si rientra in deposito';
     if (L.tram && !tn.last) txt += ' · al capolinea B riparte con la corsa dopo';
+    tn.out = out;
   }
   $('turno-note').textContent = txt;
-  $('from-depot').hidden = !(tn && tn.first && canLeaveDepot(curVariant()));
+  $('from-depot').hidden = !(tn && tn.first && tn.out);
 }
 
 // elenco delle linee del mezzo scelto (autobus o tram)
@@ -1066,7 +1135,7 @@ function buildMenu() {
   $('res-menu').addEventListener('click', backToMenu);
   $('res-next').addEventListener('click', chainNext);
   $('res-manovra').addEventListener('click', closeTramResults);
-  $('res-depot').addEventListener('click', toDepot);
+  $('res-depot').addEventListener('click', () => (bus.isTram ? tramToDepot() : toDepot()));
   refreshMenu();
 }
 
@@ -1157,9 +1226,16 @@ function startMission(resume = null) {
   for (const j of city.tramNet ? city.tramNet.junctions : []) { j.manual = false; j.state = j.o.T.id === L.id && j.x.T.id !== L.id ? 'o' : 'x'; j.sign.update(); }
   for (const Y of city.tramYards || []) { Y.reset(); for (const sw of Y.switches.values()) sw.sign.update(); }
   junctionT = 0;
+  tramRientro = null;
   if (!mission.transfer) mission.dest = destName;
   const st0 = mission.stops[0];
-  if (mission.transfer) {
+  // tram, prima corsa del turno da un capolinea col deposito: si esce dalla rimessa fuori servizio fino alla banchina
+  const tnTram = bus.isTram && !resume && service && settings.fromDepot ? turnoOf(L, settings.variant, V, settings.departure) : null;
+  if (tnTram && tnTram.first && tramDepotExit(V)) {
+    mission.depotOut = true;
+    mission.clock = settings.departure - 300;
+    bus.setDestination('', 'Fuori servizio');
+  } else if (mission.transfer) {
     bus.setDestination('', 'Fuori servizio');
     clearSave(); // il fuori servizio non si salva: niente corsa vecchia da riprendere
   } else if (bus.isTram) {
@@ -1194,7 +1270,7 @@ function startMission(resume = null) {
   for (let i = 0; i < walkers.target; i++) walkers.spawn(bus);
   wireMission();
   turno = { corse: 0, score: 0, odo: bus.odometer, depot: !!mission.transfer };
-  hud.setLine(mission.transfer ? { id: L.id, color: OFF_COLOR } : L, mission.transfer ? 'Fuori servizio' : destName);
+  hud.setLine(mission.transfer || mission.depotOut ? { id: L.id, color: OFF_COLOR } : L, mission.transfer ? 'Fuori servizio' : mission.depotOut ? 'Fuori servizio → ' + st0.name : destName);
   hud.show(true);
   hud.setBigMap(false);
   $('menu').classList.add('hidden');
@@ -1228,6 +1304,9 @@ function startMission(resume = null) {
     hud.toast('Giro libero: esplora Padova, rispetta semafori e limiti', 'info');
   } else if (mission.transfer) {
     hud.toast(`🅿️ Si esce dal deposito fuori servizio: al capolinea ${mission.dest} entro le ${fmtHM(mission.arriveBy)} (${(mission.route.length / 1000).toFixed(1).replace('.', ',')} km)`, 'info');
+    setTimeout(() => running && hud.toast(`Poi la linea ${L.id} per ${destName} parte alle ${fmtHM(settings.departure)}`, 'info'), 2400);
+  } else if (mission.depotOut) {
+    hud.toast(`🅿️ Si esce dalla rimessa ${bus.yard.yard.name} fuori servizio: gli scambi sono già messi, avanti fino alla banchina di ${st0.name}`, 'info');
     setTimeout(() => running && hud.toast(`Poi la linea ${L.id} per ${destName} parte alle ${fmtHM(settings.departure)}`, 'info'), 2400);
   } else {
     hud.toast(`Linea ${L.id} per ${destName} – partenza ${fmtHM(settings.departure)}`, 'info');
@@ -1417,7 +1496,7 @@ function toDepot() {
 function showShiftEnd() {
   clearSave();
   const km = (bus.odometer - turno.odo) / 1000;
-  $('res-title').textContent = 'Turno finito: bus in deposito';
+  $('res-title').textContent = bus.isTram ? 'Turno finito: tram in rimessa' : 'Turno finito: bus in deposito';
   $('res-stars').textContent = '🅿️';
   $('res-score').textContent = turno.score + ' punti';
   const rows = [['Corse fatte', turno.corse], ['Chilometri percorsi', km.toFixed(1).replace('.', ',')], ['Rientro in deposito', fmtHM(mission.clock, true)]];
@@ -1469,7 +1548,9 @@ function showResults() {
   // tram: il riepilogo si chiude e si fa la manovra al capolinea (con B, a fine manovra, parte la corsa dopo)
   $('res-manovra').hidden = !bus.isTram;
   $('res-manovra').textContent = next ? '🔁 Fai la manovra al capolinea (Esc)' : 'Chiudi (Esc)';
-  $('res-depot').hidden = !t || !depot || bus.isTram; // il tram non ha ancora il suo deposito
+  // il tram rientra nella rimessa del capolinea dove arriva, se c'è (Guizza, Voltabarozzo)
+  $('res-depot').hidden = !t || (bus.isTram ? !tramDepotPort(bus.track, bus.dirSig, 'end') : !depot);
+  $('res-depot').textContent = bus.isTram ? '🅿️ Fine turno: rientra in rimessa' : '🅿️ Fine turno: rientra in deposito';
   $('res-depot').classList.toggle('primary', !next);
   $('res-menu').classList.toggle('primary', !next && $('res-depot').hidden);
   $('res-menu').textContent = t ? 'Torna al menu' : 'Nuova corsa';
@@ -1754,6 +1835,7 @@ function step(dt) {
   lights.update(dt);
   trams.update(dt, [bus, ...buses.parts, ...(traffic ? traffic.cars : [])], mission.clock);
   updateJunctions(dt);
+  if (tramRientro) tramDepotCheck();
   // incroci col tram: chiamata dei tram in arrivo, segnali a barre, precedenza delle auto
   tramSignals.update(dt, tramOccupancy(), traffic, bus);
   if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, x.ap ? '🚦 Passato col rosso!' : '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
