@@ -494,6 +494,20 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   `smoothTrack`. Correggere la geometria (rettilinei paralleli lungo le banchine, curve a raggio costante con i
   raccordi, scambi dove servono e non intrecci), rigenerare la mappa (regola 4), poi foto dall'alto e dalla cabina e
   una corsa guidata di SIR2 e SIR3 in stazione, con i tram automatici per 40 minuti senza blocchi.
+- **Dopo la stazione, scambi e cambio cabina come nella realtà** (chiesto da chi gioca l'11 novembre, foto di uno
+  scambio a un capolinea: `images/14.png` della sessione del checkout principale):
+  - "normalmente ai capolinea terminali c'è uno scambio che porta il tram sull'altra linea, si arriva fino in fondo e
+    poi si cambia cabina di guida": B cambia **solo** la cabina. Il tram resta dov'è, sul binario d'arrivo, e cambia il
+    verso di guida. Ripartendo passa dallo scambio sull'altro binario. Oggi `changeTramCab` lo sposta direttamente sul
+    binario dell'altro verso;
+  - gli scambi si vedono (segnale dello scambio con la posizione: diritto o deviato) e si possono mettere nell'altra
+    posizione rispetto a quella di partenza, per entrare nei depositi o fare un percorso diverso;
+  - **resta l'impostazione automatica** degli scambi per il piazzale, la stazione e altrove, secondo le linee che ci
+    sono: quella manuale è una possibilità in più, soprattutto ai capolinea con il deposito e in Esplorazione e Giro
+    libero, dove si sceglie dove andare girando gli scambi. Il percorso del tram di chi gioca deve seguire gli scambi
+    (oggi segue un percorso fisso per linea e verso): grafo dei binari con `track.switches`;
+  - prove: al capolinea B lascia il tram dov'è col verso cambiato, poi la corsa riparte passando dallo scambio; in
+    Esplorazione uno scambio girato porta il tram sull'altro ramo.
 - Poi, in quest'ordine: turni del tram e deposito della Guizza (uscita e rientro, IDEE punto 1), binario tronco della
   Guizza, binari dei depositi (Guizza e Voltabarozzo, OSM `service=yard`), interni. Il **deposito di Rubano** del
   SIR2 (rimesse passanti, anelli, officina: struttura in `linee-tram-nuove.md`, "SIR2 nel progetto del 2022") quando
