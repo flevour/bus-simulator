@@ -44,16 +44,17 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 
 | File | Chi lo modifica | Perché |
 |---|---|---|
-| `src/data/padova-map.json`, `public/mappa/aree/` | `mappa`, `capolinea` e `tram-turni`, una rigenerazione alla volta | la rete (una riga sola da 5,9 MB) e le aree da 800 m (edifici, marciapiedi, verde, alberi) le scrive `build_map.py`: due rigenerazioni non si uniscono, si prende la mappa di `main` e si rigenera (regola 4) |
+| `src/data/padova-map.json`, `public/mappa/aree/` | `mappa`, `capolinea`, `tram-turni` e `tram-scambi`, una rigenerazione alla volta | la rete (una riga sola da 5,9 MB) e le aree da 800 m (edifici, marciapiedi, verde, alberi) le scrive `build_map.py`: due rigenerazioni non si uniscono, si prende la mappa di `main` e si rigenera (regola 4) |
 | `scripts/build_map.py`, `scripts/street_surfaces.py` | `mappa` (dettagli dentro l'area) e `capolinea` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a queste corsie |
-| `scripts/tram_linee.py`, `data/tram-linee-nuove.json` | `capolinea` (SIR2 fino ai capolinea) e `tram-turni` (binari della stazione) | chi cambia una funzione dell'altra lo scrive qui; dopo, si rigenera la mappa (la sede nella pianta delle strade segue i binari) |
+| `scripts/tram_linee.py`, `data/tram-linee-nuove.json` | `capolinea` (SIR2 fino ai capolinea), `tram-turni` (binari della stazione) e `tram-scambi` (comunicazioni e binari dei capolinea e dei depositi) | chi cambia una funzione dell'altra lo scrive qui; dopo, si rigenera la mappa (la sede nella pianta delle strade segue i binari) |
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
 | `src/world/traffic.js` | `Traffic`/`Walkers`/`TrafficLights`/`TramSignals` e in `TramSim` chi il tram aspetta (`others`, `busT`) a `traffico`, il resto di `TramSim` al tram | stesse classi in due corsie = conflitti; `traffico` tocca `TramSim` solo dove serve allo sblocco dei tram, scrivendolo qui |
 | `src/world/buses.js` | `traffico` (comportamento dei bus automatici) | `mappa` ci ha messo l'uscita dal binario opposto (`buildLane`, `ahead`): chi la cambia lo scrive qui |
 | `src/bus/bus.js` | tutti, ognuno nelle sue funzioni | era della corsia `guida` (sterzo, pedali, cruscotto), chiusa l'11 novembre |
 | `src/main.js` | tutti, ognuno nelle sue funzioni | |
+| `src/tram/tram.js` | `tram-scambi` (scambi, binari, cambio cabina) e `tram-turni` (turni) | due corsie sul tram dall'11 novembre: le funzioni di ognuna sono nei brief in fondo |
 
-## Corsie aperte (onda 1 dal 9 novembre 2026, `traffico`, `guida` e `tram-turni` dall'11 novembre)
+## Corsie aperte (onda 1 dal 9 novembre 2026, `traffico`, `guida`, `tram-turni` e `tram-scambi` dall'11 novembre)
 
 | Corsia | Workspace herdr | Porte dev / preview |
 |---|---|---|
@@ -66,6 +67,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `traffico` (dall'11 novembre) | `traffico` | 5179 / 4179 |
 | `guida` (chiusa l'11 novembre) | `guida` | 5180 / 4180 |
 | `tram-turni` (dall'11 novembre) | `tram-turni` | 5181 / 4181 |
+| `tram-scambi` (dall'11 novembre) | `tram-scambi` | 5182 / 4182 |
 
 ### verifiche
 
@@ -552,37 +554,74 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   quasi certamente il retro della lanterna di `TramSignals` per i tram in partenza all'attraversamento appena prima
   della banchina d'arrivo (2380, 3513): chi arriva vede la scatola nera da dietro. Da decidere lì se il retro va
   disegnato diverso.
-- **Poi gli scambi manovrabili** (chiesto da chi gioca l'11 novembre, foto di uno scambio a un capolinea:
-  `images/14.png` della sessione del checkout principale):
-  - B cambia **solo** la cabina: il tram resta dov'è e cambia verso di guida: fatto (sopra);
-  - gli scambi si vedono (segnale dello scambio con la posizione: diritto o deviato) e si possono mettere nell'altra
-    posizione rispetto a quella di partenza, per entrare nei depositi o fare un percorso diverso;
-  - **resta l'impostazione automatica** degli scambi per il piazzale, la stazione e altrove, secondo le linee che ci
-    sono: quella manuale è una possibilità in più, soprattutto ai capolinea con il deposito e in Esplorazione e Giro
-    libero, dove si sceglie dove andare girando gli scambi. Il percorso del tram di chi gioca deve seguire gli scambi
-    (oggi segue un percorso fisso per linea e verso): grafo dei binari con `track.switches`;
-  - prove: al capolinea B lascia il tram dov'è col verso cambiato, poi la corsa riparte passando dallo scambio; in
-    Esplorazione uno scambio girato porta il tram sull'altro ramo.
-- Poi, in quest'ordine (deciso l'11 novembre con chi gioca, che chiedeva di poter girare nei depositi con gli scambi):
-  1. turni del tram (in corso);
-  2. **rete dei binari con i bivi**, prima di ogni deposito: oggi ogni linea è una coppia di binari con una
-     comunicazione per capolinea, e N decide solo se dopo B si passa sull'altro binario. Serve un grafo dei binari
-     dove a ogni scambio il tram di chi gioca prosegue sul ramo su cui lo scambio è messo: in servizio gli scambi si
-     mettono da soli secondo la linea (piazzale, stazione, capolinea, incroci tra le linee), in Esplorazione e Giro
-     libero li gira N (lo scambio più vicino davanti al tram), anche quelli tra le linee. I tram automatici seguono
-     la stessa rete. Prove: in Esplorazione uno scambio girato porta il tram sull'altro ramo, in servizio ogni linea
-     resta sul suo percorso;
-  3. **deposito della Guizza** come primo caso della rete: i binari di servizio sono già nell'export
-     `data/osm-padova-tram.json` (`service=yard`, 35 binari, alcuni `tunnel=building_passage` dentro la rimessa) e il
-     gioco non li usa ancora; anello di ritorno, ventaglio di 8-9 binari e anello esterno dallo schema OSM
-     (`images/24.png`); binario tronco della Guizza; uscita della prima corsa del turno e rientro dell'ultima (IDEE
-     punto 1). Prova: dal capolinea, girando gli scambi, si entra in rimessa e se ne esce;
-  4. Voltabarozzo sulla stessa rete: anello di ritorno e rimessa dallo schema OSM (`images/23.png`, `images/20.png`);
-  5. interni;
-  6. il **deposito di Rubano** del SIR2 (rimesse passanti, anelli, officina: struttura in `linee-tram-nuove.md`, "SIR2
-     nel progetto del 2022"; il lotto è già nelle celle del corridoio, `0856b09`); in OSM ci sono il lotto, la
-     rimessa, le banchine e le comunicazioni, il resto si disegna dalla tavola e dalla foto del cantiere.
+- **Dall'11 novembre pomeriggio** scambi, cambio cabina, riquadro di fine corsa del tram, rete dei binari e depositi
+  sono della corsia `tram-scambi` (sotto), compresa la segnalazione urgente delle 16:30 su Voltabarozzo arrivata qui.
+  Qui restano, in quest'ordine: turni del tram (in corso), interni.
 - Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
+
+### tram-scambi
+
+Aperta l'11 novembre 2026 (pomeriggio), da `tram-turni`. Il tram di chi gioca ai capolinea e sugli scambi: cambio
+cabina, scambi manovrabili, rete dei binari con i bivi, depositi (IDEE, prossimi passi 1, "girare nei depositi con gli
+scambi"). File: in `src/tram/tram.js` `TramTrack` (scambi, `terminal`, percorsi) e `Tram` (`transfer`, `at`, `xover`,
+`xend`); in `src/main.js` `changeTramCab`, `toggleTramSwitch`, `tramAtTerminal`, `setSwitch` e il riquadro di fine
+corsa del tram; `switchSign` e la parte del tram di `buildTramway` in `src/world/city.js`; i binari in
+`src/data/padova.js` e `scripts/tram_linee.py` (tabella dei file condivisi). I turni (`src/game/turni.js`, `tramRuns`,
+`chainNext`, `nextOfTurno`) restano di `tram-turni`: chi tocca una funzione dell'altra lo scrive qui.
+
+Il lavoro fatto finora sulla manovra al capolinea è descritto sopra, in `tram-turni` ("Manovra al capolinea come
+nella realtà"): comunicazioni di OSM in `net.tramScambi`, `TramTrack.terminal`, segnale dello scambio, N in
+Esplorazione e Giro libero, prove in `tests/turni-tram.spec.js` con `guidaCapolinea` di `tests/guida.js`.
+
+Immagini mandate da chi gioca (non vanno nel repo): `images/<n>.png` nella cartella della sessione del checkout
+principale, `/private/tmp/claude-501/-Users-flevour-Sites-flevour-bus-simulator/1f252032-3341-4785-8744-16f28dc7514a/images/`
+(14 scambio a un capolinea, 19 Pontevigodarzere dall'alto, 20 Voltabarozzo dall'alto con il deposito, 21 cantiere di
+Rubano, 22 segnale dello scambio all'arrivo, 23 schema OSM di Voltabarozzo, 24 schema OSM della Guizza); le tre della
+segnalazione urgente nella sessione di `tram-turni`,
+`/private/tmp/claude-501/-Users-flevour--herdr-worktrees-bus-simulator-corsia-tram-turni/dc4a4a37-01d4-4293-864a-a5497e45bcd8/images/`
+(10, 11, 12).
+
+In quest'ordine:
+
+1. **Urgente: la manovra al capolinea si blocca** (chi gioca, 11 novembre alle 16:30, SIR3 a Voltabarozzo: "this gets
+   stuck though and I can't dismiss it to maneuver, there's still no right path for Voltabarozzo, so I can't use the
+   right scambio to switch; I should be able to do it anytime basically"):
+   - il riquadro di fine corsa ("Linea SIR3 – capolinea Voltabarozzo", punti, "Prossima corsa (B)", "Torna al
+     menu", foto 10) resta sopra al gioco e non si chiude: chi gioca non può andare in fondo al binario né girare lo
+     scambio. Il riquadro si deve poter chiudere (Esc, o un pulsante per fare la manovra) lasciando il tram guidabile,
+     e la corsa dopo comincia alla fermata di partenza come oggi;
+   - a Voltabarozzo il percorso giusto ancora non c'è (foto 11: tram sul binario d'arrivo alla banchina, con la
+     comunicazione a X dietro): con lo scambio che c'è non si arriva sull'altro binario. Binari come nello schema
+     OSM (foto 23): comunicazione subito dopo le banchine, due binari paralleli verso sud lungo il lato ovest con
+     un'altra comunicazione, anello di ritorno in fondo. Se l'anello va oltre l'area caricata, prima la comunicazione
+     giusta e l'anello al punto 3;
+   - B deve cambiare cabina **quando si vuole**, a tram fermo, non solo dopo la discesa di tutti al capolinea (foto
+     12: "Capolinea: fai scendere tutti (porte aperte, F), poi B per la corsa successiva"). In servizio, lontano dal
+     capolinea, decidere cosa succede alla corsa (avviso, o navigatore che riporta sul percorso) e scriverlo qui.
+   - prove: a Voltabarozzo, dalla fermata d'arrivo, chiuso il riquadro si va in fondo, B, lo scambio porta sull'altro
+     binario e la corsa dopo parte alla fermata di partenza; B a metà linea in Esplorazione inverte il tram dov'è.
+2. **Rete dei binari con i bivi**, prima di ogni deposito: oggi ogni linea è una coppia di binari con una comunicazione
+   per capolinea, e N decide solo se dopo B si passa sull'altro binario. Serve un grafo dei binari dove a ogni scambio
+   il tram di chi gioca prosegue sul ramo su cui lo scambio è messo (oggi segue un percorso fisso per linea e verso).
+   In servizio gli scambi si mettono da soli secondo la linea (piazzale, stazione, capolinea, incroci tra le linee):
+   l'impostazione manuale è una possibilità in più, per i depositi, Esplorazione e Giro libero, dove N gira lo
+   scambio più vicino davanti al tram, anche tra le linee. Ogni scambio si vede, col segnale della posizione. I tram
+   automatici seguono la stessa rete (oggi al capolinea saltano ancora sull'altro binario). Prove: in Esplorazione uno
+   scambio girato porta il tram sull'altro ramo, in servizio ogni linea resta sul suo percorso.
+3. **Deposito della Guizza**, primo caso della rete: i binari di servizio sono già nell'export
+   `data/osm-padova-tram.json` (`service=yard`, 35 binari, alcuni `tunnel=building_passage` dentro la rimessa) e il
+   gioco non li usa; anello di ritorno, ventaglio di 8-9 binari e anello esterno dallo schema OSM (foto 24); binario
+   tronco della Guizza (forse l'ingresso della rimessa); uscita della prima corsa del turno e rientro dell'ultima (IDEE
+   punto 1, con `tram-turni` per l'orario). Prova: dal capolinea, girando gli scambi, si entra in rimessa e se ne esce.
+4. **Voltabarozzo** sulla stessa rete: anello di ritorno e rimessa (quattro binari nel capannone più uno a est) dallo
+   schema OSM (foto 23 e 20).
+5. **Deposito di Rubano** del SIR2: rimesse passanti, anelli, officina (struttura in `linee-tram-nuove.md`, "SIR2 nel
+   progetto del 2022"; il lotto è già nelle celle del corridoio, `0856b09`); in OSM ci sono il lotto, la rimessa, le
+   banchine e le comunicazioni, il resto si disegna dalla tavola e dalla foto del cantiere (foto 21).
+
+Verifiche: regola 3, guida con il pilota a ogni capolinea dei tram e nei depositi, foto dalla cabina agli scambi, tram
+automatici per 40 minuti senza blocchi. Il segnale dello scambio visto da dietro a Voltabarozzo (pannello nero) è una
+lanterna di `TramSignals`: corsia `traffico`.
 
 ### tram-reti (chiusa il 9 novembre)
 

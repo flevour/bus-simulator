@@ -21,7 +21,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [ ] **girare nei depositi con gli scambi** (chiesto l'11 novembre): rete dei binari con i bivi, dove il tram di chi
      gioca prosegue sul ramo su cui è messo lo scambio (in servizio da soli secondo la linea, in Esplorazione e Giro
      libero con N, anche tra le linee); poi i binari di servizio della Guizza (già nell'export OSM, il gioco non li
-     usa), Voltabarozzo e Rubano. Corsia `tram-turni`, subito dopo i turni del tram;
+     usa), Voltabarozzo e Rubano. Corsia `tram-scambi`;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
 2. [~] **Nuovo piazzale della stazione e linee SIR2, SIR3**: grafo dei binari con i due anelli e le due linee nel
    gioco per il tratto in città fatti (vedi "Fatto"; dettagli in [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md)).
@@ -121,7 +121,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] al capolinea del tram B fa partire la corsa successiva, come per il bus, senza tornare al menu (vedi
        "Fatto");
      - [ ] linee del bus complete fino al capolinea, senza la scritta "tratto in città" (corsia `capolinea`, prima del
-       SIR2).
+       SIR2);
+     - [ ] urgente, manovra al capolinea del tram bloccata a Voltabarozzo: il riquadro di fine corsa non si chiude e
+       copre il gioco, manca il percorso giusto sull'altro binario, B deve cambiare cabina quando si vuole e non solo
+       dopo la discesa di tutti (corsia `tram-scambi`, punto 1).
 
 ## Mappa e dati
 
