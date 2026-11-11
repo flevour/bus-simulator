@@ -159,7 +159,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [x] Sensibilità dello sterzo regolabile (vedi "Fatto").
 - [ ] Telefoni e tablet: comandi touch e HUD compatto spenti l'11 novembre (`MOBILE_SUPPORTED` in
   `src/game/touch.js`, invito a giocare da computer); da riattivare e rifinire più avanti.
-- [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
+- [x] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata (vedi
+  "Fatto").
 - [x] Volante e pedaliera o gamepad (Gamepad API, vedi "Fatto").
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
 - [ ] Altre livree storiche (anni '80–'90).
@@ -207,6 +208,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Bus elettrico con batteria e ricarica al capolinea** (corsia `guida`, 11 novembre): batteria da 350 kWh (500
+  lo snodato), trazione con rendimento 0,9 e recupero in frenata 0,85, servizi di bordo 8 kW sul tempo della corsa.
+  Si parte pieni dal deposito, altrimenti col 5% in meno per ogni ora di servizio dalle 5:30; sotto il 10% la potenza
+  cala fino a un terzo. Colonnina da 300 kW con pantografo a scendere (`src/world/charger.js`) ai capolinea veri
+  della corsa: fermi sotto, O abbassa il pantografo sulle barre del tetto, sopra il 90% la potenza cala, a batteria
+  piena si alza da solo; ripartire col pantografo giù costa 100 punti. A fine corsa 20 punti per kWh recuperato in
+  frenata e la riga "Energia" nei risultati. Prova in `tests/elettrico.spec.js`.
 - [x] **B al capolinea del tram** (corsia `tram-turni`, 11 novembre): a fine corsa B cambia cabina (all'anello della
   stazione il SIR3 passa sul binario dell'altro verso senza cambiarla) e fa partire la corsa successiva del turno
   dalla prima fermata dell'altro verso, come la "Prossima corsa" del bus: orario dal turno ricavato dall'orario

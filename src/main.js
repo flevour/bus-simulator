@@ -18,6 +18,7 @@ import { TouchControls, isTouchDevice, MOBILE_SUPPORTED, isMobileDevice } from '
 import { GamepadControls } from './game/gamepad.js';
 import { liveryPreviews, disposeTree } from './game/liveryPreview.js';
 import { Terrain } from './world/terrain.js';
+import { Chargers, CHARGE_KW } from './world/charger.js';
 
 const $ = (id) => document.getElementById(id);
 const capture = (event, properties) => {
@@ -104,7 +105,7 @@ scene.add(rain);
 // ------------------------------------------------------------------
 // Mondo
 // ------------------------------------------------------------------
-let net, city, lights, trams, tramSignals, buses, greet, depot, depotMesh;
+let net, city, lights, trams, tramSignals, buses, greet, depot, depotMesh, chargers;
 let terrain = new Terrain(null);
 const hud = new HUD();
 const audio = new Audio();
@@ -131,6 +132,8 @@ function buildWorld() {
   // deposito: da qui escono le prime corse del turno, qui rientrano le ultime
   depot = depotGate(net);
   if (depot) depotMesh = new DepotGate(scene, depot);
+  // colonnine di ricarica dei bus elettrici, messe ai capolinea delle corse
+  chargers = new Chargers(scene);
 }
 
 // ------------------------------------------------------------------
@@ -308,7 +311,7 @@ function onKeyPress(code) {
       break;
     // tram: pantografo (O) e cambio cabina (B)
     case 'KeyO':
-      if (!bus.isTram) break;
+      if (!bus.isTram) { chargeKey(); break; }
       audio.noiseBurst({ dur: 1.2, freq: 900, gain: 0.12 });
       hud.toast(bus.togglePantograph() ? '🔌 Alzo il pantografo' : '🔋 Abbasso il pantografo: si va a batteria', 'info');
       break;
@@ -564,7 +567,7 @@ function saveGame() {
       onboard: m.onboard, log: m.log.slice(-40),
       stops: m.stops.map((st) => [st.arrived ? 1 : 0, st.left ? 1 : 0, st.delay ?? null]),
     },
-    bus: { x: bus.x, z: bus.z, h: bus.h, lights: bus.lights, dir: bus.dir, odo: bus.odometer, tram: bus.isTram ? { s: bus.sFront, panto: bus.pantoUp, battery: bus.battery } : null },
+    bus: { x: bus.x, z: bus.z, h: bus.h, lights: bus.lights, dir: bus.dir, odo: bus.odometer, battery: bus.battery, energy: bus.energy, tram: bus.isTram ? { s: bus.sFront, panto: bus.pantoUp, battery: bus.battery } : null },
     cam: camMode,
     weather: { cloud: wx.cloud, rain: wx.rain, fog: wx.fog, wet: wx.wet, target: wx.target, phase: wx.phase, next: wx.next },
     summary: m.free ? `Giro libero · Linea ${settings.line.id}` : `Linea ${settings.line.id} → ${m.dest} · fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length} (${m.stops[Math.min(m.nextStop, m.stops.length - 1)].name})`,
@@ -616,7 +619,11 @@ function applySave(d) {
   if (bus.isTram && d.bus.tram) {
     bus.setFront(d.bus.tram.s);
     bus.pantoUp = d.bus.tram.panto !== false; bus.pantoPos = bus.pantoUp ? 1 : 0; bus.battery = d.bus.tram.battery ?? 1;
-  } else bus.place(d.bus.x, d.bus.z, d.bus.h);
+  } else {
+    bus.place(d.bus.x, d.bus.z, d.bus.h);
+    if (d.bus.battery != null) bus.battery = d.bus.battery;
+    if (d.bus.energy) bus.energy = { used: d.bus.energy.used || 0, regen: d.bus.energy.regen || 0 };
+  }
   bus.lights = d.bus.lights; bus.dir = d.bus.dir || 1; bus.odometer = d.bus.odo || 0;
   bus.parking = true;
   bus.passengers = m.onboard.length;
@@ -662,6 +669,7 @@ function swapBusLivery(l) {
   const old = bus, L = settings.line;
   const nb = new Bus(scene, { id: old.ledText[0], color: L.color, dest: old.ledText[1], livery: l, articulated: old.articulated });
   for (const [k, v] of Object.entries(old)) if ((typeof v === 'number' || typeof v === 'boolean') && k !== 'electric' && k !== 'articulated') nb[k] = v;
+  nb.energy = old.energy;
   // le livree possono avere un numero diverso di porte
   nb.doorOpen = nb.doors.map((_, i) => old.doorOpen[Math.min(i, old.doorOpen.length - 1)]);
   nb.onShift = old.onShift;
@@ -937,7 +945,12 @@ function startMission(resume = null) {
     const q = stopPose(mission.route, st0); // accostato al cordolo vero della fermata
     bus.place(q.x, q.z, q.h);
     mission.s = Math.max(0, st0.s - 6.5);
+    if (settings.mode === 'service') placeChargers(mission);
   }
+  // batteria all'inizio: piena uscendo dal deposito, altrimenti il 5% in meno per ogni ora di servizio dalle 5:30
+  if (!bus.isTram) bus.battery = mission.transfer ? 1 : Math.max(0.15, Math.min(1, 1 - 0.05 * (settings.departure - 5.5 * 3600) / 3600));
+  plug = null; chargeHint = null;
+  chargers.release();
   bus.setInnerDisplay(mission.transfer ? 'Fuori servizio' : 'Linea ' + L.id + ' – ' + destName);
   if (resume) applySave(resume);
   city.ensureTiles(bus.x, bus.z, 650);
@@ -1001,6 +1014,66 @@ function startMission(resume = null) {
 }
 
 // ------------------------------------------------------------------
+// Bus elettrico: batteria, colonnine di ricarica ai capolinea, recupero in frenata
+// ------------------------------------------------------------------
+let plug = null; // colonnina a cui il bus è attaccato (pantografo giù o in discesa)
+let chargeHint = null; // colonnina per cui si è già dato il suggerimento
+let lastBattery = 1;
+const fmtKwh = (k) => k.toFixed(1).replace('.', ',');
+// ai capolinea veri della corsa: non dove la linea è tagliata al bordo della mappa
+function placeChargers(m) {
+  const V = m.route, ends = [];
+  if (!V.cutStart) ends.push(m.stops[0]);
+  if (!V.cutEnd) ends.push(m.stops[m.stops.length - 1]);
+  for (const st of ends) chargers.add(stopPose(V, st), Math.sign(st.kl ?? st.kerb ?? st.hw) || 1);
+}
+// O col bus elettrico: fermo sotto la colonnina abbassa il pantografo, di nuovo O lo alza
+function chargeKey() {
+  if (!bus.electric) { hud.toast('Questo autobus va a gasolio: niente ricarica', 'info'); return; }
+  if (plug) { plug.target = 0; plug = null; hud.toast('Pantografo della colonnina su', 'info'); return; }
+  const c = chargers.at(bus);
+  if (!c) { hud.toast('Qui non c\'è una colonnina: le colonnine di ricarica sono ai capolinea, sopra la fermata', 'info'); return; }
+  if (Math.abs(bus.v) > 0.1) { hud.toast('Fermati sotto la colonnina prima di abbassare il pantografo', 'bad'); return; }
+  plug = c; c.target = 1;
+  audio.noiseBurst({ dur: 1.2, freq: 900, gain: 0.12 });
+  hud.toast(`🔌 Pantografo della colonnina giù: ricarica a ${CHARGE_KW} kW`, 'info');
+}
+// dClock: tempo della corsa nel passo (in sosta può correre più del gioco)
+function chargeStep(dt, dClock) {
+  if (bus.isTram || !bus.electric) {
+    if (plug) { plug.target = 0; plug = null; }
+    chargers.update(dt, null);
+    return;
+  }
+  // ripartire col pantografo giù rovina il pattino e le barre del tetto
+  if (plug && Math.abs(bus.v) > 0.3) {
+    if (plug.pos > 0.3) mission.addScore(-100, '⚡ Ripartito con il pantografo della colonnina abbassato!');
+    plug.target = 0; plug = null;
+  }
+  let kw = 0;
+  if (plug && plug.down) {
+    // sopra il 90% la colonnina riduce la potenza; a batteria piena alza il pantografo da sola
+    kw = CHARGE_KW * Math.min(1, (1 - bus.battery) / 0.1);
+    if (bus.battery > 0.995) { plug.target = 0; plug = null; kw = 0; hud.toast('🔋 Batteria carica: il pantografo della colonnina si alza', 'good'); }
+  }
+  bus.energyTick(dClock, kw);
+  chargers.update(dt, plug);
+  // fermo sotto una colonnina senza caricare: un suggerimento per colonnina
+  const under = !plug && Math.abs(bus.v) < 0.1 && bus.battery < 0.95 ? chargers.at(bus) : null;
+  if (under && under !== chargeHint) { chargeHint = under; hud.toast('🔌 Sei sotto la colonnina di ricarica: premi O per abbassare il pantografo', 'info'); }
+  if (Math.abs(bus.v) > 2) chargeHint = null;
+  if (bus.battery < 0.2 && lastBattery >= 0.2) hud.toast('🔋 Batteria al 20%: ricarica alla colonnina del capolinea (O)', 'bad');
+  if (bus.battery < 0.1 && lastBattery >= 0.1) hud.toast('🔋 Batteria al 10%: potenza ridotta, ricarica al capolinea', 'bad');
+  lastBattery = bus.battery;
+}
+// a fine corsa: punti per l'energia recuperata in frenata (20 punti al kWh)
+function energyBonus(m) {
+  if (bus.isTram || !bus.electric) return;
+  const pts = Math.round(bus.energy.regen * 20);
+  if (pts > 0) m.addScore(pts, `🔋 Recupero in frenata: ${fmtKwh(bus.energy.regen)} kWh`);
+}
+
+// ------------------------------------------------------------------
 // Turno: corse una dopo l'altra con lo stesso bus, dall'uscita dal deposito al rientro
 // ------------------------------------------------------------------
 const OFF_COLOR = '#607d8b'; // linea fuori servizio
@@ -1011,7 +1084,8 @@ function missionCommon() {
 function wireMission() {
   const m = mission;
   greet = new Greetings(hud, m);
-  m.onFinish = m.transfer ? () => transferDone(m) : () => setTimeout(() => mission === m && showResults(), 3500);
+  m.onFinish = m.transfer ? () => transferDone(m) : () => { energyBonus(m); setTimeout(() => mission === m && showResults(), 3500); };
+  lastBattery = bus.battery;
 }
 // la corsa finita entra nel conto del turno (una volta sola: il tram può ripartire prima del riepilogo)
 function countRun(m) {
@@ -1056,6 +1130,8 @@ function beginService() {
   m.s = projectOnRoute(m.route, bus.x, bus.z, m.stops[0].s, 400, 400, bus.h).s;
   m.dest = dest;
   switchMission(m);
+  placeChargers(m);
+  bus.energy = { used: 0, regen: 0 };
   buses.exclude({ v: V, t: settings.departure });
   bus.setDestination(L.id, dest);
   bus.setInnerDisplay('Linea ' + L.id + ' – ' + dest);
@@ -1154,6 +1230,7 @@ function showResults() {
     ['Salite sul marciapiede', s.sidewalk],
     ['Arrivo al capolinea', fmtHM(mission.clock, true)],
   ];
+  if (bus.electric && !bus.isTram) rows.splice(rows.length - 1, 0, ['Energia', `${fmtKwh(bus.energy.used)} kWh usati, ${fmtKwh(bus.energy.regen)} recuperati in frenata · batteria ${Math.round(bus.battery * 100)}%`]);
   $('res-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
   // al capolinea: la corsa dopo del turno, il rientro in deposito o il menu
   const t = nextOfTurno(), next = t && t.next;
@@ -1442,7 +1519,9 @@ function step(dt) {
   const bump = bus.isTram ? null : city.bumpHit(bus);
   if (bump) bus.pitch -= bump.sev * Math.min(1, Math.abs(bus.v) / 8) * 0.03;
   const ctx = { speedLimit, onSidewalk, bump, night: (mission._night || 0) > 0.5 || wx.fog > 0.6 || wx.rain > 0.6 };
+  const clock0 = mission.clock;
   mission.update(dt, bus, ctx);
+  chargeStep(dt, mission.clock - clock0);
   city.update(dt);
   if (depotMesh) depotMesh.update(dt, bus);
   envTimer -= dt;
@@ -1570,6 +1649,6 @@ setTimeout(() => {
   city.setNight(0);
   window.__game = { get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot,
-    pad, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
+    pad, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
 }, 50);

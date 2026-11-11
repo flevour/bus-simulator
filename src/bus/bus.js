@@ -4,6 +4,7 @@ import { ledTexture, labelTexture } from '../world/textures.js';
 import { circleVsOBB } from '../world/spatial.js';
 import { Y_ROAD } from '../world/city.js';
 import { RainGlass, WIPER_PARK, wiperPhase } from './rainglass.js';
+import { CONTACT_Z } from '../world/charger.js';
 
 // Dimensioni (sistema locale: +z avanti, +x sinistra (lato autista), -x destra (porte))
 export const BUS = {
@@ -52,6 +53,8 @@ export class Bus {
     this.throttle = 0; this.brake = 0;
     this.gear = 1; this.dir = 1; // 1 = D, -1 = R
     this.rpm = IDLE; this.shiftTimer = 0; this.powerKw = 0;
+    // batteria dei bus elettrici (0..1), energia della corsa in kWh, potenza di ricarica dalla colonnina
+    this.battery = 1; this.energy = { used: 0, regen: 0 }; this.chargeKw = 0;
     this.parking = true;
     this.articulated = !!lineInfo.articulated;
     this.ht = 0; this.tax = 0; this.taz = 0; // rimorchio: direzione e posizione dell'asse
@@ -114,6 +117,7 @@ export class Bus {
     const dark = lam(0x1d1f22);
     const grey = lam(0x6d7278);
     const interiorWall = lam(0xd9dcdf);
+    const railMat = lam(0xb87333);
     this.mats = { paint, stripe };
     const box = (w, h, d, mat, x, y, z, parent = B) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -184,6 +188,8 @@ export class Bus {
         const p0 = u.zMin + 0.6, p1 = u.zMax - (u.front ? 1.8 : 0.3);
         box(2.2, 0.5, p1 - p0, roofMat, 0, YT + 0.25, (p0 + p1) / 2, P);
         if (u.front) box(2.0, 0.35, 1.2, roofMat, 0, YT + 0.17, u.zMax - 1.4, P);
+        // barre di contatto per il pantografo delle colonnine di ricarica ai capolinea
+        if (u.front) for (const rx of [-0.55, -0.2, 0.2, 0.55]) box(0.05, 0.04, 1.8, railMat, rx, YT + 0.52, CONTACT_Z, P).castShadow = false;
         const band = lam(liv.roofBand ?? liv.stripe);
         for (const sd of [1, -1]) box(0.02, 0.18, len - 0.6, band, sd * (HW + 0.01), YW - 0.12, zc, P).castShadow = false; // fascia sotto il tetto
         for (const sd of [1, -1]) box(0.02, 0.12, len - 0.4, lam(liv.accent), sd * (HW + 0.01), Y0 + 0.1, zc, P).castShadow = false;
@@ -590,6 +596,20 @@ export class Bus {
   get fx() { return Math.sin(this.h); }
   get fz() { return Math.cos(this.h); }
   get speedKmh() { return Math.abs(this.v) * 3.6; }
+  // capacità della batteria: 12 m e snodato da 18 m elettrici (Solaris Urbino electric e simili)
+  get batteryKwh() { return this.articulated ? 500 : 350; }
+  // energia dalla batteria (kWh, negativa = recuperata o caricata)
+  useEnergy(kwh) {
+    if (kwh > 0) this.energy.used += kwh;
+    this.battery = Math.max(0, Math.min(1, this.battery - kwh / this.batteryKwh));
+  }
+  // servizi di bordo (compressore, climatizzazione, luci) e ricarica, sul tempo della corsa: in sosta il tempo può
+  // scorrere più in fretta del gioco (attesa accelerata, T)
+  energyTick(dtClock, chargeKw) {
+    if (!this.electric || dtClock <= 0) return;
+    this.chargeKw = chargeKw;
+    this.useEnergy(((this.lights ? 8.5 : 8) - chargeKw) * dtClock / 3600);
+  }
   get doorsClosed() { return this.doorOpen.every((d) => d < 0.01); }
   get doorsAnyOpen() { return this.doorOpen.some((d) => d > 0.05); }
   get mass() { return (this.articulated ? 17800 : 11800) + this.passengers * 72; }
@@ -714,9 +734,17 @@ export class Bus {
     Fdrive = throttle * tq * (this.dir < 0 ? 3.2 * FINAL : ratio) * 0.88 / BUS.wheelR;
     if (this.shiftTimer > 0.3) Fdrive *= 0.25;
     }
+    // batteria quasi scarica: la potenza cala fino a un terzo, quanto basta per arrivare al capolinea
+    if (this.electric && this.battery < 0.1) Fdrive *= 0.35 + 6.5 * this.battery;
     if (sp * 3.6 > (this.dir < 0 ? 12 : 72)) Fdrive = 0; // limitatore
     // potenza erogata (kW), negativa in recupero di energia quando si frena
     this.powerKw += ((Fdrive * sp - (this.electric ? this.brake * Math.min(1, sp / 2) * 90000 : 0)) / 1000 - this.powerKw) * Math.min(1, dt * 5);
+    if (this.electric) {
+      // trazione con rendimento 0,9 dalla batteria al motore, recupero in frenata con 0,85 dal motore alla batteria
+      const kwh = (this.powerKw > 0 ? this.powerKw / 0.9 : this.powerKw * 0.85) * dt / 3600;
+      if (kwh < 0) this.energy.regen -= kwh;
+      this.useEnergy(kwh);
+    }
     const m = this.mass;
     const grip = world.wet ? 0.75 : 1;
     const surface = world.offRoad ? 2.5 : 1;
@@ -905,6 +933,12 @@ export class Bus {
     if (state.doors) { x.fillStyle = '#ff5252'; x.fillRect(116, 10, 24, 14); }
     if (state.request) { x.fillStyle = '#ffeb3b'; x.fillRect(116, 30, 24, 14); }
     if (this.parking) { x.fillStyle = '#ff1744'; x.font = 'bold 16px Arial'; x.fillText('P', 128, 118); }
+    if (this.electric) {
+      // batteria sotto l'indicatore della potenza, con il fulmine quando carica
+      x.fillStyle = this.chargeKw > 0 ? '#4fc3f7' : this.battery < 0.2 ? '#ff5252' : '#a6d22e';
+      x.font = 'bold 15px Arial'; x.textAlign = 'center';
+      x.fillText(`${this.chargeKw > 0 ? '⚡' : '🔋'}${Math.round(this.battery * 100)}%`, 192, 120);
+    }
     this.dashTex.needsUpdate = true;
   }
 }

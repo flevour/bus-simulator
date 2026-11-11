@@ -180,6 +180,12 @@ export class HUD {
       c.fillText(bus.pantoPos > 0.97 ? 'PANT ▲' : bus.pantoPos < 0.03 ? 'PANT ▼' : 'PANT …', W / 2 - 5, 14);
       c.fillStyle = bus.battery < 0.2 ? '#ef5350' : '#b0bec5';
       c.fillText(`BATT ${Math.round(bus.battery * 100)}%`, W / 2 - 5, 157);
+    } else if (bus.electric) {
+      // bus elettrico: batteria e, alla colonnina del capolinea, potenza di ricarica
+      c.font = 'bold 11px Arial'; c.textAlign = 'center';
+      if (bus.chargeKw > 0) { c.fillStyle = '#4fc3f7'; c.fillText(`⚡ ${Math.round(bus.chargeKw)} kW`, W / 2 - 5, 14); }
+      c.fillStyle = bus.battery < 0.2 ? '#ef5350' : '#b0bec5';
+      c.fillText(`BATT ${Math.round(bus.battery * 100)}%`, W / 2 - 5, 157);
     }
   }
 

@@ -397,8 +397,14 @@ si riattiva.
   del dispositivo), che legge assi e valori dei pulsanti; prima dell'impostazione vanno solo i pulsanti 0-3, 8 e 9.
   Prove con un controller finto in `tests/gamepad.spec.js`. Da provare con un volante vero (G29 o simili): range del
   volante, pedali che danno 0 finché non si toccano (gestito), palette e pulsanti dei diversi modelli.
-- Prossimo lavoro, in quest'ordine: bus elettrico con batteria e ricarica al capolinea; telecamera della porta
-  posteriore sul cruscotto; specchietti regolabili.
+- **Bus elettrico, fatto l'11 novembre**: batteria in `Bus` (`battery`, `energy`, `useEnergy`, `energyTick`;
+  trazione e recupero in `update`, servizi di bordo e ricarica sul tempo della corsa, che in sosta può correre più
+  del gioco), colonnine in `src/world/charger.js` (al massimo 6 nella scena, messe da `placeChargers` ai capolinea
+  della corsa che non sono tagliati al bordo della mappa, con `stopPose`), logica in `chargeStep` e `chargeKey` di
+  `main.js`. Il tasto O del bus (X del gamepad) è la colonnina; X non è più la marcia: col gamepad la retromarcia si
+  mette ripremendo LT da fermo. Numeri in IDEE ("Fatto"). Non ci sono dati su colonnine vere ai capolinea di Padova:
+  se si trovano, vanno messe dove sono.
+- Prossimo lavoro, in quest'ordine: telecamera della porta posteriore sul cruscotto; specchietti regolabili.
 - Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
 ### tram-turni

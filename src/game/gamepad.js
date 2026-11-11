@@ -11,7 +11,7 @@ const CAL_KEY = 'padova-bus-sim-volante';
 const STD_PRESS = [
   [0, 'KeyF', 'KeyF'], // A / croce: porte
   [1, 'Space', 'Space'], // B / cerchio: freno a mano
-  [2, 'KeyR', 'KeyO'], // X / quadrato: marcia avanti e indietro; tram: pantografo
+  [2, 'KeyO', 'KeyO'], // X / quadrato: pantografo (colonnina di ricarica col bus elettrico, linea aerea col tram)
   [3, 'KeyC', 'KeyC'], // Y / triangolo: visuale
   [4, 'KeyQ', 'KeyQ'], // LB: freccia a sinistra
   [5, 'KeyE', 'KeyE'], // RB: freccia a destra
