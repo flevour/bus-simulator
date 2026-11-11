@@ -125,6 +125,14 @@ Dalla presentazione del dibattito pubblico (febbraio 2022, fonti sopra).
   Nell'export OSM del 9 novembre a Rubano ci sono solo due binari tronchi (`service=spur`) vicino a 45,4335 N,
   11,7802 E: il deposito va disegnato dalla tavola (e dalle foto aeree quando ci saranno), con le misure dei tram a 4
   casse (33 m).
+
+  **Foto aerea del cantiere** (vista di chi gioca, 11 novembre 2026; non nel repository): il lotto del capolinea e del
+  deposito sta a nord-ovest di via Pria Fosca, tra la rotonda in fondo a via Pria Fosca (a sud-ovest, vicino al
+  distributore e al McDonald's) e via Palù con la sua rotonda (a nord-est); a nord-ovest confina con i campi. I binari
+  corrono lungo via Pria Fosca, dalla rotonda verso nord-est; più o meno a metà c'è la struttura della banchina, e una
+  curva entra nel lotto verso nord. In fondo al lotto, verso nord, c'è il capannone lungo della rimessa; a destra, verso
+  via Palù, gli edifici dell'officina e dei servizi. Il resto è ancora cantiere. È coerente con la tavola del 2022, ma
+  con la rimessa a nord e non a est del capolinea: per la disposizione vale la foto.
 * **Sezione tipo** (incrocio canalizzato, 24 m da sud a nord): marciapiede 1,50, pista ciclabile 2,50, banchina 0,50,
   corsia per le auto 3,50, **due corridoi del tram da 3,50** (veicolo largo 2,20, 1,30 tra i due tram), due corsie per
   le auto da 3,50 (una di svolta), banchina 0,50, marciapiede 1,50. I **pali della linea aerea stanno ai bordi della
