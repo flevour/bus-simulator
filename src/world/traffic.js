@@ -398,11 +398,19 @@ export class TrafficLights {
         sig.tramT += dt;
         return;
       }
-      // fine della fase tram: chi aveva il verde passa dal giallo, le fasi tagliate aspettano il loro verde
+      // fine della fase tram: chi aveva il verde passa dal giallo; la fase tagliata ha subito il suo verde intero, appena
+      // sgomberato l'incrocio (il ciclo si sposta). Prima aspettava il ciclo dopo se la fase tram aveva coperto il suo
+      // verde: 94 s di rosso su Riviera dei Ponti Romani a Largo Europa
       sig.postFrom = shown;
       sig.tramT = 0;
       sig.postT = dt;
       sig.owed = [0, 1].map((p) => p !== sig.tramPh && has(p));
+      const owed = [0, 1].filter((p) => sig.owed[p]);
+      if (owed.length) {
+        const p = owed.length > 1 ? (this.cycleState(sig, 1) === 'G' ? 1 : 0) : owed[0];
+        const start = p === 0 ? 0 : sig.cycle[0] + sig.cycle[1] + sig.cycle[2];
+        sig.offset = (((start - this.time - TRAM_Y - ALL_RED) % sig.total) + sig.total) % sig.total;
+      }
       return;
     }
     if (sig.postT > 0) sig.postT = sig.postT + dt < TRAM_Y + ALL_RED ? sig.postT + dt : 0;
@@ -1341,6 +1349,27 @@ export class TramSignals {
       x.free = [0, 1].filter((p) => best.appr.every((a) => a.phase !== p || (a.edge !== x.e && Math.abs(a.out.x * x.tdx + a.out.z * x.tdz) > 0.8)));
     }
     this.lights = lights;
+    // Lanterne stradali sul binario: dove il binario corre dentro la carreggiata di un braccio col semaforo (la corsia
+    // riservata di Via Tommaseo prima di Pace, Riviera dei Ponti Romani) chi guida il tram vede la lanterna di quel
+    // braccio, e quella è il suo segnale: i tram automatici ci si fermano col rosso, il tram che arriva chiama il verde
+    // del suo braccio (con i turni di tramCall: arriva entro un ciclo) e chi gioca, passando col rosso, prende la
+    // penalità. Prima nessuna logica del tram la guardava: il SIR3 di chi gioca aspettava a Pace un verde che non gli
+    // spettava e, passando col rosso, non perdeva punti. Non dove lo stesso tram taglia anche una strada di quel
+    // semaforo: lì decide il segnale a barre dell'incrocio
+    this.lanterns = [];
+    for (const sg of (lights && lights.signals) || []) for (const ap of sg.appr) {
+      const L = ap.line;
+      if (!L) continue;
+      for (const T of Object.values(city.tramTracks || { SIR1: city.tramTrack })) for (const dir of [1, -1]) {
+        if (this.list.some((x) => x.sig === sg && x.refs.some((r) => r.track === T && r.dir === dir))) continue;
+        const P = T.path(dir), pr = P.projectNear(L.x, L.z, ap.edge.width / 2 + 1.5);
+        if (!pr) continue;
+        const a = P.at(pr.s);
+        if (a.dx * -L.fx + a.dz * -L.fz < 0.8 || T.heightAt(dir, pr.s) > 1.5) continue;
+        this.lanterns.push({ sig: sg, ap, track: T, dir, sT: pr.s, free: [ap.phase], who: [], state: 'H', prev: new Map() });
+        this.sigs.add(sg);
+      }
+    }
     this.buildHeads(scene);
   }
   // un segnale per incrocio, a destra del binario, prima della strada: lanterna a tre luci in colonna (dall'alto barra
@@ -1442,6 +1471,27 @@ export class TramSignals {
         x.req = 0;
       }
     }
+    // lanterne stradali sul binario: lo stato è quello della lanterna; il tram che arriva chiama il verde del suo braccio
+    for (const l of this.lanterns || []) {
+      const st = this.lights.stateOf(l.sig, l.ap.phase);
+      l.state = st === 'G' ? 'V' : 'H';
+      l.who = [];
+      for (const o of occ) {
+        if (o.dir !== l.dir || o.track !== l.track) continue;
+        const d = l.sT - o.front;
+        if (d > -8 && d < 25 + o.v * 6 && !(o.dwell && d > 0)) l.who.push(o.ref || o);
+        // il tram del giocatore passa la linea d'arresto col rosso?
+        if (o.player) {
+          const pd = l.prev.get(o) ?? d;
+          if (pd > 0.3 && d <= 0.3 && st === 'R' && o.v > 0.5) this.violations.push(l);
+          l.prev.set(o, d);
+        }
+      }
+      if (l.who.length) {
+        l.sig._calls.push(l);
+        if (l.state === 'V') for (const t of l.who) l.sig._vTrams.add(t);
+      }
+    }
     for (const sg of this.sigs) this.lights.tramCall(sg, sg._calls, dt);
     this.drawHeads(false);
   }
@@ -1524,6 +1574,12 @@ export class TramSignals {
   // per i tram automatici: distanza dalla prossima linea d'arresto a via impedita (track: la sede del tram)
   stopAhead(s, dir, track) {
     let best = Infinity;
+    // lanterne stradali sul binario col rosso (o col giallo da lontano): 1 m prima della linea d'arresto
+    for (const l of this.lanterns || []) {
+      if (l.dir !== dir || l.track !== track) continue;
+      const d = l.sT - 1 - s, st = this.lights.stateOf(l.sig, l.ap.phase);
+      if (d > -0.5 && d < best && (st === 'R' || (st === 'Y' && d > 10))) best = d;
+    }
     for (const x of this.list) {
       if (x.state === 'V') continue;
       const r = x.refs.find((r) => r.dir === dir && r.track === track);

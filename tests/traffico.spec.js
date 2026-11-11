@@ -89,3 +89,75 @@ test('incroci semaforizzati sulla sede: tram e auto mai dentro insieme', async (
   expect(r.insieme).toEqual([]);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Segnali del tram (barre agli incroci e lanterne stradali sul binario) per sec secondi: il tempo più lungo che un tram
+// resta fermo davanti a un segnale chiamato senza via libera, e le lanterne disegnate diverse dallo stato che la logica
+// usa (controllate ogni 5 s, ignorando il passo in cui cambiano)
+function attesaSegnali({ sec }) {
+  const g = window.__game, ts = g.tramSignals, tutti = [...ts.list, ...ts.lanterns], da = new Map();
+  const acceso = (ap) => { const a = g.lights.lamps.instanceColor.array, i = ap.lampIdx * 3; return a[i] > 0.5 ? 'R' : a[i + 3] > 0.5 ? 'Y' : a[i + 7] > 0.5 ? 'G' : '?'; };
+  const diverse = () => ts.lanterns.filter((l) => l.ap.lampN && acceso(l.ap) !== g.lights.stateOf(l.sig, l.ap.phase));
+  let peggio = { s: 0 }, sbagliate = [];
+  for (let t = 0; t < sec * 5; t++) {
+    g.sim(0.2, 1 / 30, false);
+    for (const x of tutti) {
+      const fermo = x.who && x.who.some((tr) => tr.v < 0.1 && !(tr.wait > 0)) && x.state !== 'V';
+      if (!fermo) { da.delete(x); continue; }
+      const k = da.get(x) ?? g.mission.clock;
+      da.set(x, k);
+      if (g.mission.clock - k > peggio.s) peggio = { s: Math.round(g.mission.clock - k), dove: `${x.ap ? 'lanterna di ' + x.ap.edge.name : 'barre di ' + x.e.name} (${x.track.id})` };
+    }
+    if (t % 25 === 0 && diverse().length) { g.sim(1 / 30, 1 / 30, false); sbagliate.push(...diverse().map((l) => l.ap.edge.name)); }
+  }
+  return { lanterne: ts.lanterns.length, peggio, sbagliate };
+}
+
+// Segnalazione dell'11 novembre: il SIR3 di chi gioca fermo prima di Pace davanti a lanterne rosse che non diventavano
+// mai verdi, e passandoci col rosso nessuna penalità. Erano le lanterne stradali della corsia riservata di Via Tommaseo,
+// su cui corre il binario: nessuna logica del tram le guardava. Ora sono il segnale del tram: il tram che arriva chiama
+// il verde, i tram automatici col rosso si fermano, chi gioca passando col rosso perde 60 punti.
+test('segnali del tram: verde entro un ciclo, lanterna disegnata uguale allo stato, rosso a Pace penalizzato', async ({ pagina, gioco }) => {
+  test.setTimeout(300_000);
+  // tutti i tram automatici (il giocatore su un bus fermo in Via Altinate, fuori dai binari), 20 minuti
+  await avviaCorsa(pagina, { linea: '3' });
+  await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });
+  const r = await pagina.evaluate(attesaSegnali, { sec: 1200 });
+  expect(r.lanterne).toBeGreaterThan(10);
+  expect(r.peggio.s, `fermo più lungo a un segnale del tram: ${JSON.stringify(r.peggio)}`).toBeLessThanOrEqual(60);
+  expect(r.sbagliate).toEqual([]);
+  // il SIR3 di chi gioca verso Voltabarozzo, prima di Pace
+  await avviaCorsa(pagina, { linea: 'SIR3', tram: true });
+  const pace = await pagina.evaluate(() => {
+    const g = window.__game, b = g.bus, ts = g.tramSignals;
+    const l = ts.lanterns.find((l) => l.track === b.track && l.dir === b.dirSig && Math.hypot(l.ap.line.x - 493, l.ap.line.z + 866) < 15);
+    if (!l) return { lanterna: false };
+    const stato = () => g.lights.stateOf(l.sig, l.ap.phase);
+    // fermo 20 m prima della linea, aspettando il rosso: il verde arriva
+    let n = 0;
+    while (stato() !== 'R' && n++ < 600) g.sim(0.2, 1 / 30, false);
+    b.setFront(l.sT - b.pathOffset - 20);
+    b.v = 0;
+    let verde = null;
+    for (let t = 0; t < 90 && verde == null; t++) { g.sim(1, 1 / 30, false); if (stato() === 'G') verde = t + 1; }
+    // indietro, si aspetta il rosso, poi si passa la linea a 7 m/s
+    b.setFront(l.sT - b.pathOffset - 120);
+    g.sim(1, 1 / 30, false);
+    n = 0;
+    while (stato() !== 'R' && n++ < 600) g.sim(0.2, 1 / 30, false);
+    b.setFront(l.sT - b.pathOffset - 15);
+    g.sim(0.1, 1 / 30, false);
+    const rosso = stato(), log0 = g.mission.log.length;
+    b.v = 7;
+    g.keys.add('KeyW');
+    g.sim(3, 1 / 30, false);
+    g.keys.delete('KeyW');
+    return { lanterna: true, verde, rosso, oltre: b.pathOffset + b.sFront - l.sT, messaggi: g.mission.log.slice(log0).map((e) => `${e.pts} ${e.msg}`) };
+  });
+  expect(pace.lanterna, 'lanterna della corsia di Via Tommaseo prima di Pace').toBe(true);
+  expect(pace.verde, 'secondi prima del verde, da fermi davanti alla lanterna').not.toBeNull();
+  expect(pace.verde).toBeLessThanOrEqual(60);
+  expect(pace.rosso).toBe('R');
+  expect(pace.oltre).toBeGreaterThan(0);
+  expect(pace.messaggi).toContain('-60 🚦 Passato col rosso!');
+  expect(gioco.errori()).toEqual([]);
+});

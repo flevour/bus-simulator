@@ -415,6 +415,21 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   `TramSim`, insieme a `tram-turni`. Passando a via impedita chi gioca non ha preso la penalità: lanterna disegnata,
   stato usato dalla logica e penalità (`tramSignals.violations` in `main.js`) devono coincidere; anche questo nella
   prova.
+
+  Fatto l'11 novembre. Le lanterne della foto sono quelle stradali del braccio di Via Tommaseo (corsia riservata, il
+  semaforo davanti a Pace): il binario del SIR3 verso Voltabarozzo (e del SIR2 verso est) corre dentro quella corsia, e
+  in quel verso il tram non ha incroci a barre legati al semaforo. Nessuna logica del tram guardava quelle lanterne: i
+  tram automatici passavano col rosso, chi gioca aspettava un verde che non era per lui (il tram non lo chiamava) e
+  passando col rosso non perdeva punti (`checkRedLights` vale solo per il bus). Non c'entrano i binari né `TramSim`.
+  Ora (`TramSignals.lanterns`, 49 sulla mappa: Pace, Riviera dei Ponti Romani, Via Guido Reni, Corso del Popolo...) la
+  lanterna stradale sul binario è il segnale del tram: il tram che arriva chiama il verde del suo braccio (con i turni
+  di `tramCall`), i tram automatici col rosso si fermano 1 m prima della linea (`stopAhead`), chi gioca passando col
+  rosso perde 60 punti ("Passato col rosso!"). Dove lo stesso tram taglia anche una strada del semaforo decidono le
+  barre. Alla fine di una fase tram la fase tagliata ha subito il suo verde intero (si sposta il ciclo): prima, se la
+  fase tram aveva coperto il suo verde, aspettava il ciclo dopo (94 s di rosso su Riviera dei Ponti Romani a Largo
+  Europa). Prova in `tests/traffico.spec.js`: 20 minuti con tutti i tram automatici, nessun tram fermo a un segnale
+  (barre o lanterna) oltre 60 s (il più lungo 48 s) e lanterne disegnate uguali allo stato; a Pace il SIR3 di chi gioca
+  fermo davanti alla lanterna ha il verde in 5 s, passandoci col rosso prende la penalità.
 - **Subito dopo, gli incroci tra traffico e tram** (chiesto da chi gioca l'11 novembre): se il tram ha il passaggio,
   auto e bus si fermano prima della sede; se lo ha la strada, il tram si ferma. Vale per i tram automatici e per
   quello di chi gioca, per i bus automatici e per le auto. Ai semafori vuol dire coordinare `TramSignals` con

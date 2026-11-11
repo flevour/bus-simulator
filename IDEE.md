@@ -99,7 +99,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] a Voltabarozzo la fermata d'arrivo è sulla curva: spostata 33 m più avanti sul dritto (`SPOSTA` in
        `tram_linee.py`); in fondo al binario B fa ripartire nell'altro verso (correzione del tram incastrato, prova
        "in fondo al binario"), corsia `tram-turni`;
-     - [ ] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`;
+     - [x] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`: erano le
+       lanterne stradali della corsia riservata di Via Tommaseo, che nessuna logica del tram guardava; ora sono il suo
+       segnale (chiamata del verde, stop dei tram automatici, penalità col rosso);
      - [ ] capolinea della Guizza come in OSM (comunicazione prima delle banchine, anello di ritorno, deposito con
        8-9 binari e anello esterno), corsia `tram-turni`;
      - [~] binari di Voltabarozzo come in OSM (comunicazioni, anello di ritorno, rimessa) e segnale dello scambio che

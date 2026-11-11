@@ -1653,7 +1653,7 @@ function step(dt) {
   trams.update(dt, [bus, ...buses.parts, ...(traffic ? traffic.cars : [])], mission.clock);
   // incroci col tram: chiamata dei tram in arrivo, segnali a barre, precedenza delle auto
   tramSignals.update(dt, tramOccupancy(), traffic);
-  if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
+  if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, x.ap ? '🚦 Passato col rosso!' : '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
   city.streamTiles(bus.x, bus.z, 5);
   traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals, trams, bigs: buses.buses });
   buses.update(dt, { player: bus, traffic, trams, lights, clock: mission.clock });
