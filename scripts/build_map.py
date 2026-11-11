@@ -54,14 +54,16 @@ FOCUS_BORDI = [
 FOCUS_BOXES = [FOCUS, FOCUS_SUD] + FOCUS_BORDI
 # l'area fino ai capolinea veri (corsia capolinea, docs/ESTENSIONE_LINEE.md): corridoi di celle da CELLA metri attorno ai
 # percorsi completi delle linee, più una cella di margine, invece di rettangoli più grandi. Tram: le linee di
-# data/tram-linee-nuove.json (il SIR3 fino a Voltabarozzo, con il deposito accanto al capolinea). Autobus: le celle
+# data/tram-linee-nuove.json (il SIR3 fino a Voltabarozzo, con il deposito accanto al capolinea; il SIR2 da Rubano, via
+# Pria Fosca, al capolinea di Vigonza prima della rotonda della SR11). Autobus: le celle
 # toccate dai tracciati GTFS di tutte le varianti delle linee di CORRIDOI_BUS, senza margine (le vie e gli edifici a
 # meno di 0,0015 gradi da una cella entrano lo stesso, in_focus); quelle linee hanno tutte le varianti
-# (build_gtfs.load); per prime la 24, la 3, la 22, la 10 e la 11 (gruppo 2, dopo il SIR2). Strade e segnaletica fuori
-# dagli export di oggi in data/osm-corridoio.json (scripts/filter_osm_corridoio.py)
+# (build_gtfs.load). La 25 dal SIR2 (il corridoio la taglia nella zona industriale: intera, parte dalla stazione come
+# prima); poi la 24, la 3, la 22, la 10 e la 11 (gruppo 2). Strade e segnaletica fuori dagli export di oggi in
+# data/osm-corridoio.json (scripts/filter_osm_corridoio.py)
 CELLA = 250.0
-CORRIDOI_TRAM = ('SIR3',)
-CORRIDOI_BUS = ()
+CORRIDOI_TRAM = ('SIR3', 'SIR2')
+CORRIDOI_BUS = ('25',)
 TRAM_NUOVE = __file__.rsplit('/', 2)[0] + '/data/tram-linee-nuove.json'
 FOCUS_CELLE = set()  # (ix, iz) delle celle, riempito da main()
 WATER_W ={'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}

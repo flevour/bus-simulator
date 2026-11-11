@@ -25,8 +25,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - la sede di SIR2 e SIR3 nella pianta delle strade (tappa 3, corsia `mappa`): oggi i binari sono disegnati sopra
      l'asfalto e in diversi tratti la corsia dei bus ci passa sopra o accanto (richiesta in `docs/CORSIE.md`);
    - [x] l'area di Voltabarozzo (tappa 4): il SIR3 intero fino al capolinea (vedi "Fatto");
-   - il SIR2 fino ai capolinea veri (Rubano, Busa di Vigonza), corsia `capolinea`: il capolinea lato Vigonza è prima
-     della rotonda per Venezia / SR11; tracciato, fermate e capolinea del progetto del 2022 in
+   - [x] il SIR2 fino ai capolinea veri, da Rubano (via Pria Fosca) a Vigonza prima della rotonda per Venezia / SR11
+     (vedi "Fatto"); tracciato, fermate e capolinea del progetto del 2022 in
      [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md);
    - il deposito di Rubano (rimesse passanti, anelli, officina, dalla tavola del progetto del 2022), corsia
      `tram-turni` quando il corridoio del SIR2 arriva a Rubano;
@@ -139,8 +139,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [~] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
   bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
   capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa). Corsia `capolinea`: inventario dei
-  capolinea e gruppi in [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md), sezione 6; fatto il SIR3 (vedi "Fatto"),
-  poi il SIR2 e gli autobus.
+  capolinea e gruppi in [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md), sezione 6; fatti il SIR3 e il SIR2 con
+  la 25 (vedi "Fatto"), poi gli autobus. Varianti ancora tagliate, linea per linea e con il perché, nella sezione 6.
 - [~] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificato linea per linea in
   [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md); i dati sono sistemati (banchine vere, sensi unici, Ex
   Catasto sulla strada sud, partenze dalla fermata). Restano i due passaggi che mancano in OSM (dalla strada sud alla
@@ -218,6 +218,14 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   segnalazioni di chi gioca (coordinate da ricontrollare a ogni build, sezione 6.2 del piano della città).
 
 ## Fatto
+
+- [x] **SIR2 intero, da Rubano a Vigonza** (corsia `capolinea`, 11 novembre): corridoio di celle attorno ai binari
+  (10,8 km² in più), con strade e segnaletica OSM delle due teste (`data/osm-corridoio.json`), edifici e paline
+  Overture, terreno dal DTM regionale. Nel gioco 35 fermate nei due versi, da Rubano (via Pria Fosca) a Busa di Vigonza
+  prima della rotonda della SR11, senza "tratto in città". Con il corridoio la 10 arriva intera a Sarmeola e a Ponte di
+  Brenta e la 25 è intera (dalla stazione alla zona industriale e ritorno); le linee che escono dall'area e ci
+  rientrano (la 22 da Torre, la 2) si agganciano per pezzi invece di essere scartate; le case procedurali stanno
+  lontane da dove si ferma il bus.
 
 - [x] **Specchietti regolabili** (corsia `guida`, 11 novembre): nella visuale dalla cabina gli specchietti si
   trascinano col mouse (verso il loro lato guardano più in fuori, in giù più in basso, fino a una ventina di gradi),

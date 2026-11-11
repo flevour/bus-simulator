@@ -55,13 +55,17 @@ SOGLIE = {
     # lungo i bus da 111 a 117, tutti nell'area nuova (0,2-2 m, edifici Overture contro carreggiate DBGT, nessuno nella
     # corsia); marciapiede stretto da 170.618 a 175.993 (+5.400 m² su 94.000 nuovi); con il pezzo di Via Bembo tra due
     # vie dell'area (gtfs_links) la 3 non fa più l'andata e ritorno e Bembo 95 torna al suo posto: agganciate male da 11
-    # a 7
-    'edifici_in_carreggiata': 174,
-    'edifici_in_carreggiata_bus': 117,
+    # a 7.
+    # 11 novembre, corsia capolinea, SIR2 da Rubano a Vigonza e la 25 intera (corridoi di 10,8 km²): edifici in
+    # carreggiata da 174 a 189 e lungo i bus da 117 a 129, tutti nei corridoi nuovi (fino a 1,8 m, lungo i bus fino a
+    # 0,7 m; nessuno nella corsia); marciapiede stretto da 175.993 a 189.949: a Rubano e Vigonza non c'è il DBGT e
+    # valgono le larghezze per tipo di strada
+    'edifici_in_carreggiata': 189,
+    'edifici_in_carreggiata_bus': 129,
     'edifici_sui_percorsi': 0,
     'fermate_lontane': 2,
     'fermate_spostate': 7,
-    'marciapiedi_stretti_m2': 176000,
+    'marciapiedi_stretti_m2': 190000,
 }
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',

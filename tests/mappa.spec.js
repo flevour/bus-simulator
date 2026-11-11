@@ -13,7 +13,10 @@ import { test, expect } from './gioco.js';
 // mappa sopra il piazzale della stazione fermate con ostacoli 9, fuori strada 5, spostate 11. Corsia capolinea,
 // corridoio del SIR3 fino a Voltabarozzo: una palina in carreggiata, Piovese fr. Park (linee 4, 14, 16) nel golfo sotto
 // il cavalcavia della tangenziale, fuori dall'asfalto ma sotto il nastro di Corso Primo Maggio (arco in quota, che
-// roadInfo conta); con Via Bembo e Via Volta nella rete (gtfs_links di build_map.py) fuori strada 4, spostate 7
+// roadInfo conta); con Via Bembo e Via Volta nella rete (gtfs_links di build_map.py) fuori strada 4, spostate 7.
+// 11 novembre, SIR2 da Rubano a Vigonza: la 10 arriva intera a Sarmeola e a Ponte di Brenta, con due fermate dove le
+// ruote del bus fermo escono dall'asfalto (Provvidenza 14, nel golfo accanto alla sede del tram a Chiesanuova, 4,9 m;
+// Capolinea Ponte Brenta, nel piazzale, 1,7 m): fuori strada 6; spostate 6
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 1,
@@ -21,8 +24,8 @@ const SOGLIE = {
   alberi_in_carreggiata: 0,
   pensiline_in_carreggiata: 0,
   fermate_con_ostacoli: 9,
-  fermate_fuori_strada: 4,
-  fermate_spostate: 7,
+  fermate_fuori_strada: 6,
+  fermate_spostate: 6,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',

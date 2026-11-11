@@ -160,7 +160,7 @@ def main(src, map_path='src/data/padova-map.json', tram_path='data/tram-linee-nu
     # ---------------- autobus ----------------
     stato = Counter()
     term = []  # capolinea fuori dalle corse del gioco: (nome, x, z, corse feriali, linea, festive, perché)
-    fuori = defaultdict(lambda: {'fer': 0, 'stops': set(), 'var': 0, 'cut': 0, 'gone': 0})
+    fuori = defaultdict(lambda: {'fer': 0, 'stops': set(), 'var': 0, 'cut': 0, 'gone': 0, 'whole': 0, 'why': Counter()})
     for v in gv:
         m = match_map(v, map_lines, M['stops'])
         n = len(v['stops'])
@@ -178,6 +178,14 @@ def main(src, map_path='src/data/padova-map.json', tram_path='data/tram-linee-nu
             f['cut' if m else 'gone'] += 1
             f['fer'] += v['fer']
             f['stops'].update(v['stops'][i][0] for i in outside)
+            if m:
+                a, b = 0 in outside, n - 1 in outside
+                f['why']['parte dopo il capolinea e finisce prima' if a and b else 'parte dopo il capolinea' if a
+                         else 'finisce prima del capolinea' if b else 'fermate in mezzo fuori dall\'area'] += 1
+            else:
+                f['why'][v['state']] += 1
+        else:
+            f['whole'] += 1
         for i in (0, n - 1):
             if i in outside:
                 name, x, z = v['stops'][i]
@@ -213,13 +221,15 @@ def main(src, map_path='src/data/padova-map.json', tram_path='data/tram-linee-nu
         if g['dist'] < NEAR:
             print(f"| {g['name']} | {', '.join(g['lines'])} | {g['fer']} | {g['fes']} | {'; '.join(g['why'])} |")
     print()
-    print('### Linee con fermate fuori mappa\n')
-    print('| Linea | Varianti | Tagliate | Assenti | Corse fer. toccate | Fermate fuori |')
-    print('|---|---|---|---|---|---|')
+    print('### Varianti per linea\n')
+    print('Intere: prima e ultima fermata del GTFS nel gioco, con tracciato e orario interi. Tagliate: nel gioco c\'è il '
+          '"tratto in città". Assenti: la variante non c\'è.\n')
+    print('| Linea | Varianti | Intere | Tagliate | Assenti | Perché | Corse fer. toccate | Fermate fuori |')
+    print('|---|---|---|---|---|---|---|---|')
     for lid in sorted(fuori, key=line_key):
         f = fuori[lid]
-        if f['cut'] or f['gone']:
-            print(f"| {lid} | {f['var']} | {f['cut']} | {f['gone']} | {f['fer']} | {len(f['stops'])} |")
+        why = '; '.join(f'{k} {n}' for k, n in f['why'].most_common()) or '–'
+        print(f"| {lid} | {f['var']} | {f['whole']} | {f['cut']} | {f['gone']} | {why} | {f['fer']} | {len(f['stops'])} |")
     print()
 
     # ---------------- tram ----------------

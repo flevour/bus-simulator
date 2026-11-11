@@ -203,11 +203,13 @@ python3 scripts/tram_percorsi.py data/osm-padova-tram-cantiere.json SIR2.kml SIR
   stazione è quindi provvisorio finché non c'è la geometria dei due anelli (vedi sopra).
 
 **Area di gioco.** Dal 9 novembre l'area comprende il corridoio del SIR3 (celle da 250 m attorno ai binari, in
-`build_map.py`): tutte le fermate fino a Voltabarozzo e il deposito sono dentro. Prima c'erano le fermate da Pace a
-Cornaro (Gregorianum e Parco Iris sulla passeggiata Bianchini, senza strade attorno ma dentro il riquadro `FOCUS`). Del SIR2 ci sono le fermate da Cimitero Maggiore a Savelli; Rubano e
-Chiesanuova a ovest, Net Center, San Lazzaro, Ponte di Brenta e Vigonza a est sono fuori. L'export OSM delle strade
-`data/osm-padova.json` arriva fin là (lat 45,32–45,67, lon 11,69–11,99): allargare l'area è una scelta dei riquadri
-`FOCUS` di `build_map.py`, non dei dati.
+`build_map.py`): tutte le fermate fino a Voltabarozzo e il deposito sono dentro. Dall'11 novembre anche quello del
+SIR2: tutte le 35 fermate nei due versi, da Rubano (capolinea in via Pria Fosca, a est della rotonda della SS11) a Busa
+di Vigonza (capolinea su via Padova, prima della rotonda con la SR515 e la SR11 per Venezia; i binari dei dati finiscono
+al bordo della rotonda). Il tratto del progetto del 2022 oltre la rotonda, fino alla stazione di Busa e al parcheggio
+scambiatore, non c'è. Strade e segnaletica delle due teste vengono da un export a parte (`data/osm-corridoio.json`):
+l'export delle strade `data/osm-padova.json` a ovest arriva solo fino a lon 11,81. Il deposito di Rubano non è
+disegnato (corsia `tram-turni`).
 
 ## Dati delle linee (tappa 1)
 

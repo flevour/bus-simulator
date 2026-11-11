@@ -47,7 +47,7 @@ Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e b
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json data/osm-corridoio.json
 python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore sopra le soglie
 ```
 

@@ -201,9 +201,14 @@ uniscono non si incrociano.
   dove i percorsi escono e rientrano (Via Madonna della Salute per la 22, verso l'Ippodromo per la 9 e la 42, a nord per
   la 4, la 13 e la 17, a ovest per la 21, a sud per la 11). Le linee che escono dalla mappa tengono il tratto più lungo
   di fermate consecutive, e il percorso comincia e finisce attorno a quelle.
-* **Corridoi fino ai capolinea** (`CORRIDOI_TRAM` in `scripts/build_map.py`): celle da 250 m attorno ai binari completi
-  delle linee del tram nuove, più una di margine, con strade ed edifici. Oggi il SIR3 fino a Voltabarozzo e al deposito.
-  Le vie fuori dall'area che collegano due vie dell'area dove passa un bus entrano anche loro (`gtfs_links`). Capolinea
+* **Corridoi fino ai capolinea** (`CORRIDOI_TRAM` e `CORRIDOI_BUS` in `scripts/build_map.py`): celle da 250 m attorno
+  ai binari completi delle linee del tram nuove, più una di margine, e le celle toccate dai tracciati GTFS di tutte le
+  varianti delle linee del bus scelte, con strade ed edifici. Oggi il SIR3 fino a Voltabarozzo e al deposito, il SIR2 da
+  Rubano (via Pria Fosca) al capolinea di Vigonza prima della rotonda della SR11, la linea 25. Strade e segnaletica OSM
+  che mancano agli export di oggi in `data/osm-corridoio.json` (`scripts/filter_osm_corridoio.py`, che scrive anche la
+  query Overpass); edifici e paline da Overture, terreno dal DTM regionale (`dtm_grid.py --riquadro --come`). Una linea
+  che esce dall'area e ci rientra si aggancia per pezzi. Le vie fuori dall'area che collegano due vie dell'area dove
+  passa un bus entrano anche loro (`gtfs_links`). Capolinea
   e fermate ancora fuori dalla mappa: `python3 scripts/inventario_capolinea.py <cartella_gtfs>` (tabelle in
   `docs/ESTENSIONE_LINEE.md`, sezione 6).
 
@@ -218,7 +223,7 @@ curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tr
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json
+python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json data/osm-corridoio.json
 # paline OSM (strato Overture base/infrastructure, scaricato con scripts/overture_layers.py)
 python3 scripts/osm_stops.py <base-infrastructure.parquet> data/osm-fermate.json
 # terreno: DTM LiDAR a 5 m della Regione (tessere in data/lidar5, scaricate con

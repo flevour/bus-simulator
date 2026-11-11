@@ -261,9 +261,8 @@ dell'onda 3 anticipato, a gruppi di capolinea, senza aspettare il caricamento pe
   dove c'è (lotti "Padova Sud" ed "ETRA Padova"), altrimenti le misure della sezione 3 del
   [piano della città](PIANO_MODELLO_CITTA.md). Gli export nuovi in file a parte (per esempio `data/osm-corridoio.json`)
   finché non sostituiscono quelli di oggi.
-- **Peso**: misurare bundle, avvio e memoria a ogni gruppo (oggi 13,5 MB di JavaScript, 12,4 MB di mappa). Prima che
-  la mappa superi circa 20 MB fermarsi e chiedere: lì serve il caricamento per aree (sezione 4 di
-  `ESTENSIONE_LINEE.md`), che riscrive `city.js` e parte quando nessun'altra corsia ci lavora.
+- **Peso**: con il caricamento per aree (11 novembre) la mappa non ha più il limite dei 20 MB; a ogni gruppo si
+  misurano la rete (nel bundle), le aree e l'avvio.
 - **Verifiche** a ogni gruppo: quelle della regola 3 con `scripts/verifica_mappa.py --elenco`, percorsi liberi e
   fermate raggiungibili nelle aree nuove, e il giro dal posto di guida ai capolinea nuovi (foto a 2,5 m da terra, una
   linea vera con il pilota di `tests/guida.js`).
@@ -298,56 +297,44 @@ lontano): cambia solo Piovese Park (4, 14, 16), le corsie della stazione restano
 `verifica_mappa.py` e `tests/mappa.spec.js` (una palina in carreggiata: Piovese fr. Park, sotto il cavalcavia della
 tangenziale).
 
+Fatto l'11 novembre (dettagli in [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md), sezioni 4 e 6):
+
+- **caricamento per aree** (onda 3, in tre passi): la rete (nodi, archi, linee, segnaletica, terreno, carreggiate e
+  isole, gli edifici a meno di 60 m dai binari) in `src/data/padova-map.json`, edifici, marciapiedi, verde e alberi in
+  aree da 800 m in `public/mappa/aree/` (`scripts/aree_mappa.py`, lo fa `build_map.py`). Il gioco scarica le aree entro
+  1,5 km dal bus e libera quelle oltre 2,6 km (`addArea`, `removeArea` in `city.js`); all'avvio solo quelle attorno a
+  Prato, in corsa aspetta fermo quelle entro 300 m. Per chi rigenera la mappa: stesso comando, regola 4 anche per le
+  aree;
+- gruppo 1b, **SIR2 intero** da Rubano (via Pria Fosca) a Busa di Vigonza, capolinea su via Padova prima della rotonda
+  con la SR515 e la SR11 per Venezia (i dati di `tram-linee-nuove.json` finivano già lì: niente tratto fino alla
+  stazione di Busa). Corridoio di celle attorno ai binari; strade e segnaletica OSM delle due teste in
+  `data/osm-corridoio.json` (`scripts/filter_osm_corridoio.py query` scrive la query Overpass dei corridoi, `filtra`
+  tiene quello che manca agli export di oggi), edifici e paline Overture, terreno allargato con il DTM regionale
+  (`dtm_grid.py --riquadro --come`: le celle di prima restano uguali; WPS `ras:CropCoverage` su `rv:DTM_RV_5m_3003`).
+  Il DBGT di Rubano e Vigonza non c'è: valgono le larghezze per tipo di strada. Il deposito di Rubano non è disegnato;
+- con il corridoio del SIR2 la **10** arriva intera a Sarmeola e a Ponte di Brenta (6 varianti su 10) e la **25** è
+  intera (`CORRIDOI_BUS` in `build_map.py`: celle toccate dai tracciati GTFS di tutte le varianti, e per quelle linee
+  `build_gtfs.load` tiene tutte le varianti); 6 e 7 arrivano più avanti. Un tracciato che esce dall'area e ci rientra
+  si aggancia prima intero e, se viene scartato, per pezzi: tornano la 2 e le varianti della 22 da e per Torre.
+
+Funzioni di altre corsie cambiate da `capolinea` l'11 novembre: in `city.js` `buildBuildings` (le case procedurali non
+stanno a meno di 4 m dalla linea della fermata, dalla palina a 13 m indietro: con la rete più grande una finiva sul bus
+della 88 a Guizza 441 F.T.); `avviaCorsa` di `tests/gioco.js` aspetta le aree attorno al bus; `tests/mappa.spec.js`
+carica tutte le aree e ha le soglie del SIR2 (ruote oltre il cordolo 6: Provvidenza 14 e Capolinea Ponte Brenta sulla
+10 intera).
+
 Prossimo lavoro, in quest'ordine:
 
-- **richiesta di chi gioca dell'11 novembre**: le linee del bus che dicono "tratto in città" complete fino al
-  capolinea, senza la scritta. Da qui è la priorità della corsia, perché il servizio vero sono gli autobus (SIR2 e
-  SIR3 sono in costruzione). Il gruppo 1b (SIR2) si pubblica solo se è a un passo; altrimenti resta sul ramo locale e
-  si riprende dopo. Poi, in ordine, il caricamento per aree e il gruppo 2 per tutte le linee; la scritta "(tratto in
-  città)" del capolinea si toglie linea per linea, quando la linea arriva al capolinea vero;
-- gruppo 1b, SIR2 fino a Rubano e alla Busa di Vigonza. Quando si riprende: dettagli del progetto del 2022 in
-  `linee-tram-nuove.md` ("SIR2 nel progetto del 2022"), e **il capolinea lato Vigonza è prima della rotonda per
-  Venezia / SR11** (indicazione di chi gioca dell'11 novembre: niente tratto fino alla stazione di Busa né
-  parcheggio). **Deciso l'11 novembre di non pubblicarlo ora**, è sul ramo
-  locale `corsia/capolinea-sir2` del worktree `capolinea` (commit `fd9f1a5`, mappa da rigenerare). Non era a un passo:
-  - fatti i dati: strade e segnaletica OSM delle due teste in `data/osm-corridoio.json`
-    (`scripts/overpass-corridoio.ql`, `scripts/filter_osm_corridoio.py`), paline ed edifici Overture, terreno allargato
-    (`dtm_grid.py --riquadro --come`, le celle di oggi restano uguali; DTM regionale con una richiesta WPS
-    `ras:CropCoverage` su `rv:DTM_RV_5m_3003`). Tutte le 35 fermate del SIR2 hanno una strada a meno di 120 m, quindi
-    nel gioco sarebbe intero; la 10 arriverebbe intera a Sarmeola e a Ponte di Brenta, 6, 7 e 25 più avanti;
-  - aggancio: i tracciati che escono dall'area e ci rientrano (la 22 da Torre, nel corridoio, per Via Madonna del
-    Rosario che è fuori) si agganciavano con un giro dentro l'area e venivano scartati (22 da e per Torre, 2 Diretto
-    Piazze). Sul ramo il tracciato si divide nei pezzi dentro l'area (`area_pieces`) e si aggancia quello con più
-    fermate: 22 e 2 tornano come prima, ma la 25 circolare sceglie il pezzo sbagliato (perde 9 fermate in centro) e la
-    19 perde Roma 35/88. Servirà anche agli autobus del gruppo 2;
-  - mancano le verifiche (regola 3, giri e foto ai capolinea) e il DBGT di Rubano e Vigonza (vale la sezione 3 del
-    piano). La mappa arriverebbe a 17,7 MB (terreno 2,2 MB invece di 0,8): spazio tolto agli autobus prima del
-    caricamento per aree. Si riprende dopo il gruppo 2, con il caricamento per aree già fatto;
-- binari del deposito di Voltabarozzo (OSM `service=yard`, in `data/osm-padova-tram-cantiere.json`): non disegnati, li
-  può prendere la corsia `tram-turni` con il deposito della Guizza;
-- caricamento per aree (onda 3, sezione 4 di `ESTENSIONE_LINEE.md`), **prima del gruppo 2**: deciso l'11 novembre.
-  Con il SIR2 la mappa arriverebbe a 17,7 MB; gli autobus fino ai capolinea la porterebbero a 25-35 MB. Prima la rete
-  sempre caricata e le aree in `public/` (pipeline), poi `city.js`. Quando si arriva a `city.js` lo si scrive qui: da
-  lì le altre corsie non toccano `city.js` finché il lavoro non è su `main`.
-  Fatto l'11 novembre il primo passo, senza `city.js`: rete in `src/data/padova-map.json`, edifici, pianta delle
-  strade e alberi in 170 aree da 800 m in `public/mappa/aree/` (`scripts/aree_mappa.py`), scaricate tutte all'avvio da
-  `src/data/aree.js`; JavaScript da 14,6 a 3,7 MB. Per chi rigenera la mappa non cambia niente (stesso comando, regola
-  4 anche per le aree). Secondo passo, sempre senza `city.js`: carreggiate e isole (fisica, paline, semafori, lampioni
-  su tutta la mappa) tornano nella rete, con il rettangolo degli edifici e gli edifici a meno di 60 m dai binari (per
-  spostare i binari fuori dalle facciate e per i tiranti); nelle aree restano edifici, marciapiedi, verde e alberi
-  (8,8 MB in 161 aree), quello che serve solo da vicino; JavaScript 7,2 MB. Prossimo passo: le aree a richiesta, che
-  riscrive `city.js`.
-  Terzo passo, le aree a richiesta (11 novembre, `city.js` di nuovo libero per tutti): all'avvio si scaricano solo le
-  aree entro 1,5 km da Prato (17 su 161), poi quelle entro 1,5 km dal bus (`streamTiles`, una al fotogramma);
-  oltre 2,6 km si liberano mesh, ostacoli e dati. Per area: marciapiedi e verde (`addArea`), alberi del DBGT con il loro
-  ostacolo, edifici nei riquadri da 400 m di prima (`addBuildings`, costruiti da `ensureTiles` e `streamTiles`);
-  `removeArea` toglie tutto (`Grid.remove` in `spatial.js`). In `padova.js` i binari si spostano fuori dagli edifici
-  della rete (`edificiTram`) e il rettangolo degli edifici è quello della rete; `buildTramway` aggancia i tiranti agli
-  stessi edifici. Prove: `avviaCorsa` di `tests/gioco.js` aspetta le aree attorno al bus (`city.areasReady`),
-  `tests/mappa.spec.js` le carica tutte (`city.loadAll`), con gli stessi numeri;
-- gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da
-  togliere per le linee che arrivano ai capolinea. Tra i capolinea richiesti da chi gioca (sondaggio del 9 novembre,
-  linea 3 in Via Fondà): quelli della 3 e della 22 e le fermate della 10 e della 11 fuori dall'area.
+- **gruppo 2, autobus**: tutte le linee fino ai capolinea, prima la 24 (Mandriola), la 3 e la 22 (capolinea chiesti da
+  chi gioca), la 10 (Caselle) e la 11; poi le altre. Regola di chi gioca dell'11 novembre: quando la città si estende,
+  la linea si allunga, cioè ogni variante ha nel gioco la prima e l'ultima fermata del GTFS con tracciato e orario
+  interi, senza "(tratto in città)" (oggi la 24 da Mandriola parte da Volta fr. 24). Nella sezione 6 di
+  `ESTENSIONE_LINEE.md` la tabella "Varianti per linea" tiene il conto delle varianti ancora tagliate e del perché
+  (`scripts/inventario_capolinea.py`). Per le prime cinque linee il corridoio aggiunge 200 celle (12,5 km²); query
+  Overpass in 9 riquadri, edifici Overture e DTM già scaricati nello scratchpad della corsia (da rifare se serve);
+- a seguire: le aree scaricate anche lungo il percorso della linea, prima di arrivarci; il terreno per aree (oggi una
+  griglia unica che cresce con i corridoi); il DBGT dei lotti di Rubano e Vigonza;
+- binari dei depositi di Voltabarozzo e di Rubano: della corsia `tram-turni`.
 
 ### traffico
 

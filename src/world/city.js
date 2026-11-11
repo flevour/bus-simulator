@@ -2278,11 +2278,19 @@ export class City {
     const rnd = this.rnd;
     const list = [];
     const roofs = [];
+    // fermate: dalla palina a 13 m indietro stanno il bus fermo (accostato al cordolo vero, che può essere oltre il bordo
+    // dell'arco) e la pensilina; una casa a meno di 4 m da quella linea li toccherebbe (88 a Guizza 441 F.T.)
+    const stands = new Grid(40), sq = [];
+    for (const st of this.stopPlacements || []) {
+      const bx = st.x - st.dx * 13, bz = st.z - st.dz * 13;
+      stands.insertAABB({ ax: st.x, az: st.z, bx, bz }, Math.min(st.x, bx) - 4, Math.min(st.z, bz) - 4, Math.max(st.x, bx) + 4, Math.max(st.z, bz) + 4);
+    }
     const tryPlace = (x, z, dx, dz, w, d) => {
       const rx = -dz, rz = dx;
       for (const [a, b] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
         const px = x + dx * (a * w) / 2 + rx * (b * d) / 2, pz = z + dz * (a * w) / 2 + rz * (b * d) / 2;
         if (this.clearance(px, pz) < SIDEWALK - 0.5) return false;
+        if (stands.query(px, pz, 4, sq).some((it) => distToSeg(px, pz, it.ax, it.az, it.bx, it.bz).d < 4)) return false;
       }
       return true;
     };

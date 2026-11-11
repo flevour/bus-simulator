@@ -3,6 +3,11 @@
 
 Uso:
     python3 scripts/dtm_grid.py <dtm.tif in EPSG:3003> data/dtm-padova.json [passo in m, 10] [data/lidar5]
+        [--riquadro=x0,z0,x1,z1] [--come=<griglia esistente>.json]
+
+--riquadro limita la griglia a un rettangolo nelle coordinate del gioco (gli angoli sono centri di cella), invece di
+tutto il DTM scaricato; --come riusa quota di riferimento, passo e intervallo delle quote di una griglia esistente:
+allargando l'area (corsia capolinea) le celle che c'erano restano uguali.
 
 Con la cartella data/lidar5 (tessere del DTM LiDAR a 5 m della Regione, file .asc.zip scaricati da
 https://idt2.regione.veneto.it/idt/download/layerDownload/downloadDtmLidar5?dataDtmLidarId=<idPol>, elenco in
@@ -62,7 +67,7 @@ def lidar_mosaic(folder):
     return M, x0, y0, cs
 
 
-def main(src, dst, step=10.0, lidar=None):
+def main(src, dst, step=10.0, lidar=None, box=None, like=None):
     import rasterio
     from pyproj import Transformer
     with rasterio.open(src) as r:
@@ -81,6 +86,8 @@ def main(src, dst, step=10.0, lidar=None):
     gz = [-(lat - build_gtfs.ORIGIN_LAT) * build_gtfs.M_LAT for lon, lat in corners]
     x0, x1 = np.ceil(max(sorted(gx)[:2]) / step) * step, np.floor(min(sorted(gx)[2:]) / step) * step
     z0, z1 = np.ceil(max(sorted(gz)[:2]) / step) * step, np.floor(min(sorted(gz)[2:]) / step) * step
+    if box:
+        x0, z0, x1, z1 = box
     nx, nz = int((x1 - x0) / step) + 1, int((z1 - z0) / step) + 1
     xs, zs = np.meshgrid(x0 + np.arange(nx) * step, z0 + np.arange(nz) * step)
 
@@ -114,10 +121,20 @@ def main(src, dst, step=10.0, lidar=None):
     h = np.nanmean([sample(xs + dx, zs + dz) for dx in (-q, q) for dz in (-q, q)], axis=0)
     ref = float(np.nanmedian(h))
     lo, hi = np.nanpercentile(h, 0.2), np.nanpercentile(h, 99.9)
+    if like:
+        g = json.load(open(like))
+        ref, lo = g['ref'], g['ref'] + g['offset']
+        hi = lo + 255 * g['scale']
     h = np.where(np.isnan(h), ref, np.clip(h, lo, hi)) - ref
-    scale = float((hi - lo) / 255)
-    offset = float(lo - ref)
+    scale = g['scale'] if like else float((hi - lo) / 255)
+    offset = g['offset'] if like else float(lo - ref)
     b = np.clip(np.round((h - offset) / scale), 0, 255).astype(np.uint8)
+    if like:
+        # le celle della griglia esistente si copiano com'erano (con scala e scostamento arrotondati nel file, ricalcolate
+        # differirebbero di un passo in qualche punto)
+        i0, j0 = int(round((g['x0'] - x0) / step)), int(round((g['z0'] - z0) / step))
+        old = np.frombuffer(base64.b64decode(g['data']), np.uint8).reshape(g['nz'], g['nx'])
+        b[j0:j0 + g['nz'], i0:i0 + g['nx']] = old
     fonte = 'DTM LiDAR 5 m della Regione Veneto nel Comune di Padova, altrove DTM 5 m (rv:DTM_RV_5m_3003), IODL 2.0' if lidar else 'DTM 5 m della Regione Veneto (rv:DTM_RV_5m_3003, IODL 2.0)'
     out = {'fonte': fonte, 'x0': float(x0), 'z0': float(z0),
            'step': step, 'nx': nx, 'nz': nz, 'scale': round(scale, 5), 'offset': round(offset, 3), 'ref': round(ref, 2),
@@ -129,4 +146,7 @@ def main(src, dst, step=10.0, lidar=None):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 10.0, sys.argv[4] if len(sys.argv) > 4 else None)
+    opt = {a.split('=', 1)[0]: a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--')}
+    a = [a for a in sys.argv[1:] if not a.startswith('--')]
+    main(a[0], a[1], float(a[2]) if len(a) > 2 else 10.0, a[3] if len(a) > 3 else None,
+         tuple(float(v) for v in opt['--riquadro'].split(',')) if '--riquadro' in opt else None, opt.get('--come'))
