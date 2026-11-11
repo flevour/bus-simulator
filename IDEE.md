@@ -8,8 +8,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 1. [~] **Tram SIR1 guidabile**: fatto (vedi "Fatto"). Restano:
    - il binario tronco oltre il capolinea della Guizza, che entra in un edificio;
-   - i semafori del tram coordinati con quelli stradali agli incroci semaforizzati: chi ha il passaggio passa, gli
-     altri si fermano, tram e traffico allo stesso modo (11 novembre, corsia `traffico`);
+   - [x] i semafori del tram coordinati con quelli stradali agli incroci semaforizzati: chi ha il passaggio passa, gli
+     altri si fermano, tram e traffico allo stesso modo; senza semaforo precedenza al tram (11 novembre, corsia
+     `traffico`, vedi "Fatto");
    - interni più curati;
    - pedoni che attraversano la sede e si fermano;
    - [~] **turni del tram e deposito della Guizza**, come per il bus (vedi "Fatto"): al capolinea cambio cabina (B) e
@@ -212,9 +213,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Traffico e regole
 
-- [~] Bus automatici che non si bloccano ai semafori e non bloccano i tram (Tito Livio e Ponti Romani, segnalazione
-  del 9 novembre, corsia `traffico`): fatto l'incrocio di Tito Livio e Ponti Romani (vedi "Fatto"); resta il
-  controllo su tutta la mappa alle 8:15 e alle 17:30.
+- [x] Bus automatici che non si bloccano ai semafori e non bloccano i tram (Tito Livio e Ponti Romani, segnalazione
+  del 9 novembre, corsia `traffico`): fatti l'incrocio di Tito Livio e Ponti Romani e il controllo su tutta la mappa
+  alle 8:15 e alle 17:30 (vedi "Fatto").
 - [ ] Le auto rispettano STOP, precedenze e rotonde (oggi solo semafori).
 - [ ] Pedoni che attraversano sulle strisce con obbligo di precedenza (e punti).
 - [ ] Penalità per non dare precedenza a chi arriva (rotonde, dare precedenza).
@@ -261,6 +262,17 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   segnalazioni di chi gioca (coordinate da ricontrollare a ogni build, sezione 6.2 del piano della città).
 
 ## Fatto
+
+- [x] **Incroci tra tram e traffico** (chiesto da chi gioca, corsia `traffico`, 11 novembre): chi ha il passaggio
+  passa, gli altri si fermano prima dei binari, per tram automatici e di chi gioca, bus automatici e auto. Ai semafori
+  il tram prende la sua fase dopo che la via tagliata ha avuto il suo verde, e auto e bus si fermano per il tram solo
+  quando parte la sua fase (prima anche col verde); le lanterne stradali sui binari (Pace) sono il segnale del tram.
+  Senza semaforo la precedenza è del tram (art. 145 del Codice della strada): auto e bus si fermano quando il tram
+  chiama l'incrocio, il tram aspetta chi è già sopra (anche il bus di chi gioca), e chi gioca passando col bus davanti
+  al tram perde 60 punti. Le auto non girano attraverso i binari davanti al tram, non si fermano tra due binari e non
+  entrano sui binari se oltre c'è coda, anche svoltando. Prove: `tests/traffico.spec.js` (con e senza semaforo, tram e
+  auto mai dentro l'incrocio insieme; penalità in Via De Leva). Su tutta la mappa, 40 minuti alle 8:15 e alle 17:30,
+  nessun bus o tram fermo oltre 90 s.
 
 - [x] **Linee 3, 10, 11, 22, 24 e 88 fino ai capolinea veri** (richiesta dell'11 novembre, corsia `capolinea`, gruppo 2):
   tutte le varianti hanno la prima e l'ultima fermata del GTFS, con tracciato e orario interi, senza "(tratto in

@@ -654,22 +654,46 @@ export class Traffic {
     return { p0, p1, p2, len: Math.max(2, len * 0.92), s0: g2.s0, vmax: cosA > 0.8 ? car.vmax : 5.5, g2 };
   }
   // metri dal muso al primo punto del percorso (resto della corsia, curva verso il prossimo arco, primi 20 m dopo) che
-  // taglia i binari di un incrocio chiamato da un tram; Infinity se non ce n'è
+  // taglia i binari di un incrocio chiamato da un tram, o all'inizio dei primi binari se appena dopo c'è chi è fermo e
+  // l'auto non ci starebbe (dove i binari sono subito dopo una svolta la regola di carGap, che guarda l'arco su cui
+  // l'auto si trova, non vale: si entrava svoltando e ci si fermava sui binari in coda); Infinity se non serve fermarsi
   calledAhead(car, g, ts) {
     const xs = ts.nearNode(g.to);
-    if (!xs.some((x) => x.req > 0)) return Infinity;
+    if (!xs.length) return Infinity;
     if (!car.next) car.next = this.chooseNext(car);
     if (car.nextPath?.nx !== car.next) car.nextPath = { nx: car.next, ...this.turnPath(car, g, car.next) };
     const { p0, p1, p2, g2, len } = car.nextPath, front = car.s + 2.1;
-    const cut = (px, pz, dx, dz) => xs.some((x) => x.req > 0 && ts.cuts(x, px, pz, dx, dz));
-    for (let s = front; s < g.s1; s += 2) if (cut(g.sx + g.dx * s + g.dz * (car.tramOff || 0), g.sz + g.dz * s - g.dx * (car.tramOff || 0), g.dx, g.dz)) return s - front;
+    let enter = -1, exit = null;
+    // un punto del percorso a d m dal muso: true se c'è un incrocio chiamato (fermarsi lì)
+    const at = (d, px, pz, dx, dz) => {
+      let on = false;
+      for (const x of xs) if (ts.cuts(x, px, pz, dx, dz)) { if (x.call) return true; on = true; }
+      if (on) { if (enter < 0 || exit.open) exit = { px, pz, dx, dz, open: true }; if (enter < 0) enter = d; }
+      else if (exit) exit.open = false;
+      return false;
+    };
+    let hit = Infinity;
+    for (let s = front; s < g.s1 && hit === Infinity; s += 2) if (at(s - front, g.sx + g.dx * s + g.dz * (car.tramOff || 0), g.sz + g.dz * s - g.dx * (car.tramOff || 0), g.dx, g.dz)) hit = s - front;
     const d0 = Math.max(0, g.s1 - front);
-    for (let t = 0; t <= 1.001; t += 0.1) {
+    for (let t = 0; t <= 1.001 && hit === Infinity; t += 0.1) {
       const u = 1 - t, px = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, pz = u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z;
-      if (cut(px, pz, u * (p1.x - p0.x) + t * (p2.x - p1.x), u * (p1.z - p0.z) + t * (p2.z - p1.z))) return d0 + len * t;
+      if (at(d0 + len * t, px, pz, u * (p1.x - p0.x) + t * (p2.x - p1.x), u * (p1.z - p0.z) + t * (p2.z - p1.z))) hit = d0 + len * t;
     }
-    for (let d = 2; d <= 20; d += 2) if (cut(p2.x + g2.dx * d, p2.z + g2.dz * d, g2.dx, g2.dz)) return d0 + len + d;
-    return Infinity;
+    for (let d = 2; d <= 20 && hit === Infinity; d += 2) if (at(d0 + len + d, p2.x + g2.dx * d, p2.z + g2.dz * d, g2.dx, g2.dz)) hit = d0 + len + d;
+    if (enter < 0 || enter >= hit) return hit;
+    // binari chiamati poco dopo altri binari: ci si ferma prima dei primi, come in carGap (si restava fermi tra i due)
+    if (hit < Infinity) return enter > 0 && hit - enter < 14 ? enter : hit;
+    if (enter === 0) return Infinity;
+    // oltre i primi binari: qualcuno fermo o quasi entro 7 m, sulla stessa corsia?
+    const l = Math.hypot(exit.dx, exit.dz) || 1, ux = exit.dx / l, uz = exit.dz / l;
+    const full = (o, v) => {
+      if (o === car || v > 1.5) return false;
+      const rx = o.x - exit.px, rz = o.z - exit.pz, f = rx * ux + rz * uz;
+      return f > -1 && f < 7 && Math.abs(rx * uz - rz * ux) < 1.8;
+    };
+    for (const o of this.near(exit.px + ux * 3, exit.pz + uz * 3, 8)) if (full(o, o.v)) return enter;
+    for (const B of this.bigs) if (B.circles && Math.abs(B.x - exit.px) < 30 && Math.abs(B.z - exit.pz) < 30 && B.circles.some((p) => full(p, B.v))) return enter;
+    return hit;
   }
 
   // la strada OSM e il tracciato GTFS del tram non sempre combaciano: un'auto che invaderebbe la sede si sposta di lato
@@ -769,7 +793,7 @@ export class Traffic {
       if (!c.turn && ctx.tramSignals) {
         gap = Math.min(gap, ctx.tramSignals.carGap(c, g, gap, leadV));
         // (3 m prima dei binari; chi c'è già sopra va avanti e li libera)
-        if (c.edge.len - c.s < 45) {
+        if (c.edge.len - c.s < 45 && ctx.tramSignals.nearNode(g.to).length) {
           const d = this.calledAhead(c, g, ctx.tramSignals);
           if (d > 0.5 && d < Infinity) gap = Math.min(gap, Math.max(0, d - 3));
         }
@@ -1371,6 +1395,8 @@ export class TramSignals {
     this.list = [];
     this.byEdge = new Map();
     this.violations = [];
+    this.giveWay = [];
+    this.pIn = new Set();
     if (!city.tramTrack) return;
     const q = [];
     // incroci a raso tra il binario di ogni verso e le strade
@@ -1401,7 +1427,7 @@ export class TramSignals {
           const x = {
             track: T, dir, e, tE, sT, px, pz, tdx, tdz, refs: [{ track: T, dir, sT }],
             halfE: Math.min(10, (TRAM.lane + 0.6) / sinA), halfT: Math.min(14, (e.width / 2 + 1) / sinA),
-            req: 0, state: 'H', after: 0, prev: new Map(),
+            req: 0, call: false, state: 'H', after: 0, prev: new Map(),
           };
           this.list.push(x);
           if (!this.byEdge.has(e)) this.byEdge.set(e, []);
@@ -1500,14 +1526,17 @@ export class TramSignals {
     if (dirty) for (const m of [this.hBar, this.vBar, this.tri]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
   // occ: tram presenti [{ front (s lungo il binario), dir, track (la sede), len, v, dwell, player }]; cars: auto vicine per
-  // sapere se l'incrocio è sgombro
-  update(dt, occ, traffic) {
+  // sapere se l'incrocio è sgombro; player: il bus di chi gioca (per la precedenza al tram)
+  update(dt, occ, traffic, player) {
     this.violations.length = 0;
+    this.giveWay.length = 0;
+    this.player = player && !player.isTram ? player : null;
     // per semaforo: i tram che hanno già il via libera su uno dei suoi incroci (al passo prima)
     for (const sg of this.sigs) { sg.vTrams = sg._vTrams || new Set(); sg._vTrams = new Set(); sg._calls = []; }
     for (const x of this.list) {
       let need = false;
       x.who = [];
+      x.close = false;
       for (const o of occ) {
         const r = x.refs.find((r) => r.dir === o.dir && r.track === o.track);
         if (!r) continue;
@@ -1515,6 +1544,8 @@ export class TramSignals {
         const on = d > -(o.len + x.halfT) && d <= x.halfT;
         const coming = d > x.halfT && d < 25 + o.v * 6 && !o.dwell;
         if (on || coming) { need = true; x.who.push(o.ref || o); }
+        // tram a meno di 12 m più 4 s dai binari dell'incrocio (o già sopra), in marcia o col via libera
+        if (d > -(o.len + x.halfT) && d - x.halfT < 12 + o.v * 4 && !o.dwell && (o.v > 0.5 || x.state === 'V')) x.close = true;
         // il tram del giocatore entra nell'incrocio con la barra orizzontale?
         if (o.player) {
           const pd = x.prev.get(o) ?? d;
@@ -1538,10 +1569,15 @@ export class TramSignals {
         if (sg && x.state === 'V') for (const t of x.who) sg._vTrams.add(t);
         if (x.state === 'T') x.state = 'H';
         x.after = 0;
+        // chi taglia il binario si ferma prima della sede: senza semaforo da quando il tram chiama (precedenza al
+        // tram); col semaforo da quando parte la fase tram che lo fa passare, prima vale il verde della strada (auto
+        // e bus si fermavano a ogni chiamata, anche col verde e col tram fermo alla barra orizzontale)
+        x.call = x.state === 'V' || (sg ? sg.tramT > 0 && (sg.tramOpen || x.who.some((t) => sg.vTrams.has(t))) && (sg.tramPh === -1 || x.free.includes(sg.tramPh)) : true);
       } else {
         if (x.state === 'V') { x.state = 'T'; x.after = 0; }
         if (x.state === 'T' && (x.after += dt) > 2) x.state = 'H';
         x.req = 0;
+        x.call = false;
       }
     }
     // lanterne stradali sul binario: lo stato è quello della lanterna; il tram che arriva chiama il verde del suo braccio
@@ -1566,6 +1602,15 @@ export class TramSignals {
       }
     }
     for (const sg of this.sigs) this.lights.tramCall(sg, sg._calls, dt);
+    // chi guida il bus entra nella fascia dei binari di un incrocio senza semaforo con il tram vicino: non gli ha dato
+    // la precedenza (col semaforo vale il rosso)
+    const b = this.player;
+    if (b) {
+      const fx = Math.sin(b.h), fz = Math.cos(b.h), px = b.x + fx * 6, pz = b.z + fz * 6, inside = new Set();
+      for (const x of this.nearXY(px, pz)) if (this.cuts(x, px, pz, fx, fz)) inside.add(x);
+      for (const x of inside) if (!this.pIn.has(x) && !x.sig && x.close && b.v > 1) this.giveWay.push(x);
+      this.pIn = inside;
+    }
     this.drawHeads(false);
   }
   // incrocio occupato: qualcuno che taglia il binario (anche fermo) è nella fascia dei binari o ci arriva entro 1,5 s;
@@ -1581,6 +1626,12 @@ export class TramSignals {
           if (this.cuts(x, u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z, u * (p1.x - p0.x) + t * (p2.x - p1.x), u * (p1.z - p0.z) + t * (p2.z - p1.z))) return true;
         }
       } else if (this.cuts(x, c.x, c.z, fx, fz) || (c.v > 0.5 && this.cuts(x, c.x + fx * c.v * 1.5, c.z + fz * c.v * 1.5, fx, fz))) return true;
+    }
+    // il bus di chi gioca: dalla coda al muso, più 1,5 s di strada
+    const b = this.player;
+    if (b && Math.hypot(b.x - x.px, b.z - x.pz) < x.halfT + 40) {
+      const fx = Math.sin(b.h), fz = Math.cos(b.h);
+      for (const l of [-6, -3, 0, 3, 6, 6 + Math.max(0, b.v) * 1.5]) if (this.cuts(x, b.x + fx * l, b.z + fz * l, fx, fz)) return true;
     }
     return false;
   }
@@ -1599,7 +1650,9 @@ export class TramSignals {
       if (on) c.overlapT = 3;
     }
   }
-  // il punto (px, pz), andando verso (dx, dz), è nella fascia dei binari dell'incrocio x e li taglia (non ci corre lungo)
+  // il punto (px, pz), andando verso (dx, dz), è nella fascia dei binari dell'incrocio x e li taglia (non ci corre lungo;
+  // gli incroci di sbieco sono quasi tutti strade lungo il binario, come Via Piovese col SIR3, che lo incrociano solo
+  // perché la linea OSM e il tracciato del tram non combaciano: chi le percorre gli corre accanto)
   cuts(x, px, pz, dx, dz) {
     const rx = px - x.px, rz = pz - x.pz;
     if (Math.abs(rx * x.tdx + rz * x.tdz) > x.halfT || Math.abs(rx * x.tdz - rz * x.tdx) > BAND) return false;
@@ -1640,7 +1693,7 @@ export class TramSignals {
       const dist = stop - c.s;
       const out = (c.fwd ? x.tE : c.edge.len - x.tE) + x.halfE + 1;
       const full = leadV < 1.5 && c.s + 2.1 + lead < out + 6;
-      if ((x.req > 0 || full) && dist > -0.5 && dist < 80) gap = Math.min(gap, Math.max(0, dist));
+      if ((x.call || full) && dist > -0.5 && dist < 80) gap = Math.min(gap, Math.max(0, dist));
     }
     return gap;
   }

@@ -475,6 +475,29 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   una precedenza dichiarata e rispettata dai due lati. Questo lavoro passa alla corsia `traffico`, che per farlo tocca
   `TramSignals` (e `TramSim` dove i tram automatici devono fermarsi), scrivendolo qui. Prova in `tests/`: a un
   incrocio semaforizzato sulla sede, tram e auto non sono mai dentro l'incrocio insieme.
+
+  Fatto l'11 novembre, anche senza semaforo (i semafori sono nel paragrafo "Incroci tra traffico e tram" sopra):
+  - chi ha il passaggio: `x.call` in `TramSignals.update` dice ad auto (`carGap`, `calledAhead`) e bus (`buses.js`)
+    quando fermarsi prima dei binari. Senza semaforo da quando il tram chiama l'incrocio; col semaforo solo da quando
+    parte la fase tram che lo fa passare. Prima auto e bus si fermavano a ogni chiamata, anche col verde e col tram
+    fermo alla barra orizzontale ad aspettare la sua fase;
+  - senza semaforo la precedenza è del tram: art. 145 del Codice della strada (salvo diversa segnalazione si dà la
+    precedenza ai veicoli su rotaia). I 301 incroci senza semaforo (su 468) sono tutti così: nell'export OSM non ci
+    sono nodi `railway=tram_crossing` né cartelli che la diano alla strada. Se servirà (binari dei depositi di
+    `tram-scambi` che tagliano una strada col tram che dà precedenza), su quell'incrocio `x.call` resta falso fino al
+    via libera e `ready` aspetta che `busy` non veda nessuno in arrivo per 5 s;
+  - il tram aspetta anche il bus di chi gioca sui binari (`busy` lo guarda dalla coda al muso più 1,5 s di strada;
+    prima vedeva solo auto e bus automatici). Il bus di chi gioca che entra nei binari di un incrocio senza semaforo
+    con un tram a meno di 12 m più 4 s (`x.close`) perde 60 punti: "🚋 Non hai dato la precedenza al tram!"
+    (`tramSignals.giveWay` in `main.js`);
+  - `calledAhead`: con due binari vicini ci si ferma prima del primo (si restava fermi tra i due), e chi svolta verso
+    binari subito dopo l'incrocio non entra se appena oltre c'è chi è fermo (la regola di `carGap` guarda solo l'arco
+    su cui si è: si entrava svoltando e ci si fermava sui binari in coda, Viale della Pace).
+  Prova in `tests/traffico.spec.js`: 20 minuti sul SIR3 tra Via San Mattia e Via Rosmini (14 incroci senza semaforo),
+  tram e auto mai dentro insieme; in Via De Leva il bus di chi gioca passando davanti al tram perde 60 punti, senza
+  tram no; fermo sui binari, il tram aspetta alla barra orizzontale e ha il via libera appena il bus se ne va. Resta
+  un caso raro nella rotonda Rosetta Gagliardi davanti alla stazione (una volta in 40 minuti): sui pezzi corti e curvi
+  della rotonda `calledAhead` guarda 20 m in linea retta oltre la svolta e non vede i binari due archi più avanti.
 - Poi, in quest'ordine: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza e penalità
   per chi non la dà; svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (passate da
   `mappa`); corsie preferenziali vere, con le auto che non le usano; traffico più lento con pioggia e nebbia.
@@ -482,6 +505,14 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   mezzi automatici che accumulano ritardo (IDEE, "Traffico e regole"). Non è il prossimo lavoro, ma ciò che si fa ora
   (densità delle auto, semafori, bus automatici) non deve dare per scontato un traffico costante né mezzi sempre in
   orario. Le corse dei tram le gestisce `tram-turni`: quando si arriva lì, ci si accorda scrivendolo qui.
+  Cosa nel codice di oggi dà per scontato un traffico leggero (11 novembre): il numero di auto è fisso
+  (`Traffic.target`, `opts.count`); le uscite dagli stalli contano il tempo e non chi aspetta chi, e con code vere
+  scatterebbero anche dove la coda si muove: auto ferme lontane che spariscono dopo 20 s su un incrocio col tram
+  (`unstick`) o davanti a un tram (`carT`), tram che passa attraverso un bus fermo dopo 90 s (`busT`; dopo 4 s solo se
+  il bus aspetta lui, `mutual`). Prima degli ingorghi vanno legate a un'attesa reciproca, come `mutual`. Regge già le
+  code: nessuno entra sui binari o nell'incrocio senza posto oltre (`carGap`, `calledAhead`, `full` dei bus). I bus
+  automatici partono dall'orario ma poi si muovono nel traffico (accumulano ritardo, in anticipo rallentano); la
+  chiamata del tram ai semafori e agli incroci parte da dove il tram è davvero, non dall'orario.
 - Con il tram: `TramSim` e `TramSignals` restano della futura corsia `tram-turni`, tranne il coordinamento con il
   traffico (sopra); per il resto, se lo sblocco dei tram chiede di toccarli, si scrive qui cosa e perché.
 - Verifiche: regola 3, più le foto dal posto di guida nei punti cambiati e la guida della 3 su Riviera dei Ponti Romani.

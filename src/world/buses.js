@@ -577,10 +577,10 @@ export class BusSim {
       b.waitX = null;
       for (let j = b.tx; j < L.tram.length && L.tram[j].s - front < 60; j++) {
         const X = L.tram[j];
-        if (X.x.req > 0 || full(X.out)) {
+        if (X.x.call || full(X.out)) {
           const v = stopAt(X.s - front);
           vt = Math.min(vt, v);
-          if (X.x.req > 0 && v < 0.3) b.waitX = X.x;
+          if (X.x.call && v < 0.3) b.waitX = X.x;
           break;
         }
       }

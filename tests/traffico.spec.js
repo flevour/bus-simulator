@@ -47,11 +47,12 @@ test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo s
   expect(gioco.errori()).toEqual([]);
 });
 
-// Incroci semaforizzati sulla sede del tram: tram e auto che tagliano i binari non sono mai dentro insieme. Ogni 0,2 s,
-// per ogni incrocio col tram dei semafori scelti: il tram copre il binario all'altezza dell'auto (dal muso alla coda,
-// 1 m di margine) e un'auto che taglia i binari ha il muso entro mezzo tram dall'asse (3,2 m dal centro).
-function contaIncroci({ punti, sec }) {
-  const g = window.__game, xs = g.tramSignals.list.filter((x) => x.sig && punti.some(([px, pz]) => Math.hypot(x.px - px, x.pz - pz) < 40));
+// Incroci sulla sede del tram: tram e auto che tagliano i binari non sono mai dentro insieme. Ogni 0,2 s, per ogni
+// incrocio col tram vicino ai punti scelti (col semaforo se sem, senza altrimenti): il tram copre il binario all'altezza
+// dell'auto (dal muso alla coda, 1 m di margine) e un'auto che taglia i binari ha il muso entro mezzo tram dall'asse
+// (3,2 m dal centro).
+function contaIncroci({ punti, sec, sem = true, r = 40 }) {
+  const g = window.__game, xs = g.tramSignals.list.filter((x) => !!x.sig === sem && punti.some(([px, pz]) => Math.hypot(x.px - px, x.pz - pz) < r));
   const insieme = [];
   let passaggi = 0, auto = 0;
   for (let t = 0; t < sec * 5; t++) {
@@ -88,6 +89,72 @@ test('incroci semaforizzati sulla sede: tram e auto mai dentro insieme', async (
   expect(r.passaggi, 'nessun tram è passato dagli incroci').toBeGreaterThan(200);
   expect(r.auto, 'nessuna auto vicino agli incroci').toBeGreaterThan(200);
   expect(r.insieme).toEqual([]);
+  expect(gioco.errori()).toEqual([]);
+});
+
+// Il bus di chi gioca a un incrocio senza semaforo vicino a (px, pz), sull'arco che taglia i binari: lo attraversa a
+// 8 m/s senza tram, poi con un tram a 45 m che arriva a 9 m/s; poi resta fermo sui binari con un tram in arrivo, e se ne va
+function precedenza({ px, pz }) {
+  const g = window.__game, ts = g.tramSignals, b = g.bus, N = g.net.nodes;
+  const x = ts.list.filter((x) => !x.sig && Math.hypot(x.px - px, x.pz - pz) < 10).sort((p, q) => Math.hypot(p.px - px, p.pz - pz) - Math.hypot(q.px - px, q.pz - pz))[0];
+  if (!x) return { incrocio: false };
+  const e = x.e, A = N[e.a], B = N[e.b], l = Math.hypot(B.x - A.x, B.z - A.z), dx = (B.x - A.x) / l, dz = (B.z - A.z) / l;
+  const r = x.refs[0], tr = g.trams.trams.find((t) => t.track === r.track) || g.trams.trams[0];
+  // bus a d m dall'incrocio (negativo: prima), sulla corsia di destra
+  const metti = (d) => b.place(x.px + dx * d + (dz * e.width) / 4, x.pz + dz * d - (dx * e.width) / 4, Math.atan2(dx, dz));
+  // via gli altri tram e le auto attorno all'incrocio
+  const libera = () => {
+    for (const t of g.trams.trams) if (t !== tr && t.parts[0] && Math.hypot(t.parts[0].x - x.px, t.parts[0].z - x.pz) < 400) t.s = (t.s + 2500) % 1000;
+    g.traffic.cars = g.traffic.cars.filter((c) => Math.hypot(c.x - x.px, c.z - x.pz) > 250);
+  };
+  const tram = (d, v) => { tr.track = r.track; tr.dir = r.dir; tr.s = r.sT - d; tr.v = v; tr.wait = 0; };
+  const attraversa = () => {
+    const log0 = g.mission.log.length;
+    b.v = 8;
+    g.keys.add('KeyW');
+    g.sim(4, 1 / 30, false);
+    g.keys.delete('KeyW');
+    b.v = 0;
+    return g.mission.log.slice(log0).map((m) => `${m.pts} ${m.msg}`);
+  };
+  g.teleport(x.px - dx * 40, x.pz - dz * 40);
+  tram(600, 0); libera(); metti(-30); g.sim(0.1, 1 / 30, false);
+  const senza = attraversa();
+  libera(); metti(-30); tram(45, 9); g.sim(0.1, 1 / 30, false);
+  const con = attraversa();
+  tram(600, 0); g.sim(3, 1 / 30, false);
+  libera(); metti(0); b.v = 0; tram(70, 9);
+  let viaLibera = false, muso = -Infinity;
+  for (let i = 0; i < 80; i++) { g.sim(0.1, 1 / 30, false); if (x.state === 'V') viaLibera = true; muso = Math.max(muso, tr.s - r.sT); }
+  metti(40); b.v = 0;
+  let dopo = null;
+  for (let i = 0; i < 100 && dopo == null; i++) { g.sim(0.1, 1 / 30, false); if (x.state === 'V') dopo = (i + 1) / 10; }
+  return { incrocio: `${e.name} (${Math.round(x.px)}, ${Math.round(x.pz)})`, senza, con, viaLibera, muso, halfT: x.halfT, dopo };
+}
+
+// Dove non c'è semaforo la precedenza è del tram (art. 145 del Codice della strada: salvo diversa segnalazione si dà
+// la precedenza ai veicoli su rotaia; nei dati nessun incrocio senza semaforo la dà alla strada), rispettata dai due
+// lati: auto e bus si fermano prima dei binari quando un tram chiama l'incrocio, il tram aspetta chi è già sopra. Sul
+// SIR3 tra Via San Mattia e Via Rosmini, 20 minuti: tram e auto mai dentro insieme. Poi il bus di chi gioca in Via De
+// Leva: passando davanti al tram perde 60 punti, senza tram no; fermo sui binari, il tram aspetta alla barra
+// orizzontale e ha il via libera appena il bus se ne va.
+test('incroci senza semaforo: precedenza al tram, rispettata dai due lati', async ({ pagina, gioco }) => {
+  test.setTimeout(300_000);
+  await avviaCorsa(pagina, { linea: '3' });
+  await pagina.evaluate(() => { window.__game.teleport(900, 500); window.__game.sim(1, 1 / 30, false); });
+  const r = await pagina.evaluate(contaIncroci, { punti: [[720, 247], [786, 373], [909, 632], [1020, 816], [1101, 947]], sec: 1200, sem: false, r: 60 });
+  expect(r.incroci).toBeGreaterThan(8);
+  expect(r.passaggi, 'nessun tram è passato dagli incroci').toBeGreaterThan(200);
+  expect(r.auto, 'nessuna auto vicino agli incroci').toBeGreaterThan(200);
+  expect(r.insieme).toEqual([]);
+  const p = await pagina.evaluate(precedenza, { px: 1020, pz: 816 });
+  expect(p.incrocio).toMatch(/^Via Giuseppe De Leva/);
+  expect(p.senza.filter((m) => m.includes('🚋'))).toEqual([]);
+  expect(p.con).toContain('-60 🚋 Non hai dato la precedenza al tram!');
+  expect(p.viaLibera, 'via libera al tram col bus fermo sui binari').toBe(false);
+  expect(p.muso, 'muso del tram oltre la linea d\'arresto').toBeLessThan(-p.halfT);
+  expect(p.dopo, 'secondi per il via libera dopo che il bus se ne va').not.toBeNull();
+  expect(p.dopo).toBeLessThanOrEqual(3);
   expect(gioco.errori()).toEqual([]);
 });
 
