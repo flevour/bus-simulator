@@ -1267,10 +1267,10 @@ export class City {
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
     const deck = [], piers = [], poles = [], wires = [];
     this.tramPoles = []; // posizioni dei pali della linea aerea (per le prove)
+    this.tramSpans = []; // tiranti e mensole: centro, mezza larghezza delle sedi, estremi (per le prove)
     const L = TRAM.lane;
     // Facciate vicine alla sede: i tiranti della linea aerea si agganciano lì (le piante reali, gli ostacoli dei muri
-    // si costruiscono dopo). spanAnchor: dal centro (cx, cz) verso (nx, nz), oltre half metri, la prima facciata entro
-    // 14 m; se non c'è, un palo sul bordo della strada
+    // si costruiscono dopo)
     const FC = 20, fac = new Map(), nearTrack = new Set(), ck = (x, z) => Math.floor(x / FC) + ',' + Math.floor(z / FC);
     for (const T of tracks) for (const d of [1, -1]) { const P = T.path(d); for (let s = 0; s <= P.len; s += 10) { const p = P.at(s); for (const ox of [-1, 0, 1]) for (const oz of [-1, 0, 1]) nearTrack.add(ck(p.x + ox * FC, p.z + oz * FC)); } }
     for (const b of this.net.tramBuildings || this.net.buildings) {
@@ -1282,21 +1282,40 @@ export class City {
     }
     // distanza dall'asfalto: con la pianta delle strade conta l'asfalto vero (la sede è asfalto), non il nastro dell'arco
     const offRoad = this.asphRings ? (x, z) => Math.min(this.surfaceOff(x, z), this.clearance(x, z, ['tram'], 12) + 0.3) : (x, z) => this.clearance(x, z, ['road', 'tram'], 12) - 0.2;
+    // sedi di tutti i binari in una griglia (un punto ogni 1,5 m): un tirante non passa mai sopra un'altra sede
+    const SG = 4, sedi = new Map(), sk = (x, z) => Math.floor(x / SG) + ',' + Math.floor(z / SG);
+    for (const T of tracks) for (const d of [1, -1]) {
+      const P = T.path(d);
+      for (let s = 0; s <= P.len; s += 1.5) { const p = P.at(s), k = sk(p.x, p.z); if (!sedi.has(k)) sedi.set(k, []); sedi.get(k).push(p.x, p.z); }
+    }
+    const onSede = (x, z) => {
+      const ix = Math.floor(x / SG), iz = Math.floor(z / SG);
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const c = sedi.get(ix + a + ',' + (iz + b));
+        if (c) for (let i = 0; i < c.length; i += 2) if (Math.hypot(c[i] - x, c[i + 1] - z) < L + 0.2) return true;
+      }
+      return false;
+    };
+    // spanAnchor: dal centro (cx, cz) verso (nx, nz), oltre half metri, dove agganciare il tirante: la prima facciata
+    // entro 14 m, altrimenti un palo dove finisce l'asfalto (marciapiede, isola, verde) entro 16 m. Con la sede in mezzo
+    // alla strada i pali stanno così sui marciapiedi e il tirante passa sopra le corsie. La ricerca si ferma sulla sede
+    // di un altro binario (versi separati con le corsie in mezzo): da quel lato niente aggancio (null)
     const spanAnchor = (cx, cz, nx, nz, half) => {
-      let best = 14;
+      let stop = 16;
+      for (let k = half; k < 16; k += 0.5) if (onSede(cx + nx * k, cz + nz * k)) { stop = k; break; }
+      const lim = Math.min(14, stop);
+      let best = lim;
       const cells = new Set();
-      for (let k = half; k < 14 + 5; k += 5) cells.add(ck(cx + nx * Math.min(k, 14), cz + nz * Math.min(k, 14)));
+      for (let k = half; k < lim + 5; k += 5) cells.add(ck(cx + nx * Math.min(k, lim), cz + nz * Math.min(k, lim)));
       for (const key of cells) for (const sg of fac.get(key) || []) {
         const [ax, az, bx, bz] = sg, ex = bx - ax, ez = bz - az, den = nx * ez - nz * ex;
         if (Math.abs(den) < 1e-9) continue;
         const t = ((ax - cx) * ez - (az - cz) * ex) / den, u = ((ax - cx) * nz - (az - cz) * nx) / den;
         if (t >= half && t < best && u >= 0 && u <= 1) best = t;
       }
-      if (best < 14) return { x: cx + nx * best, z: cz + nz * best, pole: false };
-      // nessuna facciata: palo dove finisce l'asfalto (marciapiede, isola, verde), al più a 9 m; se fin lì è tutta
-      // carreggiata, sul cordolo della sede: mai in mezzo alla strada (binari separati con le corsie in mezzo)
-      for (let k = half; k < 9; k += 0.25) if (offRoad(cx + nx * k, cz + nz * k) >= 0.4) return { x: cx + nx * k, z: cz + nz * k, pole: true };
-      return { x: cx + nx * (half - 0.55), z: cz + nz * (half - 0.55), pole: true };
+      if (best < lim) return { x: cx + nx * best, z: cz + nz * best, pole: false };
+      for (let k = half; k < stop; k += 0.25) if (offRoad(cx + nx * k, cz + nz * k) >= 0.4) return { x: cx + nx * k, z: cz + nz * k, pole: true };
+      return null;
     };
     // ogni binario una volta: i tratti in comune li disegna la sede che c'era già
     // corsie rosse dei due versi in due mesh, il verso -1 un gradino sopra: dove i binari sono vicini le corsie si
@@ -1373,7 +1392,13 @@ export class City {
         if (q && dir < 0) continue;
         // tirante trasversale sopra i fili, agganciato alle facciate o a pali ai lati della strada
         const cx = q ? (p.x + q.x) / 2 : p.x, cz = q ? (p.z + q.z) / 2 : p.z, half = (q ? Math.hypot(p.x - q.x, p.z - q.z) / 2 : 0) + L + 0.6;
-        const ends = [-1, 1].map((side) => spanAnchor(cx, cz, -p.dz * side, p.dx * side, half));
+        let ends = [-1, 1].map((side) => spanAnchor(cx, cz, -p.dz * side, p.dx * side, half));
+        // un lato senza aggancio: il tirante diventa una mensola dal palo dell'altro lato fino a 0,6 m oltre il filo più
+        // lontano; senza aggancio ai due lati (corsie larghe ai due lati), pali sul cordolo della sede
+        const reach = half - L, side = (i) => (i ? 1 : -1);
+        if (!ends[0] && !ends[1]) ends = ends.map((e, i) => ({ x: cx - p.dz * side(i) * (half - 0.55), z: cz + p.dx * side(i) * (half - 0.55), pole: true }));
+        else ends = ends.map((e, i) => e || { x: cx - p.dz * side(i) * reach, z: cz + p.dx * side(i) * reach, pole: false });
+        this.tramSpans.push({ cx, cz, half, a: ends[0], b: ends[1] });
         const y = Y_ROAD + h + CATENARY_HEIGHT + 0.3;
         for (const a of ends) if (a.pole) { poles.push(new THREE.CylinderGeometry(0.08, 0.11, y - Y_ROAD - h + 0.4, 6).translate(a.x, Y_ROAD + h + (y - Y_ROAD - h + 0.4) / 2, a.z)); this.tramPoles.push({ x: a.x, z: a.z }); }
         const [a, b] = ends, sl = Math.hypot(b.x - a.x, b.z - a.z);
