@@ -41,13 +41,14 @@ function installaPilota({ fermaAlPrimoUrto, traffico }) {
   const davanti = () => {
     const fx = Math.sin(bus.h), fz = Math.cos(bus.h), mx = bus.x + fx * 6, mz = bus.z + fz * 6;
     let gap = Infinity;
-    const prova = (x, z, r) => {
+    const prova = (x, z, r, lat = 2.4) => {
       const a = (x - mx) * fx + (z - mz) * fz, l = Math.abs((x - mx) * fz - (z - mz) * fx);
-      if (a > -1 && a < 40 && l < 2.4) gap = Math.min(gap, a - r);
+      if (a > -1 && a < 40 && l < lat) gap = Math.min(gap, a - r);
     };
     for (const p of g.buses.parts) prova(p.x, p.z, 1.6);
     for (const c of g.traffic.cars) prova(c.x, c.z, 2.2);
-    for (const p of g.trams.near(mx, mz, 40)) prova(p.x, p.z, 1.6);
+    // il tram che viene incontro sul binario accanto conta solo se è proprio davanti (lui aspetta il mezzo di chi gioca)
+    for (const p of g.trams.near(mx, mz, 40)) prova(p.x, p.z, 1.6, Math.cos(p.h - bus.h) < -0.3 ? 1.4 : 2.4);
     return gap;
   };
   // velocità permessa da semaforo e traffico (m.s è il centro del mezzo, il muso 6 m avanti)

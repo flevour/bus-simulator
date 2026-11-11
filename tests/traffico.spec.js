@@ -40,9 +40,9 @@ test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo s
   const esiti = await guidaFermate(pagina, { fermate: 17, traffico: true });
   const fermi = await pagina.evaluate(() => window.__fermi());
   const ultima = esiti[esiti.length - 1];
+  expect(fermi.filter((f) => f.s > 60), `fermi più lunghi: ${JSON.stringify(fermi.slice(0, 6))}`).toEqual([]);
   expect(ultima.nome, `fermate: ${esiti.map((e) => `${e.nome} ${e.motivo}`).join(', ')}`).toBe('Garibaldi giardini');
   expect(ultima.arrivato).toBe(true);
-  expect(fermi.filter((f) => f.s > 60), `fermi più lunghi: ${JSON.stringify(fermi.slice(0, 6))}`).toEqual([]);
   expect(gioco.errori()).toEqual([]);
 });
 
