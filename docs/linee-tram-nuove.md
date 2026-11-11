@@ -246,6 +246,16 @@ python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-ferma
   Stazione sud, da dove riparte; il SIR2 verso est ferma a Stazione sud, verso ovest a Stazione nord e poi scende sul
   binario del SIR1 nel Corso del Popolo.
 * **De Gasperi** è sul Corso del Popolo dove il KML del SIR2 aveva Trieste, un nodo per binario.
+* **Fermate ai capolinea e banchine OSM**: per ogni verso la fermata è il nodo OSM sul suo binario (con i due binari a
+  meno di 8 m si prendevano scambiate, a Voltabarozzo); dove OSM ha la banchina (`railway=platform`) la fermata va a
+  metà banchina, perché nel gioco il punto della fermata è il centro della banchina.
+* **Depositi**: `scripts/tram_depositi.py` scrive [`data/tram-depositi.json`](../data/tram-depositi.json), le way OSM
+  attorno ai depositi della Guizza (export del SIR1) e di Voltabarozzo (cantiere), senza le comunicazioni dei
+  capolinea; il gioco ne fa il grafo del deposito (`TramYard` in `src/tram/tram.js`).
+
+  ```bash
+  python3 scripts/tram_depositi.py data/osm-padova-tram.json data/osm-padova-tram-cantiere.json data/tram-depositi.json
+  ```
 * **Banchine**: a destra del verso di marcia, come le poche banchine delle linee nuove già in OSM; in stazione stanno
   dentro l'anello interno, quindi a sinistra (porte a sinistra).
 * **Orario**: SIR3 ogni 8 minuti, 18 minuti da capolinea a capolinea; SIR2 ogni 7 minuti, 54 minuti a 18 km/h
