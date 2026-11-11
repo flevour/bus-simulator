@@ -50,7 +50,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
 | `src/world/traffic.js` | `Traffic`/`Walkers`/`TrafficLights`/`TramSignals` e in `TramSim` chi il tram aspetta (`others`, `busT`) a `traffico`, il resto di `TramSim` al tram | stesse classi in due corsie = conflitti; `traffico` tocca `TramSim` solo dove serve allo sblocco dei tram, scrivendolo qui |
 | `src/world/buses.js` | `traffico` (comportamento dei bus automatici) | `mappa` ci ha messo l'uscita dal binario opposto (`buildLane`, `ahead`): chi la cambia lo scrive qui |
-| `src/bus/bus.js` | `guida` (sterzo, pedali, cruscotto) | gli altri solo per piccole cose, segnalate qui |
+| `src/bus/bus.js` | tutti, ognuno nelle sue funzioni | era della corsia `guida` (sterzo, pedali, cruscotto), chiusa l'11 novembre |
 | `src/main.js` | tutti, ognuno nelle sue funzioni | |
 
 ## Corsie aperte (onda 1 dal 9 novembre 2026, `traffico`, `guida` e `tram-turni` dall'11 novembre)
@@ -64,7 +64,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `segnalazioni` (chiusa il 9 novembre) | `segnalazioni` | 5177 / 4177 |
 | `capolinea` (dal 9 novembre) | `capolinea` | 5178 / 4178 |
 | `traffico` (dall'11 novembre) | `traffico` | 5179 / 4179 |
-| `guida` (dall'11 novembre) | `guida` | 5180 / 4180 |
+| `guida` (chiusa l'11 novembre) | `guida` | 5180 / 4180 |
 | `tram-turni` (dall'11 novembre) | `tram-turni` | 5181 / 4181 |
 
 ### verifiche
@@ -402,9 +402,9 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   traffico (sopra); per il resto, se lo sblocco dei tram chiede di toccarli, si scrive qui cosa e perché.
 - Verifiche: regola 3, più le foto dal posto di guida nei punti cambiati e la guida della 3 su Riviera dei Ponti Romani.
 
-### guida
+### guida (chiusa l'11 novembre)
 
-Aperta l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
+Aperta e chiusa l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
 ingressi in `src/main.js` (oggetto `input`, comandi touch), menu e pausa in `index.html` e `src/style.css`.
 Dall'11 novembre telefoni e tablet non sono supportati: comandi touch e HUD compatto restano nel codice ma spenti
 (`MOBILE_SUPPORTED = false` in `src/game/touch.js`, invito a giocare da computer). Niente lavoro sul touch finché non
@@ -460,10 +460,10 @@ si riattiva.
   della cabina resta sotto l'inquadratura. Solo per il bus.
 - **Specchietti regolabili, fatti l'11 novembre**: `mirrorAdj` in `main.js` (spostamento del punto guardato, 31 m
   dietro, in fuori e in basso), trascinamento sulle cornici `#mirror-frame-l` e `#mirror-frame-r`.
-- Brief finito l'11 novembre. Restano aperti: lo sterzo da tastiera dopo il rilascio (punto sopra, da decidere), la
-  prova con un volante vero, colonnine vere ai capolinea se ci sono dati. Specchietti e monitor della porta si
-  ridisegnano a disegni alterni (`renders` in `render`), quindi anche con `sim(…, true)` nelle prove.
-- Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
+- Se si riapre: il ritorno al centro dello sterzo da tastiera dopo il rilascio (punto sopra, lasciato da decidere),
+  la prova con un volante vero, le colonnine dove sono davvero se si trovano i dati. Specchietti e monitor della porta
+  si ridisegnano a disegni alterni (`renders` in `render`), quindi anche con `sim(…, true)` nelle prove; il giro
+  guidato di `npm test` non deve cambiare.
 
 ### tram-turni
 
@@ -536,14 +536,15 @@ Dopo la chiusura i dati del piazzale sono stati sistemati dalla sessione cloud (
 
 ## Onde successive
 
-Onda 2, quando le corsie dell'onda 1 si chiudono (`traffico`, `guida` e `tram-turni` aperte l'11 novembre, sopra):
+Onda 2, quando le corsie dell'onda 1 si chiudono (`traffico` e `tram-turni` aperte l'11 novembre, `guida` aperta e chiusa lo stesso giorno, sopra):
 
 - `traffico`: aperta. Le corsie preferenziali si appoggiano su `laneLayout` e `driveOffset` di `padova.js` (corsie,
   corsie dei bus e scostamenti per verso).
 - `tram-turni`: aperta l'11 novembre (sopra). I semafori del tram coordinati con il traffico sono passati a
   `traffico`; gli scambi tra le sedi sono in `track.switches`, quelli ai capolinea si disegnano in `buildTramway`.
 - `esplorazione`: panoramica e giro libero senza mezzo, poi l'ortofoto AGEA (M5).
-- `guida`: aperta (sterzo, poi gamepad, bus elettrico con ricarica, telecamera della porta posteriore, specchietti).
+- `guida`: chiusa l'11 novembre (sterzo, gamepad e volante, bus elettrico con ricarica, telecamera della porta
+  posteriore, specchietti regolabili).
 
 Onda 3, da sola su `city.js`: `mappa-aree` al posto di `mappa`. Caricamento per aree (sezione 4 di
 [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md)) e l'aggiornamento automatico del GTFS. Le linee fino ai capolinea veri
