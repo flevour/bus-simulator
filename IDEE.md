@@ -62,6 +62,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
        Controllato linea per linea e corretto nei dati (vedi "Fatto" e
        [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md)).
+   - dal sondaggio del 9 novembre (quattro richieste, tutte dopo la correzione del Borgomagno):
+     - [ ] semafori in centro tra Riviera Tito Livio e Riviera dei Ponti Romani: gli autobus si bloccano e bloccano i
+       tram (linea 3 alle 8:54 di gioco, x 81, z -133; corsia `traffico`);
+     - [ ] cavalcavia da sistemare (linea 22 in Via Orlandini, x 1315, z -1022) e, da un giocatore nuovo, "i ponti o
+       cavalcavia come quello della stazione e il Camerini" (linea 13 in Viale Codalunga): il Cavalcavia Camerini non
+       l'ha mai guardato nessuno, il Borgomagno va ricontrollato (corsia `mappa`);
+     - [ ] sterzo troppo sensibile, "era meglio la guida vecchia" (stesso giocatore nuovo): regolazione della
+       sensibilità (corsia `guida`);
+     - [~] mappa più grande fino ai capolinea della 3 e della 22 e alle fermate della 10 e della 11 (linea 3 in Via
+       Fondà; corsia `capolinea`, dopo il tram).
 
 ## Mappa e dati
 
@@ -130,6 +140,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 ## Veicoli e guida
 
 - [x] Tram: SIR1 e SIR3 a 3 moduli, SIR2 a 4 moduli (vedi "Fatto").
+- [ ] Sensibilità dello sterzo regolabile (segnalazione del 9 novembre, corsia `guida`).
 - [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
 - [ ] Volante e pedaliera o gamepad (Gamepad API).
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
@@ -137,6 +148,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Traffico e regole
 
+- [ ] Bus automatici che non si bloccano ai semafori e non bloccano i tram (Tito Livio e Ponti Romani, segnalazione
+  del 9 novembre, corsia `traffico`).
 - [ ] Le auto rispettano STOP, precedenze e rotonde (oggi solo semafori).
 - [ ] Pedoni che attraversano sulle strisce con obbligo di precedenza (e punti).
 - [ ] Penalità per non dare precedenza a chi arriva (rotonde, dare precedenza).

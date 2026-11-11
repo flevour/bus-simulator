@@ -46,10 +46,12 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `src/data/padova-map.json` | `mappa` e `capolinea`, una rigenerazione alla volta | una riga sola da 12 MB: due rigenerazioni non si uniscono, si prende quella di `main` e si rigenera (regola 4) |
 | `scripts/build_map.py`, `scripts/street_surfaces.py` | `mappa` (dettagli dentro l'area) e `capolinea` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a queste corsie |
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
-| `src/world/traffic.js` | `Traffic`/`Walkers` al traffico, `TramSim`/`TramSignals` al tram | stesse classi in due corsie = conflitti |
+| `src/world/traffic.js` | `Traffic`/`Walkers`/`TrafficLights` a `traffico`, `TramSim`/`TramSignals` al tram | stesse classi in due corsie = conflitti; `traffico` può toccare `TramSim` solo dove serve allo sblocco dei tram, scrivendolo qui |
+| `src/world/buses.js` | `traffico` (comportamento dei bus automatici) | `mappa` ci ha messo l'uscita dal binario opposto (`buildLane`, `ahead`): chi la cambia lo scrive qui |
+| `src/bus/bus.js` | `guida` (sterzo, pedali, cruscotto) | gli altri solo per piccole cose, segnalate qui |
 | `src/main.js` | tutti, ognuno nelle sue funzioni | |
 
-## Corsie aperte (onda 1, dal 9 novembre 2026)
+## Corsie aperte (onda 1 dal 9 novembre 2026, `traffico` e `guida` dall'11 novembre)
 
 | Corsia | Workspace herdr | Porte dev / preview |
 |---|---|---|
@@ -59,6 +61,8 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `tram-reti` (chiusa il 9 novembre) | `tram-reti` | 5176 / 4176 |
 | `segnalazioni` (chiusa il 9 novembre) | `segnalazioni` | 5177 / 4177 |
 | `capolinea` (dal 9 novembre) | `capolinea` | 5178 / 4178 |
+| `traffico` (dall'11 novembre) | `traffico` | 5179 / 4179 |
+| `guida` (dall'11 novembre) | `guida` | 5180 / 4180 |
 
 ### verifiche
 
@@ -158,6 +162,11 @@ delle strade di `src/world/city.js`, `src/data/padova.js`, `src/data/padova-map.
     insieme alla sede di SIR3 e SIR2 nella pianta delle strade; da controllare anche sul SIR1.
   - **bus automatici contromano sul binario del tram** (Via Tommaseo vicino a Viale della Pace, Piazza Garibaldi, con
     il muso dentro il tram): fatto, vedi sotto.
+- Dal sondaggio del 9 novembre (IDEE, prossimi passi 5), due richieste sui cavalcavia arrivate dopo la correzione del
+  Borgomagno (pubblicata alle 16:04): "Bisogna sistemare i cavalcavia" (linea 22 in Via Orlandini, x 1315, z -1022, alle
+  17:57) e, da un giocatore nuovo, "sarebbero da migliorare i ponti o cavalcavia come quello della stazione e il
+  Camerini" (linea 13 in Viale Codalunga, alle 20:36). Il **Cavalcavia Camerini** (nella rete con questo nome) non l'ha
+  mai guardato nessuno; il **Borgomagno** va rivisto dal posto di guida come lo vede chi gioca.
 
 Fatto il 9 novembre (dettagli in IDEE, "Fatto"): corsie e segnaletica orizzontale dai tag OSM, fermate del tram sui
 nodi `tram_stop`, dossi e attraversamenti rialzati, `highway=busway` (niente da fare), area ai bordi e linee tagliate
@@ -179,6 +188,9 @@ sparsi fuori dall'asfalto vero (`buildTreesAndLamps`).
 
 Prossimo lavoro, in quest'ordine:
 
+- cavalcavia del sondaggio del 9 novembre (sopra): foto dal posto di guida e guida di una linea che ci passa sul
+  Cavalcavia Camerini, sul Borgomagno e su quelli lungo la 22 attorno a Via Orlandini; poi, al Borgomagno, la piega
+  dei fili del tram e il gradino di 20 cm;
 - sede di SIR3 e SIR2 nella pianta delle strade: fatta per isole, marciapiedi, edifici e impalcati (i binari di
   `data/tram-linee-nuove.json` entrano in `street_surfaces.surfaces` come quelli del SIR1; la sede di tutte le linee
   è asfalto, fuori da isole e marciapiedi: rotonde attraversate dal tram a posto). Cavalcavia di Chiesanuova: rampe
@@ -189,7 +201,8 @@ Prossimo lavoro, in quest'ordine:
   ogni 20 m in `buildRoads`);
 - le 9 fermate dove il bus fermo tocca una facciata e le 11 agganciate lontano (richieste di `verifiche`, sopra; dopo il
   corridoio del SIR3 sono 7, le quattro di Bembo 95 sulla 3 a posto);
-- svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (`TrafficLights` in `traffic.js`);
+- svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta: passate alla corsia `traffico`
+  (`TrafficLights` in `traffic.js`); i dati (`turnLanes`) restano di `mappa`;
 - le fermate senza palina e gli 11 tratti A-B-A con una fermata rimasti (3 in Via Bembo, 4 in Via Gramsci, 16 e 24
   al Capolinea Plebiscito; elenchi in IDEE, "Mappa e dati"); quelli di Via Bembo li ha tolti la corsia `capolinea`
   (il pezzo di Via Bembo tra due vie dell'area, `gtfs_links`);
@@ -267,8 +280,58 @@ Prossimo lavoro, in quest'ordine:
   piano; i rami di Romagnoli e San Lazzaro se OSM ha i binari;
 - binari del deposito di Voltabarozzo (OSM `service=yard`, in `data/osm-padova-tram-cantiere.json`): non disegnati, li
   può prendere la corsia `tram-turni` con il deposito della Guizza;
+- caricamento per aree (onda 3, sezione 4 di `ESTENSIONE_LINEE.md`), **prima del gruppo 2**: deciso l'11 novembre.
+  Con il SIR2 la mappa arriva a circa 17 MB; gli autobus fino ai capolinea la porterebbero a 25-35 MB. Prima la rete
+  sempre caricata e le aree in `public/` (pipeline), poi `city.js`. Quando si arriva a `city.js` lo si scrive qui: da
+  lì le altre corsie non toccano `city.js` finché il lavoro non è su `main`;
 - gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da
-  togliere per le linee che arrivano ai capolinea.
+  togliere per le linee che arrivano ai capolinea. Tra i capolinea richiesti da chi gioca (sondaggio del 9 novembre,
+  linea 3 in Via Fondà): quelli della 3 e della 22 e le fermate della 10 e della 11 fuori dall'area.
+
+### traffico
+
+Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traffico e regole"). File: `Traffic`,
+`Walkers` e `TrafficLights` in `src/world/traffic.js`, `src/world/buses.js`; in sola lettura `laneLayout`,
+`driveOffset` e `turnLanes` di `src/data/padova.js` (dati della corsia `mappa`).
+
+- **Prima di tutto la segnalazione del 9 novembre** (IDEE, prossimi passi 5): "Problema con semafori in centro tra
+  tito livio e ponti romani si bloccano gli autobus che a loro volta bloccano i tram". Mandata dalla linea 3, giorno
+  feriale, alle 8:54 di gioco, in x 81, z -133 (Riviera dei Ponti Romani; il SIR1 passa di lì).
+  1. Riprodurre in headless: corsa della 3 vicino a quell'ora, giocatore portato lontano dai binari, `__game.sim`
+     per 20-30 minuti di gioco, posizione e velocità di bus automatici (`__game.buses`), tram (`__game.trams`) e auto
+     tra Riviera Tito Livio e Riviera dei Ponti Romani. Trovare chi aspetta chi: incrocio occupato col rosso, bus
+     fermo sul binario, attese incrociate tra bus, tram e auto.
+  2. Correggere la causa: chi non può liberare l'incrocio non ci entra, un bus non resta fermo sopra il binario, e
+     nessuno aspetta all'infinito qualcuno che aspetta lui.
+  3. Una prova in `tests/` su quel tratto (bus e tram non restano fermi oltre 90 s fuori dalle fermate e dai rossi),
+     poi lo stesso controllo su tutta la mappa per 40 minuti di gioco alle 8:15 e alle 17:30, per trovare gli altri
+     blocchi (elenco in questa sezione).
+- Poi, in quest'ordine: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza e penalità
+  per chi non la dà; svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (passate da
+  `mappa`); corsie preferenziali vere, con le auto che non le usano; traffico più lento con pioggia e nebbia.
+- Con il tram: `TramSim` e `TramSignals` restano della futura corsia `tram-turni`; se lo sblocco dei tram chiede di
+  toccarli, si scrive qui cosa e perché.
+- Verifiche: regola 3, più le foto dal posto di guida nei punti cambiati e la guida della 3 su Riviera dei Ponti Romani.
+
+### guida
+
+Aperta l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
+ingressi in `src/main.js` (oggetto `input`, comandi touch), menu e pausa in `index.html` e `src/style.css`.
+
+- **Prima di tutto lo sterzo** (sondaggio del 9 novembre, giocatore nuovo, Chrome su Windows, quindi tastiera): "La
+  guida secondo me era meglio quella vecchia, l'attuale è troppo sensibile".
+  1. Capire cosa è cambiato per chi guida con la tastiera: lo sterzo progressivo del 6 novembre (`ce4ea51`) e i
+     comandi touch uniti l'8 novembre (`bfd0adb`, che ha cambiato molto `bus.js`). Oggi lo sterzo è in `Bus.update`
+     (`steerKey`, `steerHold`, `rate`, `maxSteer`). Confronto in numeri tra le versioni: gradi di volante e raggio di
+     curva dopo 0,2 s, 0,5 s e 1 s di tasto premuto a 20 e a 50 km/h.
+  2. Una regolazione "Sensibilità dello sterzo" nel menu e nella pausa, salvata nel browser (con try/catch come il
+     resto), che scala la velocità con cui i tasti girano il volante; il valore di partenza si sceglie dal confronto.
+     Il pilota delle prove (`tests/guida.js`) scrive `bus.steerIn` direttamente: la regolazione non deve cambiare
+     `maxSteer` né il ritorno al centro, altrimenti cambia il giro guidato.
+  3. Riga in `novita.js` che dice a chi gioca dove trovare la regolazione.
+- Poi, in quest'ordine: gamepad e volante (Gamepad API); bus elettrico con batteria e ricarica al capolinea;
+  telecamera della porta posteriore sul cruscotto; specchietti regolabili.
+- Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
 ### tram-reti (chiusa il 9 novembre)
 
@@ -305,15 +368,14 @@ Dopo la chiusura i dati del piazzale sono stati sistemati dalla sessione cloud (
 
 ## Onde successive
 
-Onda 2, quando le corsie dell'onda 1 si chiudono:
+Onda 2, quando le corsie dell'onda 1 si chiudono (`traffico` e `guida` aperte l'11 novembre, sopra):
 
-- `traffico`: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza; penalità per chi
-  non dà precedenza; traffico più lento con pioggia e nebbia; corsie preferenziali vere (le corsie ci sono: `laneLayout`
-  e `driveOffset` in `padova.js` danno corsie, corsie dei bus e scostamenti per verso).
+- `traffico`: aperta. Le corsie preferenziali si appoggiano su `laneLayout` e `driveOffset` di `padova.js` (corsie,
+  corsie dei bus e scostamenti per verso).
 - `tram-turni`: turni del tram e deposito della Guizza, binario tronco, semafori del tram coordinati. Può partire:
   gli scambi tra le sedi sono in `track.switches`, quelli ai capolinea si disegnano in `buildTramway`.
 - `esplorazione`: panoramica e giro libero senza mezzo, poi l'ortofoto AGEA (M5).
-- `guida`: gamepad, bus elettrico con ricarica, telecamera della porta posteriore, specchietti.
+- `guida`: aperta (sterzo, poi gamepad, bus elettrico con ricarica, telecamera della porta posteriore, specchietti).
 
 Onda 3, da sola su `city.js`: `mappa-aree` al posto di `mappa`. Caricamento per aree (sezione 4 di
 [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md)) e l'aggiornamento automatico del GTFS. Le linee fino ai capolinea veri
