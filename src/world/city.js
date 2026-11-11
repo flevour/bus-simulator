@@ -1379,8 +1379,9 @@ export class City {
         const p = P.at(sp), h = track.heightAt(dir, sp);
         if (!track.wireAt(dir, sp) || track.sharedAt(dir, sp)) { prevWire = null; continue; }
         if (prevWire) {
-          const wl = Math.hypot(p.x - prevWire.x, p.z - prevWire.z);
-          wires.push(new THREE.BoxGeometry(0.035, 0.035, wl).rotateY(Math.atan2(p.x - prevWire.x, p.z - prevWire.z)).translate((p.x + prevWire.x) / 2, Y_ROAD + CATENARY_HEIGHT + (h + prevWire.h) / 2, (p.z + prevWire.z) / 2));
+          // inclinato come il binario: orizzontale alla quota media, in rampa il filo era una scala (Borgomagno)
+          const wl = Math.hypot(p.x - prevWire.x, p.z - prevWire.z), dh = h - prevWire.h;
+          wires.push(new THREE.BoxGeometry(0.035, 0.035, Math.hypot(wl, dh)).rotateX(-Math.atan2(dh, wl)).rotateY(Math.atan2(p.x - prevWire.x, p.z - prevWire.z)).translate((p.x + prevWire.x) / 2, Y_ROAD + CATENARY_HEIGHT + (h + prevWire.h) / 2, (p.z + prevWire.z) / 2));
         }
         prevWire = { x: p.x, z: p.z, h };
         if (sp - lastPole < 30) continue;
