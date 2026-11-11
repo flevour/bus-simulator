@@ -86,8 +86,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] segni bianchi della carreggiata sulla sede rossa del tram, lungo un binario a fianco della strada (vedi
        "Fatto");
      - [x] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (vedi "Fatto");
-     - [ ] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
-       stanno alla quota degli argini (corsia `mappa`);
+     - [x] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
+       stanno alla quota degli argini (vedi "Fatto"; per la strada resta il gradino alle teste del ponte, corsia
+       `mappa`);
      - [x] SIR2 intero fino a Rubano e al capolinea prima della rotonda per Venezia / SR11 (vedi "Fatto");
      - [ ] linee del bus allungate fino ai capolinea del GTFS, con tracciato e orario interi (la 24 da Mandriola oggi
        parte da Volta fr. 24), corsia `capolinea`;
@@ -225,6 +226,14 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Ponte tra Cornaro e Voltabarozzo** (segnalazione dell'11 novembre, corsia `mappa`): il SIR3 scendeva
+  dall'argine dello Scaricatore verso nord al 20% (3 m in 15 m), perché corre accanto al rilevato di Via Piovese e il
+  DTM non ha ancora il terrapieno del binario nuovo. Lungo i binari delle linee nuove, fuori dalle carreggiate, il
+  terreno della variante "via" ora non sale né scende più del 3% (`TRAM_GRADE` in `street_surfaces.terrain_for_game`,
+  rilevati come quelli dei ponti in `terrain.bridges`): a nord 4,9 m in 165 m, al massimo 5,7% su 10 m per le celle
+  del terreno da 10 m; a sud sotto il 4%. Dove il binario è a terra ma il terreno si incurva, i nastri della sede si
+  spezzano ogni 4 m (`buildTramway`). Guidati il SIR3 da Voltabarozzo a Cornaro e la 14 da Marconi fr.121 a
+  Facciolati 127, senza urti.
 - [x] **Sede del tram pulita e avvio veloce** (segnalazioni dell'11 novembre dal SIR3 verso Cornaro, corsia `mappa`):
   i "trattini" bianchi sparsi su tutte le linee erano i dischi di raccordo nei giunti del binario, con la texture della
   sede presa dalle coordinate del mondo (pezzi storti delle righe di bordo), e le righe di bordo delle due corsie dove i

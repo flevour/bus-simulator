@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 81, d: '2026-11-11', t: 'Ponte tra Cornaro e Voltabarozzo: il SIR3 sale e scende dal ponte sullo Scaricatore su un terrapieno lungo e dolce, come la strada accanto, invece della rampa ripida verso nord. Lo stesso vale dove i binari nuovi passano un argine fuori dalla strada.' },
   { n: 80, d: '2026-11-11', t: 'Sede del tram pulita su tutte le linee: niente più trattini bianchi sparsi sulla corsia rossa né macchie d\'asfalto che coprono i binari (SIR3 verso Cornaro), e le righe della strada si fermano al bordo della sede. La città si carica di nuovo in fretta: i cavalcavia rallentavano l\'avvio di parecchi secondi.' },
   { n: 79, d: '2026-11-11', t: 'Mappa grande (M): trascinala col mouse per guardare altre zone della città. Un clic senza trascinare su una strada ti ci porta, come prima; riaprendola torna centrata sul mezzo.' },
   { n: 78, d: '2026-11-11', t: 'Il tram SIR2 si guida tutto, da Rubano (via Pria Fosca) al capolinea di Busa di Vigonza, prima della rotonda per Venezia: 35 fermate, senza tratto in città. La città arriva fin là, e con lei la linea 10 fino a Sarmeola e a Ponte di Brenta e la 25 intera, dalla stazione alla zona industriale e ritorno.' },

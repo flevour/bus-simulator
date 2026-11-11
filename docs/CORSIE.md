@@ -205,12 +205,11 @@ l'asfalto vicino alla sede del tram).
 Prossimo lavoro, in quest'ordine:
 
 - **ponte tra Cornaro e Voltabarozzo** (SIR3 e Via Piovese sul canale Scaricatore; foto di chi gioca dell'11
-  novembre): "la discesa verso nord deve essere molto più dolce". Nella foto i ponti (quello della strada, una
-  travata reticolare d'acciaio, e quello nuovo del tram accanto) stanno alla quota degli argini e le strade ci
-  arrivano quasi in piano: la discesa verso nord è una pendenza di pochi percento, non una rampa da cavalcavia.
-  Misurare la pendenza di strada e binario nel gioco, correggerla, foto dal posto di guida e guida del SIR3 e di una
-  linea del bus che ci passa. `city.js` lo sta riscrivendo `capolinea` (aree a richiesta): la correzione va nei dati
-  o in `tram.js`, oppure aspetta che il lavoro di `capolinea` sia su `main`;
+  novembre): fatto per il binario (dettagli in IDEE, "Fatto"). Resta la strada: Via Piovese scende verso nord al
+  2,5% di media, ma alle teste del ponte sale e scende di 0,6-0,7 m in 10 m (6%), perché l'impalcato prende la quota
+  della sponda 3 m oltre la fine del ponte e la cresta dell'argine è più in là. La cresta presa entro 15 m sulla
+  griglia del terreno (celle da 10 m) è stata provata e scartata: cambiava 42 ponti su 57, fino a 4 m in centro.
+  Serve la quota della strada sull'argine (nodi OSM della rampa), non quella della cella;
 - cavalcavia del sondaggio del 9 novembre (sopra): foto dal posto di guida e guida di una linea che ci passa sul
   Cavalcavia Camerini, sul Borgomagno e su quelli lungo la 22 attorno a Via Orlandini; poi, al Borgomagno, la piega
   dei fili del tram e il gradino di 20 cm;

@@ -690,6 +690,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
 
 
 TERRAIN_CLOSE = 4  # celle (10 m): mezza larghezza della finestra quadrata della chiusura (riempie fino a ~80 m)
+TRAM_GRADE = 0.03  # pendenza massima del terreno lungo i binari fuori dalle strade (rilevati del tram)
+TRAM_BANK = 8.0  # m: mezza larghezza della striscia alzata attorno a un binario (celle del terreno da 10 m)
 
 
 def closing(h, r):
@@ -709,14 +711,17 @@ def closing(h, r):
     return filt(filt(d, np.minimum, 0), np.minimum, 1)
 
 
-def terrain_for_game(dtm, nodes, edges, heights):
+def terrain_for_game(dtm, nodes, edges, heights, tram=None):
     """Griglia delle quote per il gioco (src/world/terrain.js) dalla griglia del DTM (scripts/dtm_grid.py).
 
     * sotto i cavalcavia e le loro rampe (che il gioco alza da sé, quote in `heights`) il terreno si spiana alla quota
       del suolo intorno, così il rilevato non si conta due volte;
     * i ponti sui fiumi (bridge OSM che il gioco lascia a terra) diventano tratti con la quota raccordata tra le due
       sponde: il gioco li usa per la variante "via" della griglia (asfalto, edifici, veicoli), mentre suolo e acqua
-      seguono l'alveo.
+      seguono l'alveo;
+    * lungo i binari delle linee nuove del tram (`tram`: spezzate piatte [x0, z0, x1, z1, ...]; il DTM non ha ancora i
+      loro terrapieni, quelli del SIR1 invece sì) fuori dalle carreggiate il terreno della variante "via" non sale né
+      scende più di TRAM_GRADE: dove serve si alza come per i ponti (rilevati del tram).
     """
     import base64
     import numpy as np
@@ -822,6 +827,71 @@ def terrain_for_game(dtm, nodes, edges, heights):
             t = np.clip(((xs - ax) * ex + (zs - az) * ez) / (ex * ex + ez * ez or 1), 0, 1)
             sub = hv[sl]
             sub[m] = np.maximum(sub[m], ah + (bh - ah) * t)
+    # rilevati del tram: il SIR3 sul canale Scaricatore, accanto al rilevato di Via Piovese, scendeva dall'argine al 20%
+    # (il terrapieno del binario nuovo non c'è nel DTM). Lungo ogni binario l'inviluppo del profilo con pendenza
+    # TRAM_GRADE; dove sta sopra il terreno, una spezzata con quota come quelle dei ponti (si alza soltanto). Non sulle
+    # carreggiate (si alzerebbe la sede e non le corsie accanto), sotto i tratti in quota del gioco o fuori dalla griglia
+    ramps, rilevati = [], []
+    if tram:
+        import shapely
+
+        def hb(x, z):
+            fx = min(max((x - x0) / step, 0), nx - 1.001)
+            fz = min(max((z - z0) / step, 0), nz - 1.001)
+            i, j = int(fx), int(fz)
+            tx, tz = fx - i, fz - j
+            return (hv[j, i] * (1 - tx) + hv[j, i + 1] * tx) * (1 - tz) + (hv[j + 1, i] * (1 - tx) + hv[j + 1, i + 1] * tx) * tz
+        roads = unary_union([LineString([nodes[e[0]], nodes[e[1]]]).buffer(e[3] / 2 + 1, quad_segs=2) for e in edges
+                             if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3] + up)
+        shapely.prepare(roads)
+        for t in tram:
+            P = [(t[i], t[i + 1]) for i in range(0, len(t) - 1, 2)]
+            dense = [P[0]]
+            for p, q in zip(P, P[1:]):
+                n = max(1, int(math.dist(p, q) // 5))
+                dense += [(p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n) for k in range(1, n + 1)]
+            if len(dense) < 3:
+                continue
+            xs_, zs_ = np.array([p[0] for p in dense]), np.array([p[1] for p in dense])
+            free = ~shapely.contains_xy(roads, xs_, zs_) & (xs_ >= x0) & (xs_ <= x0 + (nx - 1) * step) & (zs_ >= z0) & (zs_ <= z0 + (nz - 1) * step)
+            hs = [hb(*p) for p in dense]
+            ds = [0.0] + [math.dist(p, q) for p, q in zip(dense, dense[1:])]
+            env = list(hs)
+            for i in range(1, len(env)):
+                if free[i]:
+                    env[i] = max(env[i], env[i - 1] - TRAM_GRADE * ds[i])
+            for i in range(len(env) - 2, -1, -1):
+                if free[i]:
+                    env[i] = max(env[i], env[i + 1] - TRAM_GRADE * ds[i + 1])
+            run = []
+            for i in range(len(dense) + 1):
+                up_i = i < len(dense) and env[i] > hs[i] + 0.05
+                if up_i:
+                    if not run and i:
+                        run.append(i - 1)
+                    run.append(i)
+                    continue
+                if run:
+                    if i < len(dense):
+                        run.append(i)
+                    line = [v for k in run for v in (round(dense[k][0], 1), round(dense[k][1], 1), round(float(env[k]), 2))]
+                    ramps.append([TRAM_BANK, *line])
+                    rilevati.append((round(dense[run[0]][0]), round(dense[run[0]][1]), round(sum(ds[k] for k in run[1:])),
+                                     round(float(max(env[k] - hs[k] for k in run)), 1)))
+                    run = []
+        for br in ramps:
+            for k in range(1, len(br) - 5, 3):
+                ax, az, ah, bx, bz, bh = br[k:k + 6]
+                near = cells_near(LineString([(ax, az), (bx, bz)]), TRAM_BANK)
+                if not near:
+                    continue
+                sl, m = near
+                xs, zs = X[sl][m], Z[sl][m]
+                ex, ez = bx - ax, bz - az
+                tt = np.clip(((xs - ax) * ex + (zs - az) * ez) / (ex * ex + ez * ez or 1), 0, 1)
+                sub = hv[sl]
+                sub[m] = np.maximum(sub[m], ah + (bh - ah) * tt)
+    bridges += ramps
 
     def adjust_heights(hts):
         """Quote dei nodi delle rampe dove la variante "via" riempie la striscia spianata sotto la rampa fino alla
@@ -862,4 +932,4 @@ def terrain_for_game(dtm, nodes, edges, heights):
     out = np.clip(np.round((h - lo) / scale), 0, 255).astype(np.uint8)
     g.update({'scale': round(scale, 5), 'offset': round(lo, 3), 'data': base64.b64encode(out.tobytes()).decode(), 'bridges': bridges,
               'close': TERRAIN_CLOSE})
-    return g, {'celle_spianate': flat, 'ponti': len(bridges)}, hfun, adjust_heights
+    return g, {'celle_spianate': flat, 'ponti': len(bridges) - len(ramps), 'rilevati_tram': rilevati}, hfun, adjust_heights

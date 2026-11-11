@@ -1310,7 +1310,12 @@ export class City {
         const l = sb - sa;
         const ha = track.heightAt(dir, sa), hb = track.heightAt(dir, sb);
         const ex = (b.x - a.x) / l, ez = (b.z - a.z) / l, nx = -ez, nz = ex;
-        const hFn = ha || hb ? (x, z) => ha + (hb - ha) * Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l)) : null;
+        // quota del binario; dove è a terra ma il terreno si incurva (rilevati del tram, argini) i nastri si spezzano
+        // ogni 4 m come in rampa, perché lo shader prende la quota del terreno solo ai vertici
+        const T = this.terrain && this.terrain.ok ? (x, z) => this.terrain.at(x, z) : null;
+        const ta = T && T(a.x, a.z), tb = T && T(b.x, b.z);
+        const curved = T && l > 4 && [0.25, 0.5, 0.75].some((t) => Math.abs(T(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t) - ta - (tb - ta) * t) > 0.01);
+        const hFn = ha || hb ? (x, z) => ha + (hb - ha) * Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l)) : curved ? () => 0 : null;
         const off = (o) => [a.x + nx * o, a.z + nz * o, b.x + nx * o, b.z + nz * o];
         // corsia rossa, rotaia di guida al centro, cordolo esterno (e interno dove il binario è singolo)
         R.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.03, 8, 0, hFn);
