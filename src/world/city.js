@@ -150,11 +150,40 @@ class GeoBuilder {
       if (sgn > 0) this.idx.push(b + i0, b + i2, b + i1); else this.idx.push(b + i0, b + i1, b + i2);
     }
   }
-  // come polygon, con la quota di ogni vertice da yFn(x, z)
-  polygonH(rings, yFn, uvScale = 20) {
-    const b = this.pos.length / 3;
+  // come polygon, con la quota di ogni vertice da yFn(x, z). Con maxEdge i triangoli si dividono a metà del lato più
+  // lungo finché nessun lato supera maxEdge: la superficie segue il profilo della rampa invece di tagliarlo a corda
+  // (l'impalcato del Camerini, con un lato di 170 m, spuntava sopra l'asfalto). Il punto di mezzo di un lato è unico
+  // per i due triangoli che lo hanno, e ogni lato più lungo di maxEdge lo dividono tutti e due: niente fessure
+  polygonH(rings, yFn, uvScale = 20, maxEdge = 0) {
+    const b = this.pos.length / 3, t0 = this.idx.length;
     this.polygon(rings, 0, uvScale);
-    for (let i = b * 3; i < this.pos.length; i += 3) this.pos[i + 1] = yFn(this.pos[i], this.pos[i + 2]);
+    const P = this.pos;
+    for (let i = b * 3; i < P.length; i += 3) P[i + 1] = yFn(P[i], P[i + 2]);
+    if (!maxEdge) return;
+    const tris = this.idx.splice(t0), mid = new Map(), L2 = maxEdge * maxEdge;
+    const d2 = (i, j) => (P[3 * i] - P[3 * j]) ** 2 + (P[3 * i + 2] - P[3 * j + 2]) ** 2;
+    const half = (i, j) => {
+      const k = i < j ? i + ',' + j : j + ',' + i;
+      let m = mid.get(k);
+      if (m === undefined) {
+        const x = (P[3 * i] + P[3 * j]) / 2, z = (P[3 * i + 2] + P[3 * j + 2]) / 2;
+        m = P.length / 3;
+        P.push(x, yFn(x, z), z);
+        this.uv.push(x / uvScale, z / uvScale);
+        mid.set(k, m);
+      }
+      return m;
+    };
+    const todo = [];
+    for (let i = 0; i < tris.length; i += 3) todo.push([tris[i], tris[i + 1], tris[i + 2]]);
+    while (todo.length) {
+      const [a, c, e] = todo.pop(), ac = d2(a, c), ce = d2(c, e), ea = d2(e, a), l = Math.max(ac, ce, ea);
+      if (l <= L2) { this.idx.push(a, c, e); continue; }
+      // stesso verso di rotazione nei due triangoli nuovi
+      if (l === ac) { const m = half(a, c); todo.push([a, m, e], [m, c, e]); }
+      else if (l === ce) { const m = half(c, e); todo.push([a, c, m], [a, m, e]); }
+      else { const m = half(e, a); todo.push([a, c, m], [m, c, e]); }
+    }
   }
   // corona circolare (rotatorie): u 0 bordo esterno -> 1 interno, v lungo la circonferenza (stesso verso dei nastri)
   annulus(cx, cz, r0, r1, y, seg = 48, vScale = 12) {
@@ -911,7 +940,7 @@ export class City {
     // carreggiate in quota: alla quota della strada (vertici ogni 4 m), sopra l'impalcato e sopra l'asfalto a terra ai
     // piedi delle rampe
     const upA = new GeoBuilder();
-    for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.heightAt(x, z) + 0.004, 20);
+    for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.heightAt(x, z) + 0.004, 20, 4);
     // righe di bordo anche in quota, tranne dove la rampa si fonde con l'asfalto a terra (al piede)
     const onGround = (x, z) => rg.query(x, z, 1, q).some((it) => !it.ref.elev && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw);
     for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => marked(inx, inz, true) && !onGround(outx, outz), (x, z) => Y_ROAD + this.heightAt(x, z) + 0.012);
@@ -1421,7 +1450,7 @@ export class City {
     const top = new GeoBuilder(), side = new GeoBuilder(), par = new GeoBuilder();
     const H = new Map(), at = (x, z) => { const k = x + ',' + z; if (!H.has(k)) H.set(k, near(x, z)); return H.get(k); };
     for (const rings of D) {
-      top.polygonH(rings, (x, z) => Y_ROAD + at(x, z).h - 0.02, 8);
+      top.polygonH(rings, (x, z) => Y_ROAD + at(x, z).h - 0.02, 8, 4);
       for (const r of rings) for (let i = 0; i < r.length; i += 2) {
         const j = (i + 2) % r.length, ax = r[i], az = r[i + 1], bx = r[j], bz = r[j + 1];
         const A = at(ax, az), B = at(bx, bz), ya = Y_ROAD + A.h - 0.02, yb = Y_ROAD + B.h - 0.02;
