@@ -291,7 +291,7 @@ future potranno averne 4.
 | **F** | porte (da fermo; si sale e si scende da tutte le porte) |
 | **H** | campanello |
 | **O** | abbassa / alza il pantografo |
-| **B** | cambio cabina: al capolinea il tram resta dov'è e riparte passando dallo scambio, con la corsa successiva del turno |
+| **B** | cambio cabina: al capolinea, in fondo al binario dopo la discesa, il tram resta dov'è e riparte con la corsa successiva del turno passando dallo scambio |
 | **N** | gira lo scambio del capolinea (Esplorazione e Giro libero) |
 | **Spazio** | freno di stazionamento |
 

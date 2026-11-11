@@ -407,7 +407,7 @@ function changeTramCab() {
   const P = bus.path, sf = bus.sFront, T = bus.track, d = bus.dirSig, nd = -d, np = T.path(nd);
   // capolinea ad anello (SIR3 in stazione): negli ultimi 200 m il binario dell'altro verso continua davanti al muso, si
   // riparte senza cambiare cabina
-  const head = bus.at(sf), pr = bus.facing > 0 && sf > P.len - 200 && np.projectNear(head.x, head.z, 1.5);
+  const head = P.at(sf), pr = bus.facing > 0 && !T.terminals[d > 0 ? 1 : -1] && sf > P.len - 200 && np.projectNear(head.x, head.z, 1.5);
   if (pr && np.at(pr.s).dx * head.dx + np.at(pr.s).dz * head.dz > 0.7) {
     bus.transfer(np, nd, 0, pr.s, null, true);
     bus.parking = true;
@@ -417,10 +417,10 @@ function changeTramCab() {
   }
   // capolinea con lo scambio: in servizio lo scambio è automatico (deviato verso il binario di partenza)
   const term = bus.facing > 0 && T.terminals ? T.terminals[d > 0 ? 1 : -1] : null;
-  if (term && service && term.state !== 'deviato') { term.state = 'deviato'; refreshSwitch(term); }
+  if (term && service) setSwitch(term, 'deviato');
   const s = term && term.state === 'deviato' ? tramAtTerminal(term) : null;
   if (s != null) {
-    bus.transfer(np, nd, 0, s, term);
+    bus.transfer(np, nd, 0, s, term.field === 'dep' ? term : null);
     bus.parking = true;
     chase.init = false;
     hud.toast('🔁 Cabina cambiata: ripartendo il tram passa dallo scambio sull\'altro binario', 'info');
@@ -428,7 +428,7 @@ function changeTramCab() {
     return;
   }
   if (service) {
-    hud.toast(term && term.kind === 'dopo' ? 'Vai in fondo al binario, oltre lo scambio, poi cambia cabina (B)' : 'Si cambia cabina solo al capolinea, a fine corsa', 'info');
+    hud.toast(term && term.kind === 'dopo' ? 'Vai in fondo al binario, oltre lo scambio, poi cambia cabina (B)' : term && term.kind === 'avanti' ? 'Vai in fondo al binario passando dallo scambio, poi cambia cabina (B)' : 'Si cambia cabina solo al capolinea, a fine corsa', 'info');
     return;
   }
   // giro libero ed esplorazione: si cambia solo cabina, il tram resta sul suo binario e si guida all'indietro
@@ -436,27 +436,33 @@ function changeTramCab() {
   chase.init = false;
   hud.toast('🔁 Cabina cambiata: ora guidi dall\'altra estremità, sullo stesso binario', 'info');
 }
-// Tram: lo scambio del capolinea più vicino (entro 60 m) nell'altra posizione. In servizio si gira da solo; non si gira
+// Tram: lo scambio del capolinea più vicino (entro 120 m) nell'altra posizione. In servizio si gira da solo; non si gira
 // mentre il tram ci passa sopra
 function toggleTramSwitch() {
-  let sw = null, bd = 60;
+  let sw = null, bd = 120;
   for (const w of city.tramSwitches || []) { const d = Math.hypot(w.term.sig.x - bus.x, w.term.sig.z - bus.z); if (d < bd) { bd = d; sw = w; } }
   if (!sw) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
   if (!mission.free) { hud.toast('In servizio lo scambio del capolinea si gira da solo', 'info'); return; }
-  if (bus.xover === sw.term) { hud.toast('Scambio bloccato: il tram ci sta passando', 'bad'); return; }
+  if (bus.xover === sw.term || (bus.xend === sw.term && bus.pathOffset + bus.sFront > sw.term.toe - 1)) { hud.toast('Scambio bloccato: il tram ci sta passando', 'bad'); return; }
   sw.term.state = sw.term.state === 'deviato' ? 'diritto' : 'deviato';
   sw.update();
   audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
   hud.toast(sw.term.state === 'deviato' ? '↗️ Scambio deviato: col cambio cabina si passa sull\'altro binario' : '⬆️ Scambio diritto: col cambio cabina si resta sul binario', 'info');
 }
 function refreshSwitch(term) { for (const w of city.tramSwitches || []) if (w.term === term) w.update(); }
-// capolinea con lo scambio: se il tram è tutto dalla parte del tronco (prima di toe sul binario di partenza), la
-// progressiva sul binario di partenza della coda di ora, che diventa il muso; altrimenti null
+function setSwitch(term, state) { if (term.state !== state) { term.state = state; refreshSwitch(term); } }
+// capolinea con lo scambio: se il tram è tutto dalla parte del tronco, la progressiva sul binario di partenza della coda
+// di ora, che diventa il muso; altrimenti null. Con le distanze lungo i binari dello scambio (TramTrack.terminal): il
+// tram resta esattamente dov'è
 function tramAtTerminal(term) {
-  const B = bus.track.path(term.dep), f = bus.at(bus.sFront), t = bus.at(bus.sFront - bus.length);
-  const pf = B.project(f.x, f.z), pt = B.project(t.x, t.z);
-  if (pf.d > 10 || pt.d > 10 || Math.max(pf.s, pt.s) > term.toe + 1) return null;
-  return pt.s;
+  if (bus.dirSig !== term.arr) return null;
+  const tail = bus.pathOffset + bus.sFront - bus.length; // coda sul binario d'arrivo
+  if (tail + bus.length > term.fondo + 0.5) return null; // oltre il fondo utile il binario di partenza non c'è
+  // 'avanti': tutto oltre la comunicazione, sul tronco del binario di partenza
+  if (term.field === 'arr') return tail >= term.heel ? term.other(tail) : null;
+  // 'dopo' e 'prima': tutto oltre il punto dove lo scambio lascia il binario d'arrivo
+  const s = term.toe - (tail - term.link);
+  return tail >= term.link && s >= 0 ? s : null;
 }
 // tram a fine corsa, già sul binario dell'altro verso (dopo changeTramCab): la corsa successiva del turno parte dalla
 // prima fermata. Il tram resta dov'è se è sul binario prima della banchina di partenza (dal tronco ci arriva passando
@@ -472,6 +478,8 @@ function tramNextRun() {
   V.trackPath = tr.path;
   const sNow = tr.sig === bus.dirSig ? bus.pathOffset + bus.sFront - tr.offset : -1;
   bus.setPath(tr.path, tr.sig, tr.offset, bus.xover && bus.xover.dep === tr.sig ? bus.xover : null);
+  const tEnd = bus.track.terminals && bus.track.terminals[tr.sig > 0 ? 1 : -1];
+  if (tEnd) setSwitch(tEnd, tEnd.field === 'arr' ? 'deviato' : 'diritto');
   const m = new Mission({ ...missionCommon(), route: V, departure: next.t, depDur: next.d });
   m.clock = clock;
   const at = m.stops[0].s - 0.5; // muso a fine banchina
@@ -1026,6 +1034,9 @@ function startMission(resume = null) {
     V.trackPath = tr.path;
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
+    // in servizio gli scambi dei capolinea si mettono da soli per l'arrivo: diritto dove si passa sull'altro binario
+    // dopo il cambio cabina (lo si gira con B), deviato dove si passa prima
+    if (settings.mode === 'service') for (const t of Object.values(T.terminals || {})) if (t) setSwitch(t, t.field === 'arr' ? 'deviato' : 'diritto');
   } else {
     bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery, articulated: ARTICULATED_LINES.has(L.id) });
   }

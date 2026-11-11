@@ -10,6 +10,7 @@ Si appoggia a scripts/tram_percorsi.py (grafo dei binari, instradamento per ferm
 * i tratti di binario prima della prima fermata e dopo l'ultima (ci sta il convoglio, si cambia cabina);
 * in stazione i binari sugli anelli regolari e concentrici del piazzale nuovo (scripts/tram_stazione.py), al posto
   delle S e degli intrecci dei binari OSM;
+* le comunicazioni tra i binari di OSM (anche quelle del SIR1), per la manovra ai capolinea;
 * l'orario: frequenza per fascia oraria e tempi tra le fermate dalla velocità commerciale.
 
 SIR2 e SIR3 passano dall'anello interno, il SIR1 resta su quello esterno: il SIR3 gira tutto l'anello (arriva a Stazione
@@ -296,6 +297,10 @@ def main(osm, stops_json, out):
                     v[day] = [[t + i * L['ogni'] * 30, D] for t in hw[day]]
         res['linee'].append({'id': L['id'], 'nome': L['nome'], 'colore': L['colore'], 'moduli': L['moduli'],
                              'stato': 'in costruzione', 'ogni': L['ogni'], 'versi': versi})
+    # comunicazioni tra i binari (service=crossover), i due capi (lat, lon): il gioco ci fa passare il tram ai capolinea
+    # (TramTrack.terminal in src/tram/tram.js)
+    res['scambi'] = [[*e['geometry'][0].values(), *e['geometry'][-1].values()] for e in json.load(open(osm))['elements']
+                     if e['type'] == 'way' and e.get('tags', {}).get('service') == 'crossover']
     json.dump(res, open(out, 'w'), ensure_ascii=False, separators=(',', ':'))
 
 

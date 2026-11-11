@@ -118,7 +118,7 @@ export function tramRoute(track, variant, modules = 3, full = false) {
   // arriva dal binario d'arrivo passando dallo scambio), quella che ci finisce dopo le banchine arriva in fondo al tronco
   const t0 = track.terminals && track.terminals[-sig], t1 = track.terminals && track.terminals[sig];
   const s0 = t0 && ss[0] < t0.heel + 200 ? 0 : Math.max(0, ss[0] - back);
-  const s1 = t1 && t1.kind === 'dopo' && P.len - ss[ss.length - 1] < 250 ? P.len : Math.min(P.len, ss[ss.length - 1] + 30);
+  const s1 = t1 && t1.kind !== 'prima' && P.len - ss[ss.length - 1] < 250 ? t1.fondo : Math.min(P.len, ss[ss.length - 1] + 30);
   return { path: P.slice(s0, s1), sig, offset: s0 };
 }
 
@@ -234,64 +234,103 @@ export class TramTrack {
     // tratti senza linea aerea (Prato della Valle), per verso
     this.gaps = { 1: [], '-1': [] };
     for (const d of [1, -1]) for (const st of this.stopsDir[d]) if (/prato/i.test(st.name)) this.gaps[d].push([st.s - CATENARY_GAP_HALF, st.s + CATENARY_GAP_HALF]);
+    this.scambi = net.tramScambi || [];
     this.terminals = { 1: this.terminal(1), '-1': this.terminal(-1) };
   }
   // Scambio al capolinea dove finisce il binario del verso d (arrivo) e comincia, parallelo, quello del verso -d
-  // (partenza): il tram arriva, cambia cabina (B) restando dov'è e riparte passando dallo scambio. Oltre le banchine
-  // ('dopo': si arriva in fondo al binario tronco) se il tronco ci sta, altrimenti verso la città ('prima': si cambia
-  // cabina alla banchina, il binario d'arrivo oltre la banchina va al deposito). Sul binario di partenza fino a toe il
-  // tram corre su quello d'arrivo, da toe a heel passa dall'uno all'altro (S di XO metri): off(s) è lo scostamento dal
-  // binario di partenza a s. null ai capolinea ad anello (SIR3 in stazione) e dove i binari non corrono paralleli
+  // (partenza). La comunicazione di OSM (net.tramScambi) oltre la fermata d'arrivo, con un capo per binario; senza,
+  // una S di XO metri messa qui. Dopo la discesa il tram va in fondo al binario, cambia cabina (B) restando dov'è e
+  // torna alla fermata di partenza. Il tipo dice quando passa sull'altro binario, secondo come pende la comunicazione:
+  // 'dopo' il cambio cabina (Voltabarozzo, Rubano: ripartendo la comunicazione lo porta sul binario di partenza; sul
+  // binario di partenza fino a toe il tram corre su quello d'arrivo) o 'avanti', prima (Pontevigodarzere: dopo la
+  // banchina d'arrivo la comunicazione lo porta sul tronco del binario di partenza; sul binario d'arrivo da heel corre
+  // su quello di partenza). 'prima': S calcolata verso la città, B alla banchina. off(s): scostamento a s sul binario
+  // del campo (field: 'dep' o 'arr'). null ai capolinea ad anello (SIR3 in stazione) e dove i binari non sono paralleli
   terminal(d) {
     const A = this.paths[d], B = this.paths[-d], sa = this.stopsDir[d], sb = this.stopsDir[-d];
     if (!sa.length || !sb.length) return null;
     const end = A.at(A.len), cont = B.projectNear(end.x, end.z, 2);
     if (cont && cont.s > 5 && B.at(cont.s).dx * end.dx + B.at(cont.s).dz * end.dz > 0.7) return null; // anello
     const len = Math.max(...this.lines.map((L) => tramLength(L.modules || 3)));
-    // binario d'arrivo accanto a quello di partenza, metro per metro (verso opposto, entro 9 m)
-    const n = Math.min(Math.floor(B.len), 400), par = [];
-    for (let s = 0; s <= n; s++) {
-      const q = B.at(s), pr = A.projectNear(q.x, q.z, 9), a = pr && A.at(pr.s);
-      par.push(a && a.dx * q.dx + a.dz * q.dz < -0.9 ? { x: a.x - q.x, z: a.z - q.z } : null);
+    const aStop = sa[sa.length - 1].s;
+    // l'altro binario accanto a P, metro per metro (verso opposto, entro 9 m), per la S calcolata dove OSM non ha la
+    // comunicazione: null dove non c'è
+    const beside = (P, Q, from, to) => {
+      const out = [];
+      for (let s = Math.max(0, Math.floor(from)); s <= Math.min(Math.floor(P.len), Math.ceil(to)); s++) {
+        const q = P.at(s), pr = Q.projectNear(q.x, q.z, 9), a = pr && Q.at(pr.s);
+        out[s] = a && a.dx * q.dx + a.dz * q.dz < -0.9 ? { x: a.x - q.x, z: a.z - q.z } : null;
+      }
+      return out;
+    };
+    let kind = null, field, toe, heel, par, best = null;
+    // comunicazione di OSM: u sul binario d'arrivo oltre la fermata d'arrivo, v su quello di partenza; oltre, il tram ci
+    // deve stare tutto. Vince la più vicina alla banchina d'arrivo
+    for (const [p, q] of this.scambi || []) for (const [u, v] of [[p, q], [q, p]]) {
+      const pu = A.projectNear(u.x, u.z, 2.5), pv = B.projectNear(v.x, v.z, 2.5);
+      if (!pu || !pv || pu.s < aStop + 6 || (B.projectNear(u.x, u.z, 1) && A.projectNear(v.x, v.z, 1))) continue;
+      const vA = A.project(v.x, v.z).s, uB = B.project(u.x, u.z).s;
+      if (A.len - Math.max(pu.s, vA) < len + 3) continue;
+      // pende in avanti: si passa sul tronco del binario di partenza prima del cambio cabina
+      const c = vA > pu.s ? { kind: 'avanti', field: 'arr', toe: pu.s, heel: vA, link: pv.s } : { kind: 'dopo', field: 'dep', toe: uB, heel: pv.s, link: pu.s };
+      if (!best || pu.s < best.at) best = { ...c, at: pu.s };
     }
-    // banchine sul binario di partenza: il tram in partenza col muso a fine banchina e quello arrivato
-    const la = A.at(sa[sa.length - 1].s), pa = B.project(la.x, la.z).s, pb = sb[0].s;
-    const z0 = Math.min(pb + 12 - len, pa - 12), z1 = Math.max(pb + 12, pa - 12 + len);
-    const ok = (a, b) => { for (let s = Math.max(0, Math.floor(a)); s <= Math.min(n, Math.ceil(b)); s++) if (!par[s]) return false; return b <= n; };
-    // fine del binario d'arrivo sul binario di partenza (quello di partenza può cominciare più in là, nel tronco)
-    const sEnd = B.project(end.x, end.z).s;
-    let kind = null, toe, heel;
-    if (z0 - 4 - XO - sEnd >= len + 4 && ok(sEnd + 1, z0 - 4)) { kind = 'dopo'; heel = z0 - 4; toe = heel - XO; }
-    else if (ok(z0, z1 + 3 + XO)) { kind = 'prima'; toe = z1 + 3; heel = toe + XO; }
+    let link;
+    if (best) ({ kind, field, toe, heel, link } = best);
+    else {
+      // S calcolata: banchine sul binario di partenza (il tram in partenza col muso a fine banchina e quello arrivato)
+      par = beside(B, A, 0, Math.min(B.len, 400));
+      const n = par.length - 1, la = A.at(aStop), pa = B.project(la.x, la.z).s, pb = sb[0].s;
+      const z0 = Math.min(pb + 12 - len, pa - 12), z1 = Math.max(pb + 12, pa - 12 + len);
+      const ok = (a, b) => { for (let s = Math.max(0, Math.floor(a)); s <= Math.min(n, Math.ceil(b)); s++) if (!par[s]) return false; return b <= n; };
+      // fine del binario d'arrivo sul binario di partenza (quello di partenza può cominciare più in là, nel tronco)
+      const sEnd = B.project(end.x, end.z).s;
+      if (z0 - 4 - XO - sEnd >= len + 4 && ok(sEnd + 1, z0 - 4)) { kind = 'dopo'; heel = z0 - 4; toe = heel - XO; }
+      else if (ok(z0, z1 + 3 + XO)) { kind = 'prima'; toe = z1 + 3; heel = toe + XO; }
+      field = 'dep';
+      if (kind) { const q = B.at(toe); link = A.project(q.x, q.z).s; }
+    }
     if (!kind) return null;
-    // scostamento pesato: tutto il binario d'arrivo fino a toe, niente da heel (raccordo a coseno)
-    const ox = new Float32Array(Math.ceil(heel) + 2), oz = new Float32Array(ox.length);
-    let last = { x: 0, z: 0 };
-    for (let s = 0; s < ox.length; s++) {
-      const p = par[Math.min(s, n)] || last;
-      last = p;
-      const w = s <= toe ? 1 : s >= heel ? 0 : (1 + Math.cos((Math.PI * (s - toe)) / XO)) / 2;
-      ox[s] = p.x * w; oz[s] = p.z * w;
+    // Scostamento verso l'altro binario, con le distanze lungo i binari: a d metri dallo scambio su un binario
+    // corrisponde il punto a d metri sull'altro (link: dove lo scambio tocca l'altro binario), così il tram resta dov'è
+    // anche dove i due binari non sono paralleli. Pesato con un raccordo a coseno tra toe e heel: sul binario di
+    // partenza tutto fino a toe e niente da heel ('dopo', 'prima'), su quello d'arrivo niente fino a toe e tutto da heel
+    // ('avanti'). other(s): progressiva sull'altro binario del punto corrispondente a s
+    const P = field === 'dep' ? B : A, Q = field === 'dep' ? A : B, n = Math.ceil(field === 'dep' ? heel : P.len) + 2;
+    const other = field === 'dep' ? (s) => link + (toe - s) : (s) => link - (s - heel);
+    const ox = new Float32Array(n), oz = new Float32Array(n), L = heel - toe;
+    for (let s = 0; s < n; s++) {
+      const p = P.at(s), q = Q.at(Math.max(0, Math.min(Q.len, other(s))));
+      const c = s <= toe ? 1 : s >= heel ? 0 : (1 + Math.cos((Math.PI * (s - toe)) / L)) / 2, w = field === 'dep' ? c : 1 - c;
+      ox[s] = (q.x - p.x) * w; oz[s] = (q.z - p.z) * w;
     }
-    const pt = B.at(toe + 2), o = par[Math.min(Math.round(toe + 2), n)] || last;
-    return {
-      arr: d, dep: -d, kind, toe, heel, len, ox, oz, state: 'deviato',
-      // segnale dello scambio: all'inizio della S, tra i due binari, per chi arriva dal tronco
+    // segnale: all'inizio della S, tra i due binari, verso il tram che ci arriva (dal tronco per 'dopo', dalla banchina
+    // per 'avanti'); side: da che parte devia (+1 destra)
+    const st = field === 'dep' ? toe + 2 : toe - 2, pt = P.at(st), qt = Q.at(Math.max(0, Math.min(Q.len, other(field === 'dep' ? toe : heel))));
+    const o = { x: qt.x - P.at(field === 'dep' ? toe : heel).x, z: qt.z - P.at(field === 'dep' ? toe : heel).z };
+    const v = field === 'dep' ? { x: -o.x, z: -o.z } : o, side = v.x * -pt.dz + v.z * pt.dx > 0 ? 1 : -1;
+    // fondo utile del binario d'arrivo: oltre, il binario di partenza non c'è più (il tram non ci sta tutto)
+    const fondo = Math.min(A.len, field === 'dep' ? link + toe : heel + link);
+    const t = {
+      arr: d, dep: -d, kind, field, toe, heel, link, other, len, fondo, ox, oz, side, state: 'deviato',
       sig: { x: pt.x + o.x / 2, z: pt.z + o.z / 2, dx: pt.dx, dz: pt.dz },
       off(s) {
-        if (s >= heel || s < 0) return null;
-        const i = Math.floor(s), f = s - i, j = Math.min(ox.length - 1, i + 1);
-        return { x: ox[i] + (ox[j] - ox[i]) * f, z: oz[i] + (oz[j] - oz[i]) * f };
+        if (s < 0 || (field === 'dep' && s >= heel) || (field === 'arr' && (s <= toe || t.state !== 'deviato'))) return null;
+        const i = Math.min(n - 2, Math.floor(s)), f = s - i;
+        return { x: ox[i] + (ox[i + 1] - ox[i]) * f, z: oz[i] + (oz[i + 1] - oz[i]) * f };
       },
     };
+    return t;
   }
-  // binario dello scambio al capolinea (verso del binario d'arrivo): punti ogni 2 m da a a heel, sul binario di partenza
-  // spostato verso quello d'arrivo
-  terminalCurve(d, from = 0) {
+  // punti ogni 2 m della S dello scambio al capolinea (verso d del binario d'arrivo), per disegnarla
+  terminalCurve(d) {
     const t = this.terminals[d > 0 ? 1 : -1];
     if (!t) return null;
-    const B = this.paths[t.dep > 0 ? 1 : -1], out = [];
-    for (let s = Math.max(0, from); s <= t.heel; s += 2) { const p = B.at(s), o = t.off(s) || { x: 0, z: 0 }; out.push({ x: p.x + o.x, z: p.z + o.z }); }
+    const P = this.paths[(t.field === 'dep' ? t.dep : t.arr) > 0 ? 1 : -1], out = [];
+    const on = t.state;
+    t.state = 'deviato';
+    for (let s = Math.max(0, t.toe - 4); s <= Math.min(P.len, t.heel + 4); s += 2) { const p = P.at(s), o = t.off(s) || { x: 0, z: 0 }; out.push({ x: p.x + o.x, z: p.z + o.z }); }
+    t.state = on;
     return out;
   }
   // s sul binario del verso dir è in un tratto in comune con una sede già posata?
@@ -681,6 +720,7 @@ export class Tram {
     this.track = opts.track || null;
     this.dirSig = opts.dir || 1;
     this.pathOffset = opts.offset || 0;
+    this.setPath(path, this.dirSig, this.pathOffset);
     this.nMod = Math.max(3, modules);
     this.length = tramLength(this.nMod);
     this.scene = scene;
@@ -789,7 +829,12 @@ export class Tram {
   togglePantograph() { this.pantoUp = !this.pantoUp; return this.pantoUp; }
   // percorso nuovo (la corsa dopo sullo stesso binario): stesso verso di guida e stessa cabina. xover: lo scambio del
   // capolinea da cui il tram parte (TramTrack.terminal), che resta finché non si cambia di nuovo percorso
-  setPath(path, dir, offset = 0, xover = null) { this.path = path; this.dirSig = dir; this.pathOffset = offset; this.xover = xover; }
+  setPath(path, dir, offset = 0, xover = null) {
+    this.path = path; this.dirSig = dir; this.pathOffset = offset; this.xover = xover;
+    // capolinea in fondo a questo binario dove si passa sull'altro prima del cambio cabina (Pontevigodarzere)
+    const t = this.track && this.track.terminals && this.track.terminals[dir > 0 ? 1 : -1];
+    this.xend = t && t.field === 'arr' ? t : null;
+  }
   // il tram passa su un altro binario restando fermo dov'è, col muso a sFront e in marcia verso s crescente; keepCab: la
   // cabina attiva resta la stessa (anello della stazione), altrimenti si guida dall'altra (cambio cabina). Ogni cassa
   // resta al suo posto
@@ -800,15 +845,18 @@ export class Tram {
     this.aFwd = wasA === keepCab ? 1 : -1;
     this.setFront(sFront);
   }
+  offAt(t) { return (this.xover && this.xover.off(t)) || (this.xend && this.xend.off(t)) || null; }
   // punto del percorso a s; sullo scambio del capolinea (il binario di partenza fino allo scambio corre su quello
   // d'arrivo) spostato verso il binario d'arrivo
   at(s) {
-    const p = this.path.at(s), X = this.xover, o = X && X.off(this.pathOffset + s);
+    const p = this.path.at(s), t = this.pathOffset + s, o = this.offAt(t);
     if (!o) return p;
-    const q = this.path.at(s + 1), o2 = X.off(this.pathOffset + s + 1) || { x: 0, z: 0 };
-    const x = p.x + o.x, z = p.z + o.z, x2 = q.x + o2.x, z2 = q.z + o2.z, l = Math.hypot(x2 - x, z2 - z) || 1;
-    const dx = (x2 - x) / l, dz = (z2 - z) / l;
-    return { x, z, dx, dz, h: Math.atan2(dx, dz) };
+    // direzione tra due punti dentro il percorso (in fondo al binario quello dopo non c'è)
+    const s1 = Math.max(0, Math.min(s, this.path.len - 1)), a = this.path.at(s1), b = this.path.at(s1 + 1);
+    const oa = this.offAt(this.pathOffset + s1) || { x: 0, z: 0 }, ob = this.offAt(this.pathOffset + s1 + 1) || { x: 0, z: 0 };
+    const ex = b.x + ob.x - a.x - oa.x, ez = b.z + ob.z - a.z - oa.z, l = Math.hypot(ex, ez) || 1;
+    const dx = ex / l, dz = ez / l;
+    return { x: p.x + o.x, z: p.z + o.z, dx, dz, h: Math.atan2(dx, dz) };
   }
   hAt(s) { return this.track ? this.track.heightAt(this.dirSig, this.pathOffset + s) : 0; }
   // punto del pantografo (centro del modulo che lo porta)

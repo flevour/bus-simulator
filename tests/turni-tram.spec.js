@@ -2,7 +2,7 @@
 // parte la corsa successiva del turno dall'altro verso, senza tornare al menu. Dove lo scambio sta oltre le banchine si
 // va in fondo al binario tronco, si cambia cabina e si riparte passando dallo scambio fino alla banchina di partenza.
 import { test, expect, avviaCorsa } from './gioco.js';
-import { guidaFermate } from './guida.js';
+import { guidaFermate, guidaCapolinea } from './guida.js';
 
 // Salta alla fine della corsa: fermate prima del capolinea servite, tram 40 m prima della fine della banchina. Poi
 // fino alla banchina col manipolatore (oltre: metri oltre la fine della banchina, al più fino alla fine del binario),
@@ -68,36 +68,60 @@ async function capolineaEB(page, oltre = 0) {
   }, oltre);
 }
 
+// all'anello della stazione (SIR3 a Stazione sud) B alla banchina: si riparte senza cambiare cabina
+test('B al capolinea: SIR3 a Stazione sud (anello, senza cambio cabina)', async ({ pagina, gioco }) => {
+  const corsa = await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: 1 });
+  const r = await capolineaEB(pagina);
+  const testo = JSON.stringify(r);
+  expect([r.finita, r.nuova, r.verso2, r.cambiata, r.cabina, r.dest], testo).toEqual([true, true, -r.verso, false, false, 'Voltabarozzo']);
+  expect(r.spostamento, testo).toBeLessThan(0.1);
+  expect(r.prima2, testo).toBe(corsa.ultima);
+  expect(r.partenza, testo).toBe(r.prossima);
+  expect(r.inZona, testo).toBe(true);
+  expect([r.corse, r.riepilogo], testo).toEqual([1, false]);
+  const esiti = await guidaFermate(pagina, { fermate: 1 });
+  expect(esiti.every((e) => e.arrivato), JSON.stringify(esiti)).toBe(true);
+  expect(gioco.errori()).toEqual([]);
+});
+
+// Ai capolinea su binario tronco, con il pilota: dalla penultima fermata al capolinea, discesa, avanti fino in fondo al
+// binario, B, ripartenza fino alla fermata di partenza sull'altro binario e poi fino alla fermata dopo. A Voltabarozzo
+// e Rubano la comunicazione di OSM porta sull'altro binario dopo il cambio cabina, a Pontevigodarzere e Guizza prima;
+// a Busa di Vigonza OSM non ne ha e c'è quella del gioco
 for (const c of [
-  { nome: 'SIR3 a Stazione sud (anello, senza cambio cabina)', linea: 'SIR3', verso: 1, cabina: false, poi: 'Voltabarozzo' },
-  { nome: 'SIR3 a Voltabarozzo (scambio oltre le banchine)', linea: 'SIR3', verso: 0, cabina: true, poi: 'Stazione sud' },
-  // segnalazione dell'11 novembre: fermo oltre la banchina, in fondo al binario, il capolinea non si serviva più
-  { nome: 'SIR3 a Voltabarozzo in fondo al binario', linea: 'SIR3', verso: 0, cabina: true, poi: 'Stazione sud', oltre: 30 },
-  { nome: 'SIR1 a Guizza (scambio verso la città)', linea: 'SIR1', verso: 1, cabina: true, poi: 'Pontevigodarzere' },
+  { linea: 'SIR1', verso: 0, capolinea: 'Pontevigodarzere', avanti: true },
+  { linea: 'SIR1', verso: 1, capolinea: 'Guizza Capolinea', avanti: true },
+  { linea: 'SIR3', verso: 0, capolinea: 'Voltabarozzo' },
+  { linea: 'SIR2', verso: 1, capolinea: 'Rubano' },
+  { linea: 'SIR2', verso: 0, capolinea: 'Busa di Vigonza' },
 ]) {
-  test(`B al capolinea: ${c.nome}`, async ({ pagina, gioco }) => {
+  test(`manovra al capolinea: ${c.linea} a ${c.capolinea}`, async ({ pagina, gioco }, info) => {
     const corsa = await avviaCorsa(pagina, { linea: c.linea, tram: true, verso: c.verso });
-    const r = await capolineaEB(pagina, c.oltre || 0);
+    expect(corsa.ultima).toBe(c.capolinea);
+    await pagina.evaluate(() => {
+      const g = window.__game, m = g.mission, bus = g.bus, k = m.stops.length - 2;
+      for (const st of m.stops.slice(0, k)) Object.assign(st, { arrived: true, left: true, doneMsg: true });
+      m.nextStop = k;
+      bus.setFront(m.stops[k].s - 0.5);
+      m.s = bus.sFront - 12.45;
+      m.clock = m.stops[k].sched - 30;
+    });
+    const arrivo = await guidaFermate(pagina, { fermate: 1 });
+    expect(arrivo.every((e) => e.arrivato), JSON.stringify(arrivo)).toBe(true);
+    const r = await guidaCapolinea(pagina);
     const testo = JSON.stringify(r);
-    if (c.oltre) expect(r.fermo, testo).toBeGreaterThan(10);
+    info.annotations.push({ type: 'capolinea', description: testo });
     expect(r.finita, testo).toBe(true);
-    if (r.aBanchina) expect(r.aBanchina, testo).toEqual({ stessaCorsa: true, verso: r.verso });
-    expect(r.nuova, testo).toBe(true);
-    expect(r.verso2, testo).toBe(-r.verso);
-    // il tram resta dov'è: nessuna cassa si sposta; cambia la cabina, tranne all'anello
-    expect(r.spostamento, testo).toBeLessThan(0.1);
-    expect(r.cambiata, testo).toBe(c.cabina);
-    expect(r.cabina, testo).toBe(c.cabina);
-    expect(r.dest, testo).toBe(c.poi);
-    expect(r.prima2, testo).toBe(corsa.ultima);
-    expect(r.partenza, testo).toBe(r.prossima);
-    expect(r.partenza, testo).toBeGreaterThan(corsa.partenza);
-    expect(r.inZona, testo).toBe(true);
-    expect(r.corse, testo).toBe(1);
-    expect(r.riepilogo, testo).toBe(false);
-    // la corsa nuova: salita alla prima fermata e guida fino alla seconda
-    const esiti = await guidaFermate(pagina, { fermate: 1 });
-    expect(esiti.every((e) => e.arrivato), JSON.stringify(esiti)).toBe(true);
+    expect(r.fondo.arrivato && !r.fondo.deragliato && !r.fondo.urti, testo).toBe(true);
+    if (c.avanti) expect(r.oltreScambio, testo).toBe(true);
+    expect([r.cabina, r.nuova, r.verso], testo).toEqual([true, true, true]);
+    expect(r.ferme, testo).toBeLessThan(0.1);
+    expect(r.prima, testo).toBe(c.capolinea);
+    expect(r.partenza.arrivato && !r.partenza.deragliato && !r.partenza.urti, testo).toBe(true);
+    expect(r.servita, testo).toBe(true);
+    expect(r.sulBinario, testo).toBeLessThan(0.05);
+    const dopo = await guidaFermate(pagina, { fermate: 1 });
+    expect(dopo.every((e) => e.arrivato), JSON.stringify(dopo)).toBe(true);
     expect(gioco.errori()).toEqual([]);
   });
 }

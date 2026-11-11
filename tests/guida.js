@@ -145,9 +145,10 @@ function installaPilota({ fermaAlPrimoUrto, traffico }) {
     passo() {
       const cur = m.stops[m.nextStop];
       if (P.fase === 'apri') {
-        // porte aperte alla fermata, da fermi e dopo qualche passo: prima la missione non sa di essere in fermata
+        // porte aperte alla fermata, da fermi e dopo qualche passo: prima la missione non sa di essere in fermata (se
+        // sono già aperte, come dopo la manovra al capolinea, si passa al servizio)
         pedali(0);
-        if (P.t > 0.5 && Math.abs(bus.v) < 0.05 && bus.doorTarget === 0) { g.press('KeyF'); P.fase = 'servizio'; P.tf = P.t; }
+        if (P.t > 0.5 && Math.abs(bus.v) < 0.05) { if (bus.doorTarget === 0) g.press('KeyF'); P.fase = 'servizio'; P.tf = P.t; }
       } else if (P.fase === 'servizio') {
         // salita e discesa finite: si salta l'attesa fino all'orario e si chiudono le porte
         if ((cur && cur.doneMsg) || P.t - P.tf > 120) { g.press('KeyT'); g.press('KeyF'); P.fase = 'chiudi'; }
@@ -196,4 +197,64 @@ function installaPilota({ fermaAlPrimoUrto, traffico }) {
     },
   };
   window.__pilota = P;
+}
+
+// Manovra al capolinea del tram, come nella realtà: a corsa finita (porte aperte all'ultima fermata finché scendono
+// tutti) avanti fino in fondo al binario, dove serve passando dallo scambio; B (cambio cabina, il tram resta dov'è);
+// ripartenza fino alla prima fermata della corsa nuova (dove serve passando dallo scambio), porte aperte. Per ogni
+// passo cosa è successo.
+export async function guidaCapolinea(page) {
+  return page.evaluate(() => {
+    const g = window.__game, bus = g.bus, m = g.mission, dt = 1 / 30;
+    const tasto = (k, giu) => (giu ? g.keys.add(k) : g.keys.delete(k));
+    // col manipolatore fino a meta (muso), sotto il limite delle curve e frenando in tempo; urti e deragliamenti
+    const fino = (meta, max = 300) => {
+      let t = 0, urti = 0;
+      bus.parking = false;
+      for (; t < max; t += dt) {
+        const resto = meta - bus.sFront;
+        const vt = Math.min(Math.min(bus.curveLimit(), 25) / 3.6, Math.sqrt(2 * 0.8 * Math.max(0, resto - 0.3)));
+        const e = vt - Math.abs(bus.v);
+        tasto('KeyW', vt > 0.05 && e > 0.3);
+        tasto('KeyS', (vt <= 0.05 && Math.abs(bus.v) > 0.01) || e < -0.3);
+        g.sim(dt, dt, false);
+        if (bus.lastHit && bus.lastHit.kind !== 'car' && bus.lastHit.kind !== 'tram') urti++;
+        if (resto < 0.8 && Math.abs(bus.v) < 0.05) break;
+      }
+      tasto('KeyW', false); tasto('KeyS', false);
+      return { arrivato: meta - bus.sFront < 1.5, tempo: Math.round(t), urti, deragliato: bus.derailT > 0 };
+    };
+    const casse = () => bus.modules.map((x) => [x.group.position.x, x.group.position.z]);
+    const out = {};
+    // 1. discesa alla fermata d'arrivo: la corsa finisce
+    if (bus.doorTarget === 0) g.press('KeyF');
+    for (let t = 0; t < 150 && !m.finished; t++) g.sim(1, dt, false);
+    out.finita = m.finished;
+    g.press('KeyF');
+    for (let t = 0; t < 5 && !bus.doorsClosed; t += dt) g.sim(dt, dt, false);
+    // 2. avanti fino in fondo al binario
+    out.fondo = fino(bus.path.len - 1.5);
+    out.oltreScambio = !!(bus.xend && bus.offAt(bus.pathOffset + bus.sFront - bus.length));
+    // 3. B: cambia la cabina, il tram resta dov'è
+    const c0 = casse(), cab = bus.activeCab, verso = bus.dirSig;
+    g.press('KeyB');
+    for (let t = 0; t < 3 && g.mission === m; t += dt) g.sim(dt, dt, false);
+    const c1 = casse();
+    out.cabina = bus.activeCab !== cab;
+    out.ferme = Math.round(Math.max(...c0.map((p, i) => Math.hypot(p[0] - c1[i][0], p[1] - c1[i][1]))) * 100) / 100;
+    out.nuova = g.mission !== m;
+    out.verso = bus.dirSig === -verso;
+    const m2 = g.mission, st0 = m2.stops[0];
+    out.prima = st0.name;
+    // 4-5. ripartenza fino alla fermata di partenza
+    out.partenza = fino(st0.s - 0.5);
+    g.press('KeyF');
+    g.sim(2, dt, false);
+    out.servita = !!st0.arrived;
+    out.muso = m2.stopInfo && Math.round(m2.stopInfo.along * 10) / 10;
+    // dopo la fermata il tram è sul binario di partenza, senza scostamento
+    const p = bus.path.at(bus.sFront), f = bus.at(bus.sFront);
+    out.sulBinario = Math.round(Math.hypot(p.x - f.x, p.z - f.z) * 100) / 100;
+    return out;
+  });
 }

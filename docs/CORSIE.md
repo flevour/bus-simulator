@@ -504,7 +504,8 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   una corsa guidata di SIR2 e SIR3 in stazione, con i tram automatici per 40 minuti senza blocchi.
 - **Subito, il tram incastrato al capolinea di Voltabarozzo**: fatto, vedi sopra ("Tram incastrato al capolinea").
 - **Subito dopo Voltabarozzo, la manovra al capolinea come nella realtà** (chi gioca, 11 novembre: "l'inversione al
-  capolinea non è convincente, a Voltabarozzo fallisce"). La sequenza voluta:
+  capolinea non è convincente, a Voltabarozzo fallisce"): fatta, vedi la voce dopo; restano i binari dei depositi.
+  La sequenza voluta:
   1. si scaricano i passeggeri alla fermata d'arrivo del capolinea (lì finisce la corsa);
   2. si va avanti fino in fondo al binario;
   3. si preme B: cambia la cabina di guida e si gira la visuale;
@@ -530,16 +531,27 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   capannone e un anello esterno che gira attorno al deposito. Il "binario tronco che entra in un edificio" di IDEE è
   con ogni probabilità l'ingresso del deposito. Prove: per ogni capolinea dei tram (SIR1, SIR2, SIR3),
   la sequenza sopra con il pilota di `tests/guida.js`, fino alla prima fermata della corsa nuova.
-- **Scambi ai capolinea e B che cambia solo cabina**: primo passo fatto l'11 novembre. `TramTrack.terminal` calcola per
-  ogni capo su binario tronco lo scambio tra binario d'arrivo e di partenza: oltre le banchine dove il tronco ci sta
-  (Voltabarozzo, Rubano, Busa di Vigonza: si va in fondo e poi B), verso la città dove il binario d'arrivo oltre la
-  banchina va al deposito (Guizza, Pontevigodarzere: B alla banchina). Il tram (`Tram.transfer`, `Tram.at`) resta con
-  ogni cassa dov'è, passa sul binario di partenza con uno scostamento verso quello d'arrivo fino allo scambio e ripartendo
-  fa la S. Disegno (corsia rossa, rotaia, segnale con la freccia) in `buildTramway` e `switchSign` di `city.js`; N gira lo
-  scambio in Esplorazione e Giro libero (diritto: B cambia solo cabina e si torna indietro sullo stesso binario); in
-  servizio è automatico. Prove in `tests/turni-tram.spec.js`. Restano: i tram automatici, che al capolinea saltano
-  ancora sull'altro binario; gli scambi tra le linee (`track.switches`) manovrabili, con il tram che segue il grafo dei
-  binari; i depositi.
+- **Manovra al capolinea come nella realtà e B che cambia solo cabina**: fatto l'11 novembre. Ai capolinea su binario
+  tronco: discesa alla fermata d'arrivo, avanti fino in fondo al binario, B (cambia solo la cabina, ogni cassa resta
+  dov'è: `Tram.transfer`), ripartenza fino alla fermata di partenza sull'altro binario. Lo scambio è la comunicazione di
+  OSM (`service=crossover`, scritta da `tram_linee.py` in `tram-linee-nuove.json`, `net.tramScambi`), e come pende dice
+  quando si passa sull'altro binario (`TramTrack.terminal`): dopo il cambio cabina a Voltabarozzo (la comunicazione
+  subito dopo le banchine) e Rubano, prima a Pontevigodarzere e Guizza (la comunicazione oltre le banchine porta sul
+  tronco dell'altro binario, B in fondo). A Busa di Vigonza OSM non ne ha: S di 24 m calcolata. Il tratto sullo scambio
+  è il binario di partenza (o d'arrivo) spostato verso l'altro con le distanze lungo i binari (`Tram.at`, `xover`,
+  `xend`). Il SIR1 aveva i tronchi tagliati: lo shape GTFS fa l'inversione in fondo e il pezzo di ritorno ora va in testa
+  al binario di partenza (`padova.js`). Segnale dello scambio a due facce con la posizione (`switchSign` in `city.js`):
+  in servizio è automatico, diritto per l'arrivo e deviato al cambio cabina dove si passa dopo, deviato per l'arrivo
+  dove si passa prima; in Esplorazione e Giro libero lo gira N (diritto: B cambia solo cabina e si torna indietro sullo
+  stesso binario). Prove con il pilota per ogni capolinea in `tests/turni-tram.spec.js` (`guidaCapolinea` in
+  `tests/guida.js`; nel pilota la fase "apri" passa al servizio se le porte sono già aperte). Restano: i tram automatici,
+  che al capolinea saltano ancora sull'altro binario; gli scambi tra le linee manovrabili; i depositi (Voltabarozzo:
+  anello di ritorno e rimessa nello schema OSM; Guizza: anello e ventaglio di 8-9 binari; Rubano dalla foto del cantiere).
+- **Per la corsia traffico** (foto di Voltabarozzo dell'11 novembre, "all'arrivo il segnale dello scambio è un pannello
+  nero senza indicazione"): nella versione pubblicata il segnale dello scambio non c'era ancora. Il pannello nero è
+  quasi certamente il retro della lanterna di `TramSignals` per i tram in partenza all'attraversamento appena prima
+  della banchina d'arrivo (2380, 3513): chi arriva vede la scatola nera da dietro. Da decidere lì se il retro va
+  disegnato diverso.
 - **Poi gli scambi manovrabili** (chiesto da chi gioca l'11 novembre, foto di uno scambio a un capolinea:
   `images/14.png` della sessione del checkout principale):
   - B cambia **solo** la cabina: il tram resta dov'è e cambia verso di guida: fatto (sopra);

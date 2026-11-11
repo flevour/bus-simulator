@@ -259,11 +259,24 @@ export function buildNetwork() {
   // Con i binari OSM (tramLanes) c'è un tracciato per verso; con il solo GTFS il primo è l'asse dei due binari
   // affiancati a ±1,7 m e il secondo il binario singolo dove i versi si separano
   const lanes = !!MAP.tramLanes;
-  const tram = (MAP.tram || []).map(flat).filter((t) => t.length > 1).map((t, k) => {
-    t = cutReversal(cutReversal(t).reverse()).reverse();
-    t = smoothTrack(t);
+  // SIR1: lo shape GTFS di un verso arriva in fondo al binario tronco del capolinea, fa l'inversione e torna sul binario
+  // dell'altro verso fino alla banchina (Pontevigodarzere, Guizza). L'inversione si taglia; il pezzo di ritorno, senza i
+  // metri della curva a U, è il tronco del binario dell'altro verso e va in testa a quello: ci riparte il tram dopo il
+  // cambio cabina. Un capo senza tronco si allunga dritto di 40 m (il convoglio fermo, il cambio cabina)
+  const raw = (MAP.tram || []).map(flat).filter((t) => t.length > 1);
+  const cuts = raw.map((t) => { const head = cutReversal(t); return { t: head, tail: t.slice(head.length) }; });
+  const tram = cuts.map(({ t, tail: own }, k) => {
+    const o = cuts[1 - k];
+    let head = [];
+    if (o && o.tail.length) {
+      const u = o.t[o.t.length - 1], tail = o.tail.filter((p) => Math.hypot(p.x - u.x, p.z - u.z) > 2);
+      if (tail.length > 1 && Math.hypot(tail[tail.length - 1].x - t[0].x, tail[tail.length - 1].z - t[0].z) < 40) head = tail;
+    }
+    t = smoothTrack(cutReversal(t.slice().reverse()).reverse());
     const ext = (p, q) => { const l = Math.hypot(p.x - q.x, p.z - q.z) || 1; return { x: p.x + ((p.x - q.x) / l) * 40, z: p.z + ((p.z - q.z) / l) * 40 }; };
-    return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], tramBuildings, k === 0 && !lanes ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
+    const start = head.length ? head.concat(t) : [ext(t[0], t[1]), ...t];
+    const end = own.length ? [] : [ext(t[t.length - 1], t[t.length - 2])];
+    return clearOfBuildings([...start, ...end], tramBuildings, k === 0 && !lanes ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
   });
   const tramStops = (MAP.tramStops || []).map(([x, z, name, central]) => ({ x, z, name, central: !!central }));
   // linee in costruzione: binari OSM per verso, curve raccordate e fuori dagli edifici come quelli del SIR1
@@ -349,7 +362,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = MAP.edificiBBox || [Infinity, Infinity, -Infinity, -Infinity];
   if (!MAP.edificiBBox) for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, tramStazione: MAP.tramStazione || null, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, tramStazione: MAP.tramStazione || null, tramScambi: (NEW_TRAM.scambi || []).map(([a, b, c, d]) => [toXZ(a, b), toXZ(c, d)]), surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m

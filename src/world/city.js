@@ -1421,8 +1421,7 @@ export class City {
     for (const track of tracks) for (const d of [1, -1]) {
       const t = track.terminals && track.terminals[d];
       if (!t) continue;
-      const B = track.path(t.dep), pts = [];
-      for (let s = Math.max(0, t.toe - 4); s <= t.heel + 4; s += 2) { const p = B.at(s), o = t.off(s) || { x: 0, z: 0 }; pts.push({ x: p.x + o.x, z: p.z + o.z }); }
+      const pts = track.terminalCurve(d);
       for (let i = 0; i < pts.length - 1; i++) {
         const a = pts[i], b = pts[i + 1];
         red.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.031, 8);
@@ -1509,8 +1508,9 @@ export class City {
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
   }
 
-  // Segnale dello scambio al capolinea: palo tra i due binari all'inizio della S, pannello nero verso chi riparte dal
-  // tronco con la freccia bianca dritta (si resta sul binario d'arrivo) o deviata (si passa su quello di partenza)
+  // Segnale dello scambio al capolinea: palo tra i due binari all'inizio della S, pannello nero verso chi ci arriva
+  // (dal tronco dopo il cambio cabina, o dalla banchina d'arrivo dove si passa prima) con la freccia bianca dritta (si
+  // resta sul binario) o deviata (si passa sull'altro)
   switchSign(t) {
     const g = new THREE.Group(), s = t.sig;
     g.position.set(s.x, 0, s.z);
@@ -1519,9 +1519,9 @@ export class City {
     pole.position.y = Y_ROAD + 1.3;
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.1), new THREE.MeshLambertMaterial({ color: 0x15171a }));
     head.position.y = Y_ROAD + 2.75;
-    // verso del binario di partenza visto da chi arriva dal tronco: a destra o a sinistra
-    const o = t.off(t.toe) || { x: 0, z: 0 }, right = -o.x * -s.dz + -o.z * s.dx > 0;
-    const panel = (draw) => {
+    const right = t.side > 0; // da che parte devia lo scambio, per chi ci arriva
+    // back: la faccia dietro, per chi passa dall'altra parte (all'arrivo, dove lo scambio si prende di calcio)
+    const panel = (draw, back = false) => {
       const c = document.createElement('canvas');
       c.width = c.height = 64;
       const x = c.getContext('2d');
@@ -1529,7 +1529,8 @@ export class City {
       x.strokeStyle = '#fff'; x.fillStyle = '#fff'; x.lineWidth = 7; x.lineCap = 'round';
       draw(x);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
-      m.position.set(0, Y_ROAD + 2.75, 0.052);
+      m.position.set(0, Y_ROAD + 2.75, back ? -0.052 : 0.052);
+      if (back) m.rotation.y = Math.PI;
       return m;
     };
     const arrow = (x, x0, y0, x1, y1) => {
@@ -1540,11 +1541,15 @@ export class City {
       x.lineTo(x1 - 16 * Math.cos(a + 0.5), y1 - 16 * Math.sin(a + 0.5));
       x.closePath(); x.fill();
     };
-    const straight = panel((x) => arrow(x, 32, 54, 32, 10));
-    const diverted = panel((x) => { x.beginPath(); x.moveTo(32, 56); x.lineTo(32, 38); x.stroke(); arrow(x, 32, 38, right ? 52 : 12, 12); });
-    g.add(pole, head, straight, diverted);
+    const dritta = (x) => arrow(x, 32, 54, 32, 10), deviata = (r) => (x) => { x.beginPath(); x.moveTo(32, 56); x.lineTo(32, 38); x.stroke(); arrow(x, 32, 38, r ? 52 : 12, 12); };
+    // dall'altra parte l'altro binario sta dall'altro lato
+    const straight = panel(dritta), diverted = panel(deviata(right)), straightB = panel(dritta, true), divertedB = panel(deviata(!right), true);
+    g.add(pole, head, straight, diverted, straightB, divertedB);
     this.group.add(g);
-    const sw = { term: t, group: g, straight, diverted, update() { straight.visible = t.state !== 'deviato'; diverted.visible = t.state === 'deviato'; } };
+    const sw = { term: t, group: g, straight, diverted, update() {
+      const dev = t.state === 'deviato';
+      straight.visible = straightB.visible = !dev; diverted.visible = divertedB.visible = dev;
+    } };
     sw.update();
     return sw;
   }
