@@ -1591,7 +1591,7 @@ let lastT = performance.now();
 // posizione dei tram lungo la sede (per gli incroci): automatici e, se c'è, quello del giocatore
 const playerOcc = { player: true, front: 0, dir: 1, len: 0, v: 0, dwell: false };
 function tramOccupancy() {
-  const occ = trams.trams.map((tr) => ({ front: tr.s, dir: tr.dir, track: tr.track, len: tr.L, v: tr.v, dwell: tr.wait > 0 }));
+  const occ = trams.trams.map((tr) => ({ ref: tr, front: tr.s, dir: tr.dir, track: tr.track, len: tr.L, v: tr.v, dwell: tr.wait > 0 }));
   if (bus && bus.isTram) {
     Object.assign(playerOcc, { front: bus.pathOffset + bus.sFront, dir: bus.dirSig, track: bus.track, len: bus.length, v: bus.v, dwell: bus.doorsAnyOpen });
     occ.push(playerOcc);
@@ -1650,12 +1650,12 @@ function step(dt) {
     if (Math.abs(indAccum) > 0.9 && Math.abs(bus.steerIn) < 0.12) { bus.indicator = 0; indAccum = 0; }
   }
   lights.update(dt);
-  trams.update(dt, [bus, ...buses.parts], mission.clock);
+  trams.update(dt, [bus, ...buses.parts, ...(traffic ? traffic.cars : [])], mission.clock);
   // incroci col tram: chiamata dei tram in arrivo, segnali a barre, precedenza delle auto
   tramSignals.update(dt, tramOccupancy(), traffic);
   if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
   city.streamTiles(bus.x, bus.z, 5);
-  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals, bigs: buses.buses });
+  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals, trams, bigs: buses.buses });
   buses.update(dt, { player: bus, traffic, trams, lights, clock: mission.clock });
   // colleghi da salutare: bus e tram automatici vicini
   greet.update(dt, bus, trams.colleagues(buses.colleagues()));

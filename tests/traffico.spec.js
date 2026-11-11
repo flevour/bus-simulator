@@ -45,3 +45,47 @@ test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo s
   expect(fermi.filter((f) => f.s > 60), `fermi più lunghi: ${JSON.stringify(fermi.slice(0, 6))}`).toEqual([]);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Incroci semaforizzati sulla sede del tram: tram e auto che tagliano i binari non sono mai dentro insieme. Ogni 0,2 s,
+// per ogni incrocio col tram dei semafori scelti: il tram copre il binario all'altezza dell'auto (dal muso alla coda,
+// 1 m di margine) e un'auto che taglia i binari ha il muso entro mezzo tram dall'asse (3,2 m dal centro).
+function contaIncroci({ punti, sec }) {
+  const g = window.__game, xs = g.tramSignals.list.filter((x) => x.sig && punti.some(([px, pz]) => Math.hypot(x.px - px, x.pz - pz) < 40));
+  const insieme = [];
+  let passaggi = 0, auto = 0;
+  for (let t = 0; t < sec * 5; t++) {
+    g.sim(0.2, 1 / 30, false);
+    for (const x of xs) {
+      for (const c of g.traffic.cars) if (Math.hypot(c.x - x.px, c.z - x.pz) < 25) auto++;
+      let tram = null, d = 0;
+      for (const tr of g.trams.trams) {
+        const r = x.refs.find((r) => r.dir === tr.dir && r.track === tr.track);
+        if (r && r.sT - tr.s > -(tr.L + x.halfT) && r.sT - tr.s <= x.halfT) { tram = tr; d = r.sT - tr.s; break; }
+      }
+      if (!tram) continue;
+      passaggi++;
+      for (const c of g.traffic.cars) {
+        const rx = c.x - x.px, rz = c.z - x.pz, lungo = rx * x.tdx + rz * x.tdz, di = Math.abs(rx * x.tdz - rz * x.tdx);
+        if (Math.abs(lungo) > x.halfT || di > 3.2 || lungo > -d + 1 || lungo < -d - tram.L - 1) continue;
+        if (Math.abs(Math.sin(c.h) * x.tdx + Math.cos(c.h) * x.tdz) > 0.8) continue;
+        insieme.push(`${x.e.name} (${Math.round(x.px)}, ${Math.round(x.pz)}) alle ${Math.floor(g.mission.clock / 3600)}:${String(Math.floor((g.mission.clock % 3600) / 60)).padStart(2, '0')}: tram ${tram.line}, auto a ${c.v.toFixed(1)} m/s`);
+      }
+    }
+  }
+  return { incroci: xs.length, passaggi, auto, insieme };
+}
+
+// Chiesto da chi gioca l'11 novembre: se il tram ha il passaggio, auto e bus si fermano prima della sede. Giocatore fermo
+// in Via Altinate, 20 minuti di gioco alle 8:15 attorno ai semafori di Riviera Tito Livio, di Riviera dei Ponti Romani
+// con Via Battisti, di Largo Europa e di Piazza Garibaldi (per posizione: gli id dei nodi cambiano con la mappa).
+test('incroci semaforizzati sulla sede: tram e auto mai dentro insieme', async ({ pagina, gioco }) => {
+  test.setTimeout(300_000);
+  await avviaCorsa(pagina, { linea: '3' });
+  await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });
+  const r = await pagina.evaluate(contaIncroci, { punti: [[24, 149], [58, 65], [53, -333], [9, -195]], sec: 1200 });
+  expect(r.incroci).toBeGreaterThan(4);
+  expect(r.passaggi, 'nessun tram è passato dagli incroci').toBeGreaterThan(200);
+  expect(r.auto, 'nessuna auto vicino agli incroci').toBeGreaterThan(200);
+  expect(r.insieme).toEqual([]);
+  expect(gioco.errori()).toEqual([]);
+});

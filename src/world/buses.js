@@ -179,17 +179,27 @@ function buildLane(net, city, v, tramSignals) {
     if (!ap) continue;
     signals.push({ s: ls(cum[k] - (ap.stop ?? (n.radius || 0) + 1.2) - 0.3), out: ls(cum[k] + (n.radius || 0) + 2), node: n, edge: e });
   }
-  // incroci a raso con la sede del tram: ci si ferma prima del primo binario se un tram ha chiamato l'incrocio
+  // incroci a raso con la sede del tram: dove la corsia taglia la fascia dei binari di un incrocio (anche di un'altra
+  // strada: prima solo quelli sugli archi del percorso, e il bus fermo per uno restava dentro la fascia dell'altro, in
+  // Via Belludi) ci si ferma prima del primo binario se un tram ha chiamato l'incrocio; out: dove si è fuori
   const tram = [];
-  if (tramSignals && tramSignals.byEdge) segs.forEach((g, k) => {
-    const xs = g.e && tramSignals.byEdge.get(g.e);
-    if (!xs) return;
-    const list = xs.map((x) => ({ x, at: cum[k] + (g.fwd ? x.tE : g.e.len - x.tE) - x.halfE })).sort((a, b) => a.at - b.at);
-    for (const it of list) {
-      const first = list.find((o) => o.at <= it.at && it.at - o.at < 14) || it;
-      tram.push({ x: it.x, s: ls(first.at - 2.5), out: ls(it.at + it.x.halfE + 1) });
+  if (tramSignals && tramSignals.nearXY) {
+    const span = new Map();
+    for (let i = 0; i < P.pts.length - 1; i++) {
+      const a = P.pts[i], b = P.pts[i + 1];
+      for (const x of tramSignals.nearXY(a.x, a.z)) {
+        if (!tramSignals.cuts(x, a.x, a.z, b.x - a.x, b.z - a.z)) continue;
+        const sp = span.get(x);
+        if (!sp) span.set(x, { a: P.cum[i], b: P.cum[i] });
+        else if (P.cum[i] - sp.b < 6) sp.b = P.cum[i];
+      }
     }
-  });
+    const list = [...span].map(([x, sp]) => ({ x, a: sp.a, b: sp.b })).sort((p, q) => p.a - q.a);
+    for (const it of list) {
+      const first = list.find((o) => o.a <= it.a && it.a - o.a < 14) || it;
+      tram.push({ x: it.x, s: first.a - 1, out: it.b + 1 });
+    }
+  }
   // velocità massima: curve (accelerazione laterale da bus urbano) e limiti del tratto, poi l'inviluppo di frenata
   const n = P.pts.length, vlim = new Float32Array(n), segOf = new Int32Array(n);
   for (let i = 0; i < n; i++) {

@@ -377,6 +377,35 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
     bus; i bus aspettano dietro il tram fermo alla sua fermata (anche 40 s se è in anticipo) e alla fermata dei bus
     (x -30, z 260) bus e tram si sovrappongono (dati della corsia `mappa`);
   - alla fermata Ponti Romani 68, sul binario, tre bus di fila fanno aspettare il tram dietro anche un minuto.
+
+  Controllo su tutta la mappa (40 minuti alle 8:15 e alle 17:30, giocatore lontano e in centro), dopo la correzione:
+  un solo fermo oltre 90 s, un bus della 24 al rosso di Via Tommaseo alla stazione (95 s), e rossi da 60-72 s ai
+  semafori con la chiamata del tram (Largo Europa, Piazza Garibaldi, Via Machiavelli, stazione): con un tram dopo
+  l'altro la via trasversale non aveva mai il verde. Corretto con gli incroci (sotto).
+
+  Incroci tra traffico e tram (11 novembre), fatto il primo passo, ai semafori:
+  - `TrafficLights.tramCall`: la fase tram parte solo se chi viene tagliato ha avuto 10 s di verde e, dopo una fase
+    tram, il verde che gli spettava (`owed`); dopo 30 s non entrano altri tram (`tramOpen`), salvo quello che ha già il
+    via libera su un altro incrocio dello stesso semaforo (`vTrams`, `x.who`: prima restava fermo tra due binari e la
+    fase non finiva più, alla stazione); se un tram servito non passa con la fase scelta si va verso il tutto rosso.
+    Intanto il tram aspetta alla barra orizzontale;
+  - `TramSignals`: via libera solo con l'incrocio libero da chi taglia i binari, anche fermo, e da chi ci arriva entro
+    1,5 s o con la curva (`busy`, `cuts`); dopo 20 s di incrocio occupato da auto ferme, quelle lontane dal giocatore
+    spariscono (`unstick`, in Via Dante la fine della corsia delle auto cade sulla sede);
+  - auto: prima della curva in fondo all'arco guardano se il percorso (resto della corsia, curva, 20 m dopo) taglia i
+    binari di un incrocio chiamato e si fermano 3 m prima (`calledAhead`), anche col verde; non entrano sui binari se
+    oltre c'è coda (`carGap`); si fermano davanti a un tram che passa; niente vicoli ciechi per le auto (`deadEnd`:
+    in Piazza Garibaldi e in Via Morgagni facevano inversioni sulla sede);
+  - `TramSim.move`: il tram si ferma davanti alle auto (`main.js` gli passa anche le auto), dopo 20 s quella ferma
+    sparisce se è lontana dal giocatore;
+  - bus: la lista degli incroci col tram è geometrica (la corsia taglia la fascia dei binari, `nearXY`), non più per
+    arco: in Via Belludi il bus fermo per un incrocio restava nella fascia dell'altro.
+  Prova `tests/traffico.spec.js`: 20 minuti attorno ai semafori di Tito Livio, Ponti Romani-Battisti, Largo Europa e
+  Piazza Garibaldi, tram e auto mai dentro insieme. Su tutta la mappa (cinque giri da 20 minuti) restano rari casi in
+  incroci con il binario in curva o la corsia delle auto a 2 m dai binari (Corso del Popolo davanti alla stazione,
+  Prato della Valle, Piazzetta Nievo); senza semaforo il tram ha ancora sempre la precedenza.
+  Per `tram-turni`: alla stazione un SIR3 fermo al capolinea in anticipo (anche 7 minuti) tiene dietro di sé un SIR2
+  sullo stesso binario per 100-260 s.
 - **Subito, il semaforo del tram che non diventa mai verde** (foto di chi gioca dell'11 novembre, `images/16.png` della
   sessione del checkout principale): SIR3 verso Voltabarozzo, alle 8:31 di gioco, fermata 2/13 "Pace" a 57 m. Il tram è
   fermo prima dell'incrocio dove i binari si dividono verso Pace, con le lanterne del tram a via impedita, e il verde non
