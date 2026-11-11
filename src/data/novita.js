@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 67, d: '2026-11-11', t: 'Tram: i pali della linea aerea non stanno più in mezzo alla strada. Dove i due binari corrono separati, con le corsie delle auto in mezzo, i pali sono sul bordo della sede o sul marciapiede, e i fili non attraversano più tutta la carreggiata.' },
   { n: 66, d: '2026-11-11', t: 'Cavalcavia Camerini (linea 13) sistemato: niente più macchie grigie sull\'asfalto in cima al ponte e sulla rampa. Lo stesso vale per gli altri cavalcavia, dove l\'impalcato spuntava sopra la strada.' },
   { n: 65, d: '2026-11-11', t: 'Sterzo più dolce con la tastiera: un colpo su A D o sulle frecce fa girare il bus di meno, più o meno come prima del 6 novembre. Se lo vuoi più pronto o più lento, nel menu e nella pausa c\'è "Sensibilità dello sterzo": "Alta" è lo sterzo dei giorni scorsi. Il volante touch non cambia.' },
   { n: 64, d: '2026-11-11', t: 'Tram: si ferma a tutte le fermate, anche se nessuno aspetta e nessuno deve scendere (tirare dritto è una fermata saltata). Sul tram niente più prenotazione della fermata né ritardatari che corrono alla porta: restano sugli autobus.' },

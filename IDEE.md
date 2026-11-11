@@ -79,7 +79,15 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        `traffico`);
      - [ ] segni bianchi della carreggiata sulla sede rossa del tram, lungo un binario a fianco della strada (corsia
        `mappa`);
-     - [ ] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (corsia `mappa`).
+     - [ ] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (corsia `mappa`);
+     - [x] pali della linea aerea in mezzo alla strada dove i due binari corrono separati, con i tiranti che
+       attraversano tutte le corsie (vedi "Fatto");
+     - [ ] in stazione il binario di destra parallelo alla banchina, senza la S verso sinistra; la curva a sinistra
+       dell'anello interno più regolare; niente intrecci a S all'uscita della banchina (corsia `tram-turni`);
+     - [ ] al capolinea del tram B fa partire la corsa successiva, come per il bus, senza tornare al menu (corsia
+       `tram-turni`);
+     - [ ] linee del bus complete fino al capolinea, senza la scritta "tratto in città" (corsia `capolinea`, prima del
+       SIR2).
 
 ## Mappa e dati
 
@@ -197,6 +205,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Pali della linea aerea fuori dalla strada** (11 novembre): dove non c'è una facciata a cui agganciare il
+  tirante, il palo va dove finisce l'asfalto (marciapiede, isola, verde) entro 9 m e, se fin lì è tutta carreggiata,
+  sul cordolo della sede. Prima si fermava a 9 m anche in mezzo alla strada: con i binari separati dalle corsie, pali
+  sulle righe e tiranti attraverso tutta la carreggiata. Pali sull'asfalto fuori dalla sede: da 598 a 9 su 1.167.
 - [x] **Sensibilità dello sterzo** (corsia `guida`, 11 novembre): nel menu (punto 8) e nella pausa si sceglie quanto in
   fretta A D / ← → girano il volante: Bassa 0,5, Media 0,7 (di partenza), Alta 1 (lo sterzo dal 6 all'11 novembre),
   Molto alta 1,4; la scelta resta nel browser. Il controsterzo non rallenta; ritorno al centro, sterzata massima e

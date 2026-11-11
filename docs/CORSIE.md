@@ -43,15 +43,16 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 
 | File | Chi lo modifica | Perché |
 |---|---|---|
-| `src/data/padova-map.json` | `mappa` e `capolinea`, una rigenerazione alla volta | una riga sola da 12 MB: due rigenerazioni non si uniscono, si prende quella di `main` e si rigenera (regola 4) |
+| `src/data/padova-map.json` | `mappa`, `capolinea` e `tram-turni`, una rigenerazione alla volta | una riga sola da 12 MB: due rigenerazioni non si uniscono, si prende quella di `main` e si rigenera (regola 4) |
 | `scripts/build_map.py`, `scripts/street_surfaces.py` | `mappa` (dettagli dentro l'area) e `capolinea` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a queste corsie |
+| `scripts/tram_linee.py`, `data/tram-linee-nuove.json` | `capolinea` (SIR2 fino ai capolinea) e `tram-turni` (binari della stazione) | chi cambia una funzione dell'altra lo scrive qui; dopo, si rigenera la mappa (la sede nella pianta delle strade segue i binari) |
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
 | `src/world/traffic.js` | `Traffic`/`Walkers`/`TrafficLights` a `traffico`, `TramSim`/`TramSignals` al tram | stesse classi in due corsie = conflitti; `traffico` può toccare `TramSim` solo dove serve allo sblocco dei tram, scrivendolo qui |
 | `src/world/buses.js` | `traffico` (comportamento dei bus automatici) | `mappa` ci ha messo l'uscita dal binario opposto (`buildLane`, `ahead`): chi la cambia lo scrive qui |
 | `src/bus/bus.js` | `guida` (sterzo, pedali, cruscotto) | gli altri solo per piccole cose, segnalate qui |
 | `src/main.js` | tutti, ognuno nelle sue funzioni | |
 
-## Corsie aperte (onda 1 dal 9 novembre 2026, `traffico` e `guida` dall'11 novembre)
+## Corsie aperte (onda 1 dal 9 novembre 2026, `traffico`, `guida` e `tram-turni` dall'11 novembre)
 
 | Corsia | Workspace herdr | Porte dev / preview |
 |---|---|---|
@@ -63,6 +64,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `capolinea` (dal 9 novembre) | `capolinea` | 5178 / 4178 |
 | `traffico` (dall'11 novembre) | `traffico` | 5179 / 4179 |
 | `guida` (dall'11 novembre) | `guida` | 5180 / 4180 |
+| `tram-turni` (dall'11 novembre) | `tram-turni` | 5181 / 4181 |
 
 ### verifiche
 
@@ -287,6 +289,11 @@ tangenziale).
 
 Prossimo lavoro, in quest'ordine:
 
+- **richiesta di chi gioca dell'11 novembre**: le linee del bus che dicono "tratto in città" complete fino al
+  capolinea, senza la scritta. Da qui è la priorità della corsia, perché il servizio vero sono gli autobus (SIR2 e
+  SIR3 sono in costruzione). Il gruppo 1b (SIR2) si pubblica solo se è a un passo; altrimenti resta sul ramo locale e
+  si riprende dopo. Poi, in ordine, il caricamento per aree e il gruppo 2 per tutte le linee; la scritta "(tratto in
+  città)" del capolinea si toglie linea per linea, quando la linea arriva al capolinea vero;
 - gruppo 1b, SIR2 fino a Rubano e alla Busa di Vigonza: 173 celle nuove (10,8 km², stima 3-4 MB di mappa). Servono gli
   export fuori dal riquadro di oggi: nodi OSM (`scripts/overpass-nodes.ql` sul corridoio), paline (Overture
   `base/infrastructure`), edifici Overture, DTM, DBGT dei lotti di Rubano e Vigonza o le misure della sezione 3 del
@@ -371,6 +378,39 @@ ingressi in `src/main.js` (oggetto `input`, comandi touch), menu e pausa in `ind
   telecamera della porta posteriore sul cruscotto; specchietti regolabili.
 - Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
+### tram-turni
+
+Aperta l'11 novembre 2026. Il tram di chi gioca tra una corsa e l'altra, i binari della stazione e i depositi (IDEE,
+prossimi passi 1 e 2). File: `src/game/turni.js` e le funzioni dei turni in `src/main.js` (`changeTramCab`,
+`chainNext`, `nextOfTurno`), `src/tram/tram.js` (`TramTrack`, `TramSim` tranne il coordinamento con il traffico, che è
+di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scripts/tram_linee.py` e
+`data/tram-linee-nuove.json` (con `capolinea`, tabella dei file condivisi), la parte del tram di `buildTramway` in
+`src/world/city.js`.
+
+- **Prima di tutto B al capolinea** (chiesto da chi gioca l'11 novembre): "una volta al capolinea (es. SIR3 al
+  capolinea Stazione sud) vorrei poter premere B e ricominciare come per i bus, senza fare nuova corsa". Oggi B cambia
+  cabina (`changeTramCab`; all'anello della stazione si riparte senza cambiarla), ma per la corsa dopo si torna al
+  menu. Al capolinea B deve cambiare cabina e far partire la corsa successiva del turno nel verso opposto, come
+  `chainNext` per il bus: orario dal turno, pannello della linea, indicatori e fermate aggiornati, salvataggio. Vale
+  anche al capolinea ad anello. Prova in `tests/`: SIR3 fino al capolinea, B, la corsa nuova parte dalla prima fermata
+  dell'altro verso.
+- **Poi i binari della stazione** (tre foto dell'11 novembre, nel pannello del checkout principale):
+  - "rendiamo la corsia di destra in stazione parallela, senza lo sbandamento a sinistra": alla banchina di Stazione
+    sud (SIR2 fermo), il binario di destra fa una S verso sinistra invece di correre parallelo a quello della
+    banchina;
+  - "la curva a sinistra dell'ovale più armonica": dove il SIR3 entra nell'anello interno girando a sinistra, la
+    curva è spigolosa, con un cambio di raggio brusco;
+  - "e anche qui": all'uscita della banchina i binari si intrecciano a S e si incrociano più volte prima di
+    separarsi.
+
+  I binari dell'anello vengono dalle way OSM del cantiere (`tram_linee.py`, anello interno e raccordi) e passano da
+  `smoothTrack`. Correggere la geometria (rettilinei paralleli lungo le banchine, curve a raggio costante con i
+  raccordi, scambi dove servono e non intrecci), rigenerare la mappa (regola 4), poi foto dall'alto e dalla cabina e
+  una corsa guidata di SIR2 e SIR3 in stazione, con i tram automatici per 40 minuti senza blocchi.
+- Poi, in quest'ordine: turni del tram e deposito della Guizza (uscita e rientro, IDEE punto 1), binario tronco della
+  Guizza, binari dei depositi (Guizza e Voltabarozzo, OSM `service=yard`), interni.
+- Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
+
 ### tram-reti (chiusa il 9 novembre)
 
 SIR3 e SIR2, tappe 1 e 2 del piano in [`linee-tram-nuove.md`](linee-tram-nuove.md), fatte:
@@ -406,13 +446,12 @@ Dopo la chiusura i dati del piazzale sono stati sistemati dalla sessione cloud (
 
 ## Onde successive
 
-Onda 2, quando le corsie dell'onda 1 si chiudono (`traffico` e `guida` aperte l'11 novembre, sopra):
+Onda 2, quando le corsie dell'onda 1 si chiudono (`traffico`, `guida` e `tram-turni` aperte l'11 novembre, sopra):
 
 - `traffico`: aperta. Le corsie preferenziali si appoggiano su `laneLayout` e `driveOffset` di `padova.js` (corsie,
   corsie dei bus e scostamenti per verso).
-- `tram-turni`: turni del tram e deposito della Guizza, binario tronco (i semafori del tram coordinati con il traffico
-  sono passati a `traffico` l'11 novembre). Può partire:
-  gli scambi tra le sedi sono in `track.switches`, quelli ai capolinea si disegnano in `buildTramway`.
+- `tram-turni`: aperta l'11 novembre (sopra). I semafori del tram coordinati con il traffico sono passati a
+  `traffico`; gli scambi tra le sedi sono in `track.switches`, quelli ai capolinea si disegnano in `buildTramway`.
 - `esplorazione`: panoramica e giro libero senza mezzo, poi l'ortofoto AGEA (M5).
 - `guida`: aperta (sterzo, poi gamepad, bus elettrico con ricarica, telecamera della porta posteriore, specchietti).
 

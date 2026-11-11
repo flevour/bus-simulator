@@ -1191,6 +1191,7 @@ export class City {
     for (const T of tracks) T.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz));
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
     const deck = [], piers = [], poles = [], wires = [];
+    this.tramPoles = []; // posizioni dei pali della linea aerea (per le prove)
     const L = TRAM.lane;
     // Facciate vicine alla sede: i tiranti della linea aerea si agganciano lì (le piante reali, gli ostacoli dei muri
     // si costruiscono dopo). spanAnchor: dal centro (cx, cz) verso (nx, nz), oltre half metri, la prima facciata entro
@@ -1204,6 +1205,8 @@ export class City {
         for (const k of new Set([ck(a.x, a.z), ck(c.x, c.z), ck((a.x + c.x) / 2, (a.z + c.z) / 2)])) { if (!fac.has(k)) fac.set(k, []); fac.get(k).push(seg); }
       }
     }
+    // distanza dall'asfalto: con la pianta delle strade conta l'asfalto vero (la sede è asfalto), non il nastro dell'arco
+    const offRoad = this.asphRings ? (x, z) => Math.min(this.surfaceOff(x, z), this.clearance(x, z, ['tram'], 12) + 0.3) : (x, z) => this.clearance(x, z, ['road', 'tram'], 12) - 0.2;
     const spanAnchor = (cx, cz, nx, nz, half) => {
       let best = 14;
       const cells = new Set();
@@ -1215,10 +1218,10 @@ export class City {
         if (t >= half && t < best && u >= 0 && u <= 1) best = t;
       }
       if (best < 14) return { x: cx + nx * best, z: cz + nz * best, pole: false };
-      // nessuna facciata: palo dove finisce la strada (sul marciapiede), al più a 9 m
-      let k = half;
-      while (k < 9 && this.clearance(cx + nx * k, cz + nz * k, ['road', 'tram'], 12) < 0.6) k += 0.5;
-      return { x: cx + nx * k, z: cz + nz * k, pole: true };
+      // nessuna facciata: palo dove finisce l'asfalto (marciapiede, isola, verde), al più a 9 m; se fin lì è tutta
+      // carreggiata, sul cordolo della sede: mai in mezzo alla strada (binari separati con le corsie in mezzo)
+      for (let k = half; k < 9; k += 0.25) if (offRoad(cx + nx * k, cz + nz * k) >= 0.4) return { x: cx + nx * k, z: cz + nz * k, pole: true };
+      return { x: cx + nx * (half - 0.55), z: cz + nz * (half - 0.55), pole: true };
     };
     // ogni binario una volta: i tratti in comune li disegna la sede che c'era già
     for (const track of tracks) for (const dir of [1, -1]) {
@@ -1283,7 +1286,7 @@ export class City {
         const cx = q ? (p.x + q.x) / 2 : p.x, cz = q ? (p.z + q.z) / 2 : p.z, half = (q ? Math.hypot(p.x - q.x, p.z - q.z) / 2 : 0) + L + 0.6;
         const ends = [-1, 1].map((side) => spanAnchor(cx, cz, -p.dz * side, p.dx * side, half));
         const y = Y_ROAD + h + CATENARY_HEIGHT + 0.3;
-        for (const a of ends) if (a.pole) poles.push(new THREE.CylinderGeometry(0.08, 0.11, y - Y_ROAD - h + 0.4, 6).translate(a.x, Y_ROAD + h + (y - Y_ROAD - h + 0.4) / 2, a.z));
+        for (const a of ends) if (a.pole) { poles.push(new THREE.CylinderGeometry(0.08, 0.11, y - Y_ROAD - h + 0.4, 6).translate(a.x, Y_ROAD + h + (y - Y_ROAD - h + 0.4) / 2, a.z)); this.tramPoles.push({ x: a.x, z: a.z }); }
         const [a, b] = ends, sl = Math.hypot(b.x - a.x, b.z - a.z);
         wires.push(new THREE.BoxGeometry(0.03, 0.03, sl).rotateY(Math.atan2(b.x - a.x, b.z - a.z)).translate((a.x + b.x) / 2, y, (a.z + b.z) / 2));
       }
