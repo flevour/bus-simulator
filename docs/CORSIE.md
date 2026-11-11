@@ -500,12 +500,26 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   raccordi, scambi dove servono e non intrecci), rigenerare la mappa (regola 4), poi foto dall'alto e dalla cabina e
   una corsa guidata di SIR2 e SIR3 in stazione, con i tram automatici per 40 minuti senza blocchi.
 - **Subito, il tram incastrato al capolinea di Voltabarozzo**: fatto, vedi sopra ("Tram incastrato al capolinea").
-- **Dopo la stazione, scambi e cambio cabina come nella realtà** (chiesto da chi gioca l'11 novembre, foto di uno
-  scambio a un capolinea: `images/14.png` della sessione del checkout principale):
-  - "normalmente ai capolinea terminali c'è uno scambio che porta il tram sull'altra linea, si arriva fino in fondo e
-    poi si cambia cabina di guida": B cambia **solo** la cabina. Il tram resta dov'è, sul binario d'arrivo, e cambia il
-    verso di guida. Ripartendo passa dallo scambio sull'altro binario. Oggi `changeTramCab` lo sposta direttamente sul
-    binario dell'altro verso;
+- **Subito dopo Voltabarozzo, la manovra al capolinea come nella realtà** (chi gioca, 11 novembre: "l'inversione al
+  capolinea non è convincente, a Voltabarozzo fallisce"). La sequenza voluta:
+  1. si scaricano i passeggeri alla fermata d'arrivo del capolinea (lì finisce la corsa);
+  2. si va avanti fino in fondo al binario;
+  3. si preme B: cambia la cabina di guida e si gira la visuale;
+  4. si riparte e **lo scambio si mette da solo** verso l'altro binario;
+  5. ci si ferma alla fermata di partenza, sull'altro binario, dove comincia la corsa nuova.
+
+  Il passaggio sull'altro binario può venire prima o dopo il cambio di cabina, secondo dove sta lo scambio. A
+  Pontevigodarzere (foto dall'alto `images/19.png`: banchine ai due lati, comunicazione tra i binari oltre le
+  banchine, binari tronchi in fondo) lo scambio a destra è già in deviata: dopo la discesa il tram passa dallo scambio
+  sull'altro binario, poi cambia cabina in fondo e torna indietro fino alla fermata giusta. A Voltabarozzo (foto
+  dall'alto `images/20.png`, con il deposito: due binari dalla via, una comunicazione all'inizio, un binario lungo il
+  lato ovest fino a un anello di ritorno in fondo, e dall'anello 3-4 binari che entrano nella rimessa da sud) va
+  rifatta allo stesso modo, con la fermata d'arrivo sul dritto. Prove: per ogni capolinea dei tram (SIR1, SIR2, SIR3),
+  la sequenza sopra con il pilota di `tests/guida.js`, fino alla prima fermata della corsa nuova.
+- **Poi gli scambi manovrabili** (chiesto da chi gioca l'11 novembre, foto di uno scambio a un capolinea:
+  `images/14.png` della sessione del checkout principale):
+  - B cambia **solo** la cabina: il tram resta dov'è e cambia verso di guida (sopra); oggi `changeTramCab` lo sposta
+    direttamente sul binario dell'altro verso;
   - gli scambi si vedono (segnale dello scambio con la posizione: diritto o deviato) e si possono mettere nell'altra
     posizione rispetto a quella di partenza, per entrare nei depositi o fare un percorso diverso;
   - **resta l'impostazione automatica** degli scambi per il piazzale, la stazione e altrove, secondo le linee che ci
