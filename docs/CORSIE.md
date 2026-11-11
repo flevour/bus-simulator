@@ -563,11 +563,25 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
     (oggi segue un percorso fisso per linea e verso): grafo dei binari con `track.switches`;
   - prove: al capolinea B lascia il tram dov'è col verso cambiato, poi la corsa riparte passando dallo scambio; in
     Esplorazione uno scambio girato porta il tram sull'altro ramo.
-- Poi, in quest'ordine: turni del tram e deposito della Guizza (uscita e rientro, IDEE punto 1), binario tronco della
-  Guizza, binari dei depositi (Guizza e Voltabarozzo, OSM `service=yard`), interni. Il **deposito di Rubano** del
-  SIR2 (rimesse passanti, anelli, officina: struttura in `linee-tram-nuove.md`, "SIR2 nel progetto del 2022") quando
-  il corridoio del SIR2 arriva a Rubano (corsia `capolinea`, dopo gli autobus); in OSM non c'è, si disegna dalla
-  tavola.
+- Poi, in quest'ordine (deciso l'11 novembre con chi gioca, che chiedeva di poter girare nei depositi con gli scambi):
+  1. turni del tram (in corso);
+  2. **rete dei binari con i bivi**, prima di ogni deposito: oggi ogni linea è una coppia di binari con una
+     comunicazione per capolinea, e N decide solo se dopo B si passa sull'altro binario. Serve un grafo dei binari
+     dove a ogni scambio il tram di chi gioca prosegue sul ramo su cui lo scambio è messo: in servizio gli scambi si
+     mettono da soli secondo la linea (piazzale, stazione, capolinea, incroci tra le linee), in Esplorazione e Giro
+     libero li gira N (lo scambio più vicino davanti al tram), anche quelli tra le linee. I tram automatici seguono
+     la stessa rete. Prove: in Esplorazione uno scambio girato porta il tram sull'altro ramo, in servizio ogni linea
+     resta sul suo percorso;
+  3. **deposito della Guizza** come primo caso della rete: i binari di servizio sono già nell'export
+     `data/osm-padova-tram.json` (`service=yard`, 35 binari, alcuni `tunnel=building_passage` dentro la rimessa) e il
+     gioco non li usa ancora; anello di ritorno, ventaglio di 8-9 binari e anello esterno dallo schema OSM
+     (`images/24.png`); binario tronco della Guizza; uscita della prima corsa del turno e rientro dell'ultima (IDEE
+     punto 1). Prova: dal capolinea, girando gli scambi, si entra in rimessa e se ne esce;
+  4. Voltabarozzo sulla stessa rete: anello di ritorno e rimessa dallo schema OSM (`images/23.png`, `images/20.png`);
+  5. interni;
+  6. il **deposito di Rubano** del SIR2 (rimesse passanti, anelli, officina: struttura in `linee-tram-nuove.md`, "SIR2
+     nel progetto del 2022"; il lotto è già nelle celle del corridoio, `0856b09`); in OSM ci sono il lotto, la
+     rimessa, le banchine e le comunicazioni, il resto si disegna dalla tavola e dalla foto del cantiere.
 - Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
 
 ### tram-reti (chiusa il 9 novembre)
