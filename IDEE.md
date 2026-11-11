@@ -88,7 +88,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        stanno alla quota degli argini (corsia `mappa`);
      - [ ] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
        manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`);
-     - [ ] mappa grande (M) da trascinare per spostarsi (checkout principale);
+     - [x] mappa grande (M) da trascinare per spostarsi (vedi "Fatto");
      - [x] pali della linea aerea in mezzo alla strada dove i due binari corrono separati, con i tiranti che
        attraversano tutte le corsie (vedi "Fatto");
      - [ ] in stazione il binario di destra parallelo alla banchina, senza la S verso sinistra; la curva a sinistra
@@ -219,6 +219,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Mappa grande da trascinare** (11 novembre): con M aperta si trascina col mouse (`HUD.panBigMap`, pan rispetto al
+  mezzo, azzerato a ogni apertura); un clic senza trascinare (meno di 5 px) teletrasporta come prima.
 - [x] **SIR2 intero, da Rubano a Vigonza** (corsia `capolinea`, 11 novembre): corridoio di celle attorno ai binari
   (10,8 km² in più), con strade e segnaletica OSM delle due teste (`data/osm-corridoio.json`), edifici e paline
   Overture, terreno dal DTM regionale. Nel gioco 35 fermate nei due versi, da Rubano (via Pria Fosca) a Busa di Vigonza

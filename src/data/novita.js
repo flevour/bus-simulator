@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 79, d: '2026-11-11', t: 'Mappa grande (M): trascinala col mouse per guardare altre zone della città. Un clic senza trascinare su una strada ti ci porta, come prima; riaprendola torna centrata sul mezzo.' },
   { n: 78, d: '2026-11-11', t: 'Il tram SIR2 si guida tutto, da Rubano (via Pria Fosca) al capolinea di Busa di Vigonza, prima della rotonda per Venezia: 35 fermate, senza tratto in città. La città arriva fin là, e con lei la linea 10 fino a Sarmeola e a Ponte di Brenta e la 25 intera, dalla stazione alla zona industriale e ritorno.' },
   { n: 77, d: '2026-11-11', t: 'La città si carica a pezzi: all\'avvio solo il centro attorno a Prato della Valle, il resto mentre guidi, entro un chilometro e mezzo dal bus (palazzi, marciapiedi, prati e alberi). Lontano da te la città si alleggerisce, e il gioco può crescere fino ai capolinea veri delle linee.' },
   { n: 76, d: '2026-11-11', t: 'Giro libero ed Esplorazione: niente traffico (né auto né bus e tram automatici) e il mezzo va più forte, con il limitatore a 120 km/h invece di 70. Il bus da 12 m in piano arriva a circa 113 km/h, lo snodato a 103; il tram arriva a 120. Nel giro libero i limiti di velocità valgono ancora, e l\'autovelox scatta. In servizio di linea tutto come prima.' },

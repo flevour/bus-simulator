@@ -35,6 +35,7 @@ export class HUD {
     this.mm = $('minimap');
     this.mmx = this.mm.getContext('2d');
     this.big = false;
+    this.pan = { x: 0, z: 0 }; // spostamento della mappa grande rispetto al mezzo (m)
     this.cluster = $('cluster');
     this.cx = this.cluster.getContext('2d');
   }
@@ -205,7 +206,7 @@ export class HUD {
     c.translate(W / 2, H / 2);
     if (!big) c.rotate(-(Math.PI - bus.h)); // il bus punta verso l'alto
     c.scale(scale, scale);
-    const cxw = bus.x, czw = bus.z;
+    const cxw = bus.x + (big ? this.pan.x : 0), czw = bus.z + (big ? this.pan.z : 0);
     if (big) this.bigView = { cx: cxw, cz: czw, scale, W, H };
     c.translate(-cxw, -czw);
     // acqua
@@ -272,7 +273,7 @@ export class HUD {
     if (big) {
       c.fillStyle = 'rgba(8,12,18,0.8)'; c.fillRect(0, H - 30, W, 30);
       c.fillStyle = '#fff'; c.font = 'bold 14px Arial'; c.textAlign = 'center';
-      c.fillText('Clicca su una strada per teletrasportarti · M per chiudere', W / 2, H - 10);
+      c.fillText('Trascina per spostare la mappa · clicca su una strada per teletrasportarti · M per chiudere', W / 2, H - 10);
     }
     if (!big) {
       c.fillStyle = '#fff'; c.font = 'bold 12px Arial'; c.textAlign = 'center';
@@ -284,8 +285,15 @@ export class HUD {
 
   setBigMap(v) {
     this.big = v;
+    if (v) this.pan = { x: 0, z: 0 }; // si riapre centrata sul mezzo
     this.mm.classList.toggle('big', v);
     this.mm.width = v ? 640 : 220;
     this.mm.height = v ? 640 : 220;
+  }
+  // trascinamento della mappa grande di (dx, dy) pixel del disegno: la mappa segue il mouse
+  panBigMap(dx, dy) {
+    if (!this.big || !this.bigView) return;
+    this.pan.x -= dx / this.bigView.scale;
+    this.pan.z -= dy / this.bigView.scale;
   }
 }

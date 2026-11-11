@@ -899,13 +899,34 @@ function buildMenu() {
   $('tp-close').addEventListener('click', () => openTeleport(false));
   $('resume').addEventListener('click', () => togglePause(false));
   $('pause-btn').addEventListener('click', () => togglePause(true));
-  $('minimap').addEventListener('click', (ev) => {
-    if (!running || !hud.big || !hud.bigView) return;
+  // mappa grande: trascinando si sposta; un clic senza trascinare su una strada teletrasporta
+  let mapDrag = null;
+  $('minimap').addEventListener('pointerdown', (ev) => {
+    if (!running || !hud.big) return;
+    mapDrag = { x: ev.clientX, y: ev.clientY, moved: false };
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+  });
+  $('minimap').addEventListener('pointermove', (ev) => {
+    if (!mapDrag || !hud.bigView) return;
+    const dx = ev.clientX - mapDrag.x, dy = ev.clientY - mapDrag.y;
+    if (!mapDrag.moved && Math.hypot(dx, dy) < 5) return;
+    mapDrag.moved = true;
+    ev.currentTarget.classList.add('dragging');
+    const k = hud.bigView.W / ev.currentTarget.getBoundingClientRect().width; // pixel dello schermo → del disegno
+    hud.panBigMap(dx * k, dy * k);
+    mapDrag.x = ev.clientX; mapDrag.y = ev.clientY;
+  });
+  $('minimap').addEventListener('pointerup', (ev) => {
+    ev.currentTarget.classList.remove('dragging');
+    const d = mapDrag;
+    mapDrag = null;
+    if (!d || d.moved || !running || !hud.big || !hud.bigView) return;
     const rect = ev.currentTarget.getBoundingClientRect(), v = hud.bigView;
     const px = ((ev.clientX - rect.left) / rect.width) * v.W, py = ((ev.clientY - rect.top) / rect.height) * v.H;
     teleportTo(v.cx + (px - v.W / 2) / v.scale, v.cz + (py - v.H / 2) / v.scale);
     hud.setBigMap(false);
   });
+  $('minimap').addEventListener('pointercancel', (ev) => { ev.currentTarget.classList.remove('dragging'); mapDrag = null; });
   $('resume-save').addEventListener('click', () => { if (touch.enabled) touch.goFullscreen(); resumeSaved(); });
   $('discard-save').addEventListener('click', clearSave);
   $('restart').addEventListener('click', () => { clearSave(); togglePause(false); startMission(); });
@@ -1739,7 +1760,7 @@ setTimeout(async () => {
   $('loading').style.display = 'none';
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
-  window.__game = { get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
+  window.__game = { get hud() { return hud; }, get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot,
     pad, mirrorAdj, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
