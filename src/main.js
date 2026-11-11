@@ -14,7 +14,7 @@ import { Audio } from './game/audio.js';
 import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
 import { initNews } from './game/news.js';
 import { Greetings } from './game/greetings.js';
-import { TouchControls, isTouchDevice } from './game/touch.js';
+import { TouchControls, isTouchDevice, MOBILE_SUPPORTED, isMobileDevice } from './game/touch.js';
 import { GamepadControls } from './game/gamepad.js';
 import { liveryPreviews, disposeTree } from './game/liveryPreview.js';
 import { Terrain } from './world/terrain.js';
@@ -184,8 +184,12 @@ window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
 // comandi touch: i pulsanti passano da onKeyPress come i tasti, volante e pedali sono analogici
 const touch = new TouchControls({ press: (code) => onKeyPress(code), keys });
-if (isTouchDevice()) touch.enable();
-window.addEventListener('touchstart', () => { if (!touch.enabled) { touch.enable(); layoutMirrors(); } }, { passive: true, once: true });
+if (MOBILE_SUPPORTED) {
+  if (isTouchDevice()) touch.enable();
+  window.addEventListener('touchstart', () => { if (!touch.enabled) { touch.enable(); layoutMirrors(); } }, { passive: true, once: true });
+} else document.body.classList.add('solo-computer');
+// telefono o tablet senza supporto: l'invito a giocare da computer al posto del gioco (la città non si costruisce)
+const mobileBlocked = !MOBILE_SUPPORTED && isMobileDevice();
 // gamepad e volante: anche loro passano i pulsanti da onKeyPress; levetta, volante e pedali sono analogici
 const pad = new GamepadControls({ press: (code) => onKeyPress(code), keys, onChange: () => padChanged() });
 function readInput(dt) {
@@ -1468,6 +1472,13 @@ window.addEventListener('resize', () => {
 
 // avvio
 setTimeout(() => {
+  if (mobileBlocked) {
+    $('loading').style.display = 'none';
+    $('solo-computer').classList.add('dispositivo');
+    $('solo-computer').hidden = false;
+    capture('mobile_blocked', { screen_width: screen.width, screen_height: screen.height, touch_points: navigator.maxTouchPoints });
+    return;
+  }
   try {
     buildWorld();
   } catch (e) {

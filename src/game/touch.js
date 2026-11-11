@@ -4,6 +4,16 @@
 export const isTouchDevice = () =>
   (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
 
+// Telefoni e tablet per ora non sono supportati: chi ha solo il touch o uno schermo piccolo vede l'invito a giocare da
+// computer (#solo-computer) e la città non si costruisce; su un computer con la finestra piccola l'invito chiede di
+// allargarla. Comandi touch e HUD compatto restano nel codice: per riattivarli basta true.
+export const MOBILE_SUPPORTED = false;
+// solo touch: puntatore grossolano e nessun mouse o trackpad (i portatili con lo schermo touch giocano)
+export const isTouchOnly = () =>
+  typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+// telefono o tablet: solo touch, oppure uno schermo che anche intero non arriva alla misura minima del gioco
+export const isMobileDevice = () => isTouchOnly() || Math.min(screen.width, screen.height) < 560;
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export class TouchControls {

@@ -43,6 +43,11 @@ I percorsi del build sono relativi (`base: './'`), quindi il gioco funziona anch
 
 ## Smartphone e tablet
 
+Per ora **non sono supportati**: su telefoni e tablet (solo touch, o schermo più piccolo di 560 px) il gioco mostra
+l'invito ad aprirlo da un computer e non costruisce la città; su un computer con la finestra più piccola di 900 × 560
+chiede di allargarla. I comandi touch sono ancora nel codice, spenti da `MOBILE_SUPPORTED` in `src/game/touch.js`:
+con `true` tornano come descritto qui sotto.
+
 Su schermo touch compaiono i comandi a video (meglio con il telefono in orizzontale; all'avvio il gioco passa a
 schermo intero dove il browser lo consente):
 

@@ -8,6 +8,17 @@ button { font: inherit; cursor: pointer; }
 #loading .logo { font-size: 64px; animation: drive 1.2s ease-in-out infinite alternate; }
 #loading .sub { font-size: 13px; opacity: .6; }
 @keyframes drive { from { transform: translateX(-30px); } to { transform: translateX(30px); } }
+/* per ora si gioca da computer (MOBILE_SUPPORTED in src/game/touch.js): sui telefoni e tablet l'avviso lo mostra main.js
+   e la città non si costruisce; su un computer compare da solo quando la finestra è più piccola della misura minima */
+#solo-computer { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; background: #0d1117; z-index: 70; font-size: 16px; line-height: 1.4; }
+#solo-computer[hidden] { display: none; }
+#solo-computer .logo { font-size: 56px; }
+#solo-computer h2 { margin: 6px 0; font-size: 22px; }
+#solo-computer p { margin: 0; max-width: 420px; }
+#solo-computer .link { margin: 8px 0; font-weight: 800; color: #ffb300; user-select: all; }
+#solo-computer .sub { font-size: 13px; opacity: .6; }
+#solo-computer.dispositivo .finestra { display: none; }
+@media (max-width: 899px), (max-height: 559px) { body.solo-computer #solo-computer[hidden] { display: flex; } }
 
 .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20; background: rgba(5, 8, 12, .55); backdrop-filter: blur(3px); }
 .overlay.hidden { display: none; }

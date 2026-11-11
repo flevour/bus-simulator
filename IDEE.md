@@ -157,6 +157,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 - [x] Tram: SIR1 e SIR3 a 3 moduli, SIR2 a 4 moduli (vedi "Fatto").
 - [x] Sensibilità dello sterzo regolabile (vedi "Fatto").
+- [ ] Telefoni e tablet: comandi touch e HUD compatto spenti l'11 novembre (`MOBILE_SUPPORTED` in
+  `src/game/touch.js`, invito a giocare da computer); da riattivare e rifinire più avanti.
 - [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
 - [x] Volante e pedaliera o gamepad (Gamepad API, vedi "Fatto").
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.

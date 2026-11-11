@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 69, d: '2026-11-11', t: 'Per ora Padova Bus Simulator si gioca da computer, con la tastiera o il gamepad: su telefono e tablet compare l\'invito ad aprirlo da un computer. Se la finestra del browser è troppo piccola, il gioco chiede di allargarla. La versione per telefono e tablet tornerà più avanti.' },
   { n: 68, d: '2026-11-11', t: 'Si guida anche con il gamepad: levetta sinistra per sterzare, grilletto destro per il gas e sinistro per il freno, A per le porte, LB e RB per le frecce, Menu per la pausa (tutti i pulsanti nell\'aiuto, tasto I). Hai un volante con la pedaliera? Collegalo, apri la pausa e premi "Imposta volante e pedali": giri il volante, premi il gas e il freno, e il gioco se li ricorda.' },
   { n: 67, d: '2026-11-11', t: 'Tram: i pali della linea aerea non stanno più in mezzo alla strada. Dove i due binari corrono separati, con le corsie delle auto in mezzo, i pali sono sul bordo della sede o sul marciapiede, e i fili non attraversano più tutta la carreggiata.' },
   { n: 66, d: '2026-11-11', t: 'Cavalcavia Camerini (linea 13) sistemato: niente più macchie grigie sull\'asfalto in cima al ponte e sulla rampa. Lo stesso vale per gli altri cavalcavia, dove l\'impalcato spuntava sopra la strada.' },
