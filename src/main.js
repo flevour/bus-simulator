@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { buildNetwork, LINES, TRAM_LINES, fmtHM } from './data/padova.js';
-import { loadAllAreas } from './data/aree.js';
+import { buildNetwork, LINES, TRAM_LINES, fmtHM, toXZ, LANDMARKS } from './data/padova.js';
+import { loadAreasNear } from './data/aree.js';
 import { Tram, tramRoute, TRAM } from './tram/tram.js';
 import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
@@ -1673,7 +1673,11 @@ function loop() {
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   frame++;
-  if (running && !paused && !tpOpen) {
+  if (running && !paused && !tpOpen && !city.areasReady(bus.x, bus.z, 300)) {
+    // aree della mappa attorno al bus non ancora arrivate (partenza lontano da Prato, teletrasporto): si aspetta fermi
+    city.ensureTiles(bus.x, bus.z, 300);
+    render(0);
+  } else if (running && !paused && !tpOpen) {
     // sotto-passi per una fisica stabile
     const n = dt > 0.025 ? 2 : 1;
     for (let i = 0; i < n; i++) step(dt / n);
@@ -1709,8 +1713,10 @@ setTimeout(async () => {
     return;
   }
   try {
-    // edifici, strade e alberi per aree (src/data/aree.js), poi la città
-    await loadAllAreas((n, tot) => { $('loading-sub').textContent = `mappa: ${n} aree su ${tot}`; });
+    // edifici, marciapiedi, verde e alberi arrivano per aree (src/data/aree.js): prima della città quelle attorno a Prato
+    // (lo sfondo del menu), le altre quando il bus si avvicina
+    const prato = toXZ(...LANDMARKS.prato);
+    await loadAreasNear(prato.x, prato.z, 1500, (n, tot) => { $('loading-sub').textContent = `mappa: ${n} aree su ${tot}`; });
     $('loading-sub').textContent = 'strade, palazzi, Prato della Valle';
     await new Promise((ok) => setTimeout(ok, 0));
     buildWorld();

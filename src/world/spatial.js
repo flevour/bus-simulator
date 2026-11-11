@@ -18,6 +18,18 @@ export class Grid {
         a.push(item);
       }
   }
+  // toglie item dalle celle del rettangolo con cui era stato inserito
+  remove(item, minX, minZ, maxX, maxZ) {
+    const c = this.cell;
+    for (let ix = Math.floor(minX / c); ix <= Math.floor(maxX / c); ix++)
+      for (let iz = Math.floor(minZ / c); iz <= Math.floor(maxZ / c); iz++) {
+        const k = this.key(ix, iz), a = this.map.get(k);
+        if (!a) continue;
+        const i = a.indexOf(item);
+        if (i >= 0) a.splice(i, 1);
+        if (!a.length) this.map.delete(k);
+      }
+  }
   query(x, z, r, out = []) {
     const c = this.cell;
     out.length = 0;

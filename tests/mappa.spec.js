@@ -37,6 +37,8 @@ const NOMI = {
 
 test('rapporto di verifica sulla mappa', async ({ pagina, gioco }, info) => {
   test.setTimeout(600_000);
+  // con la mappa divisa in aree (src/data/aree.js) si misura tutta: si caricano tutte, e non si liberano più
+  await pagina.evaluate(() => window.__game.city.loadAll());
   const r = await pagina.evaluate(misura);
   const valori = Object.fromEntries(Object.keys(SOGLIE).map((k) => [k, r.casi[k].length]));
   const righe = [

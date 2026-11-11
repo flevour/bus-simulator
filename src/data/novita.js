@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 77, d: '2026-11-11', t: 'La città si carica a pezzi: all\'avvio solo il centro attorno a Prato della Valle, il resto mentre guidi, entro un chilometro e mezzo dal bus (palazzi, marciapiedi, prati e alberi). Lontano da te la città si alleggerisce, e il gioco può crescere fino ai capolinea veri delle linee.' },
   { n: 76, d: '2026-11-11', t: 'Giro libero ed Esplorazione: niente traffico (né auto né bus e tram automatici) e il mezzo va più forte, con il limitatore a 120 km/h invece di 70. Il bus da 12 m in piano arriva a circa 113 km/h, lo snodato a 103; il tram arriva a 120. Nel giro libero i limiti di velocità valgono ancora, e l\'autovelox scatta. In servizio di linea tutto come prima.' },
   { n: 75, d: '2026-11-11', t: 'Menu: le linee del tram SIR2 e SIR3 non dicono più "qui il tratto in città". Il SIR3 si guida già tutto fino a Voltabarozzo; il SIR2 arriverà fino ai capolinea di Rubano e Vigonza.' },
   { n: 74, d: '2026-11-11', t: 'Gli specchietti si regolano: nella visuale dalla cabina trascinali col mouse, verso l\'esterno per vedere più in fuori, in giù per vedere più vicino al bus. Il gioco si ricorda la regolazione; con un doppio clic lo specchietto torna com\'era.' },

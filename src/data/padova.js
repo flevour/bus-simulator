@@ -238,6 +238,10 @@ function clearOfBuildings(t, buildings, half) {
   return pts.map((p, i) => ({ x: p.x + nor[i].x * sm[i], z: p.z + nor[i].z * sm[i] }));
 }
 
+// edificio della mappa ([h, tipo, nome, contorno, cortili, portici]) con i punti come { x, z }
+const flatPts = (f) => { const out = []; for (let i = 0; i < f.length; i += 2) out.push({ x: f[i], z: f[i + 1] }); return out; };
+export const parseBuilding = ([h, kind, name, f, holes, por]) => ({ h, kind, name, pts: flatPts(f), holes: holes ? holes.map(flatPts) : null, por });
+
 export function buildNetwork() {
   const nodes = {};
   const N = MAP.nodes.length / 2;
@@ -246,7 +250,10 @@ export function buildNetwork() {
   const water = MAP.water.map(([name, width, f]) => ({ name, width, pts: flat(f) })).filter((w) => w.pts.length > 1);
   const rails = MAP.rails.map(([bt, yard, f]) => ({ bridge: bt === 1, tunnel: bt === 2, yard: !!yard, pts: flat(f) })).filter((r) => r.pts.length > 1);
   // por: altezza libera dei portici misurati (DBGT), 0 = misurato senza portici, undefined = non misurato
-  const buildings = MAP.buildings.map(([h, kind, name, f, holes, por]) => ({ h, kind, name, pts: flat(f), holes: holes ? holes.map(flat) : null, por }));
+  const buildings = MAP.buildings.map(parseBuilding);
+  // con la mappa divisa in aree (src/data/aree.js) gli edifici arrivano a richiesta: per spostare i binari fuori dalle
+  // facciate e per i tiranti della linea aerea la rete ha quelli a meno di 60 m dai binari (scripts/aree_mappa.py)
+  const tramBuildings = MAP.edificiTram ? MAP.edificiTram.map(parseBuilding) : buildings;
   // tram SIR1: tracciato e fermate (sede tranviaria in mezzo a Via Aspetti, Via Reni, ecc.)
   // sede del tram: inversione ai capolinea tagliata, curve raccordate, binario tronco di 40 m oltre i capolinea.
   // Con i binari OSM (tramLanes) c'è un tracciato per verso; con il solo GTFS il primo è l'asse dei due binari
@@ -256,11 +263,11 @@ export function buildNetwork() {
     t = cutReversal(cutReversal(t).reverse()).reverse();
     t = smoothTrack(t);
     const ext = (p, q) => { const l = Math.hypot(p.x - q.x, p.z - q.z) || 1; return { x: p.x + ((p.x - q.x) / l) * 40, z: p.z + ((p.z - q.z) / l) * 40 }; };
-    return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], buildings, k === 0 && !lanes ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
+    return clearOfBuildings([ext(t[0], t[1]), ...t, ext(t[t.length - 1], t[t.length - 2])], tramBuildings, k === 0 && !lanes ? [-3, -1.7, 0, 1.7, 3] : [-1.4, 0, 1.4]);
   });
   const tramStops = (MAP.tramStops || []).map(([x, z, name, central]) => ({ x, z, name, central: !!central }));
   // linee in costruzione: binari OSM per verso, curve raccordate e fuori dagli edifici come quelli del SIR1
-  const tramLines = NEW_TRAM_LINES.map((L) => ({ id: L.id, lanes: L.lanes.map((t) => clearOfBuildings(smoothTrack(t), buildings, [-1.4, 0, 1.4])) }));
+  const tramLines = NEW_TRAM_LINES.map((L) => ({ id: L.id, lanes: L.lanes.map((t) => clearOfBuildings(smoothTrack(t), tramBuildings, [-1.4, 0, 1.4])) }));
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
   const edges = [];
   const E = MAP.edges;
@@ -340,9 +347,9 @@ export function buildNetwork() {
   }
   const expandSeq = (seq) => seq.filter((id, i) => i === 0 || id !== seq[i - 1]);
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
-  let bb = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, buildingBBox: bb, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
+  let bb = MAP.edificiBBox || [Infinity, Infinity, -Infinity, -Infinity];
+  if (!MAP.edificiBBox) for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m

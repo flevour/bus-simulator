@@ -85,6 +85,9 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
 * `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
   `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.
+* Edifici, marciapiedi, verde e alberi arrivano per aree attorno al bus (`src/data/aree.js`): dopo `startMission`
+  `avviaCorsa` di `tests/gioco.js` aspetta `city.areasReady(x, z)`; chi misura tutta la mappa chiama prima
+  `await city.loadAll()` (come `tests/mappa.spec.js`).
 * Dopo modifiche a strade, fermate o edifici, controlla che i percorsi dei bus restino liberi: nessun ostacolo
   nella corsia, fermate raggiungibili.
 

@@ -33,8 +33,9 @@ export { expect };
 // Sceglie dal menu mezzo e linea (id della scheda: '24', 'SIR1'...), il verso (0 andata, 1 ritorno) e la modalità,
 // poi avvia la corsa. La corsa è quella che il menu propone (la più vicina alle 8:15 nei giorni feriali) o, con
 // `partenza` ('08:36'), quella che parte a quell'ora; senza uscita dal deposito: si parte dal capolinea.
+// Con la mappa divisa in aree (src/data/aree.js) aspetta che quelle attorno al bus siano arrivate e costruite.
 export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 'service', partenza = null }) {
-  return page.evaluate(({ linea, tram, verso, modo, partenza }) => {
+  const corsa = await page.evaluate(({ linea, tram, verso, modo, partenza }) => {
     const g = window.__game, $ = (q) => document.querySelector(q);
     // il menu propone la corsa più vicina a quella scelta prima: senza scelta, quella delle 8:15 (giorno feriale)
     g.settings.departure = 0;
@@ -57,4 +58,7 @@ export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 
     const m = g.mission;
     return { linea, fermate: m.stops.length, prima: m.stops[0].name, ultima: m.stops[m.stops.length - 1].name, partenza: g.settings.departure };
   }, { linea, tram, verso, modo, partenza });
+  // a intervalli e non a ogni fotogramma: le prove spengono il ciclo del gioco (requestAnimationFrame)
+  await page.waitForFunction(() => { const g = window.__game; g.city.ensureTiles(g.bus.x, g.bus.z, 650); return g.city.areasReady(g.bus.x, g.bus.z, 650); }, null, { polling: 100, timeout: 120_000 });
+  return corsa;
 }

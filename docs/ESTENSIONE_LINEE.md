@@ -103,7 +103,15 @@ tutta la mappa all'avvio (fisica, paline con `allStopPlacements`, semafori, lamp
 `clearOfBuildings` e i tiranti di `buildTramway`). Nelle aree restano edifici, marciapiedi, verde e alberi: 8,8 MB in
 161 aree, solo da vicino (da vedere e da urtare). Rete 5,9 MB, JavaScript 7,2 MB (2,5 MB compresso).
 
-Resta da fare il caricamento a richiesta (punti 2-5 sotto), che riscrive `city.js`. Misura dell'avvio (11 novembre,
+Terzo passo (11 novembre), le aree a richiesta: all'avvio solo quelle entro 1,5 km da Prato (17 su 161, per lo sfondo
+del menu e per i semafori a muro), poi quelle entro 1,5 km dal bus, una per fotogramma; oltre 2,6 km si liberano mesh,
+ostacoli e dati (`addArea`, `removeArea` in `city.js`). Fisica, paline, semafori e lampioni non cambiano: usano le
+carreggiate della rete. La partenza non aspetta le aree (le prove sì, `city.areasReady`): al capolinea il bus è fermo e
+le aree vicine arrivano in qualche decimo di secondo. Esempio: avviata la 3 al capolinea Orlandini e poi teletrasportato
+il bus a sud, da 27 aree e 142.810 ostacoli a 17 aree e 35.555 ostacoli.
+
+Restano: le aree scaricate anche lungo il percorso della linea, prima di arrivarci (punto 2); il terreno ancora in una
+griglia unica; `npm run build:single` con tutte le aree dentro la pagina. Misura dell'avvio (11 novembre,
 SwiftShader su una macchina carica): `buildDecks` prende 17 s su 21 di costruzione della città (0,3 s nel build del 9
 novembre: impalcati in triangoli da 4 m, corsia `mappa`), `buildRoads` con tutta la pianta delle strade meno di 1 s.
 

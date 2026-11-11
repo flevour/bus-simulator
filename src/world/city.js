@@ -3,7 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
-import { LINES, TRAM_LINES, laneLayout, laneSpan } from '../data/padova.js';
+import { LINES, TRAM_LINES, laneLayout, laneSpan, parseBuilding } from '../data/padova.js';
+import { AREA_SIZE, AREA_KEYS, areaData, requestArea, dropArea, areaKeysNear, loadAllAreas } from '../data/aree.js';
 import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, tramLength } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 import { applyTerrain } from './terrain.js';
@@ -13,6 +14,8 @@ export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie r
 const Y_SIDEWALK = 0.1;
 const Y_GREEN = 0.05; // prati e aiuole del DBGT, sopra il prato generico e sotto i marciapiedi
 const SIDEWALK = 4;
+// aree a richiesta (src/data/aree.js): si scaricano entro AREA_NEAR metri dal bus, si liberano oltre AREA_FAR
+const AREA_NEAR = 1500, AREA_FAR = 2600;
 
 // strati coplanari: spinge in avanti nel depth buffer (evita z-fighting)
 export function layer(mat, n) {
@@ -950,15 +953,17 @@ export class City {
     this.asphMat = am.material;
     const wm = new THREE.Mesh(walk.build(), layer(new THREE.MeshLambertMaterial({ map: TX.sidewalkTexture() }), 1));
     wm.receiveShadow = true;
+    this.walkMat = wm.material;
     const gt = TX.grassTexture();
     const im = new THREE.Mesh(isl.build(), layer(new THREE.MeshLambertMaterial({ map: gt, color: 0xb8d8a0 }), 8));
     im.receiveShadow = true;
     const kMat = new THREE.MeshLambertMaterial({ color: 0xc9c4ba, side: THREE.DoubleSide });
     this.group.add(am, wm, im, new THREE.Mesh(kerb.build(), layer(kMat.clone(), 3)), new THREE.Mesh(side.build(), layer(kMat, 8)));
+    // come il prato di fondo: si disegna subito dopo e non nasconde niente (sul terreno in pendenza marciapiedi e
+    // carreggiate, con altri vertici, possono passare qualche centimetro sotto)
+    this.greenMat = new THREE.MeshLambertMaterial({ map: TX.grassTexture(), color: 0x9fbf88, depthWrite: false });
     if (green.pos.length) {
-      // come il prato di fondo: si disegna subito dopo e non nasconde niente (sul terreno in pendenza marciapiedi e
-      // carreggiate, con altri vertici, possono passare qualche centimetro sotto)
-      const gm = new THREE.Mesh(green.build(), new THREE.MeshLambertMaterial({ map: TX.grassTexture(), color: 0x9fbf88, depthWrite: false }));
+      const gm = new THREE.Mesh(green.build(), this.greenMat);
       gm.receiveShadow = true;
       gm.renderOrder = -0.4;
       this.group.add(gm);
@@ -1198,7 +1203,7 @@ export class City {
     // 14 m; se non c'è, un palo sul bordo della strada
     const FC = 20, fac = new Map(), nearTrack = new Set(), ck = (x, z) => Math.floor(x / FC) + ',' + Math.floor(z / FC);
     for (const T of tracks) for (const d of [1, -1]) { const P = T.path(d); for (let s = 0; s <= P.len; s += 10) { const p = P.at(s); for (const ox of [-1, 0, 1]) for (const oz of [-1, 0, 1]) nearTrack.add(ck(p.x + ox * FC, p.z + oz * FC)); } }
-    for (const b of this.net.buildings) {
+    for (const b of this.net.tramBuildings || this.net.buildings) {
       if (!b.pts.some((p) => nearTrack.has(ck(p.x, p.z)))) continue;
       for (let i = 0; i < b.pts.length; i++) {
         const a = b.pts[i], c = b.pts[(i + 1) % b.pts.length], seg = [a.x, a.z, c.x, c.z];
@@ -1856,7 +1861,7 @@ export class City {
     const { nodes, edges } = this.net;
     let removed = 0;
     const q = [];
-    const T = (this.tileSize || 400) / 2 + 80;
+    const T = tile && tile.half ? tile.half : (this.tileSize || 400) / 2 + 80;
     for (const e of edges) {
       if (!e.routes) continue;
       const A = nodes[e.a];
@@ -1872,14 +1877,16 @@ export class City {
         }
       }
     }
-    // tratti di linea senza strada (salti dell'aggancio al confine della mappa): liberali comunque
-    if (!tile) {
+    // tratti di linea senza strada (salti dell'aggancio al confine della mappa): liberali comunque (in un'area arrivata
+    // dopo, solo i punti dentro l'area)
+    if (!tile || tile.half) {
       for (const L of LINES) for (const v of L.variants) for (let i = 0; i < v.nodes.length - 1; i++) {
         if (this.net.edgeBetween(v.nodes[i], v.nodes[i + 1])) continue;
         const A = nodes[v.nodes[i]], B = nodes[v.nodes[i + 1]];
         const l = Math.hypot(B.x - A.x, B.z - A.z);
         for (let s = 0; s <= l; s += 2) {
           const x = A.x + ((B.x - A.x) * s) / l, z = A.z + ((B.z - A.z) * s) / l;
+          if (tile && (Math.abs(x - tile.cx) > T || Math.abs(z - tile.cz) > T)) continue;
           for (const b of this.obstacles.query(x, z, 5, q)) {
             const lx = (x - b.x) * b.c + (z - b.z) * b.s, lz = -(x - b.x) * b.s + (z - b.z) * b.c;
             if (!b.dead && Math.hypot(Math.max(Math.abs(lx) - b.hx, 0), Math.max(Math.abs(lz) - b.hz, 0)) < 3) { b.dead = true; removed++; }
@@ -1899,45 +1906,188 @@ export class City {
 
   // edifici reali OSM: pianta estrusa, finestre procedurali, tetti piani, muri come ostacoli
   buildRealBuildings() {
-    const list = this.net.buildings;
-    if (!list || !list.length) return;
-    this.realBuildingCount = list.length;
     // gli edifici sono divisi in riquadri da 400 m costruiti a richiesta (prima quelli vicini al bus)
-    const T = (this.tileSize = 400);
+    this.tileSize = 400;
     this.tiles = new Map();
+    this.tilesBuilt = 0;
+    this.bMat = makeBuildingMaterial(this.uniforms, true);
+    this.rMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    if (this.net.areas) {
+      // mappa divisa in aree da 800 m (src/data/aree.js): edifici, marciapiedi, verde e alberi arrivano con la loro area,
+      // che si scarica quando il bus si avvicina e si libera quando si allontana
+      this.areas = new Map();
+      for (const key of AREA_KEYS) {
+        const [ix, iz] = key.split('_').map(Number);
+        this.areas.set(key, { key, cx: (ix + 0.5) * AREA_SIZE, cz: (iz + 0.5) * AREA_SIZE, added: false, meshes: [], obs: [], tiles: [] });
+      }
+      this.realBuildingCount = 0;
+    } else {
+      const list = this.net.buildings;
+      if (!list || !list.length) return;
+      this.realBuildingCount = list.length;
+      this.addBuildings(list, null);
+    }
+    const p = this.net.landmarks.prato;
+    if (p) this.ensureTiles(p.x, p.z, 700);
+  }
+
+  // edifici nei riquadri da 400 m (per baricentro dei vertici, come le aree di scripts/aree_mappa.py)
+  addBuildings(list, area) {
+    const T = this.tileSize;
     for (const b of list) {
       let cx = 0, cz = 0;
       for (const p of b.pts) { cx += p.x; cz += p.z; }
       b.cx = cx / b.pts.length; b.cz = cz / b.pts.length;
       const ix = Math.floor(b.cx / T), iz = Math.floor(b.cz / T), key = ix + ',' + iz;
       let t = this.tiles.get(key);
-      if (!t) this.tiles.set(key, (t = { key, cx: (ix + 0.5) * T, cz: (iz + 0.5) * T, list: [], built: false, meshes: [] }));
+      if (!t) {
+        this.tiles.set(key, (t = { key, cx: (ix + 0.5) * T, cz: (iz + 0.5) * T, list: [], built: false, meshes: [], obs: [] }));
+        if (area) area.tiles.push(t);
+      }
       t.list.push(b);
     }
-    this.bMat = makeBuildingMaterial(this.uniforms, true);
-    this.rMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-    this.tilesBuilt = 0;
-    const p = this.net.landmarks.prato;
-    if (p) this.ensureTiles(p.x, p.z, 700);
+    this._order = null;
   }
 
-  // costruisce subito i riquadri entro r metri (es. all'avvio o dopo un teletrasporto)
+  // ---- aree a richiesta ----
+  // area arrivata: marciapiedi, verde e alberi subito, edifici nei riquadri (costruiti da ensureTiles e streamTiles)
+  addArea(A, d) {
+    A.added = true;
+    const walk = new GeoBuilder(), green = new GeoBuilder();
+    for (const [, , W, V] of d.celle) {
+      for (const poly of W || []) walk.polygon(poly, Y_SIDEWALK, 6);
+      for (const poly of V || []) green.polygon(poly, Y_GREEN, 8);
+    }
+    if (walk.pos.length) { const m = new THREE.Mesh(walk.build(), this.walkMat); m.receiveShadow = true; A.meshes.push(m); }
+    if (green.pos.length) { const m = new THREE.Mesh(green.build(), this.greenMat); m.receiveShadow = true; m.renderOrder = -0.4; A.meshes.push(m); }
+    // alberi veri del DBGT (filari, aree alberate, boschi), fuori dalle strade e dalla sede del tram
+    const trees = [];
+    for (let i = 0; i < d.alberi.length; i += 2) {
+      const x = d.alberi[i], z = d.alberi[i + 1];
+      if (this.clearance(x, z, ['road', 'tram'], 12) < 0.8) continue;
+      trees.push([x, z]);
+      A.obs.push(this.addObstacle(x, z, 0.35, 0.35, 0, 'tree'));
+    }
+    if (trees.length) {
+      const K = this.trees3d(), trunks = new THREE.InstancedMesh(K.trunkG, K.trunkMat, trees.length), crowns = new THREE.InstancedMesh(K.crownG, K.crownMat, trees.length);
+      const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+      // misura, rotazione e colore dal punto: lo stesso albero è uguale ogni volta che l'area torna
+      const hash = (x, z, k) => { const v = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453; return v - Math.floor(v); };
+      trees.forEach(([x, z], i) => {
+        const s = 1.1 + hash(x, z, 1) * 0.6;
+        Q.setFromAxisAngle(Y, hash(x, z, 2) * 6.28);
+        M.compose(P.set(x, 0, z), Q, S.set(s, s * (0.9 + hash(x, z, 3) * 0.3), s));
+        trunks.setMatrixAt(i, M);
+        crowns.setMatrixAt(i, M);
+        col.setHSL(0.22 + hash(x, z, 4) * 0.08, 0.35 + hash(x, z, 5) * 0.2, 0.22 + hash(x, z, 6) * 0.12);
+        crowns.setColorAt(i, col);
+      });
+      trunks.castShadow = crowns.castShadow = true;
+      A.meshes.push(trunks, crowns);
+    }
+    for (const m of A.meshes) this.group.add(m);
+    const list = d.edifici.map(parseBuilding);
+    this.realBuildingCount += list.length;
+    A.buildings = list.length;
+    this.addBuildings(list, A);
+    // le strade dei bus restano libere anche dagli alberi dell'area
+    if (this.busRoadsCleared) this.clearBusRoads({ cx: A.cx, cz: A.cz, half: AREA_SIZE / 2 + 80 });
+  }
+
+  // area lontana: via mesh, ostacoli e riquadri degli edifici; i dati si riscaricano se torna a servire
+  removeArea(A) {
+    for (const m of A.meshes) this.disposeMesh(m);
+    for (const b of A.obs) this.removeObstacle(b);
+    for (const t of A.tiles) {
+      for (const m of t.meshes) this.disposeMesh(m);
+      for (const b of t.obs) this.removeObstacle(b);
+      if (t.built) this.tilesBuilt--;
+      this.tiles.delete(t.key);
+    }
+    this.realBuildingCount -= A.buildings || 0;
+    Object.assign(A, { added: false, meshes: [], obs: [], tiles: [], buildings: 0 });
+    this._order = null;
+    dropArea(A.key);
+  }
+
+  disposeMesh(o) {
+    this.group.remove(o);
+    o.traverse((m) => {
+      if (m.isInstancedMesh) { m.dispose(); return; } // geometrie e materiali degli alberi sono condivisi
+      if (m.geometry) m.geometry.dispose();
+      for (const mt of [].concat(m.material || [])) if (![this.bMat, this.rMat, this.walkMat, this.greenMat].includes(mt)) mt.dispose();
+    });
+  }
+
+  removeObstacle(b) {
+    const r = Math.hypot(b.hx, b.hz);
+    this.obstacles.remove(b, b.x - r, b.z - r, b.x + r, b.z + r);
+    this.obstacleCount--;
+  }
+
+  // aree entro r metri da (x, z): quelle già scaricate si aggiungono subito, le altre si chiedono
+  syncAreas(x, z, r) {
+    for (const k of areaKeysNear(x, z, r)) {
+      const A = this.areas.get(k);
+      if (A.added) continue;
+      const d = areaData(k);
+      if (d) this.addArea(A, d);
+      else this.fetchArea(A);
+    }
+  }
+
+  // scarica l'area; se non arriva (rete assente) non si aspetta più, e streamTiles riprova
+  fetchArea(A) {
+    requestArea(A.key).then(() => { A.failed = false; }, (e) => { A.failed = true; console.warn(e.message); });
+  }
+
+  // le aree entro r metri da (x, z) sono tutte aggiunte (per le prove e per chi aspetta la partenza)
+  areasReady(x, z, r = 650) {
+    return !this.areas || areaKeysNear(x, z, r).every((k) => this.areas.get(k).added || this.areas.get(k).failed);
+  }
+
+  // tutta la mappa (rapporto di verifica): scarica e aggiunge tutte le aree, che non si liberano più
+  async loadAll() {
+    if (!this.areas) return;
+    await loadAllAreas();
+    this.keepAreas = true;
+    for (const A of this.areas.values()) if (!A.added) this.addArea(A, areaData(A.key));
+  }
+
+  // costruisce subito i riquadri entro r metri (es. all'avvio o dopo un teletrasporto); con le aree a richiesta, quelle
+  // non ancora scaricate arrivano dopo (streamTiles)
   ensureTiles(x, z, r) {
     if (!this.tiles) return;
+    if (this.areas) this.syncAreas(x, z, r + this.tileSize);
     for (const t of this.tiles.values()) if (!t.built && Math.hypot(t.cx - x, t.cz - z) < r + this.tileSize * 0.71) this.buildTile(t);
   }
 
-  // a ogni fotogramma: costruisce qualche riquadro in sottofondo e nasconde quelli lontani
+  // a ogni fotogramma: aree vicine scaricate e aggiunte, lontane liberate; qualche riquadro costruito in sottofondo e
+  // quelli lontani nascosti
   streamTiles(x, z, budgetMs = 6) {
     if (!this.tiles) return;
     const t0 = performance.now();
+    if (this.areas) {
+      if (!this._areaT || t0 - this._areaT > 1000) {
+        this._areaT = t0;
+        this._near = areaKeysNear(x, z, AREA_NEAR).map((k) => this.areas.get(k)).sort((a, b) => Math.hypot(a.cx - x, a.cz - z) - Math.hypot(b.cx - x, b.cz - z));
+        for (const A of this._near) if (!A.added) this.fetchArea(A);
+        if (!this.keepAreas) {
+          const far = new Set(areaKeysNear(x, z, AREA_FAR));
+          for (const A of this.areas.values()) if (A.added && !far.has(A.key)) this.removeArea(A);
+        }
+      }
+      // al più un'area nuova per fotogramma (marciapiedi, verde e alberi in qualche millisecondo)
+      const A = this._near.find((a) => !a.added && areaData(a.key));
+      if (A) this.addArea(A, areaData(A.key));
+    }
     if (!this._order || performance.now() - (this._orderT || 0) > 1500) {
       this._order = [...this.tiles.values()].filter((t) => !t.built).sort((a, b) => Math.hypot(a.cx - x, a.cz - z) - Math.hypot(b.cx - x, b.cz - z));
       this._orderT = performance.now();
     }
     while (this._order.length && performance.now() - t0 < budgetMs) {
       const t = this._order.shift();
-      if (!t.built) this.buildTile(t);
+      if (!t.built && this.tiles.has(t.key)) this.buildTile(t);
     }
     for (const t of this.tiles.values()) {
       if (!t.built) continue;
@@ -1999,7 +2149,7 @@ export class City {
           const cr = (v[1][2] - v[0][2]) * 0 + ((v[1][0] - v[0][0]) * nz - (v[1][2] - v[0][2]) * nx);
           const order = cr > 0 ? [0, 1, 2, 3, 4, 5] : [0, 2, 1, 3, 5, 4];
           for (const k of order) { W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(seed); W.h.push(h); }
-          this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building');
+          tile.obs.push(this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building'));
         }
       }
       // tetto a padiglione sugli edifici quasi rettangolari senza cortile
@@ -2271,6 +2421,18 @@ export class City {
   }
 
   // ---- alberi e lampioni ----
+  // tronco e chioma degli alberi, condivisi con quelli delle aree
+  trees3d() {
+    if (!this.treeKit) {
+      const trunkG = new THREE.CylinderGeometry(0.18, 0.28, 3, 6);
+      trunkG.translate(0, 1.5, 0);
+      const crownG = new THREE.IcosahedronGeometry(2.4, 1);
+      crownG.translate(0, 4.6, 0);
+      this.treeKit = { trunkG, crownG, trunkMat: new THREE.MeshLambertMaterial({ color: 0x5a4330 }), crownMat: new THREE.MeshLambertMaterial({ color: 0xffffff }) };
+    }
+    return this.treeKit;
+  }
+
   buildTreesAndLamps() {
     const { nodes, edges } = this.net;
     const rnd = this.rnd;
@@ -2336,12 +2498,9 @@ export class City {
       if (this.asphRings && this.surfaceOff(x, z) < 1) continue; // piazzali e parcheggi asfaltati fuori dal grafo
       trees.push({ x, z, big: true });
     }
-    const trunkG = new THREE.CylinderGeometry(0.18, 0.28, 3, 6);
-    trunkG.translate(0, 1.5, 0);
-    const crownG = new THREE.IcosahedronGeometry(2.4, 1);
-    crownG.translate(0, 4.6, 0);
-    const trunks = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x5a4330 }), trees.length);
-    const crowns = new THREE.InstancedMesh(crownG, new THREE.MeshLambertMaterial({ color: 0xffffff }), trees.length);
+    const K = this.trees3d();
+    const trunks = new THREE.InstancedMesh(K.trunkG, K.trunkMat, trees.length);
+    const crowns = new THREE.InstancedMesh(K.crownG, K.crownMat, trees.length);
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
     const col = new THREE.Color();
     trees.forEach((t, i) => {

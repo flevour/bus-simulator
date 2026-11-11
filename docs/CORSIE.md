@@ -337,12 +337,14 @@ Prossimo lavoro, in quest'ordine:
   spostare i binari fuori dalle facciate e per i tiranti); nelle aree restano edifici, marciapiedi, verde e alberi
   (8,8 MB in 161 aree), quello che serve solo da vicino; JavaScript 7,2 MB. Prossimo passo: le aree a richiesta, che
   riscrive `city.js`.
-  **Dall'11 novembre, ore 11:30, `capolinea` lavora su `city.js`** (aree a richiesta): le altre corsie non toccano
-  `city.js` finché il lavoro non è su `main` (lo si scrive qui). Cambiano `buildSurfaces` (marciapiedi e verde per
-  area), `buildTreesAndLamps` (gli alberi del DBGT per area), `buildRealBuildings`, `ensureTiles`, `streamTiles` e
-  `buildTile` (edifici scaricati e liberati per distanza), una riga di `buildTramway` (gli edifici vicini ai binari della
-  rete) e `inOsmArea`; in `src/data/padova.js` la riga di `clearOfBuildings` e `buildingBBox`, in
-  `src/world/spatial.js` la rimozione dalla griglia;
+  Terzo passo, le aree a richiesta (11 novembre, `city.js` di nuovo libero per tutti): all'avvio si scaricano solo le
+  aree entro 1,5 km da Prato (17 su 161), poi quelle entro 1,5 km dal bus (`streamTiles`, una al fotogramma);
+  oltre 2,6 km si liberano mesh, ostacoli e dati. Per area: marciapiedi e verde (`addArea`), alberi del DBGT con il loro
+  ostacolo, edifici nei riquadri da 400 m di prima (`addBuildings`, costruiti da `ensureTiles` e `streamTiles`);
+  `removeArea` toglie tutto (`Grid.remove` in `spatial.js`). In `padova.js` i binari si spostano fuori dagli edifici
+  della rete (`edificiTram`) e il rettangolo degli edifici è quello della rete; `buildTramway` aggancia i tiranti agli
+  stessi edifici. Prove: `avviaCorsa` di `tests/gioco.js` aspetta le aree attorno al bus (`city.areasReady`),
+  `tests/mappa.spec.js` le carica tutte (`city.loadAll`), con gli stessi numeri;
 - gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da
   togliere per le linee che arrivano ai capolinea. Tra i capolinea richiesti da chi gioca (sondaggio del 9 novembre,
   linea 3 in Via Fondà): quelli della 3 e della 22 e le fermate della 10 e della 11 fuori dall'area.
