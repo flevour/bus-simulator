@@ -84,8 +84,9 @@ export class HUD {
     if (!m.free) $('stops-progress').textContent = m.transfer ? 'Fuori servizio' : `Fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length}`;
     const lbl = m.transfer ? 'Destinazione' : 'Prossima fermata';
     if ($('next-lbl').textContent !== lbl) $('next-lbl').textContent = lbl;
-    // fermata a richiesta: prenotata, qualcuno in attesa, oppure si può passare dritti
+    // fermata a richiesta: prenotata, qualcuno in attesa, oppure si può passare dritti; il tram ferma sempre
     const rq = $('request');
+    rq.hidden = !!m.tram;
     const ahead = st && !st.arrived && st.idx < m.stops.length - 1 && st.spawned;
     const nWait = ahead ? st.waiting.length : 0;
     const txt = m.request ? '🔔 FERMATA PRENOTATA' : nWait ? `👥 ${nWait} IN ATTESA: FERMATI` : ahead ? '⏩ NESSUNO: SI PUÒ PASSARE' : '🔔 FERMATA PRENOTATA';

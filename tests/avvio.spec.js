@@ -24,3 +24,16 @@ for (const caso of [
     expect(gioco.errori()).toEqual([]);
   });
 }
+
+// il tram ferma a tutte le fermate: niente prenotazione e niente "si può passare" nel pannello della linea
+test('il tram ferma a tutte le fermate, senza prenotazione', async ({ pagina, gioco }) => {
+  await avviaCorsa(pagina, { linea: 'SIR1', tram: true });
+  const stato = await pagina.evaluate(() => {
+    const g = window.__game, m = g.mission;
+    g.sim(1, 1 / 30, true);
+    return { tutte: m.stops.slice(1, -1).every((st) => m.needsStop(st)), riquadro: document.getElementById('request').hidden };
+  });
+  expect(stato.tutte).toBe(true);
+  expect(stato.riquadro).toBe(true);
+  expect(gioco.errori()).toEqual([]);
+});

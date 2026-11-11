@@ -8,7 +8,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 1. [~] **Tram SIR1 guidabile**: fatto (vedi "Fatto"). Restano:
    - il binario tronco oltre il capolinea della Guizza, che entra in un edificio;
-   - i semafori del tram coordinati con quelli stradali agli incroci semaforizzati;
+   - i semafori del tram coordinati con quelli stradali agli incroci semaforizzati: chi ha il passaggio passa, gli
+     altri si fermano, tram e traffico allo stesso modo (11 novembre, corsia `traffico`);
    - interni più curati;
    - pedoni che attraversano la sede e si fermano;
    - [ ] **turni del tram e deposito della Guizza**, come per il bus (vedi "Fatto"): la prima corsa del turno esce dal
@@ -72,6 +73,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        sensibilità (corsia `guida`);
      - [~] mappa più grande fino ai capolinea della 3 e della 22 e alle fermate della 10 e della 11 (linea 3 in Via
        Fondà; corsia `capolinea`, dopo il tram).
+   - dall'11 novembre (foto nel pannello del checkout principale):
+     - [x] sul tram niente ritardatario né fermate prenotate: il tram ferma a tutte le fermate (vedi "Fatto");
+     - [ ] incroci tra traffico e tram: se il tram ha il passaggio gli altri si fermano, e viceversa (corsia
+       `traffico`);
+     - [ ] segni bianchi della carreggiata sulla sede rossa del tram, lungo un binario a fianco della strada (corsia
+       `mappa`);
+     - [ ] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (corsia `mappa`).
 
 ## Mappa e dati
 
@@ -189,6 +197,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Il tram ferma a tutte le fermate** (11 novembre): `needsStop` è sempre vero per il tram (tirare dritto è una
+  fermata saltata), niente prenotazione, niente ritardatario, niente riquadro "fermata prenotata / si può passare" nel
+  pannello della linea e niente "PRENOT." sul cruscotto del tram. Gli autobus restano come prima.
 - [x] **SIR3 fino a Voltabarozzo** (corsia `capolinea`, 9 novembre): l'area di gioco comprende un corridoio di celle da
   250 m attorno ai binari del SIR3 (2,3 km² in più, con il deposito), con gli edifici Overture della zona; il SIR3 si
   guida intero nei due versi e i suoi tram automatici fanno il capolinea. 4, 14 e 16 arrivano più avanti su Via

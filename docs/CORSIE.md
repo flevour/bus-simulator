@@ -167,6 +167,17 @@ delle strade di `src/world/city.js`, `src/data/padova.js`, `src/data/padova-map.
   17:57) e, da un giocatore nuovo, "sarebbero da migliorare i ponti o cavalcavia come quello della stazione e il
   Camerini" (linea 13 in Viale Codalunga, alle 20:36). Il **Cavalcavia Camerini** (nella rete con questo nome) non l'ha
   mai guardato nessuno; il **Borgomagno** va rivisto dal posto di guida come lo vede chi gioca.
+- Segnalazioni di chi gioca dell'11 novembre, sulla sede del tram (due foto dal SIR3 verso Cornaro, nel pannello del
+  checkout principale):
+  - **"sporchessi" sulla linea**: trattini e segni bianchi corti sparsi sulla sede rossa, di traverso e lungo il
+    binario. Sembrano i segni della carreggiata (divisorie, frecce, strisce) rimasti sopra la sede; si vedono anche
+    dove il binario corre da solo a fianco della strada;
+  - **"macchie di asfalto che mangiano la corsia"**: a un incrocio, poligoni grigio scuro a triangoli sopra la sede
+    rossa, che coprono pezzi di tutti e due i binari. Sembra l'asfalto della strada che incrocia disegnato sopra la
+    sede.
+
+  Da controllare su tutte le linee, non solo lì: conteggio dei segni e dei pezzi d'asfalto che cadono sulla sede, con
+  una soglia in `verifica_mappa.py`.
 
 Fatto il 9 novembre (dettagli in IDEE, "Fatto"): corsie e segnaletica orizzontale dai tag OSM, fermate del tram sui
 nodi `tram_stop`, dossi e attraversamenti rialzati, `highway=busway` (niente da fare), area ai bordi e linee tagliate
@@ -188,6 +199,8 @@ sparsi fuori dall'asfalto vero (`buildTreesAndLamps`).
 
 Prossimo lavoro, in quest'ordine:
 
+- sede del tram pulita (segnalazioni dell'11 novembre, sopra): niente segni della carreggiata né asfalto sopra la
+  sede, su tutte le linee;
 - cavalcavia del sondaggio del 9 novembre (sopra): foto dal posto di guida e guida di una linea che ci passa sul
   Cavalcavia Camerini, sul Borgomagno e su quelli lungo la 22 attorno a Via Orlandini; poi, al Borgomagno, la piega
   dei fili del tram e il gradino di 20 cm;
@@ -306,11 +319,18 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   3. Una prova in `tests/` su quel tratto (bus e tram non restano fermi oltre 90 s fuori dalle fermate e dai rossi),
      poi lo stesso controllo su tutta la mappa per 40 minuti di gioco alle 8:15 e alle 17:30, per trovare gli altri
      blocchi (elenco in questa sezione).
+- **Subito dopo, gli incroci tra traffico e tram** (chiesto da chi gioca l'11 novembre): se il tram ha il passaggio,
+  auto e bus si fermano prima della sede; se lo ha la strada, il tram si ferma. Vale per i tram automatici e per
+  quello di chi gioca, per i bus automatici e per le auto. Ai semafori vuol dire coordinare `TramSignals` con
+  `TrafficLights`: oggi i semafori del tram non seguono quelli stradali (IDEE, punto 1). Dove non c'è semaforo serve
+  una precedenza dichiarata e rispettata dai due lati. Questo lavoro passa alla corsia `traffico`, che per farlo tocca
+  `TramSignals` (e `TramSim` dove i tram automatici devono fermarsi), scrivendolo qui. Prova in `tests/`: a un
+  incrocio semaforizzato sulla sede, tram e auto non sono mai dentro l'incrocio insieme.
 - Poi, in quest'ordine: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza e penalità
   per chi non la dà; svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (passate da
   `mappa`); corsie preferenziali vere, con le auto che non le usano; traffico più lento con pioggia e nebbia.
-- Con il tram: `TramSim` e `TramSignals` restano della futura corsia `tram-turni`; se lo sblocco dei tram chiede di
-  toccarli, si scrive qui cosa e perché.
+- Con il tram: `TramSim` e `TramSignals` restano della futura corsia `tram-turni`, tranne il coordinamento con il
+  traffico (sopra); per il resto, se lo sblocco dei tram chiede di toccarli, si scrive qui cosa e perché.
 - Verifiche: regola 3, più le foto dal posto di guida nei punti cambiati e la guida della 3 su Riviera dei Ponti Romani.
 
 ### guida
@@ -372,7 +392,8 @@ Onda 2, quando le corsie dell'onda 1 si chiudono (`traffico` e `guida` aperte l'
 
 - `traffico`: aperta. Le corsie preferenziali si appoggiano su `laneLayout` e `driveOffset` di `padova.js` (corsie,
   corsie dei bus e scostamenti per verso).
-- `tram-turni`: turni del tram e deposito della Guizza, binario tronco, semafori del tram coordinati. Può partire:
+- `tram-turni`: turni del tram e deposito della Guizza, binario tronco (i semafori del tram coordinati con il traffico
+  sono passati a `traffico` l'11 novembre). Può partire:
   gli scambi tra le sedi sono in `track.switches`, quelli ai capolinea si disegnano in `buildTramway`.
 - `esplorazione`: panoramica e giro libero senza mezzo, poi l'ortofoto AGEA (M5).
 - `guida`: aperta (sterzo, poi gamepad, bus elettrico con ricarica, telecamera della porta posteriore, specchietti).

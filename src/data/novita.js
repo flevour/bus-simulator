@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 64, d: '2026-11-11', t: 'Tram: si ferma a tutte le fermate, anche se nessuno aspetta e nessuno deve scendere (tirare dritto è una fermata saltata). Sul tram niente più prenotazione della fermata né ritardatari che corrono alla porta: restano sugli autobus.' },
   { n: 63, d: '2026-11-09', t: 'Il tram SIR3 si guida tutto, dalla stazione al capolinea di Voltabarozzo: la mappa arriva fino in fondo, con le strade, le case e il deposito accanto al capolinea, e le fermate Nani e Piovese sui due rami. Anche le linee 4, 14 e 16 vanno più avanti su Via Piovese e a Piovese Park fermano nei golfi sotto la tangenziale. La 3 verso Lion resta in Via Bembo senza giri nelle vie laterali, e la 24 parte da Volta fr. 24 sulla strada invece che nel prato.' },
   { n: 62, d: '2026-11-09', t: 'Cavalcavia di Chiesanuova sul SIR2 rifatto: l\'impalcato non copre più asfalto e binari, la rampa ovest non sale più a 12 metri, la sede del tram si vede intera sopra il ponte.' },
   { n: 61, d: '2026-11-09', t: 'Nelle rotonde attraversate dal tram (SIR1, SIR2 e SIR3) i binari passano in mezzo all\'isola invece di sparire sotto l\'erba; marciapiedi e aiuole non coprono più la sede rossa, e gli alberi dei viali stanno fuori dall\'asfalto.' },

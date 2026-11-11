@@ -115,9 +115,9 @@ export class Mission {
     this.timetable = this.stops.map((s) => ({ name: s.name, time: fmtHM(s.sched) }));
   }
 
-  // bisogna fermarsi? qualcuno aspetta alla fermata o qualcuno a bordo deve scendere (prenotazione)
+  // bisogna fermarsi? il tram ferma sempre; il bus se qualcuno aspetta alla fermata o a bordo deve scendere (prenotazione)
   needsStop(st) {
-    return st.waiting.length > 0 || this.onboard.some((d) => d === st.idx);
+    return this.tram || st.waiting.length > 0 || this.onboard.some((d) => d === st.idx);
   }
   // numero di persone in attesa a una fermata: le fermate secondarie restano vuote più spesso (si passa dritti)
   rollWaiting(st) {
@@ -233,7 +233,7 @@ export class Mission {
       }
       // fermata saltata
       if (!st.arrived && along > 25 && st.idx < this.stops.length - 1) {
-        // fermata a richiesta (bus e tram): ci si ferma solo se qualcuno aspetta o deve scendere
+        // fermata a richiesta (solo bus): ci si ferma solo se qualcuno aspetta o deve scendere
         const wanted = this.needsStop(st);
         if (wanted) {
           this.addScore(-120, `Fermata saltata: ${st.name}!`);
@@ -247,9 +247,9 @@ export class Mission {
       }
     }
 
-    // ---- prenotazione fermata ----
+    // ---- prenotazione fermata (solo bus: il tram ferma a tutte) ----
     const ns = this.stops[this.nextStop];
-    if (ns && !this.request && !ns.arrived && this.onboard.some((d) => d === ns.idx) && ns.s - this.s < 320 && this.rnd() < dt * 0.6) {
+    if (!this.tram && ns && !this.request && !ns.arrived && this.onboard.some((d) => d === ns.idx) && ns.s - this.s < 320 && this.rnd() < dt * 0.6) {
       this.request = true;
       this.audio.bell();
       this.hud.toast('🔔 Fermata prenotata', 'info');
@@ -474,14 +474,14 @@ export class Mission {
     const cur = this.stops[this.nextStop];
     if (cur && this.atStop && cur.doneMsg && cur.sched > this.clock) { this.clock = cur.sched; this.hud.toast('Orario di partenza raggiunto: chiudi le porte (F)', 'info'); }
   }
-  // evento: un ritardatario corre verso il bus mentre si chiudono le porte
+  // evento: un ritardatario corre verso il bus mentre si chiudono le porte (non sul tram)
   onDoorsClosing(bus) {
     const st = this.stops[this.nextStop];
-    if (!st || !this.atStop || st.idx === this.stops.length - 1 || st.runnerDone) return;
+    if (this.tram || !st || !this.atStop || st.idx === this.stops.length - 1 || st.runnerDone) return;
     st.runnerDone = true;
     if (this.rnd() > 0.45) return;
     // parte da dietro il bus, ben visibile nello specchietto destro, e punta alla porta posteriore
-    const back = this.tram ? bus.toWorld(-2.6, -(bus.length - 6) - 12) : bus.behind(-2.6, 11);
+    const back = bus.behind(-2.6, 11);
     const p = this.crowd.add({
       x: back.x, z: back.z, h: bus.h, ph: 0, speed: 4.6, sc: 1.0,
       col: new THREE.Color(0xff3d00), dest: this.pickDest(st.idx), runner: true,

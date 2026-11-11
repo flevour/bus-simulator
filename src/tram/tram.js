@@ -888,7 +888,6 @@ export class Tram {
     x.font = 'bold 14px monospace';
     x.fillText(this.throttle > 0.05 ? `T ${Math.round(this.throttle * 100)}%` : this.brake > 0.05 ? `F ${Math.round(this.brake * 100)}%` : 'N', 128, 150);
     if (state.doors) { x.fillStyle = '#c8102e'; x.fillText('PORTE', 40, 20); }
-    if (state.request) { x.fillStyle = '#b08800'; x.fillText('PRENOT.', 210, 20); }
     if (this.parking) { x.fillStyle = '#c8102e'; x.fillText('P', 128, 20); }
     this.dashTex.needsUpdate = true;
   }
