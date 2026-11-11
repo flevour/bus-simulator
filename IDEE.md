@@ -13,8 +13,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - interni più curati;
    - pedoni che attraversano la sede e si fermano;
    - [~] **turni del tram e deposito della Guizza**, come per il bus (vedi "Fatto"): al capolinea cambio cabina (B) e
-     corsa successiva senza tornare al menu fatto (vedi "Fatto"); restano la prima corsa del turno che esce dal
-     deposito e l'ultima che ci rientra. Il deposito è accanto al capolinea della Guizza: in OSM ci sono i binari di servizio (`railway=tram`,
+     corsa successiva senza tornare al menu fatto (vedi "Fatto"); tram automatici con i turni dall'orario e la manovra
+     ai capolinea fatti (vedi "Fatto"); restano i turni di chi guida il tram dagli stessi turni (oggi la corsa dopo può
+     essere un tratto del GTFS), la prima corsa del turno che esce dal deposito e l'ultima che ci rientra. Il deposito è accanto al capolinea della Guizza: in OSM ci sono i binari di servizio (`railway=tram`,
      `service=yard`, Busitalia Veneto, verso 45.3670, 11.8756), alcuni dentro la rimessa (`tunnel=building_passage`),
      e sono già nell'export `data/osm-padova-tram.json` (35 binari di servizio), da vedere se il gioco li usa. Il
      binario tronco "che entra in un edificio" è forse l'ingresso della rimessa: da verificare;
@@ -113,8 +114,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [~] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
        manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`):
        fatta la manovra al capolinea come nella realtà con le comunicazioni di OSM (B, segnale con la posizione, N in
-       Esplorazione e Giro libero, prove con il pilota per ogni capolinea); restano gli scambi tra le linee, i tram
-       automatici e i depositi;
+       Esplorazione e Giro libero, prove con il pilota per ogni capolinea) e la manovra dei tram automatici; restano gli
+       scambi tra le linee e i depositi (corsia `tram-scambi`);
      - [x] mappa grande (M) da trascinare per spostarsi (vedi "Fatto");
      - [x] pali della linea aerea in mezzo alla strada dove i due binari corrono separati, con i tiranti che
        attraversano tutte le corsie (vedi "Fatto");
@@ -220,7 +221,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   traffico invece di seguire l'orario alla lettera, con le conseguenze sulle corse dopo (turni, soste ai capolinea,
   tram che si avvicinano). Oggi `tram-turni` distribuisce i tram sugli orari perché non si ammucchino ai capolinea:
   le scelte di adesso (turni, soste, posti ai capolinea) devono reggere anche corse che arrivano in ritardo. Corsie
-  `traffico` e `tram-turni`, quando hanno finito il lavoro in corso.
+  `traffico` e `tram-turni`, quando hanno finito il lavoro in corso. Per i tram automatici fatto l'11 novembre: un tram
+  in ritardo fa comunque la corsa dopo del suo turno, partendo in ritardo, e al capolinea chi arriva aspetta che lo
+  scambio sia libero (prova con un tram per linea fermo 4 minuti in `tests/turni-tram.spec.js`).
 
 ## Passeggeri e servizio
 
@@ -347,6 +350,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   Vigonza, senza comunicazione in OSM, c'è quella del gioco. Segnale dello scambio con la posizione, N per girarlo in
   Esplorazione e Giro libero; il SIR1 ha di nuovo i tronchi in fondo. Prove con il pilota per ogni capolinea in
   `tests/turni-tram.spec.js`.
+- [x] **Tram automatici con i turni e la manovra ai capolinea** (corsia `tram-turni`, 11 novembre): ogni tram segue un
+  turno ricavato dall'orario (la regola dei turni di chi guida, `concatena` in `turni.js`), ai capolinea aspettano al
+  più due tram e con lo scambio fanno la manovra come chi gioca invece di saltare sull'altro binario. Tolte le corse
+  doppie del SIR1 tra Santo e Pontevigodarzere (tratti del GTFS che restavano). Con i ritardi la corsa dopo la fa lo
+  stesso tram, in ritardo. Prova in `tests/turni-tram.spec.js`.
 
 - [x] **Gamepad e volante con pedaliera** (corsia `guida`, 11 novembre, `src/game/gamepad.js`): il gamepad con la
   mappatura standard va subito (levetta sinistra volante, RT gas, LT freno e retromarcia da fermo, pulsanti come i
