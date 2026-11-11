@@ -22,8 +22,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      binario tronco "che entra in un edificio" è forse l'ingresso della rimessa: da verificare;
    - [~] **girare nei depositi con gli scambi** (chiesto l'11 novembre): rete dei binari con i bivi, dove il tram di chi
      gioca prosegue sul ramo su cui è messo lo scambio (in servizio da soli secondo la linea, in Esplorazione e Giro
-     libero con N, anche tra le linee): fatti i bivi tra le linee (vedi "Fatto"); restano i binari di servizio della
-     Guizza (già nell'export OSM, il gioco non li usa), Voltabarozzo e Rubano. Corsia `tram-scambi`;
+     libero con N, anche tra le linee): fatti i bivi tra le linee e i depositi della Guizza e di Voltabarozzo (vedi
+     "Fatto"); restano Rubano, la seconda comunicazione di Voltabarozzo e l'uscita dal deposito e il rientro nei turni.
+     Corsia `tram-scambi`;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
 2. [~] **Nuovo piazzale della stazione e linee SIR2, SIR3**: grafo dei binari con i due anelli e le due linee nel
    gioco per il tratto in città fatti (vedi "Fatto"; dettagli in [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md)).
@@ -106,8 +107,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`: erano le
        lanterne stradali della corsia riservata di Via Tommaseo, che nessuna logica del tram guardava; ora sono il suo
        segnale (chiamata del verde, stop dei tram automatici, penalità col rosso);
-     - [ ] capolinea della Guizza come in OSM (comunicazione prima delle banchine, anello di ritorno, deposito con
-       8-9 binari e anello esterno), corsia `tram-turni`;
+     - [~] capolinea della Guizza come in OSM (comunicazione prima delle banchine, anello di ritorno, deposito con
+       8-9 binari e anello esterno), corsia `tram-scambi`: fatto il deposito, guidabile in Esplorazione e Giro libero
+       (vedi "Fatto"); restano l'uscita della prima corsa del turno e il rientro dell'ultima;
      - [~] binari di Voltabarozzo come in OSM (comunicazioni, anello di ritorno, rimessa) e segnale dello scambio che
        mostra la posizione (all'arrivo è un pannello nero), corsia `tram-turni`: fatti la comunicazione dopo le
        banchine e il segnale con la posizione (il pannello nero è il retro di una lanterna del tram, segnalato a
@@ -263,6 +265,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Depositi del tram della Guizza e di Voltabarozzo** (corsia `tram-scambi`, 11 novembre): i binari di servizio di
+  OSM (`scripts/tram_depositi.py` → `data/tram-depositi.json`, senza le comunicazioni dei capolinea) diventano il grafo
+  del deposito (`TramYard` in `src/tram/tram.js`): rami tra i nodi, porte alla fine dei binari della linea, scambi dove
+  da un capo si può proseguire su due, ognuno col segnale. Fuori servizio il tram di chi gioca, arrivato alla porta,
+  corre su un percorso fatto dal pezzo di binario sotto di lui e dai rami davanti secondo gli scambi (`YardRun`); lo
+  rifà vicino alla fine, dopo B e quando si gira uno scambio con N; tutto su un pezzo di binario della linea, andando
+  via dal deposito, torna sul binario intero. Gli scambi partono verso l'uscita più vicina. Alla Guizza la mappa non ha
+  il capannone: rimessa disegnata sopra i binari `building_passage` (tetto, pareti lunghe, testate aperte), e sotto i
+  binari del deposito la massicciata. Ai capolinea con la comunicazione 'avanti' (la Guizza) fuori servizio il tram
+  oltre la comunicazione passa davvero sul tronco del binario di partenza. Prove in `tests/depositi-tram.spec.js`.
 - [x] **Bivi tra le linee del tram** (corsia `tram-scambi`, 11 novembre): dove il SIR2 corre sui binari del SIR1 e del
   SIR3 (e il ritorno del SIR3 sul binario d'andata in stazione) ai capi del tratto in comune c'è un bivio con una
   posizione e il segnale con la freccia (`TramNet` in `src/tram/tram.js`, segnali in `buildTramway`). Il tram di chi

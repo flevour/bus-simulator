@@ -446,7 +446,7 @@ function changeTramCab() {
 // riparte senza cambiare cabina. La progressiva sul binario dell'altro verso, o null
 function tramLoop() {
   const P = bus.path, sf = bus.sFront, T = bus.track, d = bus.dirSig, np = T.path(-d);
-  if (bus.facing < 0 || T.terminals[d > 0 ? 1 : -1] || sf <= P.len - 200) return null;
+  if (bus.yard || bus.facing < 0 || T.terminals[d > 0 ? 1 : -1] || sf <= P.len - 200) return null;
   const head = P.at(sf), pr = np.projectNear(head.x, head.z, 1.5);
   return pr && np.at(pr.s).dx * head.dx + np.at(pr.s).dz * head.dz > 0.7 ? pr.s : null;
 }
@@ -484,8 +484,18 @@ function toggleTramSwitch() {
   }
   let sw = null, bd = 120;
   for (const w of city.tramSwitches || []) { const d = Math.hypot(w.term.sig.x - bus.x, w.term.sig.z - bus.z); if (d < bd) { bd = d; sw = w; } }
-  if (!jn && !sw) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
+  // scambio del deposito davanti (nel deposito, o dopo la porta verso cui si va)
+  const ys = bus.yardAhead();
+  if (!jn && !sw && !ys) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
   if (!mission.free) { hud.toast('In servizio gli scambi si girano da soli, secondo la linea', 'info'); return; }
+  if (ys && (!jn || ys.d < jd) && (!sw || ys.d < bd || bus.yard)) {
+    ys.sw.state = (ys.sw.state + 1) % ys.sw.options.length;
+    ys.sw.sign.update();
+    if (bus.yard) bus.yard.dirty = true;
+    audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
+    hud.toast(`${ys.sw.state ? '↗️ Scambio deviato' : '⬆️ Scambio diritto'} tra ${Math.round(ys.d)} m`, 'info');
+    return;
+  }
   if (jn && (!sw || jd < bd)) {
     jn.state = jn.state === 'x' ? 'o' : 'x';
     jn.manual = true;
@@ -1111,6 +1121,8 @@ function startMission(resume = null) {
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
     // fuori servizio i bivi tra le linee portano il tram sull'altro binario (TramNet); in servizio la corsa resta sul suo
     bus.net = settings.mode !== 'service' ? city.tramNet : null;
+    bus.yards = settings.mode !== 'service' ? city.tramYards : null;
+    bus.onYard = (Y) => hud.toast(`🅿️ Deposito ${Y.name}: N gira lo scambio davanti, B cambia cabina; in fondo ai tronchi si torna indietro`, 'info');
     bus.onJunction = (o) => {
       const ln = TRAM_LINES.find((x) => x.id === o.T.id), st = o.T.stopsDir[o.dir];
       hud.setLine({ id: o.T.id, color: ln ? ln.color : L.color }, settings.mode === 'roam' ? 'Esplorazione' : 'Giro libero');
@@ -1143,6 +1155,7 @@ function startMission(resume = null) {
   cabAfterDoors = false;
   // bivi tra le linee: verso la linea della corsa, nessuno girato a mano (i tram automatici li rimettono per sé)
   for (const j of city.tramNet ? city.tramNet.junctions : []) { j.manual = false; j.state = j.o.T.id === L.id && j.x.T.id !== L.id ? 'o' : 'x'; j.sign.update(); }
+  for (const Y of city.tramYards || []) { Y.reset(); for (const sw of Y.switches.values()) sw.sign.update(); }
   junctionT = 0;
   if (!mission.transfer) mission.dest = destName;
   const st0 = mission.stops[0];

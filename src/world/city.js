@@ -3,9 +3,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
-import { LINES, TRAM_LINES, laneLayout, laneSpan, parseBuilding } from '../data/padova.js';
+import { LINES, TRAM_LINES, TRAM_DEPOTS, laneLayout, laneSpan, parseBuilding } from '../data/padova.js';
 import { AREA_SIZE, AREA_KEYS, areaData, requestArea, dropArea, areaKeysNear, loadAllAreas } from '../data/aree.js';
-import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, TramNet, tramLength } from '../tram/tram.js';
+import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, TramNet, TramYard, tramLength } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 import { applyTerrain } from './terrain.js';
 
@@ -1439,14 +1439,31 @@ export class City {
     // di chi arriva, qualche metro prima del bivio; in stazione, dove i binari sono fitti, il primo posto a 2,3 m da ogni
     // binario, a destra o a sinistra
     this.tramNet = new TramNet(tracks);
-    const lanes = tracks.flatMap((T) => [T.path(1), T.path(-1)]);
+    // depositi (TramYard, binari OSM di data/tram-depositi.json): rami con corsia rossa e rotaia, senza cordoli (dove i
+    // binari si avvicinano agli scambi si sovrapporrebbero)
+    this.tramYards = TRAM_DEPOTS.filter((d) => this.tramTracks[d.line]).map((d) => new TramYard(d, this.tramTracks[d.line]));
+    const bed = new GeoBuilder();
+    for (const Y of this.tramYards) for (const e of Y.edges) for (let i = 0; i < e.pts.length - 1; i++) {
+      const a = e.pts[i], b = e.pts[i + 1];
+      if (Math.hypot(b.x - a.x, b.z - a.z) < 0.05) continue;
+      // massicciata grigia attorno al binario (il deposito non è nella pianta delle strade: sotto c'è il prato)
+      bed.ribbon(a.x, a.z, b.x, b.z, L * 2 + 2.4, Y_ROAD + 0.015, 8);
+      bed.disc(b.x, b.z, L + 1.2, Y_ROAD + 0.015, 8, 8);
+      red.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.03, 8);
+      const u0 = red.uv.length;
+      red.disc(b.x, b.z, L, Y_ROAD + 0.025, 8, 8);
+      for (let k = u0; k < red.uv.length; k += 2) red.uv[k] = 0.5;
+      rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8);
+    }
+    const lanes = tracks.flatMap((T) => [T.path(1), T.path(-1)]).concat(this.tramYards.flatMap((Y) => Y.edges.map((e) => e.path)));
     const free = (x, z) => !lanes.some((P) => P.projectNear(x, z, L + 0.6));
-    for (const j of this.tramNet.junctions) {
-      const s = j.panel.sig, w = L + 0.9, bx = s.x + s.dx * 4 + s.dz * w, bz = s.z + s.dz * 4 - s.dx * w; // il punto sul binario
+    const place = (s) => {
+      const w = L + 0.9, bx = s.x + s.dx * 4 + s.dz * w, bz = s.z + s.dz * 4 - s.dx * w; // il punto sul binario
       const spot = [4, 7, 10, 2, 13].flatMap((a) => [w, -w, w + 0.8, -w - 0.8].map((l) => ({ x: bx - s.dx * a - s.dz * l, z: bz - s.dz * a + s.dx * l }))).find((p) => free(p.x, p.z));
       if (spot) Object.assign(s, spot);
-      j.sign = this.switchSign(j.panel);
-    }
+    };
+    for (const j of this.tramNet.junctions) { place(j.panel.sig); j.sign = this.switchSign(j.panel); }
+    for (const Y of this.tramYards) for (const sw of Y.switches.values()) { place(sw.panel.sig); sw.sign = this.switchSign(sw.panel); }
     const tex = TX.tramLaneTexture();
     if (redS.pos.length) this.group.add(new THREE.Mesh(redS.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 4.5)));
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
@@ -1458,6 +1475,8 @@ export class City {
     if (piers.length) this.group.add(new THREE.Mesh(mergeGeometries(piers), new THREE.MeshLambertMaterial({ color: 0xa8a39a })));
     if (poles.length) { const pm = new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x6f767c })); pm.castShadow = true; this.group.add(pm); }
     if (wires.length) this.group.add(new THREE.Mesh(mergeGeometries(wires), new THREE.MeshBasicMaterial({ color: 0x2a2d30 })));
+    if (bed.pos.length) { const bm = new THREE.Mesh(bed.build(), layer(new THREE.MeshLambertMaterial({ color: 0x8a8781 }), 4.2)); bm.receiveShadow = true; this.group.add(bm); }
+    for (const Y of this.tramYards) this.buildDepotShed(Y);
     // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per ogni verso
     const pan = [], panTex = TX.pantographSignTexture();
     for (const track of tracks) for (const dir of [1, -1]) {
@@ -1524,6 +1543,32 @@ export class City {
     if (stopLines.pos.length) this.group.add(new THREE.Mesh(stopLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2f2ea }), 7)));
     if (plat.length) this.group.add(new THREE.Mesh(mergeGeometries(plat), new THREE.MeshLambertMaterial({ color: 0xc9c3b8 })));
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
+  }
+
+  // Rimessa del deposito sopra i binari che in OSM passano nell'edificio (tunnel=building_passage; la mappa alla Guizza
+  // non ha il capannone): tetto e pareti lunghe orientati come i binari, 3 m oltre quelli esterni; le testate aperte, con
+  // solo l'architrave sopra il pantografo alzato
+  buildDepotShed(Y) {
+    const inside = Y.edges.filter((e) => e.tunnel === 'building_passage');
+    if (!inside.length) return;
+    let dx = 0, dz = 0;
+    for (const e of inside) { const a = e.pts[0], b = e.pts[e.pts.length - 1], l = Math.hypot(b.x - a.x, b.z - a.z) || 1, k = dx * (b.x - a.x) + dz * (b.z - a.z) < 0 ? -1 : 1; dx += (k * (b.x - a.x)) / l; dz += (k * (b.z - a.z)) / l; }
+    const l = Math.hypot(dx, dz) || 1;
+    dx /= l; dz /= l;
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const e of inside) for (const p of e.pts) { const u = p.x * dx + p.z * dz, v = -p.x * dz + p.z * dx; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+    v0 -= 3; v1 += 3;
+    const H = 6.6, len = u1 - u0, wid = v1 - v0, cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, ang = Math.atan2(dx, dz);
+    const at = (u, v) => ({ x: u * dx - v * dz, z: u * dz + v * dx });
+    const geo = [];
+    const box = (w, h, d, u, v, y) => { const c = at(u, v); geo.push(new THREE.BoxGeometry(w, h, d).rotateY(ang).translate(c.x, Y_ROAD + y, c.z)); };
+    box(wid + 0.6, 0.35, len, cu, cv, H); // tetto
+    for (const v of [v0, v1]) box(0.3, H, len, cu, v, H / 2); // pareti lunghe
+    for (const u of [u0, u1]) box(wid, 0.9, 0.3, u, cv, H - 0.45); // architravi delle testate
+    for (let u = u0; u <= u1 + 0.1; u += len / Math.max(1, Math.round(len / 8))) for (const v of [v0, v1]) box(0.45, H, 0.45, u, v, H / 2); // pilastri
+    const m = new THREE.Mesh(mergeGeometries(geo), new THREE.MeshLambertMaterial({ color: 0xb9b4aa }));
+    m.castShadow = m.receiveShadow = true;
+    this.group.add(m);
   }
 
   // Segnale dello scambio al capolinea: palo tra i due binari all'inizio della S, pannello nero verso chi ci arriva

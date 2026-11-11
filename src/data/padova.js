@@ -3,6 +3,7 @@
 // Generata da scripts/build_map.py. Dati © OpenStreetMap contributors (ODbL), Busitalia Veneto.
 import MAP from './padova-map.json' with { type: 'json' };
 import NEW_TRAM from '../../data/tram-linee-nuove.json' with { type: 'json' };
+import DEPOSITI from '../../data/tram-depositi.json' with { type: 'json' };
 
 const ORIGIN = { lat: MAP.origin[0], lon: MAP.origin[1] };
 const M_PER_LAT = 111130;
@@ -146,6 +147,12 @@ const NEW_TRAM_LINES = NEW_TRAM.linee.map((l) => {
   };
 });
 export const TRAM_LINES = [...SIR1_LINES, ...NEW_TRAM_LINES];
+// Binari dei depositi del tram (data/tram-depositi.json di scripts/tram_depositi.py): per deposito le way OSM in x, z.
+// Il grafo lo fa TramYard (src/tram/tram.js)
+export const TRAM_DEPOTS = DEPOSITI.depositi.map((d) => ({
+  name: d.nome, line: d.linea,
+  ways: d.binari.map((b) => ({ id: b.id, service: b.servizio, tunnel: b.galleria, pts: b.punti.map(([la, lo]) => toXZ(la, lo)) })),
+}));
 
 // Prato della Valle è una piazza-parco: non è un edificio OSM, lo modelliamo noi
 export const LANDMARKS = { prato: [45.39814, 11.8766] };

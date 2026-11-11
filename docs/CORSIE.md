@@ -810,8 +810,23 @@ In quest'ordine:
    gioco non li usa; anello di ritorno, ventaglio di 8-9 binari e anello esterno dallo schema OSM (foto 24); binario
    tronco della Guizza (forse l'ingresso della rimessa); uscita della prima corsa del turno e rientro dell'ultima (IDEE
    punto 1, con `tram-turni` per l'orario). Prova: dal capolinea, girando gli scambi, si entra in rimessa e se ne esce.
+
+   **Fatto l'11 novembre il deposito, fuori servizio** (IDEE, "Fatto"), anche quello di Voltabarozzo (punto 4). Dati:
+   `scripts/tram_depositi.py` → `data/tram-depositi.json` (way OSM attorno al deposito, senza `service=crossover`),
+   `TRAM_DEPOTS` in `padova.js`; la mappa non cambia. Grafo: `TramYard` in `tram.js` (`city.tramYards`, disegnato in
+   `buildTramway`, rimessa in `buildDepotShed`); porte 6 m prima della fine dei binari della linea, sulla way OSM che
+   prosegue; scambi con `options` (il più dritto prima), `home` verso l'uscita più vicina, `reset()` a ogni corsa. Il
+   tram di chi gioca (`bus.yards`, solo fuori servizio): `Tram.yardEnter`, `yardStep`, `yardRebuild`, `yardAhead` (per
+   N), `reseat`. Fuori servizio, ai capolinea con lo scambio, tutto il tram sul tratto dove corre sull'altro binario e in
+   marcia verso il tronco passa davvero su quel binario (`yardEnter`), e uscendo dal deposito sul tronco d'arrivo lo
+   scostamento dello scambio aspetta che il tram sia tutto prima della comunicazione (`xendHold`). Restano: uscita della
+   prima corsa del turno dalla rimessa e rientro dell'ultima, in servizio (con `tram-turni` per l'orario: le prime corse
+   dei turni entrano alla banchina di partenza, le ultime escono a quella d'arrivo); la seconda comunicazione di
+   Voltabarozzo (053, tra i due binari verso sud: tocca il binario di partenza a metà, va fatta come porta a metà
+   binario); i tram automatici nel deposito.
 4. **Voltabarozzo** sulla stessa rete: anello di ritorno e rimessa (quattro binari nel capannone più uno a est) dallo
-   schema OSM (foto 23 e 20).
+   schema OSM (foto 23 e 20). Fatto con la Guizza (sopra): in fondo i due binari si uniscono nel binario della rimessa
+   (non è un anello: si gira cambiando cabina).
 5. **Deposito di Rubano** del SIR2: rimesse passanti, anelli, officina (struttura in `linee-tram-nuove.md`, "SIR2 nel
    progetto del 2022"; il lotto è già nelle celle del corridoio, `0856b09`); in OSM ci sono il lotto, la rimessa, le
    banchine e le comunicazioni, il resto si disegna dalla tavola e dalla foto del cantiere (foto 21).
