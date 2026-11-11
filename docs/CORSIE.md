@@ -483,6 +483,11 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   `smoothTrack`. Correggere la geometria (rettilinei paralleli lungo le banchine, curve a raggio costante con i
   raccordi, scambi dove servono e non intrecci), rigenerare la mappa (regola 4), poi foto dall'alto e dalla cabina e
   una corsa guidata di SIR2 e SIR3 in stazione, con i tram automatici per 40 minuti senza blocchi.
+- **Subito, il tram incastrato al capolinea di Voltabarozzo** (foto di chi gioca dell'11 novembre, `images/15.png`
+  della sessione del checkout principale): SIR3 verso Voltabarozzo, fermata 13/13 "Voltabarozzo (capolinea)" a 0 m,
+  navigatore "Prosegui per 0 m", tram fermo sul binario tra le due banchine. Il capolinea non si riesce a servire e
+  il tram non va avanti. Riprodurre (corsa del SIR3 fino al capolinea, pilota di `tests/guida.js`), correggere,
+  aggiungere la prova.
 - **Dopo la stazione, scambi e cambio cabina come nella realtà** (chiesto da chi gioca l'11 novembre, foto di uno
   scambio a un capolinea: `images/14.png` della sessione del checkout principale):
   - "normalmente ai capolinea terminali c'è uno scambio che porta il tram sull'altra linea, si arriva fino in fondo e

@@ -86,6 +86,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [ ] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (corsia `mappa`);
      - [ ] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
        stanno alla quota degli argini (corsia `mappa`);
+     - [x] SIR2 intero fino a Rubano e al capolinea prima della rotonda per Venezia / SR11 (vedi "Fatto");
+     - [ ] linee del bus allungate fino ai capolinea del GTFS, con tracciato e orario interi (la 24 da Mandriola oggi
+       parte da Volta fr. 24), corsia `capolinea`;
+     - [ ] tram incastrato al capolinea di Voltabarozzo (SIR3, 13/13 a 0 m), corsia `tram-turni`;
      - [ ] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
        manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`);
      - [x] mappa grande (M) da trascinare per spostarsi (vedi "Fatto");
