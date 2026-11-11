@@ -523,7 +523,12 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   verso sud lungo il lato ovest con un'altra comunicazione, l'anello di ritorno in fondo e da lì i binari della rimessa
   (quattro nel capannone più uno a est). Il **segnale dello scambio** all'arrivo è un pannello nero senza indicazione
   (`images/22.png`): deve mostrare la posizione dello scambio (diritto o deviato), e con la manovra automatica la via
-  che il tram sta per prendere. Se è una lanterna di `TramSignals`, insieme a `traffico`. Prove: per ogni capolinea dei tram (SIR1, SIR2, SIR3),
+  che il tram sta per prendere. Se è una lanterna di `TramSignals`, insieme a `traffico`. Allo stesso modo il
+  **capolinea della Guizza** (SIR1, "Capolinea Sud"), dallo schema OSM mandato da chi gioca (`images/24.png`): due
+  binari da ovest con una comunicazione prima delle banchine, le due banchine del capolinea, i binari che proseguono
+  verso est oltre le banchine fino a un anello di ritorno, e da lì il deposito a sud: un ventaglio di 8-9 binari nel
+  capannone e un anello esterno che gira attorno al deposito. Il "binario tronco che entra in un edificio" di IDEE è
+  con ogni probabilità l'ingresso del deposito. Prove: per ogni capolinea dei tram (SIR1, SIR2, SIR3),
   la sequenza sopra con il pilota di `tests/guida.js`, fino alla prima fermata della corsa nuova.
 - **Poi gli scambi manovrabili** (chiesto da chi gioca l'11 novembre, foto di uno scambio a un capolinea:
   `images/14.png` della sessione del checkout principale):
