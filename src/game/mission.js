@@ -206,7 +206,8 @@ export class Mission {
       // al capolinea del tram fino alla fine del binario (17 m oltre la banchina): fermo più avanti non poteva servire il
       // capolinea, né proseguire, né tornare indietro
       const end = this.tram && st.idx === this.stops.length - 1 ? Infinity : 10;
-      const inZone = along > -12 && along < end && proj.d < Math.max(st.hw, kerb) + 2.5;
+      // il tram con la cabina al contrario (B a metà corsa) non serve le fermate: si guida all'indietro
+      const inZone = along > -12 && along < end && proj.d < Math.max(st.hw, kerb) + 2.5 && !(this.tram && bus.facing < 0);
       const lat = Math.abs(proj.lat - ((st.kl ?? kerb) - 1.6));
       this.stopInfo = { st, along, inZone, lat };
       const stopped = Math.abs(bus.v) < 0.3;
@@ -589,6 +590,9 @@ export class Mission {
   navInfo() {
     const r = this.route;
     if (this.tram) {
+      // fuori dal percorso della corsa (cabina al contrario, manovra al capolinea) il navigatore lo dà main.js
+      const h = this.navHint && this.navHint();
+      if (h) return h;
       // sul tram niente svolte: prossima fermata e avvisi per il pantografo
       const ns = this.stops[this.nextStop];
       return { dist: ns ? Math.max(0, ns.s - this.s - 6) : r.length - this.s, dir: 'straight', street: ns ? 'Fermata ' + ns.name : 'Capolinea' };

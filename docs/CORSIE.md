@@ -637,8 +637,8 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
 Aperta l'11 novembre 2026 (pomeriggio), da `tram-turni`. Il tram di chi gioca ai capolinea e sugli scambi: cambio
 cabina, scambi manovrabili, rete dei binari con i bivi, depositi (IDEE, prossimi passi 1, "girare nei depositi con gli
 scambi"). File: in `src/tram/tram.js` `TramTrack` (scambi, `terminal`, percorsi) e `Tram` (`transfer`, `at`, `xover`,
-`xend`); in `src/main.js` `changeTramCab`, `toggleTramSwitch`, `tramAtTerminal`, `setSwitch` e il riquadro di fine
-corsa del tram; `switchSign` e la parte del tram di `buildTramway` in `src/world/city.js`; i binari in
+`xend`); in `src/main.js` `changeTramCab`, `toggleTramSwitch`, `tramAtTerminal`, `setSwitch`, `tramLoop`, `tramNav`, il
+riquadro di fine corsa del tram (`closeTramResults`); `switchSign` e la parte del tram di `buildTramway` in `src/world/city.js`; i binari in
 `src/data/padova.js` e `scripts/tram_linee.py` (tabella dei file condivisi). I turni (`src/game/turni.js`, `tramRuns`,
 `chainNext`, `nextOfTurno`) restano di `tram-turni`: chi tocca una funzione dell'altra lo scrive qui.
 
@@ -673,6 +673,23 @@ In quest'ordine:
      capolinea, decidere cosa succede alla corsa (avviso, o navigatore che riporta sul percorso) e scriverlo qui.
    - prove: a Voltabarozzo, dalla fermata d'arrivo, chiuso il riquadro si va in fondo, B, lo scambio porta sull'altro
      binario e la corsa dopo parte alla fermata di partenza; B a metà linea in Esplorazione inverte il tram dov'è.
+
+   **Fatto l'11 novembre** (IDEE, "Fatto"). Riepilogo: Esc o "Fai la manovra al capolinea" lo chiudono
+   (`closeTramResults`); B o "Prossima corsa" col riepilogo aperto, prima del punto della manovra, lo chiudono anche.
+   Il navigatore del tram, quando il percorso della corsa non basta, lo dà `tramNav` in `main.js` (via
+   `Mission.navHint`, frase pronta in `nav.text` per `hud.js`): a fine corsa quanti metri fare per avere tutto il tram
+   oltre lo scambio, poi B. B a metà corsa in servizio, deciso così: cambia solo cabina, la corsa resta quella, si guida
+   all'indietro sullo stesso binario, le fermate non si servono (`inZone` in `mission.js` con `bus.facing < 0`) e il
+   navigatore dice "Cambia cabina (B)"; nessuna penalità. Il salvataggio ricorda la cabina (`facing`). Il percorso
+   "sbagliato" di Voltabarozzo erano le fermate: le due stop_position di OSM ai capi della banchina centrale erano
+   scambiate tra i versi (`stops_on` prende la prima che incontra) e la banchina di partenza finiva sopra lo scambio.
+   In `tram_linee.py` (file condiviso con `capolinea` e `tram-turni`) `fermate_sul_binario` prende per ogni verso la
+   fermata sul suo binario e, dove OSM ha la banchina (`railway=platform`), la mette a metà banchina: si spostano
+   Voltabarozzo, Cornaro, Parco Iris, Rubano, e Palasport S. Lazzaro (127 m), Pierobon (75 m), Tribunale/Fiera (65 m)
+   dove le banchine dei due versi stanno ai due lati dell'incrocio; `SPOSTA` tolto. La mappa non cambia (solo
+   fermate). La S dello scambio in `buildTramway` sta sotto le corsie dritte, in tinta unita (sembrava una X). Restano
+   la seconda comunicazione e il fondo di Voltabarozzo (i due binari si uniscono nel binario della rimessa: non è un
+   anello, si gira cambiando cabina), da disegnare con la rete dei binari (punto 2) e la rimessa (punto 4).
 2. **Rete dei binari con i bivi**, prima di ogni deposito: oggi ogni linea è una coppia di binari con una comunicazione
    per capolinea, e N decide solo se dopo B si passa sull'altro binario. Serve un grafo dei binari dove a ogni scambio
    il tram di chi gioca prosegue sul ramo su cui lo scambio è messo (oggi segue un percorso fisso per linea e verso).

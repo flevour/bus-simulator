@@ -229,3 +229,129 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
   expect(r.perse, testo).toEqual([]);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Voltabarozzo come nella realtà (segnalazione dell'11 novembre: "non riesco a chiudere il riepilogo per fare la
+// manovra"): dalla fermata d'arrivo il riepilogo di fine corsa si chiude con Esc e il tram resta guidabile; B a banchina
+// cambia solo cabina (si guida all'indietro e il navigatore dice di girarsi); il navigatore dice quanti metri fare per
+// avere tutto il tram oltre lo scambio; lì B fa partire la corsa dopo sull'altro binario e il tram si ferma alla banchina
+// di partenza, di fronte a quella d'arrivo, già tutto oltre lo scambio
+test('Voltabarozzo: riepilogo chiuso con Esc, manovra oltre lo scambio, corsa dopo alla banchina di fronte', async ({ pagina, gioco }) => {
+  const corsa = await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: 0 });
+  expect(corsa.ultima).toBe('Voltabarozzo');
+  await pagina.evaluate(() => {
+    const g = window.__game, m = g.mission, bus = g.bus, k = m.stops.length - 2;
+    for (const st of m.stops.slice(0, k)) Object.assign(st, { arrived: true, left: true, doneMsg: true });
+    m.nextStop = k;
+    bus.setFront(m.stops[k].s - 0.5);
+    m.s = bus.sFront - 12.45;
+    m.clock = m.stops[k].sched - 30;
+  });
+  const arrivo = await guidaFermate(pagina, { fermate: 1 });
+  expect(arrivo.every((e) => e.arrivato), JSON.stringify(arrivo)).toBe(true);
+  // discesa: la corsa finisce, porte chiuse; il riepilogo arriva dopo qualche secondo
+  await pagina.evaluate(() => {
+    const g = window.__game, m = g.mission, bus = g.bus, dt = 1 / 30;
+    for (let t = 0; t < 150 && !m.finished; t++) g.sim(1, dt, false);
+    g.press('KeyF');
+    for (let t = 0; t < 5 && !bus.doorsClosed; t += dt) g.sim(dt, dt, false);
+  });
+  await pagina.waitForFunction(() => !document.getElementById('results').classList.contains('hidden'), null, { timeout: 15_000 });
+  const r = await pagina.evaluate(() => {
+    const g = window.__game, bus = g.bus, m = g.mission, dt = 1 / 30, $ = (id) => document.getElementById(id);
+    const nav = () => $('nav-dist').textContent;
+    const casse = () => bus.modules.map((x) => [x.group.position.x, x.group.position.z]);
+    const ferme = (a, b) => Math.round(Math.max(...a.map((p, i) => Math.hypot(p[0] - b[i][0], p[1] - b[i][1]))) * 100) / 100;
+    const fino = (meta) => {
+      bus.parking = false;
+      for (let t = 0; t < 120; t += dt) {
+        const resto = meta - bus.sFront, vt = Math.min(5, Math.sqrt(2 * 0.8 * Math.max(0, resto - 0.3))), e = vt - Math.abs(bus.v);
+        if (vt > 0.05 && e > 0.3) g.keys.add('KeyW'); else g.keys.delete('KeyW');
+        if ((vt <= 0.05 && Math.abs(bus.v) > 0.01) || e < -0.3) g.keys.add('KeyS'); else g.keys.delete('KeyS');
+        g.sim(dt, dt, false);
+        if (resto < 0.8 && Math.abs(bus.v) < 0.05) break;
+      }
+      g.keys.delete('KeyW'); g.keys.delete('KeyS');
+    };
+    const out = { manovra: !$('res-manovra').hidden };
+    g.press('Escape');
+    g.sim(0.2, dt, false);
+    out.chiuso = $('results').classList.contains('hidden') && $('pause').classList.contains('hidden');
+    out.nav = nav();
+    // B a banchina: cambia solo cabina, il tram resta dov'è; di nuovo B e si torna verso il fondo
+    let c0 = casse();
+    g.press('KeyB'); g.sim(0.2, dt, false);
+    out.banchina = { facing: bus.facing, stessa: g.mission === m, ferme: ferme(c0, casse()), nav: nav() };
+    g.press('KeyB'); g.sim(0.2, dt, false);
+    out.diNuovo = bus.facing;
+    // avanti quanto dice il navigatore, poi B
+    const metri = Number((out.nav.match(/(\d+) m/) || [])[1]);
+    out.metri = metri;
+    fino(bus.sFront + metri);
+    out.navOltre = nav();
+    c0 = casse();
+    const t = bus.track.terminals[bus.dirSig];
+    g.press('KeyB');
+    for (let s = 0; s < 3 && g.mission === m; s += dt) g.sim(dt, dt, false);
+    const m2 = g.mission;
+    out.nuova = m2 !== m;
+    out.ferme = ferme(c0, casse());
+    fino(m2.stops[0].s - 0.5);
+    g.sim(0.5, dt, false);
+    out.inZona = !!(m2.stopInfo && m2.stopInfo.inZone && m2.stopInfo.st.idx === 0);
+    // alla banchina di partenza la coda è oltre lo scambio (heel), e le due banchine stanno una di fronte all'altra
+    out.oltreScambio = Math.round(bus.pathOffset + bus.sFront - bus.length - t.heel);
+    const T = bus.track, a = T.stopsDir[t.arr].at(-1), d = T.stopsDir[t.dep][0];
+    out.fronte = Math.round(Math.hypot(a.x - d.x, a.z - d.z));
+    return out;
+  });
+  const testo = JSON.stringify(r);
+  expect([r.manovra, r.chiuso], testo).toEqual([true, true]);
+  expect(r.nav, testo).toMatch(/^Avanti \d+ m/);
+  expect([r.banchina.facing, r.banchina.stessa, r.banchina.nav], testo).toEqual([-1, true, 'Cambia cabina (B)']);
+  expect(r.banchina.ferme, testo).toBeLessThan(0.1);
+  expect(r.diNuovo, testo).toBe(1);
+  expect(r.metri, testo).toBeGreaterThan(20);
+  expect(r.navOltre, testo).toBe('Cambia cabina (B)');
+  expect([r.nuova, r.inZona], testo).toEqual([true, true]);
+  expect(r.ferme, testo).toBeLessThan(0.1);
+  expect(r.oltreScambio, testo).toBeGreaterThan(0);
+  expect(r.fronte, testo).toBeLessThan(8);
+  expect(gioco.errori()).toEqual([]);
+});
+
+// B quando si vuole, a tram fermo con le porte chiuse: in Esplorazione a metà linea il tram si inverte dov'è e torna
+// indietro; in servizio a metà corsa la corsa resta quella, il navigatore dice di cambiare di nuovo cabina e con la
+// cabina al contrario le fermate non si servono
+test('B a metà linea: in Esplorazione e in servizio', async ({ pagina, gioco }) => {
+  const prova = async (modo) => {
+    await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: 0, modo });
+    return pagina.evaluate(() => {
+      const g = window.__game, bus = g.bus, m = g.mission, dt = 1 / 30;
+      g.traffic.target = 0; g.traffic.cars.splice(0);
+      if (bus.doorTarget > 0) { g.press('KeyF'); g.sim(3, dt, false); }
+      const casse = () => bus.modules.map((x) => [x.group.position.x, x.group.position.z]);
+      // a metà linea, fermo
+      bus.setFront(bus.path.len / 2);
+      m.s = Math.max(0, bus.sFront - 6);
+      bus.parking = false;
+      g.sim(0.5, dt, false);
+      const c0 = casse(), s0 = bus.sFront;
+      g.press('KeyB');
+      g.sim(0.2, dt, false);
+      const c1 = casse();
+      const out = { facing: bus.facing, stessa: g.mission === m, ferme: Math.round(Math.max(...c0.map((p, i) => Math.hypot(p[0] - c1[i][0], p[1] - c1[i][1]))) * 100) / 100, nav: document.getElementById('nav-dist').textContent };
+      bus.parking = false;
+      g.keys.add('KeyW'); g.sim(4, dt, false); g.keys.delete('KeyW');
+      g.keys.add('KeyS'); g.sim(6, dt, false); g.keys.delete('KeyS');
+      out.indietro = Math.round(s0 - bus.sFront);
+      g.press('KeyB'); g.sim(0.2, dt, false);
+      out.diNuovo = bus.facing;
+      return out;
+    });
+  };
+  const roam = await prova('roam'), servizio = await prova('service');
+  const testo = JSON.stringify({ roam, servizio });
+  expect([roam.facing, roam.ferme < 0.1, roam.indietro > 2, roam.diNuovo], testo).toEqual([-1, true, true, 1]);
+  expect([servizio.facing, servizio.stessa, servizio.ferme < 0.1, servizio.nav, servizio.indietro > 2, servizio.diNuovo], testo).toEqual([-1, true, true, 'Cambia cabina (B)', true, 1]);
+  expect(gioco.errori()).toEqual([]);
+});

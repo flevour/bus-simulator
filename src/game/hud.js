@@ -20,6 +20,7 @@ function navWhat(m) {
   return `${m.keep ? 'tieni la' : 'a'} ${side(m.dir)}`;
 }
 function navText(nav) {
+  if (nav.text) return nav.text; // frase già pronta (manovre del tram)
   const m = Math.round(nav.dist / 10) * 10;
   if (nav.dir === 'straight') return nav.dist > 1500 ? 'Prosegui dritto' : `Prosegui per ${m} m`;
   if (nav.inside) return nav.exit > 1 ? `Esci alla ${nav.exit}ª uscita` : 'Esci alla prossima uscita';

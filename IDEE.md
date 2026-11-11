@@ -98,8 +98,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        parte da Volta fr. 24), corsia `capolinea`;
      - [x] tram incastrato al capolinea di Voltabarozzo (SIR3, 13/13 a 0 m), corsia `tram-turni`;
      - [x] a Voltabarozzo la fermata d'arrivo è sulla curva: spostata 33 m più avanti sul dritto (`SPOSTA` in
-       `tram_linee.py`); in fondo al binario B fa ripartire nell'altro verso (correzione del tram incastrato, prova
-       "in fondo al binario"), corsia `tram-turni`;
+       `tram_linee.py`, tolto l'11 novembre: le fermate di OSM erano scambiate tra i due versi, vedi "Fatto"); in
+       fondo al binario B fa ripartire nell'altro verso (correzione del tram incastrato, prova "in fondo al binario"),
+       corsia `tram-turni`;
      - [x] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`: erano le
        lanterne stradali della corsia riservata di Via Tommaseo, che nessuna logica del tram guardava; ora sono il suo
        segnale (chiamata del verde, stop dei tram automatici, penalità col rosso);
@@ -125,9 +126,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        "Fatto");
      - [ ] linee del bus complete fino al capolinea, senza la scritta "tratto in città" (corsia `capolinea`, prima del
        SIR2);
-     - [ ] urgente, manovra al capolinea del tram bloccata a Voltabarozzo: il riquadro di fine corsa non si chiude e
+     - [x] urgente, manovra al capolinea del tram bloccata a Voltabarozzo: il riquadro di fine corsa non si chiude e
        copre il gioco, manca il percorso giusto sull'altro binario, B deve cambiare cabina quando si vuole e non solo
-       dopo la discesa di tutti (corsia `tram-scambi`, punto 1).
+       dopo la discesa di tutti (corsia `tram-scambi`, punto 1; vedi "Fatto").
 
 ## Mappa e dati
 
@@ -258,6 +259,18 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Manovra al capolinea sbloccata e B quando si vuole** (segnalazione dell'11 novembre alle 16:30 su Voltabarozzo,
+  corsia `tram-scambi`): il riepilogo di fine corsa del tram si chiude con Esc o con "Fai la manovra al capolinea" e il
+  tram resta guidabile; B col riepilogo aperto, prima del punto della manovra, lo chiude. Il navigatore del tram dice
+  la manovra: quanti metri per avere tutto il tram oltre lo scambio, poi B (`tramNav` in `main.js`). B cambia cabina
+  quando si vuole, a tram fermo con le porte chiuse: in servizio a metà corsa la corsa resta quella, si guida
+  all'indietro sullo stesso binario, le fermate non si servono e il navigatore dice di cambiare di nuovo cabina.
+  Voltabarozzo: le due fermate di OSM (stop_position ai capi della banchina centrale) erano scambiate tra i versi e la
+  banchina di partenza finiva sopra lo scambio; `tram_linee.py` prende per ogni verso la fermata sul suo binario e,
+  dove OSM ha la banchina, la mette a metà banchina (Voltabarozzo, Cornaro, Parco Iris, Rubano; spostate anche
+  Palasport S. Lazzaro, Pierobon e Tribunale/Fiera, dove le banchine dei due versi stanno ai due lati dell'incrocio).
+  La S dello scambio è disegnata sotto le corsie dritte e in tinta unita: sopra, con le righe dei bordi, sembrava una
+  X. Prove in `tests/turni-tram.spec.js` (Voltabarozzo con il riepilogo, B a metà linea in Esplorazione e in servizio).
 - [x] **Gradini sui cavalcavia e fili del tram** (sondaggio del 9 novembre, corsia `mappa`, 11 novembre): lungo le linee
   il bus saltava di quota dove `City.heightAt` cambiava tratto. Al piede delle rampe restava a terra per 10 m e poi
   saliva di colpo; dopo un nodo teneva la quota del tratto di prima, o di un ramo che parte dallo stesso nodo, finché

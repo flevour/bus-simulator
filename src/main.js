@@ -343,6 +343,8 @@ function onKeyPress(code) {
     return;
   }
   if (code === 'KeyJ' && !paused) { openTeleport(true); return; }
+  // tram a fine corsa: Esc chiude il riepilogo e si fa la manovra al capolinea
+  if (code === 'Escape' && !paused && bus.isTram && !$('results').classList.contains('hidden')) { closeTramResults(); return; }
   if (code === 'KeyP' || code === 'Escape') { togglePause(); return; }
   if (paused) return;
   audio.resume();
@@ -388,55 +390,82 @@ function onKeyPress(code) {
   }
 }
 
-// Tram: cambio cabina (B), da fermo con le porte chiuse. Il tram resta dov'è e si guida dall'altra estremità. Al capolinea
-// con lo scambio (TramTrack.terminal), dalla parte del tronco e con lo scambio deviato, il binario davanti diventa quello
-// dell'altro verso: ripartendo si passa dallo scambio. All'anello della stazione si riparte senza cambiare cabina. In
-// servizio solo a fine corsa, e parte anche la corsa successiva del turno (tramNextRun)
+// Tram: cambio cabina (B), quando si vuole, da fermo con le porte chiuse. Il tram resta dov'è e si guida dall'altra
+// estremità, sullo stesso binario. Al capolinea con lo scambio (TramTrack.terminal), dalla parte del tronco e con lo
+// scambio deviato, il binario davanti diventa quello dell'altro verso: ripartendo si passa dallo scambio. All'anello della
+// stazione si riparte senza cambiare cabina. In servizio questi due solo a fine corsa, e parte anche la corsa successiva
+// del turno (tramNextRun); a metà corsa la corsa resta quella e il navigatore dice di cambiare di nuovo cabina (tramNav)
 let cabAfterDoors = false; // B a fine corsa con le porte aperte: si chiudono, poi si cambia cabina
 function changeTramCab() {
-  const service = !mission.free && !mission.transfer;
-  if (service && !mission.finished) {
-    hud.toast(mission.nextStop >= mission.stops.length - 1 ? 'Capolinea: fai scendere tutti (porte aperte, F), poi B per la corsa successiva' : 'Si cambia cabina solo al capolinea, a fine corsa', 'info');
-    return;
-  }
-  if (service && Math.abs(bus.v) < 0.05 && bus.doorTarget > 0) {
+  const service = !mission.free && !mission.transfer, done = service && mission.finished;
+  if (done && Math.abs(bus.v) < 0.05 && bus.doorTarget > 0) {
     toggleDoors();
     cabAfterDoors = true;
     hud.toast('Porte in chiusura, poi si cambia cabina', 'info');
     return;
   }
   if (Math.abs(bus.v) > 0.05 || !bus.doorsClosed || bus.doorTarget > 0) { hud.toast('Fermati con le porte chiuse per cambiare cabina', 'bad'); return; }
-  const P = bus.path, sf = bus.sFront, T = bus.track, d = bus.dirSig, nd = -d, np = T.path(nd);
-  // capolinea ad anello (SIR3 in stazione): negli ultimi 200 m il binario dell'altro verso continua davanti al muso, si
-  // riparte senza cambiare cabina
-  const head = P.at(sf), pr = bus.facing > 0 && !T.terminals[d > 0 ? 1 : -1] && sf > P.len - 200 && np.projectNear(head.x, head.z, 1.5);
-  if (pr && np.at(pr.s).dx * head.dx + np.at(pr.s).dz * head.dz > 0.7) {
-    bus.transfer(np, nd, 0, pr.s, null, true);
-    bus.parking = true;
-    if (service) tramNextRun();
-    else hud.toast('🔁 Fine dell\'anello: si riparte verso l\'altro capolinea, senza cambiare cabina', 'info');
-    return;
+  const T = bus.track, d = bus.dirSig, nd = -d, np = T.path(nd);
+  if (!service || done) {
+    const sl = tramLoop();
+    if (sl != null) {
+      bus.transfer(np, nd, 0, sl, null, true);
+      bus.parking = true;
+      if (done) tramNextRun();
+      else hud.toast('🔁 Fine dell\'anello: si riparte verso l\'altro capolinea, senza cambiare cabina', 'info');
+      return;
+    }
+    // capolinea con lo scambio: in servizio lo scambio è automatico (deviato verso il binario di partenza)
+    const term = bus.facing > 0 && T.terminals ? T.terminals[d > 0 ? 1 : -1] : null;
+    if (term && done) setSwitch(term, 'deviato');
+    const s = term && term.state === 'deviato' ? tramAtTerminal(term) : null;
+    if (s != null) {
+      bus.transfer(np, nd, 0, s, term.field === 'dep' ? term : null);
+      bus.parking = true;
+      chase.init = false;
+      hud.toast('🔁 Cabina cambiata: ripartendo il tram passa dallo scambio sull\'altro binario', 'info');
+      if (done) tramNextRun();
+      return;
+    }
   }
-  // capolinea con lo scambio: in servizio lo scambio è automatico (deviato verso il binario di partenza)
-  const term = bus.facing > 0 && T.terminals ? T.terminals[d > 0 ? 1 : -1] : null;
-  if (term && service) setSwitch(term, 'deviato');
-  const s = term && term.state === 'deviato' ? tramAtTerminal(term) : null;
-  if (s != null) {
-    bus.transfer(np, nd, 0, s, term.field === 'dep' ? term : null);
-    bus.parking = true;
-    chase.init = false;
-    hud.toast('🔁 Cabina cambiata: ripartendo il tram passa dallo scambio sull\'altro binario', 'info');
-    if (service) tramNextRun();
-    return;
-  }
-  if (service) {
-    hud.toast(term && term.kind === 'dopo' ? 'Vai in fondo al binario, oltre lo scambio, poi cambia cabina (B)' : term && term.kind === 'avanti' ? 'Vai in fondo al binario passando dallo scambio, poi cambia cabina (B)' : 'Si cambia cabina solo al capolinea, a fine corsa', 'info');
-    return;
-  }
-  // giro libero ed esplorazione: si cambia solo cabina, il tram resta sul suo binario e si guida all'indietro
+  // B (o "Prossima corsa") col riepilogo aperto, prima del punto della manovra: si chiude e il navigatore dice dove andare
+  if (done && !$('results').classList.contains('hidden')) { closeTramResults(); return; }
   bus.changeCab();
   chase.init = false;
-  hud.toast('🔁 Cabina cambiata: ora guidi dall\'altra estremità, sullo stesso binario', 'info');
+  if (!service) hud.toast('🔁 Cabina cambiata: ora guidi dall\'altra estremità, sullo stesso binario', 'info');
+  else if (done) hud.toast('🔁 Cabina cambiata', 'info');
+  else hud.toast(bus.facing < 0 ? `🔁 Cabina cambiata: si torna indietro sullo stesso binario. La corsa per ${mission.dest} resta quella: di nuovo B per riprenderla` : `🔁 Cabina verso ${mission.dest}: si riprende la corsa`, 'info');
+}
+// capolinea ad anello (SIR3 in stazione): negli ultimi 200 m il binario dell'altro verso continua davanti al muso, si
+// riparte senza cambiare cabina. La progressiva sul binario dell'altro verso, o null
+function tramLoop() {
+  const P = bus.path, sf = bus.sFront, T = bus.track, d = bus.dirSig, np = T.path(-d);
+  if (bus.facing < 0 || T.terminals[d > 0 ? 1 : -1] || sf <= P.len - 200) return null;
+  const head = P.at(sf), pr = np.projectNear(head.x, head.z, 1.5);
+  return pr && np.at(pr.s).dx * head.dx + np.at(pr.s).dz * head.dz > 0.7 ? pr.s : null;
+}
+// riepilogo di fine corsa del tram chiuso (Esc, "Fai la manovra", B prima del punto della manovra): il tram resta
+// guidabile e il navigatore (tramNav) dice fin dove andare per la corsa dopo
+function closeTramResults() {
+  $('results').classList.add('hidden');
+  const n = tramNav();
+  if (n) hud.toast(`🔁 Manovra: ${n.text.toLowerCase()} · ${n.street}`, 'info');
+}
+// Navigatore del tram dove il percorso della corsa non basta (Mission.navInfo): a metà corsa con la cabina al contrario,
+// e a fine corsa la manovra al capolinea fino al punto dove B fa partire la corsa dopo
+function tramNav() {
+  if (mission.free || mission.transfer) return null;
+  if (!mission.finished) return bus.facing < 0 ? { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: `Si guida all'indietro: la corsa per ${mission.dest} è dall'altra parte` } : null;
+  const t = nextOfTurno(), next = t && t.next;
+  if (!next) return { dist: 0, dir: 'straight', text: 'Ultima corsa del turno', street: 'Dal menu (Esc) scegli una corsa nuova' };
+  const after = `poi la corsa delle ${fmtHM(next.t)} per ${next.v.stops[next.v.stops.length - 1].name}`;
+  if (tramLoop() != null) return { dist: 0, dir: 'uturn', text: 'Premi B', street: `Si riparte senza cambiare cabina, ${after}` };
+  const term = bus.track.terminals && bus.track.terminals[bus.dirSig > 0 ? 1 : -1];
+  if (!term) return null;
+  if (bus.facing < 0) return { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: 'La manovra è verso il fondo del binario' };
+  if (tramAtTerminal(term) != null) return { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: `Si riparte sull'altro binario, ${after}` };
+  const tail = bus.pathOffset + bus.sFront - bus.length, need = Math.max(1, (term.field === 'arr' ? term.heel : term.link) - tail + 1);
+  return { dist: need, dir: 'straight', text: `Avanti ${Math.ceil(need)} m: tutto il tram oltre lo scambio`, street: 'Poi cambia cabina (B)' };
 }
 // Tram: lo scambio del capolinea più vicino (entro 120 m) nell'altra posizione. In servizio si gira da solo; non si gira
 // mentre il tram ci passa sopra
@@ -664,7 +693,7 @@ function saveGame() {
       onboard: m.onboard, log: m.log.slice(-40),
       stops: m.stops.map((st) => [st.arrived ? 1 : 0, st.left ? 1 : 0, st.delay ?? null]),
     },
-    bus: { x: bus.x, z: bus.z, h: bus.h, lights: bus.lights, dir: bus.dir, odo: bus.odometer, battery: bus.battery, energy: bus.energy, tram: bus.isTram ? { s: bus.sFront, panto: bus.pantoUp, battery: bus.battery } : null },
+    bus: { x: bus.x, z: bus.z, h: bus.h, lights: bus.lights, dir: bus.dir, odo: bus.odometer, battery: bus.battery, energy: bus.energy, tram: bus.isTram ? { s: bus.sFront, facing: bus.facing, panto: bus.pantoUp, battery: bus.battery } : null },
     cam: camMode,
     weather: { cloud: wx.cloud, rain: wx.rain, fog: wx.fog, wet: wx.wet, target: wx.target, phase: wx.phase, next: wx.next },
     summary: m.free ? `Giro libero · Linea ${settings.line.id}` : `Linea ${settings.line.id} → ${m.dest} · fermata ${Math.min(m.nextStop + 1, m.stops.length)}/${m.stops.length} (${m.stops[Math.min(m.nextStop, m.stops.length - 1)].name})`,
@@ -717,6 +746,7 @@ function applySave(d) {
     // salvato dopo il cambio cabina, ancora dalla parte del tronco: il tram è sul binario d'arrivo, prima dello scambio
     const t = bus.track && bus.track.terminals && bus.track.terminals[-bus.dirSig];
     if (t && bus.pathOffset === 0 && mission.stops && d.bus.tram.s < mission.stops[0].s - 2 && d.bus.tram.s < t.heel) bus.xover = t;
+    if (d.bus.tram.facing === -1) bus.facing = -1; // salvato con la cabina al contrario (B a metà corsa)
     bus.setFront(d.bus.tram.s);
     bus.pantoUp = d.bus.tram.panto !== false; bus.pantoPos = bus.pantoUp ? 1 : 0; bus.battery = d.bus.tram.battery ?? 1;
   } else {
@@ -983,6 +1013,7 @@ function buildMenu() {
   $('quit').addEventListener('click', backToMenu);
   $('res-menu').addEventListener('click', backToMenu);
   $('res-next').addEventListener('click', chainNext);
+  $('res-manovra').addEventListener('click', closeTramResults);
   $('res-depot').addEventListener('click', toDepot);
   refreshMenu();
 }
@@ -1214,6 +1245,7 @@ function wireMission() {
   const m = mission;
   greet = new Greetings(hud, m);
   m.onFinish = m.transfer ? () => transferDone(m) : () => { energyBonus(m); setTimeout(() => mission === m && showResults(), 3500); };
+  m.navHint = bus.isTram ? tramNav : null;
   lastBattery = bus.battery;
 }
 // la corsa finita entra nel conto del turno (una volta sola: il tram può ripartire prima del riepilogo)
@@ -1326,7 +1358,7 @@ function showShiftEnd() {
   const rows = [['Corse fatte', turno.corse], ['Chilometri percorsi', km.toFixed(1).replace('.', ',')], ['Rientro in deposito', fmtHM(mission.clock, true)]];
   $('res-table').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
   $('res-turno').textContent = '';
-  $('res-next').hidden = $('res-depot').hidden = true;
+  $('res-next').hidden = $('res-depot').hidden = $('res-manovra').hidden = true;
   $('res-menu').textContent = 'Nuova corsa';
   $('res-menu').classList.add('primary');
   $('results').classList.remove('hidden');
@@ -1369,6 +1401,9 @@ function showResults() {
     const fuori = curVariant().cutEnd || next.v.cutStart; // il giro fino al capolinea vero è fuori mappa
     $('res-next').textContent = `▶ Prossima corsa${bus.isTram ? ' (B)' : ''}: ${next.v.headsign} alle ${fmtHM(next.t)} (${wait > 0 ? `${fuori ? 'giro al capolinea fuori mappa e sosta' : 'sosta'}: ${wait} min` : 'sei in ritardo: si riparte subito'})`;
   }
+  // tram: il riepilogo si chiude e si fa la manovra al capolinea (con B, a fine manovra, parte la corsa dopo)
+  $('res-manovra').hidden = !bus.isTram;
+  $('res-manovra').textContent = next ? '🔁 Fai la manovra al capolinea (Esc)' : 'Chiudi (Esc)';
   $('res-depot').hidden = !t || !depot || bus.isTram; // il tram non ha ancora il suo deposito
   $('res-depot').classList.toggle('primary', !next);
   $('res-menu').classList.toggle('primary', !next && $('res-depot').hidden);

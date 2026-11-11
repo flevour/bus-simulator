@@ -330,14 +330,14 @@ export class TramTrack {
     const a = this.terminals[dir > 0 ? 1 : -1], b = this.terminals[dir > 0 ? -1 : 1];
     return (a && a.field === 'arr' && a.off(s, true)) || (b && b.field === 'dep' && b.off(s, true)) || null;
   }
-  // punti ogni 2 m della S dello scambio al capolinea (verso d del binario d'arrivo), per disegnarla
+  // punti ogni 2 m della S dello scambio al capolinea (verso d del binario d'arrivo), da un capo all'altro, per disegnarla
   terminalCurve(d) {
     const t = this.terminals[d > 0 ? 1 : -1];
     if (!t) return null;
     const P = this.paths[(t.field === 'dep' ? t.dep : t.arr) > 0 ? 1 : -1], out = [];
     const on = t.state;
     t.state = 'deviato';
-    for (let s = Math.max(0, t.toe - 4); s <= Math.min(P.len, t.heel + 4); s += 2) { const p = P.at(s), o = t.off(s) || { x: 0, z: 0 }; out.push({ x: p.x + o.x, z: p.z + o.z }); }
+    for (let s = Math.max(0, t.toe); s <= Math.min(P.len, t.heel); s += 2) { const p = P.at(s), o = t.off(s) || { x: 0, z: 0 }; out.push({ x: p.x + o.x, z: p.z + o.z }); }
     t.state = on;
     return out;
   }

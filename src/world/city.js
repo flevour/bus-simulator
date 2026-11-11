@@ -1416,21 +1416,27 @@ export class City {
       }
     }
     // scambi ai capolinea (cambio cabina): la S tra il binario d'arrivo e quello di partenza (TramTrack.terminal), corsia
-    // rossa e rotaia, e il segnale della posizione dello scambio (freccia dritta o deviata) per chi riparte dal tronco
+    // rossa e rotaia, e il segnale della posizione dello scambio (freccia dritta o deviata) per chi riparte dal tronco.
+    // La corsia della S sta sotto quelle dritte e in tinta unita: si vede solo dove riempie lo spazio tra i due binari. Sopra,
+    // con le righe bianche dei bordi e le strisce scure, sembrava una X (foto di Voltabarozzo dell'11 novembre); la via la
+    // dice la rotaia
     this.tramSwitches = [];
+    const redS = new GeoBuilder();
     for (const track of tracks) for (const d of [1, -1]) {
       const t = track.terminals && track.terminals[d];
       if (!t) continue;
       const pts = track.terminalCurve(d);
       for (let i = 0; i < pts.length - 1; i++) {
         const a = pts[i], b = pts[i + 1];
-        red.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.031, 8);
-        red.disc(b.x, b.z, L, Y_ROAD + 0.03, 8, 8);
+        redS.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.029, 8);
+        redS.disc(b.x, b.z, L, Y_ROAD + 0.029, 8, 8);
         rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.051, 8);
       }
       this.tramSwitches.push(this.switchSign(t));
     }
+    redS.uv.fill(0.5);
     const tex = TX.tramLaneTexture();
+    if (redS.pos.length) this.group.add(new THREE.Mesh(redS.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 4.5)));
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
     const rm2 = new THREE.Mesh(red2.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5.5));
     rm.receiveShadow = rm2.receiveShadow = true;
