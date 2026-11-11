@@ -133,6 +133,14 @@ Dalla presentazione del dibattito pubblico (febbraio 2022, fonti sopra).
   curva entra nel lotto verso nord. In fondo al lotto, verso nord, c'è il capannone lungo della rimessa; a destra, verso
   via Palù, gli edifici dell'officina e dei servizi. Il resto è ancora cantiere. Per la disposizione sul terreno vale
   la foto più della tavola del 2022, che non dice com'è orientata.
+
+  **In OSM l'11 novembre** (Overpass; non ancora negli export del repository) il lotto è mappato e torna con la foto:
+  `landuse=industrial` "Deposito Rubano" (way 1453139702, gestore Busitalia Veneto, circa 10,7 ha, dalla rotonda di
+  via Pria Fosca a via Palù e lungo i campi fino a 45,4363 N), con un ritaglio `landuse=commercial` vicino alla
+  rotonda di via Palù (1453139703); la rimessa (1453139704, `depot=tram`, 107 × 37 m, lunga quasi da sud a nord); i
+  due binari tronchi (1453139695, 1453139696), due comunicazioni (1453139699, 1453139700) e le due banchine in
+  costruzione (1453139697, 1453139698) a metà di via Pria Fosca. Nel gioco la rimessa c'è già, da Overture: stessa
+  misura, ma circa 20 m più a ovest e girata di una decina di gradi rispetto alla way di oggi.
 * **Sezione tipo** (incrocio canalizzato, 24 m da sud a nord): marciapiede 1,50, pista ciclabile 2,50, banchina 0,50,
   corsia per le auto 3,50, **due corridoi del tram da 3,50** (veicolo largo 2,20, 1,30 tra i due tram), due corsie per
   le auto da 3,50 (una di svolta), banchina 0,50, marciapiede 1,50. I **pali della linea aerea stanno ai bordi della

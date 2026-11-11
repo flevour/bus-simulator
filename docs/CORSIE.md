@@ -306,7 +306,10 @@ Fatto l'11 novembre (dettagli in [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md), s
   `data/osm-corridoio.json` (`scripts/filter_osm_corridoio.py query` scrive la query Overpass dei corridoi, `filtra`
   tiene quello che manca agli export di oggi), edifici e paline Overture, terreno allargato con il DTM regionale
   (`dtm_grid.py --riquadro --come`: le celle di prima restano uguali; WPS `ras:CropCoverage` su `rv:DTM_RV_5m_3003`).
-  Il DBGT di Rubano e Vigonza non c'è: valgono le larghezze per tipo di strada. Il deposito di Rubano non è disegnato;
+  Il DBGT di Rubano e Vigonza non c'è: valgono le larghezze per tipo di strada. Il deposito di Rubano non è disegnato,
+  ma il lotto intero (OSM "Deposito Rubano", way 1453139702, e la foto aerea del cantiere) sta già nelle celle del
+  corridoio (da -32 a -30 in x, da -13 a -11 in z) e nell'area `-10_-4`, con almeno 50 m di margine: per disegnarlo
+  non servono celle nuove (controllo dell'11 novembre; way OSM del lotto in `linee-tram-nuove.md`);
 - con il corridoio del SIR2 la **10** arriva intera a Sarmeola e a Ponte di Brenta (6 varianti su 10) e la **25** è
   intera (`CORRIDOI_BUS` in `build_map.py`: celle toccate dai tracciati GTFS di tutte le varianti, e per quelle linee
   `build_gtfs.load` tiene tutte le varianti); 6 e 7 arrivano più avanti. Un tracciato che esce dall'area e ci rientra
