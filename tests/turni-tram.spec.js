@@ -255,7 +255,8 @@ test('Voltabarozzo: riepilogo chiuso con Esc, manovra oltre lo scambio, corsa do
     g.press('KeyF');
     for (let t = 0; t < 5 && !bus.doorsClosed; t += dt) g.sim(dt, dt, false);
   });
-  await pagina.waitForFunction(() => !document.getElementById('results').classList.contains('hidden'), null, { timeout: 15_000 });
+  // il riepilogo di questa corsa (al capolinea Voltabarozzo, col pulsante della manovra)
+  await pagina.waitForFunction(() => !document.getElementById('results').classList.contains('hidden') && /Voltabarozzo/.test(document.getElementById('res-title').textContent) && !document.getElementById('res-manovra').hidden, null, { timeout: 15_000 });
   const r = await pagina.evaluate(() => {
     const g = window.__game, bus = g.bus, m = g.mission, dt = 1 / 30, $ = (id) => document.getElementById(id);
     const nav = () => $('nav-dist').textContent;

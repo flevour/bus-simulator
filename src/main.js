@@ -1287,6 +1287,7 @@ function startMission(resume = null) {
   hud.show(true);
   hud.setBigMap(false);
   $('menu').classList.add('hidden');
+  $('results').classList.add('hidden'); // il riepilogo di una corsa di prima, se è rimasto aperto
   running = true;
   paused = false;
   $('pause').classList.add('hidden');
