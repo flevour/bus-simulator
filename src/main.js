@@ -1035,8 +1035,9 @@ function startMission(resume = null) {
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
     // in servizio gli scambi dei capolinea si mettono da soli per l'arrivo: diritto dove si passa sull'altro binario
-    // dopo il cambio cabina (lo si gira con B), deviato dove si passa prima
-    if (settings.mode === 'service') for (const t of Object.values(T.terminals || {})) if (t) setSwitch(t, t.field === 'arr' ? 'deviato' : 'diritto');
+    // dopo il cambio cabina (lo si gira con B), deviato dove si passa prima. In Esplorazione e Giro libero si comincia
+    // con tutti deviati, come li lascia la manovra
+    for (const t of Object.values(T.terminals || {})) if (t) setSwitch(t, settings.mode !== 'service' || t.field === 'arr' ? 'deviato' : 'diritto');
   } else {
     bus = new Bus(scene, { id: L.id, color: L.color, dest: destName, livery: settings.livery, articulated: ARTICULATED_LINES.has(L.id) });
   }

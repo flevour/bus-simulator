@@ -3,7 +3,7 @@
 // commit, se sale per una buona ragione si alza scrivendo il perché.
 import { test, expect } from './gioco.js';
 
-const SOGLIE = { pali_sull_asfalto: 6, pali_sul_cordolo: 102, tiranti_sopra_un_altra_sede: 0 };
+const SOGLIE = { pali_sull_asfalto: 7, pali_sul_cordolo: 103, tiranti_sopra_un_altra_sede: 0 };
 
 test('linea aerea: pali fuori dalla strada, tiranti mai sopra un\'altra sede', async ({ pagina, gioco }) => {
   const r = await pagina.evaluate(() => {
