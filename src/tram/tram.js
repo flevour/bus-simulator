@@ -114,7 +114,11 @@ export function tramRoute(track, variant, modules = 3, full = false) {
   if (full) return { path: P, sig, offset: 0 };
   const ss = variant.stops.map((st) => P.project(st.x, st.z).s);
   const back = tramLength(modules) + 20;
-  const s0 = Math.max(0, ss[0] - back), s1 = Math.min(P.len, ss[ss.length - 1] + 30);
+  // capolinea con lo scambio (TramTrack.terminal): la corsa che parte da lì comincia dall'inizio del binario (il tram
+  // arriva dal binario d'arrivo passando dallo scambio), quella che ci finisce dopo le banchine arriva in fondo al tronco
+  const t0 = track.terminals && track.terminals[-sig], t1 = track.terminals && track.terminals[sig];
+  const s0 = t0 && ss[0] < t0.heel + 200 ? 0 : Math.max(0, ss[0] - back);
+  const s1 = t1 && t1.kind === 'dopo' && P.len - ss[ss.length - 1] < 250 ? P.len : Math.min(P.len, ss[ss.length - 1] + 30);
   return { path: P.slice(s0, s1), sig, offset: s0 };
 }
 
@@ -139,6 +143,7 @@ function rampWeights(flags, step, ramp) {
   return w;
 }
 const STEP = 3, NEAR = 9;
+const XO = 24; // m: lunghezza dello scambio ai capolinea (S tra il binario d'arrivo e quello di partenza)
 const sampleS = (len) => { const out = []; for (let s = 0; s < len; s += STEP) out.push(s); out.push(len); return out; };
 export class TramTrack {
   // net: la rete (net.tram, net.tramLanes, net.tramStops: la sede del SIR1). Per le altre linee opts: id, lanes (i binari
@@ -229,6 +234,65 @@ export class TramTrack {
     // tratti senza linea aerea (Prato della Valle), per verso
     this.gaps = { 1: [], '-1': [] };
     for (const d of [1, -1]) for (const st of this.stopsDir[d]) if (/prato/i.test(st.name)) this.gaps[d].push([st.s - CATENARY_GAP_HALF, st.s + CATENARY_GAP_HALF]);
+    this.terminals = { 1: this.terminal(1), '-1': this.terminal(-1) };
+  }
+  // Scambio al capolinea dove finisce il binario del verso d (arrivo) e comincia, parallelo, quello del verso -d
+  // (partenza): il tram arriva, cambia cabina (B) restando dov'è e riparte passando dallo scambio. Oltre le banchine
+  // ('dopo': si arriva in fondo al binario tronco) se il tronco ci sta, altrimenti verso la città ('prima': si cambia
+  // cabina alla banchina, il binario d'arrivo oltre la banchina va al deposito). Sul binario di partenza fino a toe il
+  // tram corre su quello d'arrivo, da toe a heel passa dall'uno all'altro (S di XO metri): off(s) è lo scostamento dal
+  // binario di partenza a s. null ai capolinea ad anello (SIR3 in stazione) e dove i binari non corrono paralleli
+  terminal(d) {
+    const A = this.paths[d], B = this.paths[-d], sa = this.stopsDir[d], sb = this.stopsDir[-d];
+    if (!sa.length || !sb.length) return null;
+    const end = A.at(A.len), cont = B.projectNear(end.x, end.z, 2);
+    if (cont && cont.s > 5 && B.at(cont.s).dx * end.dx + B.at(cont.s).dz * end.dz > 0.7) return null; // anello
+    const len = Math.max(...this.lines.map((L) => tramLength(L.modules || 3)));
+    // binario d'arrivo accanto a quello di partenza, metro per metro (verso opposto, entro 9 m)
+    const n = Math.min(Math.floor(B.len), 400), par = [];
+    for (let s = 0; s <= n; s++) {
+      const q = B.at(s), pr = A.projectNear(q.x, q.z, 9), a = pr && A.at(pr.s);
+      par.push(a && a.dx * q.dx + a.dz * q.dz < -0.9 ? { x: a.x - q.x, z: a.z - q.z } : null);
+    }
+    // banchine sul binario di partenza: il tram in partenza col muso a fine banchina e quello arrivato
+    const la = A.at(sa[sa.length - 1].s), pa = B.project(la.x, la.z).s, pb = sb[0].s;
+    const z0 = Math.min(pb + 12 - len, pa - 12), z1 = Math.max(pb + 12, pa - 12 + len);
+    const ok = (a, b) => { for (let s = Math.max(0, Math.floor(a)); s <= Math.min(n, Math.ceil(b)); s++) if (!par[s]) return false; return b <= n; };
+    // fine del binario d'arrivo sul binario di partenza (quello di partenza può cominciare più in là, nel tronco)
+    const sEnd = B.project(end.x, end.z).s;
+    let kind = null, toe, heel;
+    if (z0 - 4 - XO - sEnd >= len + 4 && ok(sEnd + 1, z0 - 4)) { kind = 'dopo'; heel = z0 - 4; toe = heel - XO; }
+    else if (ok(z0, z1 + 3 + XO)) { kind = 'prima'; toe = z1 + 3; heel = toe + XO; }
+    if (!kind) return null;
+    // scostamento pesato: tutto il binario d'arrivo fino a toe, niente da heel (raccordo a coseno)
+    const ox = new Float32Array(Math.ceil(heel) + 2), oz = new Float32Array(ox.length);
+    let last = { x: 0, z: 0 };
+    for (let s = 0; s < ox.length; s++) {
+      const p = par[Math.min(s, n)] || last;
+      last = p;
+      const w = s <= toe ? 1 : s >= heel ? 0 : (1 + Math.cos((Math.PI * (s - toe)) / XO)) / 2;
+      ox[s] = p.x * w; oz[s] = p.z * w;
+    }
+    const pt = B.at(toe + 2), o = par[Math.min(Math.round(toe + 2), n)] || last;
+    return {
+      arr: d, dep: -d, kind, toe, heel, len, ox, oz, state: 'deviato',
+      // segnale dello scambio: all'inizio della S, tra i due binari, per chi arriva dal tronco
+      sig: { x: pt.x + o.x / 2, z: pt.z + o.z / 2, dx: pt.dx, dz: pt.dz },
+      off(s) {
+        if (s >= heel || s < 0) return null;
+        const i = Math.floor(s), f = s - i, j = Math.min(ox.length - 1, i + 1);
+        return { x: ox[i] + (ox[j] - ox[i]) * f, z: oz[i] + (oz[j] - oz[i]) * f };
+      },
+    };
+  }
+  // binario dello scambio al capolinea (verso del binario d'arrivo): punti ogni 2 m da a a heel, sul binario di partenza
+  // spostato verso quello d'arrivo
+  terminalCurve(d, from = 0) {
+    const t = this.terminals[d > 0 ? 1 : -1];
+    if (!t) return null;
+    const B = this.paths[t.dep > 0 ? 1 : -1], out = [];
+    for (let s = Math.max(0, from); s <= t.heel; s += 2) { const p = B.at(s), o = t.off(s) || { x: 0, z: 0 }; out.push({ x: p.x + o.x, z: p.z + o.z }); }
+    return out;
   }
   // s sul binario del verso dir è in un tratto in comune con una sede già posata?
   sharedAt(dir, s) { return this.shared[dir > 0 ? 1 : -1].some(([a, b]) => s >= a && s <= b); }
@@ -723,15 +787,36 @@ export class Tram {
     return Math.max(15, Math.min(70, Math.floor(v / 5) * 5));
   }
   togglePantograph() { this.pantoUp = !this.pantoUp; return this.pantoUp; }
-  // cambio di binario (cambio cabina al capolinea): nuovo percorso, nuovo verso
-  setPath(path, dir, offset = 0) { this.path = path; this.dirSig = dir; this.pathOffset = offset; this.facing = 1; this.aFwd = 1; }
+  // percorso nuovo (la corsa dopo sullo stesso binario): stesso verso di guida e stessa cabina. xover: lo scambio del
+  // capolinea da cui il tram parte (TramTrack.terminal), che resta finché non si cambia di nuovo percorso
+  setPath(path, dir, offset = 0, xover = null) { this.path = path; this.dirSig = dir; this.pathOffset = offset; this.xover = xover; }
+  // il tram passa su un altro binario restando fermo dov'è, col muso a sFront e in marcia verso s crescente; keepCab: la
+  // cabina attiva resta la stessa (anello della stazione), altrimenti si guida dall'altra (cambio cabina). Ogni cassa
+  // resta al suo posto
+  transfer(path, dir, offset, sFront, xover = null, keepCab = false) {
+    const wasA = this.activeCab === this.modules[0];
+    this.setPath(path, dir, offset, xover);
+    this.facing = 1;
+    this.aFwd = wasA === keepCab ? 1 : -1;
+    this.setFront(sFront);
+  }
+  // punto del percorso a s; sullo scambio del capolinea (il binario di partenza fino allo scambio corre su quello
+  // d'arrivo) spostato verso il binario d'arrivo
+  at(s) {
+    const p = this.path.at(s), X = this.xover, o = X && X.off(this.pathOffset + s);
+    if (!o) return p;
+    const q = this.path.at(s + 1), o2 = X.off(this.pathOffset + s + 1) || { x: 0, z: 0 };
+    const x = p.x + o.x, z = p.z + o.z, x2 = q.x + o2.x, z2 = q.z + o2.z, l = Math.hypot(x2 - x, z2 - z) || 1;
+    const dx = (x2 - x) / l, dz = (z2 - z) / l;
+    return { x, z, dx, dz, h: Math.atan2(dx, dz) };
+  }
   hAt(s) { return this.track ? this.track.heightAt(this.dirSig, this.pathOffset + s) : 0; }
   // punto del pantografo (centro del modulo che lo porta)
   pantoPoint() { return { x: this.pantoModule.group.position.x, z: this.pantoModule.group.position.z }; }
   // punti lungo il convoglio (per chi segue sulla stessa corsia)
   trackPoints() {
     const out = [];
-    for (let d = 0; d <= this.length; d += 6) { const p = this.path.at(this.sFront - this.facing * d); out.push({ x: p.x, z: p.z }); }
+    for (let d = 0; d <= this.length; d += 6) { const p = this.at(this.sFront - this.facing * d); out.push({ x: p.x, z: p.z }); }
     return out;
   }
   // cambio cabina: solo da fermo con le porte chiuse
@@ -760,11 +845,10 @@ export class Tram {
   }
 
   syncTransform() {
-    const P = this.path;
     let off = 0;
     this.modules.forEach((m, k) => {
       const sa = this.sA - this.aFwd * off, sb = sa - this.aFwd * m.len;
-      const a = P.at(sa), b = P.at(sb), ha = this.hAt(sa), hb = this.hAt(sb);
+      const a = this.at(sa), b = this.at(sb), ha = this.hAt(sa), hb = this.hAt(sb);
       m.group.position.set((a.x + b.x) / 2, (ha + hb) / 2 + 0.14, (a.z + b.z) / 2);
       m.group.rotation.order = 'YXZ';
       m.group.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
@@ -778,7 +862,7 @@ export class Tram {
         m.group.rotation.z = side * 0.05 * w;
       } else m.group.rotation.z = 0;
       if (k < this.nMod - 1) {
-        const j = P.at(sb - this.aFwd * TRAM.gap / 2), bl = this.bellows[k];
+        const j = this.at(sb - this.aFwd * TRAM.gap / 2), bl = this.bellows[k];
         bl.position.set(j.x, this.hAt(sb) + 1.55, j.z);
         bl.rotation.y = j.h;
       }
@@ -787,7 +871,7 @@ export class Tram {
     if (this.spot && this.spot.parent !== this.activeCab.inner) this.activeCab.inner.add(this.spot, this.spot.target);
     // punto di riferimento (come il centro del bus): 6 m dietro il muso della cabina attiva
     const sr = this.sFront - this.facing * TRAM.ref;
-    const r = P.at(sr), ra = P.at(sr + 4), rb = P.at(sr - 4);
+    const r = this.at(sr), ra = this.at(sr + 4), rb = this.at(sr - 4);
     this.x = r.x; this.z = r.z;
     this.elev = this.hAt(sr);
     const hc = Math.atan2(ra.x - rb.x, ra.z - rb.z);
@@ -855,7 +939,7 @@ export class Tram {
     }
     // collisioni: auto o tram sulla corsia davanti al muso
     if (world && world.carsNear) {
-      const fr = this.path.at(this.sFront), fdx = fr.dx * this.facing, fdz = fr.dz * this.facing;
+      const fr = this.at(this.sFront), fdx = fr.dx * this.facing, fdz = fr.dz * this.facing;
       for (const c of world.carsNear(fr.x, fr.z, 6)) {
         const rx = c.x - fr.x, rz = c.z - fr.z;
         const ahead = rx * fdx + rz * fdz, lat = Math.abs(rx * -fdz + rz * fdx);

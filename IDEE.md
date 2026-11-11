@@ -103,8 +103,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [ ] manovra al capolinea come nella realtà: scarico, avanti fino in fondo, B (cambio cabina e visuale), lo scambio
        si mette da solo sull'altro binario, fermata di partenza (Pontevigodarzere e Voltabarozzo dall'alto), corsia
        `tram-turni`;
-     - [ ] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
-       manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`);
+     - [~] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
+       manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`):
+       fatti gli scambi ai capolinea (B, segnale, N in Esplorazione e Giro libero); restano gli scambi tra le linee, i
+       tram automatici e i depositi;
      - [x] mappa grande (M) da trascinare per spostarsi (vedi "Fatto");
      - [x] pali della linea aerea in mezzo alla strada dove i due binari corrono separati, con i tiranti che
        attraversano tutte le corsie (vedi "Fatto");

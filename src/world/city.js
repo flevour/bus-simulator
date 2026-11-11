@@ -1415,6 +1415,22 @@ export class City {
         wires.push(new THREE.BoxGeometry(0.03, 0.03, sl).rotateY(Math.atan2(b.x - a.x, b.z - a.z)).translate((a.x + b.x) / 2, y, (a.z + b.z) / 2));
       }
     }
+    // scambi ai capolinea (cambio cabina): la S tra il binario d'arrivo e quello di partenza (TramTrack.terminal), corsia
+    // rossa e rotaia, e il segnale della posizione dello scambio (freccia dritta o deviata) per chi riparte dal tronco
+    this.tramSwitches = [];
+    for (const track of tracks) for (const d of [1, -1]) {
+      const t = track.terminals && track.terminals[d];
+      if (!t) continue;
+      const B = track.path(t.dep), pts = [];
+      for (let s = Math.max(0, t.toe - 4); s <= t.heel + 4; s += 2) { const p = B.at(s), o = t.off(s) || { x: 0, z: 0 }; pts.push({ x: p.x + o.x, z: p.z + o.z }); }
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        red.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.031, 8);
+        red.disc(b.x, b.z, L, Y_ROAD + 0.03, 8, 8);
+        rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.051, 8);
+      }
+      this.tramSwitches.push(this.switchSign(t));
+    }
     const tex = TX.tramLaneTexture();
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
     const rm2 = new THREE.Mesh(red2.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5.5));
@@ -1491,16 +1507,46 @@ export class City {
     if (stopLines.pos.length) this.group.add(new THREE.Mesh(stopLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2f2ea }), 7)));
     if (plat.length) this.group.add(new THREE.Mesh(mergeGeometries(plat), new THREE.MeshLambertMaterial({ color: 0xc9c3b8 })));
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
-    // scambi ai capolinea (cambio cabina): un deviatoio che collega i due binari nel tratto tronco
-    const xo = new GeoBuilder();
-    for (const track of tracks) {
-      const N = track.path(1), S = track.path(-1);
-      for (const [A, sA, B] of [[N, N.len - 40, S], [S, S.len - 40, N]]) {
-        const pa = A.at(sA), tgt = A.at(sA + 24), sb = B.project(tgt.x, tgt.z).s, pb = B.at(Math.min(B.len, Math.max(0, sb)));
-        if (Math.hypot(pb.x - pa.x, pb.z - pa.z) < 40) xo.ribbon(pa.x, pa.z, pb.x, pb.z, 0.22, Y_ROAD + 0.055, 8);
-      }
-    }
-    this.group.add(new THREE.Mesh(xo.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)));
+  }
+
+  // Segnale dello scambio al capolinea: palo tra i due binari all'inizio della S, pannello nero verso chi riparte dal
+  // tronco con la freccia bianca dritta (si resta sul binario d'arrivo) o deviata (si passa su quello di partenza)
+  switchSign(t) {
+    const g = new THREE.Group(), s = t.sig;
+    g.position.set(s.x, 0, s.z);
+    g.rotation.y = Math.atan2(-s.dx, -s.dz);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.6, 6), new THREE.MeshLambertMaterial({ color: 0x5f666c }));
+    pole.position.y = Y_ROAD + 1.3;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.1), new THREE.MeshLambertMaterial({ color: 0x15171a }));
+    head.position.y = Y_ROAD + 2.75;
+    // verso del binario di partenza visto da chi arriva dal tronco: a destra o a sinistra
+    const o = t.off(t.toe) || { x: 0, z: 0 }, right = -o.x * -s.dz + -o.z * s.dx > 0;
+    const panel = (draw) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const x = c.getContext('2d');
+      x.fillStyle = '#000'; x.fillRect(0, 0, 64, 64);
+      x.strokeStyle = '#fff'; x.fillStyle = '#fff'; x.lineWidth = 7; x.lineCap = 'round';
+      draw(x);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+      m.position.set(0, Y_ROAD + 2.75, 0.052);
+      return m;
+    };
+    const arrow = (x, x0, y0, x1, y1) => {
+      x.beginPath(); x.moveTo(x0, y0); x.lineTo(x1, y1); x.stroke();
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      x.beginPath(); x.moveTo(x1, y1);
+      x.lineTo(x1 - 16 * Math.cos(a - 0.5), y1 - 16 * Math.sin(a - 0.5));
+      x.lineTo(x1 - 16 * Math.cos(a + 0.5), y1 - 16 * Math.sin(a + 0.5));
+      x.closePath(); x.fill();
+    };
+    const straight = panel((x) => arrow(x, 32, 54, 32, 10));
+    const diverted = panel((x) => { x.beginPath(); x.moveTo(32, 56); x.lineTo(32, 38); x.stroke(); arrow(x, 32, 38, right ? 52 : 12, 12); });
+    g.add(pole, head, straight, diverted);
+    this.group.add(g);
+    const sw = { term: t, group: g, straight, diverted, update() { straight.visible = t.state !== 'deviato'; diverted.visible = t.state === 'deviato'; } };
+    sw.update();
+    return sw;
   }
 
   // Cavalcavia a più impalcati affiancati (Borgomagno: la strada verso sud e, poco più in basso, la sede del tram con

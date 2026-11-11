@@ -530,10 +530,19 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   capannone e un anello esterno che gira attorno al deposito. Il "binario tronco che entra in un edificio" di IDEE è
   con ogni probabilità l'ingresso del deposito. Prove: per ogni capolinea dei tram (SIR1, SIR2, SIR3),
   la sequenza sopra con il pilota di `tests/guida.js`, fino alla prima fermata della corsa nuova.
+- **Scambi ai capolinea e B che cambia solo cabina**: primo passo fatto l'11 novembre. `TramTrack.terminal` calcola per
+  ogni capo su binario tronco lo scambio tra binario d'arrivo e di partenza: oltre le banchine dove il tronco ci sta
+  (Voltabarozzo, Rubano, Busa di Vigonza: si va in fondo e poi B), verso la città dove il binario d'arrivo oltre la
+  banchina va al deposito (Guizza, Pontevigodarzere: B alla banchina). Il tram (`Tram.transfer`, `Tram.at`) resta con
+  ogni cassa dov'è, passa sul binario di partenza con uno scostamento verso quello d'arrivo fino allo scambio e ripartendo
+  fa la S. Disegno (corsia rossa, rotaia, segnale con la freccia) in `buildTramway` e `switchSign` di `city.js`; N gira lo
+  scambio in Esplorazione e Giro libero (diritto: B cambia solo cabina e si torna indietro sullo stesso binario); in
+  servizio è automatico. Prove in `tests/turni-tram.spec.js`. Restano: i tram automatici, che al capolinea saltano
+  ancora sull'altro binario; gli scambi tra le linee (`track.switches`) manovrabili, con il tram che segue il grafo dei
+  binari; i depositi.
 - **Poi gli scambi manovrabili** (chiesto da chi gioca l'11 novembre, foto di uno scambio a un capolinea:
   `images/14.png` della sessione del checkout principale):
-  - B cambia **solo** la cabina: il tram resta dov'è e cambia verso di guida (sopra); oggi `changeTramCab` lo sposta
-    direttamente sul binario dell'altro verso;
+  - B cambia **solo** la cabina: il tram resta dov'è e cambia verso di guida: fatto (sopra);
   - gli scambi si vedono (segnale dello scambio con la posizione: diritto o deviato) e si possono mettere nell'altra
     posizione rispetto a quella di partenza, per entrare nei depositi o fare un percorso diverso;
   - **resta l'impostazione automatica** degli scambi per il piazzale, la stazione e altrove, secondo le linee che ci

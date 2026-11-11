@@ -291,7 +291,8 @@ future potranno averne 4.
 | **F** | porte (da fermo; si sale e si scende da tutte le porte) |
 | **H** | campanello |
 | **O** | abbassa / alza il pantografo |
-| **B** | al capolinea: cambio cabina e corsa successiva del turno |
+| **B** | cambio cabina: al capolinea il tram resta dov'è e riparte passando dallo scambio, con la corsa successiva del turno |
+| **N** | gira lo scambio del capolinea (Esplorazione e Giro libero) |
 | **Spazio** | freno di stazionamento |
 
 * Ci si ferma con il muso a fine banchina; nelle curve strette il limite scende (fino a 15 km/h).
