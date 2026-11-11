@@ -200,6 +200,7 @@ function readInput() {
   input.thrAxis = (rev ? T.brake : T.gas) || null;
   input.brkAxis = (rev ? T.gas : T.brake) || null;
   input.steerAxis = T.steer;
+  input.steerSens = settings.steerSens;
   if (bus) bus.horn = keys.has('KeyH');
 }
 
@@ -248,7 +249,14 @@ const L24 = LINES.find((l) => l.id === '24') || LINES[0];
 const ALL_LINES = [...LINES, ...TRAM_LINES];
 // linee servite con l'autobus snodato da 18 m
 const ARTICULATED_LINES = new Set(['10']);
-const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus', lightHour: null, fromDepot: true };
+// sensibilità dello sterzo da tastiera, salvata in questo browser: 0.7 fa girare il bus, per un colpo di tasto in città,
+// quanto lo sterzo di prima del 6 novembre; 1 è lo sterzo progressivo dal 6 all'11 novembre
+const STEER_KEY = 'padova-bus-sim-sterzo';
+const STEER_SENS = [0.5, 0.7, 1, 1.4];
+function loadSteerSens() {
+  try { const v = Number(localStorage.getItem(STEER_KEY)); return STEER_SENS.includes(v) ? v : 0.7; } catch (e) { return 0.7; }
+}
+const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus', lightHour: null, fromDepot: true, steerSens: loadSteerSens() };
 // modalità: servizio di linea, giro libero (regole della strada) o esplorazione (nessuna regola, il tram non deraglia)
 const MODE_NOTE = {
   service: 'Corsa con orario, fermate, passeggeri e punteggio.',
@@ -676,8 +684,8 @@ function renderLines() {
     refreshMenu();
   };
   document.querySelectorAll('.line-card').forEach((el) => { el.addEventListener('click', () => pick(el)); el.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(el); }); });
-  // la livrea riguarda solo l'autobus
-  $('livery-box').hidden = tram;
+  // livrea e sterzo riguardano solo l'autobus
+  $('livery-box').hidden = $('steer-box').hidden = tram;
   document.querySelectorAll('#vehicle button').forEach((b) => b.classList.toggle('sel', b.dataset.k === settings.vehicle));
 }
 function setVehicle(k) {
@@ -714,6 +722,15 @@ function buildMenu() {
     settings.lightHour = e.target.value === '' ? null : Number(e.target.value);
     if (mission) setupWeatherAndTime();
   });
+  // sensibilità dello sterzo: stessa scelta nel menu e nella pausa, ricordata in questo browser
+  const steerBtns = document.querySelectorAll('#steer-sens button, #pause-steer-sens button');
+  const markSteer = () => steerBtns.forEach((x) => x.classList.toggle('sel', Number(x.dataset.s) === settings.steerSens));
+  steerBtns.forEach((b) => b.addEventListener('click', () => {
+    settings.steerSens = Number(b.dataset.s);
+    try { localStorage.setItem(STEER_KEY, String(settings.steerSens)); } catch (e) { /* ignorato */ }
+    markSteer();
+  }));
+  markSteer();
   seg('livery', 'l', (l) => { settings.livery = l; markLivery(l); });
   // pausa: stesso selettore del menu
   $('pause-livery').innerHTML = $('livery').innerHTML;

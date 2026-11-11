@@ -69,8 +69,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [ ] cavalcavia da sistemare (linea 22 in Via Orlandini, x 1315, z -1022) e, da un giocatore nuovo, "i ponti o
        cavalcavia come quello della stazione e il Camerini" (linea 13 in Viale Codalunga): il Cavalcavia Camerini non
        l'ha mai guardato nessuno, il Borgomagno va ricontrollato (corsia `mappa`);
-     - [ ] sterzo troppo sensibile, "era meglio la guida vecchia" (stesso giocatore nuovo): regolazione della
-       sensibilità (corsia `guida`);
+     - [x] sterzo troppo sensibile, "era meglio la guida vecchia" (stesso giocatore nuovo): regolazione
+       "Sensibilità dello sterzo" nel menu e nella pausa, che parte più dolce di prima (vedi "Fatto");
      - [~] mappa più grande fino ai capolinea della 3 e della 22 e alle fermate della 10 e della 11 (linea 3 in Via
        Fondà; corsia `capolinea`, dopo il tram).
    - dall'11 novembre (foto nel pannello del checkout principale):
@@ -148,7 +148,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 ## Veicoli e guida
 
 - [x] Tram: SIR1 e SIR3 a 3 moduli, SIR2 a 4 moduli (vedi "Fatto").
-- [ ] Sensibilità dello sterzo regolabile (segnalazione del 9 novembre, corsia `guida`).
+- [x] Sensibilità dello sterzo regolabile (vedi "Fatto").
 - [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
 - [ ] Volante e pedaliera o gamepad (Gamepad API).
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
@@ -197,6 +197,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Sensibilità dello sterzo** (corsia `guida`, 11 novembre): nel menu (punto 8) e nella pausa si sceglie quanto in
+  fretta A D / ← → girano il volante: Bassa 0,5, Media 0,7 (di partenza), Alta 1 (lo sterzo dal 6 all'11 novembre),
+  Molto alta 1,4; la scelta resta nel browser. Il controsterzo non rallenta; ritorno al centro, sterzata massima e
+  volante touch non cambiano. Con lo sterzo progressivo del 6 novembre un colpo di tasto in città faceva girare il
+  bus quasi il doppio di prima, perché il volante torna al centro in 2-4 s invece che in meno di un secondo: con 0,7
+  a 20 km/h un tasto tenuto 0,5 s gira il bus di 7° (prima del 6 novembre 6°, dal 6 novembre 10°). Numeri in
+  [`docs/CORSIE.md`](docs/CORSIE.md), sezione `guida`.
 - [x] **Il tram ferma a tutte le fermate** (11 novembre): `needsStop` è sempre vero per il tram (tirare dritto è una
   fermata saltata), niente prenotazione, niente ritardatario, niente riquadro "fermata prenotata / si può passare" nel
   pannello della linea e niente "PRENOT." sul cruscotto del tram. Gli autobus restano come prima.

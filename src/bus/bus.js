@@ -671,8 +671,10 @@ export class Bus {
       this.steerIn += Math.sign(d) * Math.min(Math.abs(d), dt * 2.5);
     } else if (steerKey) {
       this.steerHold += dt;
-      // controsterzo più svelto: si riporta il volante verso il centro
-      const back = this.steerIn * steerKey < 0 ? 1.6 : 1;
+      // sensibilità scelta nel menu (input.steerSens): scala la velocità con cui i tasti girano il volante.
+      // Il controsterzo, più svelto, non rallenta: si riporta il volante verso il centro.
+      const sens = input.steerSens || 1;
+      const back = this.steerIn * steerKey < 0 ? 1.6 * Math.max(1, sens) : sens;
       const rate = (0.22 + Math.min(1, this.steerHold / 0.6) * 0.75) * back;
       this.steerIn = Math.max(-1, Math.min(1, this.steerIn + steerKey * rate * dt));
     } else this.steerIn -= this.steerIn * Math.min(1, dt * (0.4 + 0.1 * sp));

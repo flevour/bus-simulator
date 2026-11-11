@@ -86,6 +86,17 @@
             <button data-w="rain">🌧️ Pioggia</button>
             <button data-w="fog">🌫️ Nebbia</button>
           </div>
+          <div id="steer-box">
+            <h3>8 · Sensibilità dello sterzo</h3>
+            <!-- stessa scelta nella pausa (#pause-steer-sens), ricordata nel browser -->
+            <div class="seg" id="steer-sens">
+              <button data-s="0.5">Bassa</button>
+              <button data-s="0.7" class="sel">Media</button>
+              <button data-s="1">Alta</button>
+              <button data-s="1.4">Molto alta</button>
+            </div>
+            <div class="note">Quanto in fretta A D / ← → girano il volante. «Alta» è lo sterzo dal 6 all'11 novembre.</div>
+          </div>
           <button id="start" class="primary">▶ Inizia il servizio</button>
           <div id="resume-box" hidden>
             <div class="resume-title">Corsa salvata</div>
@@ -197,7 +208,7 @@
       <h3>Come si guida</h3>
       <ul>
         <li><b>W / ↑</b> acceleratore, <b>S / ↓</b> freno (i pedali sono progressivi: tienili premuti più a lungo per più forza). Tieni <b>Shift</b> insieme a W o S per dare più gas o frenare forte.</li>
-        <li><b>A D / ← →</b> girano il volante: un colpetto per correggere, tieni premuto per sterzare di più; lasciato, il volante torna al centro da solo (più in fretta se vai veloce). Il bus è lungo 12 m: allarga le curve!</li>
+        <li><b>A D / ← →</b> girano il volante: un colpetto per correggere, tieni premuto per sterzare di più; lasciato, il volante torna al centro da solo (più in fretta se vai veloce). Quanto in fretta gira lo scegli in <b>Sensibilità dello sterzo</b>, nel menu o nella pausa. Il bus è lungo 12 m: allarga le curve!</li>
         <li><b>F</b> apre/chiude le porte. Con le porte aperte è inserito il freno di fermata.</li>
         <li>Fermati con il muso sulla <b>palina gialla</b>, dentro il riquadro giallo <i>BUS</i>, vicino al marciapiede.</li>
         <li><b>E</b> freccia a destra quando accosti, <b>Q</b> freccia a sinistra quando riparti: punti bonus!</li>
@@ -225,6 +236,13 @@
         <h3>Autobus</h3>
         <!-- stesso selettore del menu: i pulsanti si copiano da #livery all'avvio -->
         <div class="seg livery-pick" id="pause-livery"></div>
+        <h3>Sensibilità dello sterzo</h3>
+        <div class="seg" id="pause-steer-sens">
+          <button data-s="0.5">Bassa</button>
+          <button data-s="0.7">Media</button>
+          <button data-s="1">Alta</button>
+          <button data-s="1.4">Molto alta</button>
+        </div>
       </div>
       <h3>Meteo</h3>
       <div class="seg" id="pause-weather">

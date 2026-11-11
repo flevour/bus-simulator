@@ -338,18 +338,36 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
 Aperta l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
 ingressi in `src/main.js` (oggetto `input`, comandi touch), menu e pausa in `index.html` e `src/style.css`.
 
-- **Prima di tutto lo sterzo** (sondaggio del 9 novembre, giocatore nuovo, Chrome su Windows, quindi tastiera): "La
-  guida secondo me era meglio quella vecchia, l'attuale è troppo sensibile".
-  1. Capire cosa è cambiato per chi guida con la tastiera: lo sterzo progressivo del 6 novembre (`ce4ea51`) e i
-     comandi touch uniti l'8 novembre (`bfd0adb`, che ha cambiato molto `bus.js`). Oggi lo sterzo è in `Bus.update`
-     (`steerKey`, `steerHold`, `rate`, `maxSteer`). Confronto in numeri tra le versioni: gradi di volante e raggio di
-     curva dopo 0,2 s, 0,5 s e 1 s di tasto premuto a 20 e a 50 km/h.
-  2. Una regolazione "Sensibilità dello sterzo" nel menu e nella pausa, salvata nel browser (con try/catch come il
-     resto), che scala la velocità con cui i tasti girano il volante; il valore di partenza si sceglie dal confronto.
-     Il pilota delle prove (`tests/guida.js`) scrive `bus.steerIn` direttamente: la regolazione non deve cambiare
-     `maxSteer` né il ritorno al centro, altrimenti cambia il giro guidato.
-  3. Riga in `novita.js` che dice a chi gioca dove trovare la regolazione.
-- Poi, in quest'ordine: gamepad e volante (Gamepad API); bus elettrico con batteria e ricarica al capolinea;
+- **Sterzo, fatto l'11 novembre** (sondaggio del 9 novembre, giocatore nuovo, Chrome su Windows, quindi tastiera:
+  "La guida secondo me era meglio quella vecchia, l'attuale è troppo sensibile").
+  - Cosa è cambiato: per la tastiera solo `ce4ea51` (6 novembre). Prima il volante andava verso il fondo a 0,85 al
+    secondo e tornava al centro a 1,25 al secondo, le ruote lo seguivano subito; da `ce4ea51` la velocità cresce da
+    0,22 a 0,97 in 0,6 s, il ritorno al centro è esponenziale (0,4 + 0,1 × m/s al secondo) e le ruote hanno un ritardo.
+    `bfd0adb` ha aggiunto solo il volante touch. Il sito pubblica `main` dal 4 novembre.
+  - Confronto (tasto tenuto, velocità costante, `dt` 1/60). Volante in gradi (rapporto 14), raggio di curva
+    all'asse posteriore al rilascio, rotta totale fino a quando il volante è tornato al centro:
+
+    | km/h | tasto | volante° prima / dopo | raggio m prima / dopo | rotta° prima / dopo / con 0,7 |
+    |---|---|---|---|---|
+    | 20 | 0,2 s | 79 / 15 | 60 / 324 | 1,0 / 2,4 / 1,6 |
+    | 20 | 0,5 s | 191 / 81 | 24 / 58 | 5,6 / 9,9 / 6,9 |
+    | 20 | 1 s | 376 / 275 | 12 / 17 | 22,4 / 32,6 / 22,6 |
+    | 50 | 0,2 s | 48 / 9 | 98 / 531 | 1,4 / 2,0 / 1,4 |
+    | 50 | 0,5 s | 116 / 49 | 40 / 96 | 8,4 / 9,2 / 6,4 |
+    | 50 | 1 s | 229 / 168 | 20 / 28 | 33,3 / 32,6 / 22,7 |
+
+    Al rilascio il volante di oggi è girato meno, ma ci mette 2,7 s a tornare al centro a 20 km/h (prima 0,3 s) e
+    3,8 s a 10 km/h: il bus continua a girare dopo che si è lasciato il tasto, e in città un colpo di tasto lo fa
+    girare da 1,5 a 2,5 volte più di prima.
+  - Regolazione "Sensibilità dello sterzo" nel menu (punto 8, nascosto col tram) e nella pausa (riquadro Autobus):
+    Bassa 0,5, Media 0,7 (di partenza), Alta 1 (lo sterzo dal 6 all'11 novembre), Molto alta 1,4, salvata in
+    `localStorage` (`padova-bus-sim-sterzo`). Passa al bus come `input.steerSens` e scala solo la velocità con cui i
+    tasti allontanano il volante dal centro; il controsterzo resta svelto, `maxSteer`, ritorno al centro e volante
+    touch non cambiano, quindi il giro guidato di `npm test` resta uguale.
+  - Se il giocatore la trova ancora diversa da prima: quello che resta è il ritorno al centro lento dopo il rilascio.
+    Si può renderlo più svelto solo dopo un tasto (il pilota delle prove non preme tasti), ma cambia la guida di
+    tutti: da decidere.
+- Prossimo lavoro, in quest'ordine: gamepad e volante (Gamepad API); bus elettrico con batteria e ricarica al capolinea;
   telecamera della porta posteriore sul cruscotto; specchietti regolabili.
 - Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
