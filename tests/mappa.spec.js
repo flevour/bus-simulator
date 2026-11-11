@@ -26,6 +26,8 @@ const SOGLIE = {
   fermate_con_ostacoli: 9,
   fermate_fuori_strada: 6,
   fermate_spostate: 6,
+  segni_sulla_sede: 0,
+  asfalto_sopra_sede: 0,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',
@@ -36,6 +38,8 @@ const NOMI = {
   fermate_con_ostacoli: 'fermate dove il bus fermo tocca un ostacolo',
   fermate_fuori_strada: 'fermate dove il bus fermo ha le ruote oltre il cordolo',
   fermate_spostate: 'fermate agganciate a più di 40 m dalla fermata vera',
+  segni_sulla_sede: 'quadrati di 10 m con segni della strada sopra la sede del tram',
+  asfalto_sopra_sede: 'quadrati di 10 m con asfalto sopra la sede del tram',
 };
 
 test('rapporto di verifica sulla mappa', async ({ pagina, gioco }, info) => {
@@ -87,6 +91,49 @@ function misura() {
   classifica('lampioni', 'lampioni_in_carreggiata', di('pole'));
   classifica('alberi', 'alberi_in_carreggiata', di('tree'));
   classifica('pensiline', 'pensiline_in_carreggiata', di('shelter'));
+
+  // sede del tram pulita (segnalazioni dell'11 novembre dal SIR3 verso Cornaro): segni della strada (le mesh con
+  // userData.segno) e asfalto sopra le corsie rosse, cordoli esclusi. Un caso per quadrato di 10 m. La sede è quella
+  // del gioco con la sua quota (city.onSede): i segni a terra sotto un viadotto del tram non contano
+  const quadrati = (mappa, x, z, voce) => {
+    const k = Math.floor(x / 10) + ',' + Math.floor(z / 10), c = mappa.get(k) || { x: Math.round(x), z: Math.round(z), via: via(x, z), n: 0 };
+    c.n++;
+    if (voce) c.cm = Math.max(c.cm || 0, voce);
+    mappa.set(k, c);
+  };
+  const segni = new Map(), asfalto = new Map();
+  let asf = null;
+  city.group.traverse((o) => {
+    if (o.isMesh && o.material === city.asphMat) asf = o;
+    if (!o.isMesh || !o.userData.segno) return;
+    const P = o.geometry.attributes.position, I = o.geometry.index, n = (I ? I.count : P.count) / 3;
+    for (let t = 0; t < n; t++) {
+      let x = 0, y = 0, z = 0;
+      for (let k = 0; k < 3; k++) { const i = I ? I.getX(3 * t + k) : 3 * t + k; x += P.getX(i) / 3; y += P.getY(i) / 3; z += P.getZ(i) / 3; }
+      if (city.onSede(x, z, y - 0.14, -0.4)) quadrati(segni, x, z);
+    }
+  });
+  // asfalto: la quota la mette lo shader del terreno ai vertici; dentro il triangolo è la media, la sede rossa sta 3 cm
+  // sopra il terreno. Campioni ogni 1,5 m, conta chi supera la sede di più di 2 cm
+  if (asf && g.terrain.ok) {
+    const T = (x, z) => g.terrain.at(x, z), P = asf.geometry.attributes.position, I = asf.geometry.index;
+    for (let t = 0; t < I.count / 3; t++) {
+      const v = [0, 1, 2].map((k) => { const i = I.getX(3 * t + k), x = P.getX(i), z = P.getZ(i); return [x, z, P.getY(i) + T(x, z)]; });
+      const x0 = Math.min(v[0][0], v[1][0], v[2][0]), x1 = Math.max(v[0][0], v[1][0], v[2][0]), z0 = Math.min(v[0][1], v[1][1], v[2][1]), z1 = Math.max(v[0][1], v[1][1], v[2][1]);
+      if (!city.tramIn(x0, z0, x1, z1)) continue;
+      const det = (v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1]);
+      if (Math.abs(det) < 1e-6) continue;
+      for (let x = x0; x <= x1; x += 1.5) for (let z = z0; z <= z1; z += 1.5) {
+        const a = ((x - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (z - v[0][1])) / det;
+        const b = ((v[1][0] - v[0][0]) * (z - v[0][1]) - (x - v[0][0]) * (v[1][1] - v[0][1])) / det;
+        if (a < 0 || b < 0 || a + b > 1 || !city.onSede(x, z, 0, -0.4)) continue;
+        const sopra = v[0][2] * (1 - a - b) + v[1][2] * a + v[2][2] * b - (0.14 + 0.03 + T(x, z));
+        if (sopra > 0.02) quadrati(asfalto, x, z, Math.round(sopra * 100));
+      }
+    }
+  }
+  casi.segni_sulla_sede = [...segni.values()];
+  casi.asfalto_sopra_sede = [...asfalto.values()];
 
   // fermate di tutte le varianti: si avvia la corsa (le fermate si allineano alle paline come in gioco) e si mette il
   // bus nella posizione di fermata (stopPose di src/game/routes.js)

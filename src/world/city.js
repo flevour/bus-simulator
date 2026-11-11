@@ -18,6 +18,10 @@ const SIDEWALK = 4;
 const AREA_NEAR = 1500, AREA_FAR = 2600;
 
 // strati coplanari: spinge in avanti nel depth buffer (evita z-fighting)
+// segno della strada (righe, strisce, frecce, scritte, dossi): il rapporto della mappa conta quelli sopra la sede del
+// tram (tests/mappa.spec.js)
+const segno = (m) => { m.userData.segno = true; return m; };
+
 export function layer(mat, n) {
   mat.polygonOffset = true;
   mat.polygonOffsetFactor = -n;
@@ -102,11 +106,23 @@ function pointInPoly(x, z, pts) {
 // ---------- helper geometria ----------
 class GeoBuilder {
   constructor() { this.pos = []; this.uv = []; this.idx = []; }
+  // skip(x, z, h): per i segni della strada, il quadrilatero non si disegna se un suo punto (vertici e mezzeria ogni
+  // metro, da p0-p1 a p2-p3) cade dove skip dice di no; h è la quota sopra la strada a terra
   quad(p0, p1, p2, p3, uv) {
+    if (this.skip && this.skipQuad(p0, p1, p2, p3)) return;
     const b = this.pos.length / 3;
     for (const p of [p0, p1, p2, p3]) this.pos.push(p[0], p[1], p[2]);
     this.uv.push(...uv);
     this.idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+  }
+  skipQuad(p0, p1, p2, p3) {
+    const ps = [p0, p1, p2, p3], h = (p0[1] + p3[1]) / 2 - Y_ROAD;
+    // skipNear(x0, z0, x1, z1): prova veloce sul rettangolo che contiene il quadrilatero
+    if (this.skipNear && !this.skipNear(Math.min(p0[0], p1[0], p2[0], p3[0]) - 1, Math.min(p0[2], p1[2], p2[2], p3[2]) - 1, Math.max(p0[0], p1[0], p2[0], p3[0]) + 1, Math.max(p0[2], p1[2], p2[2], p3[2]) + 1)) return false;
+    if (ps.some((p) => this.skip(p[0], p[2], h))) return true;
+    const ax = (p0[0] + p1[0]) / 2, az = (p0[2] + p1[2]) / 2, bx = (p2[0] + p3[0]) / 2, bz = (p2[2] + p3[2]) / 2, n = Math.ceil(Math.hypot(bx - ax, bz - az));
+    for (let k = 0; k <= n; k++) if (this.skip(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n, h)) return true;
+    return false;
   }
   // nastro lungo una spezzata (pts: [{x, z}]) con giunti a cuneo: i tratti consecutivi non si sovrappongono (niente
   // z-fighting) e le righe di bordo girano senza tacche. u: 0 sinistra -> 1 destra, v continua lungo la spezzata
@@ -153,17 +169,23 @@ class GeoBuilder {
       if (sgn > 0) this.idx.push(b + i0, b + i2, b + i1); else this.idx.push(b + i0, b + i1, b + i2);
     }
   }
-  // come polygon, con la quota di ogni vertice da yFn(x, z). Con maxEdge i triangoli si dividono a metà del lato più
-  // lungo finché nessun lato supera maxEdge: la superficie segue il profilo della rampa invece di tagliarlo a corda
-  // (l'impalcato del Camerini, con un lato di 170 m, spuntava sopra l'asfalto). Il punto di mezzo di un lato è unico
-  // per i due triangoli che lo hanno, e ogni lato più lungo di maxEdge lo dividono tutti e due: niente fessure
-  polygonH(rings, yFn, uvScale = 20, maxEdge = 0) {
+  // come polygon, con la quota di ogni vertice da yFn(x, z). Con tol i lati più lunghi di 1 m la cui quota a metà si
+  // stacca di più di tol dalla corda si dividono: la superficie segue il profilo della rampa invece di tagliarlo
+  // (l'impalcato del Camerini, con un lato di 170 m, spuntava sopra l'asfalto), e dove è piana o dritta resta com'è
+  polygonH(rings, yFn, uvScale = 20, tol = 0) {
     const b = this.pos.length / 3, t0 = this.idx.length;
     this.polygon(rings, 0, uvScale);
     const P = this.pos;
     for (let i = b * 3; i < P.length; i += 3) P[i + 1] = yFn(P[i], P[i + 2]);
-    if (!maxEdge) return;
-    const tris = this.idx.splice(t0), mid = new Map(), L2 = maxEdge * maxEdge;
+    if (tol) this.refine(t0, yFn, uvScale, (l2, ax, az, bx, bz, ya, yb) => l2 > 1 && Math.abs(yFn((ax + bx) / 2, (az + bz) / 2) - (ya + yb) / 2) > tol);
+  }
+  // divide i triangoli dall'indice t0 in poi finché nessun lato lo chiede (split(l2, ax, az, bx, bz, ya, yb): l2
+  // lunghezza al quadrato, ya e yb quote dei capi). Si divide sempre il lato più lungo, a metà (dividere quello che lo
+  // chiede, se è corto, non finiva più: mediane sempre lunghe in triangoli sempre più sottili). Il punto di mezzo è
+  // unico per i due triangoli che hanno il lato; se il vicino non lo divide, lì la quota si stacca al più quanto split
+  // tollera
+  refine(t0, yFn, uvScale, split) {
+    const P = this.pos, tris = this.idx.splice(t0), mid = new Map();
     const d2 = (i, j) => (P[3 * i] - P[3 * j]) ** 2 + (P[3 * i + 2] - P[3 * j + 2]) ** 2;
     const half = (i, j) => {
       const k = i < j ? i + ',' + j : j + ',' + i;
@@ -179,9 +201,10 @@ class GeoBuilder {
     };
     const todo = [];
     for (let i = 0; i < tris.length; i += 3) todo.push([tris[i], tris[i + 1], tris[i + 2]]);
+    const want = (i, j, l) => split(l, P[3 * i], P[3 * i + 2], P[3 * j], P[3 * j + 2], P[3 * i + 1], P[3 * j + 1]);
     while (todo.length) {
       const [a, c, e] = todo.pop(), ac = d2(a, c), ce = d2(c, e), ea = d2(e, a), l = Math.max(ac, ce, ea);
-      if (l <= L2) { this.idx.push(a, c, e); continue; }
+      if (!want(a, c, ac) && !want(c, e, ce) && !want(e, a, ea)) { this.idx.push(a, c, e); continue; }
       // stesso verso di rotazione nei due triangoli nuovi
       if (l === ac) { const m = half(a, c); todo.push([a, m, e], [m, c, e]); }
       else if (l === ce) { const m = half(c, e); todo.push([a, c, m], [a, m, e]); }
@@ -197,12 +220,13 @@ class GeoBuilder {
       this.quad(P(a0, r1), P(a0, r0), P(a1, r1), P(a1, r0), [0, va, 1, va, 0, vb, 1, vb]);
     }
   }
-  // nastro da A a B, larghezza w, quota y; v in metri / vScale (spezzato in tratti <= 40 m)
+  // nastro da A a B, larghezza w, quota y; v in metri / vScale (spezzato in tratti <= 40 m; con hFn <= 4 m, perché il
+  // terreno si prende ai vertici e la sede del tram restava sotto l'asfalto dove il terreno si incurva)
   ribbon(ax, az, bx, bz, w, y, vScale = 12, v0 = 0, hFn = null) {
     const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz);
     if (l < 0.01) return;
     const nx = (-dz / l) * (w / 2), nz = (dx / l) * (w / 2);
-    const n = Math.max(1, Math.ceil(l / (hFn ? 10 : 40)));
+    const n = Math.max(1, Math.ceil(l / (hFn ? 4 : 40)));
     for (let k = 0; k < n; k++) {
       const t0 = k / n, t1 = (k + 1) / n;
       const x0 = ax + dx * t0, z0 = az + dz * t0, x1 = ax + dx * t1, z1 = az + dz * t1;
@@ -371,6 +395,7 @@ const PAL_OUT = ['#e8dcc3', '#d5c4a1', '#c9c1b3', '#e9e4da', '#b8ab95', '#d4a373
 
 export class City {
   constructor(scene, net, opts = {}) {
+    this.terrain = opts.terrain || null; // quote del terreno (Terrain di terrain.js), per l'asfalto vicino alla sede del tram
     this.scene = scene;
     this.net = net;
     this.uniforms = { uNight: { value: 0 } };
@@ -450,6 +475,17 @@ export class City {
     const thw = this.net.tramLanes ? TRAM.lane + 0.3 : TRAM_HW;
     for (const t of this.net.tram || []) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, thw, 'tram');
     for (const T of this.net.tramLines || []) for (const t of T.lanes) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, TRAM.lane + 0.3, 'tram');
+    // solo la sede, per i segni della strada (onSede, offTram), e solo le strade in quota, per le quote di carreggiate
+    // e impalcati in quota vertice per vertice (elevHeight)
+    this.tramGrid = new Grid(40);
+    this.elevGrid = new Grid(20);
+    const seen = new Set();
+    for (const it of this.segGrid.map.values()) for (const t of it) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      const g = t.kind === 'tram' ? this.tramGrid : t.kind === 'road' && t.ref && t.ref.elev ? this.elevGrid : null;
+      if (g) g.insertAABB(t, Math.min(t.ax, t.bx) - t.hw, Math.min(t.az, t.bz) - t.hw, Math.max(t.ax, t.bx) + t.hw, Math.max(t.az, t.bz) + t.hw);
+    }
   }
   // distanza libera (positiva = fuori) dalle feature
   clearance(x, z, kinds = null, r = 40) {
@@ -653,6 +689,8 @@ export class City {
     // Ogni rampa o dosso va anche in bumpGrid (bumpHit): sev è lo scossone, lim la velocità che non dà fastidio
     this.bumpGrid = new Grid(40);
     const bumpY = new GeoBuilder(), bumpK = new GeoBuilder();
+    // segni della strada fuori dalla sede del tram (da lontano spuntavano dalla sede rossa a trattini)
+    for (const g of [marks, paint, paintBus, bumpY, bumpK]) this.sedeSkip(g);
     const CALM = [{ sev: 1, lim: 25, len: 0.6 }, { sev: 0.7, lim: 30, len: 1.2 }, { sev: 0.3, lim: 40, len: 2.4 }, { sev: 0.6, lim: 30 }, { sev: 0.6, lim: 30 }];
     const calmingAt = (e, A, s, c) => {
       const hw = e.width / 2 - 0.3, rx = -e.dz, rz = e.dx, y = Y_ROAD + 0.018, kd = CALM[c.kind];
@@ -664,6 +702,7 @@ export class City {
       const teeth = (t, dir) => {
         for (let w = -hw + 0.2; w < hw - 0.6; w += 1.0) {
           const b0 = P(t, w), b1 = P(t, w + 0.6), tip = P(t + dir * 0.8, w + 0.3);
+          if ([b0, b1, tip].some((p) => this.onSede(p[0], p[2]))) continue;
           paintTri.push(...(dir > 0 ? [b0, b1, tip] : [b1, b0, tip]));
         }
       };
@@ -716,7 +755,7 @@ export class City {
         // righe tra le corsie (mezzeria, divisorie, corsie dei bus) e scritte BUS; le righe di bordo seguono il bordo
         // dell'asfalto (buildSurfaces)
         if (!e0.ped && !e0.roundabout) {
-          for (const ln of painted(e0)) laneLine(ln, road2, (g, d, w) => g.strip(d, w, Y_ROAD + 0.012, 1, ln.off));
+          for (const ln of painted(e0)) laneLine(ln, road2, (g, d, w) => { for (const r of this.offTram(d, ln.off)) g.strip(r, w, Y_ROAD + 0.012, 1, ln.off); });
           busWriting(road2, laneLayout(e0));
         }
         continue;
@@ -746,7 +785,7 @@ export class City {
           // rampa, e le pile
           for (const ln of painted(e)) {
             const ox = -e.dz * ln.off, oz = e.dx * ln.off;
-            laneLine(ln, [{ x: A.x, z: A.z }, { x: B.x, z: B.z }], (g, d, w) => g.ribbon(d[0].x + ox, d[0].z + oz, d[d.length - 1].x + ox, d[d.length - 1].z + oz, w, Y_ROAD + 0.012, 1, 0, hFn));
+            laneLine(ln, [{ x: A.x, z: A.z }, { x: B.x, z: B.z }], (g, d, w) => { for (const r of this.offTram(d, ln.off, hFn)) g.ribbon(r[0].x + ox, r[0].z + oz, r[r.length - 1].x + ox, r[r.length - 1].z + oz, w, Y_ROAD + 0.012, 1, 0, hFn); });
           }
           this.buildOverpass(e, A, curb);
           continue;
@@ -827,21 +866,21 @@ export class City {
     const wm = new THREE.Mesh(mergeGeometries([walk.build().toNonIndexed(), walkDisc.build().toNonIndexed()]), swMat);
     wm.receiveShadow = true;
     const cm = new THREE.Mesh(curb.length ? mergeGeometries(curb) : new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ color: 0xbdb8ae }));
-    const mk = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4));
+    const mk = segno(new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4)));
     this.group.add(rm, im, wm, cm, mk);
-    if (lines.pos.length) this.group.add(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4)));
-    if (yellow.pos.length) this.group.add(new THREE.Mesh(yellow.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe6b422 }), 4)));
-    if (bumpY.pos.length) this.group.add(new THREE.Mesh(bumpY.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8b818 }), 5)), new THREE.Mesh(bumpK.build(), layer(new THREE.MeshLambertMaterial({ color: 0x1c1c1c }), 5)));
+    if (lines.pos.length) this.group.add(segno(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4))));
+    if (yellow.pos.length) this.group.add(segno(new THREE.Mesh(yellow.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe6b422 }), 4))));
+    if (bumpY.pos.length) this.group.add(segno(new THREE.Mesh(bumpY.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8b818 }), 5))), segno(new THREE.Mesh(bumpK.build(), layer(new THREE.MeshLambertMaterial({ color: 0x1c1c1c }), 5))));
     if (paintTri.length) {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(paintTri.flat(), 3));
       g.computeVertexNormals();
-      this.group.add(new THREE.Mesh(g, layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 5)));
+      this.group.add(segno(new THREE.Mesh(g, layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 5))));
     }
     if (paint.pos.length || paintBus.pos.length) {
       const atlas = TX.roadMarkAtlas(), mat = (color) => layer(new THREE.MeshLambertMaterial({ map: atlas, color, alphaTest: 0.5 }), 5);
-      if (paint.pos.length) this.group.add(new THREE.Mesh(paint.build(), mat(0xe8e8e2)));
-      if (paintBus.pos.length) this.group.add(new THREE.Mesh(paintBus.build(), mat(0xe6b422)));
+      if (paint.pos.length) this.group.add(segno(new THREE.Mesh(paint.build(), mat(0xe8e8e2))));
+      if (paintBus.pos.length) this.group.add(segno(new THREE.Mesh(paintBus.build(), mat(0xe6b422))));
     }
   }
 
@@ -850,6 +889,21 @@ export class City {
   buildSurfaces() {
     const S = this.net.surfaces, T = S.tile;
     const asph = new GeoBuilder(), walk = new GeoBuilder(), isl = new GeoBuilder(), kerb = new GeoBuilder(), side = new GeoBuilder(), islandLines = new GeoBuilder();
+    // sulla sede del tram niente righe delle isole né cordoli dell'asfalto (questi solo dentro le corsie rosse: il bordo
+    // della sede accanto al marciapiede il cordolo ce l'ha)
+    this.sedeSkip(islandLines);
+    this.sedeSkip(kerb, -0.4);
+    // vicino alla sede l'asfalto segue il terreno: la quota la mette lo shader ai vertici, e i triangoli lunghi decine di
+    // metri passavano sopra la sede rossa dove il terreno si incurva (argine del canale verso Cornaro). Un lato più lungo
+    // di 2 m si divide se la sede è più vicina della sua lunghezza e il terreno a 1/4, 1/2 e 3/4 si stacca dalla corda
+    const ter = this.terrain && this.terrain.ok ? (x, z) => this.terrain.at(x, z) : null;
+    const nearSede = (l2, ax, az, bx, bz) => {
+      if (!ter || l2 <= 4) return false;
+      const l = Math.sqrt(l2);
+      if (!this.tramIn(Math.min(ax, bx) - l, Math.min(az, bz) - l, Math.max(ax, bx) + l, Math.max(az, bz) + l)) return false;
+      const ta = ter(ax, az), tb = ter(bx, bz);
+      return [0.25, 0.5, 0.75].some((t) => Math.abs(ter(ax + (bx - ax) * t, az + (bz - az) * t) - ta - (tb - ta) * t) > 0.01);
+    };
     const green = new GeoBuilder(); // prati, aree alberate e aiuole del DBGT
     this.asphRings = new Map();
     this.asphEdges = new Grid(20);
@@ -899,10 +953,13 @@ export class City {
         const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, sx = (-(b.z - a.z) / l) * sg, sz = ((b.x - a.x) / l) * sg, mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
         ok.push(keep(a, b, mx + sx * 1.2, mz + sz * 1.2, mx - sx * 0.5, mz - sz * 0.5));
       }
-      const draw = (pts) => {
-        const p0 = edgeLines.pos.length;
-        edgeLines.strip(pts, 0.14, Y_ROAD + 0.012, 1, 0.35 * sg);
-        if (yFn) for (let i = p0; i < edgeLines.pos.length; i += 3) edgeLines.pos[i + 1] = yFn(edgeLines.pos[i], edgeLines.pos[i + 2]);
+      // dove il bordo è quello della sede del tram (binario accanto alla strada) la riga non c'è
+      const draw = (all) => {
+        for (const pts of this.offTram(all, 0.35 * sg, yFn && ((x, z) => yFn(x, z) - Y_ROAD - 0.012))) {
+          const p0 = edgeLines.pos.length;
+          edgeLines.strip(pts, 0.14, Y_ROAD + 0.012, 1, 0.35 * sg);
+          if (yFn) for (let i = p0; i < edgeLines.pos.length; i += 3) edgeLines.pos[i + 1] = yFn(edgeLines.pos[i], edgeLines.pos[i + 2]);
+        }
       };
       if (ok.every(Boolean)) { const pts = []; for (let i = 0; i <= n + 1; i++) pts.push(pt(i)); draw(pts); return; }
       let run = null;
@@ -917,7 +974,11 @@ export class City {
       const ib = I.map((p) => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; const r = p[0]; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); z0 = Math.min(z0, r[i + 1]); z1 = Math.max(z1, r[i + 1]); } return [x0, z0, x1, z1, p]; });
       const onIsland = (x, z) => ib.some(([x0, z0, x1, z1, p]) => x >= x0 && x <= x1 && z >= z0 && z <= z1 && inside(x, z, p));
       for (const poly of A) {
+        const t0 = asph.idx.length, r0 = poly[0];
         asph.polygon(poly, Y_ROAD, 20);
+        let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+        for (let i = 0; i < r0.length; i += 2) { x0 = Math.min(x0, r0[i]); x1 = Math.max(x1, r0[i]); z0 = Math.min(z0, r0[i + 1]); z1 = Math.max(z1, r0[i + 1]); }
+        if (this.tramIn(x0, z0, x1, z1)) asph.refine(t0, () => Y_ROAD, 20, nearSede);
         rings.push(...poly);
         eachEdge(poly, ix, iz, (ax, az, bx, bz) => {
           this.asphEdges.insertAABB({ ax, az, bx, bz }, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz));
@@ -943,10 +1004,10 @@ export class City {
     // carreggiate in quota: alla quota della strada (vertici ogni 4 m), sopra l'impalcato e sopra l'asfalto a terra ai
     // piedi delle rampe
     const upA = new GeoBuilder();
-    for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.heightAt(x, z) + 0.004, 20, 4);
+    for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.004, 20, 0.02);
     // righe di bordo anche in quota, tranne dove la rampa si fonde con l'asfalto a terra (al piede)
     const onGround = (x, z) => rg.query(x, z, 1, q).some((it) => !it.ref.elev && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw);
-    for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => marked(inx, inz, true) && !onGround(outx, outz), (x, z) => Y_ROAD + this.heightAt(x, z) + 0.012);
+    for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => marked(inx, inz, true) && !onGround(outx, outz), (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.012);
     if (upA.pos.length) { const um = new THREE.Mesh(upA.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3)); um.receiveShadow = true; this.upMat = um.material; this.group.add(um); }
     const am = new THREE.Mesh(asph.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
     am.receiveShadow = true;
@@ -969,7 +1030,7 @@ export class City {
       this.group.add(gm);
     }
     const lineMat = layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4);
-    for (const g of [islandLines, edgeLines]) if (g.pos.length) this.group.add(new THREE.Mesh(g.build(), lineMat));
+    for (const g of [islandLines, edgeLines]) if (g.pos.length) this.group.add(segno(new THREE.Mesh(g.build(), lineMat)));
   }
   // dosso o rampa attraversati da obj (x, z) dall'ultima chiamata: il più forte, { sev, lim }, o null
   bumpHit(obj) {
@@ -1036,7 +1097,7 @@ export class City {
         kerb.push(new THREE.CylinderGeometry(ri, ri, 0.16, 48, 1, true).translate(g.cx, Y_ROAD + 0.08, g.cz));
         kerb.push(new THREE.RingGeometry(ri - 0.35, ri, 48).rotateX(-Math.PI / 2).translate(g.cx, Y_ROAD + 0.16, g.cz));
         grass.push(new THREE.CircleGeometry(ri - 0.3, 48).rotateX(-Math.PI / 2).translate(g.cx, Y_ROAD + 0.155, g.cz));
-      } else {
+      } else if (!this.onSede(g.cx, g.cz)) {
         paint.push(new THREE.CircleGeometry(Math.max(1, ri), 32).rotateX(-Math.PI / 2).translate(g.cx, Y_ROAD + 0.03, g.cz));
       }
     }
@@ -1049,7 +1110,7 @@ export class City {
       m.receiveShadow = true;
       this.group.add(m);
     }
-    if (paint.length) this.group.add(new THREE.Mesh(mergeGeometries(paint), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4)));
+    if (paint.length) this.group.add(segno(new THREE.Mesh(mergeGeometries(paint), layer(new THREE.MeshLambertMaterial({ color: 0xeeeeea }), 4))));
     this.roundabouts = rings;
   }
 
@@ -1112,6 +1173,15 @@ export class City {
   // quota della strada in un punto. Con cur (quota attuale del veicolo) vale, tra le superfici che ci sono lì, quella
   // più vicina a cur: il piano terra conta solo dove sotto il cavalcavia passa davvero un'altra strada, così sulle
   // rampe si sale e chi passa sotto resta a terra
+  // come heightAt(x, z) senza cur, cercando solo tra le strade in quota (molto più veloce, per costruire la scena)
+  elevHeight(x, z) {
+    let h = 0;
+    for (const it of this.elevGrid.query(x, z, 12, this._qeh || (this._qeh = []))) {
+      const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
+      if (r.d <= it.hw + 1.5) h = Math.max(h, edgeHeight(it.ref, r.t * it.ref.len));
+    }
+    return h;
+  }
   heightAt(x, z, cur = null) {
     const arr = this.segGrid.query(x, z, 12, this._qh || (this._qh = []));
     let h = 0, best = Infinity, any = false, under = false;
@@ -1229,8 +1299,11 @@ export class City {
       return { x: cx + nx * (half - 0.55), z: cz + nz * (half - 0.55), pole: true };
     };
     // ogni binario una volta: i tratti in comune li disegna la sede che c'era già
+    // corsie rosse dei due versi in due mesh, il verso -1 un gradino sopra: dove i binari sono vicini le corsie si
+    // sovrappongono, e la riga bianca del bordo di una, a pari livello con il rosso dell'altra, si vedeva a trattini
+    const red2 = new GeoBuilder();
     for (const track of tracks) for (const dir of [1, -1]) {
-      const P = track.path(dir);
+      const P = track.path(dir), R = dir > 0 ? red : red2;
       let lastPole = -1e9, prevWire = null;
       // tratto di binario da a a b (progressive sa, sb)
       const piece = (a, b, sa, sb) => {
@@ -1240,9 +1313,15 @@ export class City {
         const hFn = ha || hb ? (x, z) => ha + (hb - ha) * Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l)) : null;
         const off = (o) => [a.x + nx * o, a.z + nz * o, b.x + nx * o, b.z + nz * o];
         // corsia rossa, rotaia di guida al centro, cordolo esterno (e interno dove il binario è singolo)
-        red.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.03, 8, 0, hFn);
-        // disco di raccordo nei giunti: solo in piano, in rampa sporgerebbe sopra la corsia
-        if (Math.abs(hb - ha) < 0.02) red.disc(b.x, b.z, L, Y_ROAD + 0.029 + hb, 8, 8);
+        R.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.03, 8, 0, hFn);
+        // disco di raccordo nei giunti: solo in piano, in rampa sporgerebbe sopra la corsia. In tinta unita come il centro
+        // della corsia: con le uv del mondo mostrava pezzi storti delle righe bianche dei bordi (i "trattini" sparsi sulla
+        // sede segnalati l'11 novembre); un po' più in basso, così dove si sovrappone vince la corsia
+        if (Math.abs(hb - ha) < 0.02) {
+          const u0 = R.uv.length;
+          R.disc(b.x, b.z, L, Y_ROAD + 0.025 + hb, 8, 8);
+          for (let i = u0; i < R.uv.length; i += 2) R.uv[i] = 0.5;
+        }
         rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8, 0, hFn);
         kerb.ribbon(...off(L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
         if (track.doubleAt(dir, sa) < 0.5) kerb.ribbon(...off(-L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
@@ -1298,7 +1377,9 @@ export class City {
     }
     const tex = TX.tramLaneTexture();
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));
-    rm.receiveShadow = true;
+    const rm2 = new THREE.Mesh(red2.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5.5));
+    rm.receiveShadow = rm2.receiveShadow = true;
+    this.group.add(rm2);
     this.group.add(rm, new THREE.Mesh(rail.build(), layer(new THREE.MeshLambertMaterial({ color: 0x9da3a8 }), 6)), new THREE.Mesh(kerb.build(), layer(new THREE.MeshLambertMaterial({ color: 0xd8d4cc }), 6)));
     if (deck.length) { const dm = new THREE.Mesh(mergeGeometries(deck), new THREE.MeshLambertMaterial({ color: 0xb7b1a6 })); dm.castShadow = true; this.group.add(dm); }
     if (piers.length) this.group.add(new THREE.Mesh(mergeGeometries(piers), new THREE.MeshLambertMaterial({ color: 0xa8a39a })));
@@ -1437,31 +1518,45 @@ export class City {
   buildDecks() {
     const D = this.net.surfaces && this.net.surfaces.decks;
     if (!D || !D.length) return;
-    const track = this.tramTrack, q = [];
+    const track = this.tramTrack, q = [], qt = [];
+    // tratti dei due binari in una griglia: la proiezione su tutto il percorso, per ogni vertice dell'impalcato vicino al
+    // tram, costava secondi
+    const tg = new Grid(20);
+    if (track) for (const d of [1, -1]) {
+      const P = track.path(d);
+      for (let i = 0; i < P.pts.length - 1; i++) {
+        const a = P.pts[i], b = P.pts[i + 1];
+        tg.insertAABB({ d, P, i }, Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z));
+      }
+    }
     const near = (x, z) => {
       let best = Infinity, h = 0, cross = false;
-      for (const it of this.segGrid.query(x, z, 16, q)) {
-        if (it.kind !== 'road' || !it.ref || !it.ref.elev) continue;
+      for (const it of this.elevGrid.query(x, z, 16, q)) {
         const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz), sc = Math.max(0, r.d - it.hw);
         if (r.d < it.hw + 0.6) cross = true;
         if (sc < best) { best = sc; h = edgeHeight(it.ref, r.t * it.ref.len); }
       }
-      if (track) for (const d of [1, -1]) {
-        const P = track.path(d), pr = P.project(x, z);
-        if (pr.d > 16) continue;
-        const sc = Math.max(0, pr.d - TRAM.lane - 0.3);
-        if (pr.d < TRAM.lane + 0.9) cross = true;
-        if (sc < best) { best = sc; h = track.heightAt(d, pr.s); }
+      // binario più vicino in ogni verso, entro 16 m (come TrackPath.project sui soli tratti vicini)
+      const pr = { 1: { d: 16 }, [-1]: { d: 16 } };
+      for (const { d, P, i } of tg.query(x, z, 16, qt)) {
+        const a = P.pts[i], b = P.pts[i + 1], r = distToSeg(x, z, a.x, a.z, b.x, b.z);
+        if (r.d <= pr[d].d) pr[d] = { d: r.d, s: P.cum[i] + Math.hypot(b.x - a.x, b.z - a.z) * r.t };
+      }
+      for (const d of [1, -1]) {
+        if (pr[d].s === undefined) continue;
+        const sc = Math.max(0, pr[d].d - TRAM.lane - 0.3);
+        if (pr[d].d < TRAM.lane + 0.9) cross = true;
+        if (sc < best) { best = sc; h = track.heightAt(d, pr[d].s); }
       }
       return { h, cross };
     };
     const top = new GeoBuilder(), side = new GeoBuilder(), par = new GeoBuilder();
     const H = new Map(), at = (x, z) => { const k = x + ',' + z; if (!H.has(k)) H.set(k, near(x, z)); return H.get(k); };
     for (const rings of D) {
-      top.polygonH(rings, (x, z) => Y_ROAD + at(x, z).h - 0.02, 8, 4);
+      top.polygonH(rings, (x, z) => Y_ROAD + at(x, z).h - 0.06, 8, 0.03);
       for (const r of rings) for (let i = 0; i < r.length; i += 2) {
         const j = (i + 2) % r.length, ax = r[i], az = r[i + 1], bx = r[j], bz = r[j + 1];
-        const A = at(ax, az), B = at(bx, bz), ya = Y_ROAD + A.h - 0.02, yb = Y_ROAD + B.h - 0.02;
+        const A = at(ax, az), B = at(bx, bz), ya = Y_ROAD + A.h - 0.06, yb = Y_ROAD + B.h - 0.06;
         side.quad([ax, ya - 0.9, az], [bx, yb - 0.9, bz], [ax, ya, az], [bx, yb, bz], [0, 0, 1, 0, 0, 1, 1, 1]);
         const mx = (ax + bx) / 2, mz = (az + bz) / 2, M = near(mx, mz);
         if (A.h < 0.5 || B.h < 0.5 || M.cross) continue;
@@ -1494,6 +1589,56 @@ export class City {
   // tram: c'è la linea aerea sopra il binario di verso dir alla progressiva s?
   catenaryAt(dir, s) { return !this.tramTrack || this.tramTrack.wireAt(dir, s); }
 
+  // i quadrilateri del GeoBuilder g che cadono sulla sede del tram non si disegnano (segni della strada)
+  sedeSkip(g, margin = 0.1) {
+    g.skip = (x, z, h) => this.onSede(x, z, h, margin);
+    g.skipNear = (x0, z0, x1, z1) => this.tramIn(x0, z0, x1, z1);
+  }
+  // la sede del tram tocca il rettangolo?
+  tramIn(x0, z0, x1, z1) {
+    const arr = this.tramGrid.query((x0 + x1) / 2, (z0 + z1) / 2, Math.max(x1 - x0, z1 - z0) / 2, this._qti || (this._qti = []));
+    return arr.some((t) => Math.max(t.ax, t.bx) + t.hw > x0 && Math.min(t.ax, t.bx) - t.hw < x1 && Math.max(t.az, t.bz) + t.hw > z0 && Math.min(t.az, t.bz) - t.hw < z1);
+  }
+  // un segno della strada in (x, z), a quota h sopra il terreno, cade sulla sede del tram (corsie rosse, cordoli e quello
+  // che c'è tra i due binari)? Non conta la sede che passa sotto un cavalcavia o sopra la strada su un viadotto: la quota
+  // del binario è quella della strada in quota che affianca (come in buildTramway)
+  onSede(x, z, h = 0, margin = 0.1) {
+    for (const t of this.tramGrid.query(x, z, 3, this._qts || (this._qts = []))) {
+      if (distToSeg(x, z, t.ax, t.az, t.bx, t.bz).d >= t.hw + margin) continue;
+      const l = Math.hypot(t.bx - t.ax, t.bz - t.az) || 1;
+      if (Math.abs(this.nearElevatedHeight(x, z, (t.bx - t.ax) / l, (t.bz - t.az) / l) - h) < 1.5) return true;
+    }
+    return false;
+  }
+  // pezzi della spezzata pts (spostata di lato di off, come GeoBuilder.strip) fuori dalla sede del tram: le righe della
+  // strada che la attraversano o la affiancano si fermano al suo bordo. hAt(x, z): quota della riga sopra il terreno
+  offTram(pts, off = 0, hAt = null) {
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+    const pad = Math.abs(off) + 1;
+    if (!this.tramIn(x0 - pad, z0 - pad, x1 + pad, z1 + pad)) return [pts];
+    // campioni ogni metro; dei pezzi fuori dalla sede si tengono i vertici di pts e i due capi
+    const out = [];
+    let run = null, last = null;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z);
+      if (l < 1e-6) continue;
+      const nx = (-(b.z - a.z) / l) * off, nz = ((b.x - a.x) / l) * off, n = Math.ceil(l);
+      for (let k = run || last ? 1 : 0; k <= n; k++) {
+        const x = a.x + ((b.x - a.x) * k) / n, z = a.z + ((b.z - a.z) * k) / n, p = { x, z };
+        last = p;
+        if (this.onSede(x + nx, z + nz, hAt ? hAt(x, z) : 0, 0.3)) {
+          if (run && run.tail) run.push(run.tail);
+          run = null;
+          continue;
+        }
+        if (!run) { run = [p]; out.push(run); continue; }
+        if (k === n) { run.push(p); run.tail = null; } else run.tail = p;
+      }
+    }
+    if (run && run.tail) run.push(run.tail);
+    return out.filter((r) => r.length > 1);
+  }
   // la sede del tram sotto un punto?
   onTramway(x, z, margin = -0.4) {
     const arr = this.segGrid.query(x, z, 6, this._qt || (this._qt = []));
@@ -1653,6 +1798,8 @@ export class City {
     const yellow = new THREE.MeshLambertMaterial({ color: 0xf2c200 });
     const poleG = new THREE.CylinderGeometry(0.05, 0.05, 3, 8);
     const marks = new GeoBuilder(), busText = new GeoBuilder();
+    this.sedeSkip(marks); // niente zigzag gialli sulla sede del tram
+    this.sedeSkip(busText);
     const frames = [], glasses = [], benches = [], signs = [], yellows = [];
     const ATLAS_COLS = 16;
     const atlas = document.createElement('canvas');
@@ -1723,7 +1870,7 @@ export class City {
     const fm = new THREE.Mesh(mergeGeometries(frames), frame);
     fm.castShadow = true;
     this.group.add(fm, new THREE.Mesh(mergeGeometries(glasses), glass), new THREE.Mesh(mergeGeometries(benches), new THREE.MeshLambertMaterial({ color: 0x8a6a44 })));
-    const ym = new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2c200 }), 4));
+    const ym = segno(new THREE.Mesh(marks.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2c200 }), 4)));
     this.group.add(ym);
     // texture della scritta BUS gialla (lettere allungate come la segnaletica orizzontale)
     const bc = document.createElement('canvas');
@@ -1733,7 +1880,7 @@ export class City {
     bx.font = 'bold 120px Arial';
     bx.textAlign = 'center'; bx.textBaseline = 'middle';
     bx.fillText('BUS', 128, 68, 240);
-    const bt = new THREE.Mesh(busText.build(), layer(new THREE.MeshLambertMaterial({ map: TX.makeTex(bc, false), transparent: true, alphaTest: 0.4, depthWrite: false }), 4));
+    const bt = segno(new THREE.Mesh(busText.build(), layer(new THREE.MeshLambertMaterial({ map: TX.makeTex(bc, false), transparent: true, alphaTest: 0.4, depthWrite: false }), 4)));
     this.group.add(bt);
   }
 
@@ -1744,6 +1891,7 @@ export class City {
   buildSigns() {
     const { nodes, signs: real } = this.net;
     const fronts = [], backs = [], poles = [], lines = new GeoBuilder();
+    this.sedeSkip(lines); // linee d'arresto e di precedenza fuori dalla sede del tram
     this.stopSigns = [];
     this.signGrid = new Grid(60);
     const poleG = new THREE.CylinderGeometry(0.04, 0.04, 2.9, 6).translate(0, 1.45, 0);
@@ -1850,7 +1998,7 @@ export class City {
     const pm = new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x8f9497 }));
     pm.castShadow = true;
     this.group.add(pm);
-    if (lines.pos.length) this.group.add(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e0 }), 4)));
+    if (lines.pos.length) this.group.add(segno(new THREE.Mesh(lines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e0 }), 4))));
     this.signCount = fronts.length;
   }
 

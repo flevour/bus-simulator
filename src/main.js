@@ -121,7 +121,7 @@ function buildWorld() {
     v.cutStart = net.nodes[v.nodes[0]].edges.length === 1;
     v.cutEnd = net.nodes[v.nodes[v.nodes.length - 1]].edges.length === 1;
   }
-  city = new City(scene, net);
+  city = new City(scene, net, { terrain });
   lights = new TrafficLights(scene, net, city);
   city.buildSigns();
   trams = new TramSim(scene, net, { track: city.tramTrack, tracks: city.tramTracks });
