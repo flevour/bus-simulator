@@ -692,7 +692,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
 TERRAIN_CLOSE = 4  # celle (10 m): mezza larghezza della finestra quadrata della chiusura (riempie fino a ~80 m)
 TRAM_GRADE = 0.03  # pendenza massima del terreno lungo i binari fuori dalle strade (rilevati del tram)
 TRAM_BANK = 8.0  # m: mezza larghezza della striscia alzata attorno a un binario (celle del terreno da 10 m)
-ROAD_GRADE = 0.06  # pendenza massima della strada che passa un ponte sui fiumi, teste e accessi compresi
+ROAD_GRADE = 0.04  # pendenza massima della strada che passa un ponte sui fiumi, teste e accessi compresi
 ROAD_APPROACH = 60.0  # m: accessi del ponte considerati da ogni parte
 
 

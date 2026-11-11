@@ -87,8 +87,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        "Fatto");
      - [x] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (vedi "Fatto");
      - [x] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
-       stanno alla quota degli argini (vedi "Fatto"; per la strada resta il gradino alle teste del ponte, corsia
-       `mappa`);
+       stanno alla quota degli argini (vedi "Fatto");
      - [x] SIR2 intero fino a Rubano e al capolinea prima della rotonda per Venezia / SR11 (vedi "Fatto");
      - [ ] linee del bus allungate fino ai capolinea del GTFS, con tracciato e orario interi (la 24 da Mandriola oggi
        parte da Volta fr. 24), corsia `capolinea`;
@@ -230,6 +229,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Teste dei ponti sui fiumi** (corsia `mappa`, 11 novembre, dopo il ponte tra Cornaro e Voltabarozzo): alle teste
+  la strada saliva o scendeva di colpo verso la cresta dell'argine, perché l'alveo riempito dal terreno "via" stava
+  sotto la cresta (Corso Primo Maggio 2,2 m in 10 m, 29%; Ponte Sabbionari, Via Pontevigodarzere e Ponte Isonzo
+  9-10%). Lungo la strada di ogni ponte, con 60 m di accessi per parte, il profilo non sale né scende più del 4% e
+  l'impalcato resta dritto tra le teste (`ROAD_GRADE` e `raise_along` in `street_surfaces.terrain_for_game`, lo stesso
+  inviluppo dei rilevati del tram); si alza soltanto, mai sotto i tratti in quota. Corso Primo Maggio alzato fino a
+  2,8 m su 250 m, gli altri accessi al più 0,7 m. Pendenze più forti su 10 m alle teste, misurate nel gioco: Ponte
+  Sabbionari 7,3%, Corso Primo Maggio 7,1%, tutti gli altri ponti sotto il 6% (le celle del terreno da 10 m
+  arrotondano l'inviluppo). La prima prova, la cresta presa entro 15 m sulla cella più vicina, cambiava 42 ponti su
+  57 fino a 4 m in centro (terrapieni delle mura e delle rampe) ed è stata scartata.
 - [x] **Binari della stazione** (corsia `tram-turni`, 11 novembre): i due anelli del piazzale regolari e concentrici
   come nel rendering del progetto (lati lunghi dritti e paralleli, testate a semicerchio, 3,4 m tra gli anelli), scambi
   a S di 24 m tra gli anelli, raccordi a raggio costante verso Pace e verso ovest (raggi minimi da 8-12 m a 16 m).

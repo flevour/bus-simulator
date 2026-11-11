@@ -204,12 +204,6 @@ l'asfalto vicino alla sede del tram).
 
 Prossimo lavoro, in quest'ordine:
 
-- **ponte tra Cornaro e Voltabarozzo** (SIR3 e Via Piovese sul canale Scaricatore; foto di chi gioca dell'11
-  novembre): fatto per il binario (dettagli in IDEE, "Fatto"). Resta la strada: Via Piovese scende verso nord al
-  2,5% di media, ma alle teste del ponte sale e scende di 0,6-0,7 m in 10 m (6%), perché l'impalcato prende la quota
-  della sponda 3 m oltre la fine del ponte e la cresta dell'argine è più in là. La cresta presa entro 15 m sulla
-  griglia del terreno (celle da 10 m) è stata provata e scartata: cambiava 42 ponti su 57, fino a 4 m in centro.
-  Serve la quota della strada sull'argine (nodi OSM della rampa), non quella della cella;
 - cavalcavia del sondaggio del 9 novembre (sopra): foto dal posto di guida e guida di una linea che ci passa sul
   Cavalcavia Camerini, sul Borgomagno e su quelli lungo la 22 attorno a Via Orlandini; poi, al Borgomagno, la piega
   dei fili del tram e il gradino di 20 cm;
@@ -286,6 +280,11 @@ Fatto il 9 novembre (dettagli in [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md), s
 - funzioni nuove per i bordi dell'area: `gtfs_links` (vie fuori dall'area tra due vie dell'area dove passa un bus: Via
   Bembo per la 3, che toglie l'A-B-A di Via Bembo della lista della corsia `mappa`, e Via Volta per la 24) e il taglio
   dei tornanti in testa e in coda in `cut_path`.
+
+Segnalato da `mappa` l'11 novembre, dopo il SIR2 intero (`aae9385`): la 14 da Granze (verso Ferrovia) si ferma prima di
+Piovese Park contro un albero in x 2528, z 3577, con il bus 1,9 m fuori dall'asfalto (golfo di fermata di Piovese
+Park, `stop_lanes`); prima di quel commit lo stesso giro guidato passava. Da guardare con le fermate fuori strada
+salite da 4 a 6 nella soglia di `tests/mappa.spec.js`.
 
 Funzioni della corsia `mappa` cambiate da `capolinea`: `stop_lanes` in `build_map.py` accetta anche i golfi di fermata
 (strade di servizio a senso unico, palina fino a 5 m oltre il bordo o dentro il golfo, percorso attuale almeno 3 m più
