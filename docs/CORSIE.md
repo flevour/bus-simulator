@@ -204,9 +204,9 @@ l'asfalto vicino alla sede del tram).
 
 Prossimo lavoro, in quest'ordine:
 
-- cavalcavia del sondaggio del 9 novembre (sopra): foto dal posto di guida e guida di una linea che ci passa sul
-  Cavalcavia Camerini, sul Borgomagno e su quelli lungo la 22 attorno a Via Orlandini; poi, al Borgomagno, la piega
-  dei fili del tram e il gradino di 20 cm;
+- strade ripide senza ponte: la 13 vicino ad Altichiero (x -485, z -4078) sale e scende sul terreno al 36% per una
+  decina di metri (argine attraversato senza ponte in OSM?); da guardare con le altre pendenze oltre il 20% lungo le
+  linee (sonda della quota assoluta, `heightAt` più terreno, ogni 0,5 m);
 - sede di SIR3 e SIR2 nella pianta delle strade: fatta per isole, marciapiedi, edifici e impalcati (i binari di
   `data/tram-linee-nuove.json` entrano in `street_surfaces.surfaces` come quelli del SIR1; la sede di tutte le linee
   è asfalto, fuori da isole e marciapiedi: rotonde attraversate dal tram a posto). Cavalcavia di Chiesanuova: rampe

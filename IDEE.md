@@ -229,6 +229,14 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Gradini sui cavalcavia e fili del tram** (sondaggio del 9 novembre, corsia `mappa`, 11 novembre): lungo le linee
+  il bus saltava di quota dove `City.heightAt` cambiava tratto. Al piede delle rampe restava a terra per 10 m e poi
+  saliva di colpo; dopo un nodo teneva la quota del tratto di prima, o di un ramo che parte dallo stesso nodo, finché
+  ne usciva; dove due carreggiate in quota si separano prendeva quella sbagliata (Chiesanuova: caduta di 2,6 m sulla
+  10). Ora la strada a terra vince solo sotto un impalcato (più di 0,5 m sopra), un tratto di cui il punto vede solo
+  il capo conta meno, e conta la distanza dall'asse. Salti della quota assoluta lungo tutte le 133 varianti, ogni
+  0,5 m: oltre 0,5 m da 82 a 0, oltre 0,2 m da 362 a 13. Il filo di contatto del tram è inclinato come il binario
+  (sul Borgomagno saliva a gradini sopra le pile).
 - [x] **Teste dei ponti sui fiumi** (corsia `mappa`, 11 novembre, dopo il ponte tra Cornaro e Voltabarozzo): alle teste
   la strada saliva o scendeva di colpo verso la cresta dell'argine, perché l'alveo riempito dal terreno "via" stava
   sotto la cresta (Corso Primo Maggio 2,2 m in 10 m, 29%; Ponte Sabbionari, Via Pontevigodarzere e Ponte Isonzo

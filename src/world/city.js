@@ -1184,7 +1184,7 @@ export class City {
   }
   heightAt(x, z, cur = null) {
     const arr = this.segGrid.query(x, z, 12, this._qh || (this._qh = []));
-    let h = 0, best = Infinity, any = false, under = false;
+    let h = 0, best = Infinity, diff = Infinity, any = false, under = false;
     for (const it of arr) {
       const e = it.ref;
       if (it.kind !== 'road' || !e) continue;
@@ -1193,10 +1193,19 @@ export class City {
       if (r.d > it.hw + 1.5) continue;
       const he = edgeHeight(e, r.t * e.len);
       any = true;
-      if (cur == null) h = Math.max(h, he);
-      else if (Math.abs(he - cur) < best) { best = Math.abs(he - cur); h = he; }
+      if (cur == null) { h = Math.max(h, he); continue; }
+      // un tratto di cui il punto vede solo un capo (oltre la fine o di fianco, a più di 0,5 m) conta meno di quello su
+      // cui sta: dopo un nodo il bus restava per qualche metro alla quota del tratto di prima, o di un ramo che parte
+      // dallo stesso nodo, e poi saltava su quello nuovo
+      const ex = it.bx - it.ax, ez = it.bz - it.az, l2 = ex * ex + ez * ez || 1, tr = ((x - it.ax) * ex + (z - it.az) * ez) / l2;
+      // e tra due carreggiate che si separano da un nodo vince quella su cui sta il mezzo (0,5 per metro di distanza
+      // dall'asse): a Chiesanuova la 10 prendeva la carreggiata che sale e poi cadeva di 2,6 m su quella giusta
+      const sc = Math.abs(he - cur) + 0.5 * r.d + ((tr < 0 || tr > 1) && r.d > 0.5 ? 1 : 0);
+      if (sc < best) { best = sc; diff = Math.abs(he - cur); h = he; }
     }
-    if (any && cur != null && under && Math.abs(cur) < best) h = 0;
+    // sotto un impalcato la strada a terra vince se il mezzo è già giù; al piede di una rampa (meno di 0,5 m sopra) no,
+    // altrimenti il bus restava a terra per i primi metri e poi saltava sulla rampa (Borgomagno, 20-40 cm)
+    if (any && cur != null && under && Math.abs(cur) < diff && diff > 0.5) h = 0;
     return h;
   }
 
