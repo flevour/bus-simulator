@@ -305,7 +305,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [x] **Pali della linea aerea dai marciapiedi** (11 novembre, chi gioca: "se le corsie sono in mezzo alla strada i
   pali dovrebbero partire dai marciapiedi"): il palo va dove finisce l'asfalto entro 16 m, anche oltre le corsie delle
   auto, e il tirante le scavalca; la ricerca si ferma sulla sede di un altro binario, e da quel lato il filo lo regge
-  una mensola dal palo dell'altro lato. Pali sul cordolo della sede da 728 a 94, nessun tirante sopra un'altra sede
+  una mensola dal palo dell'altro lato. Pali sul cordolo della sede da 728 a 102 (14 nel piazzale della stazione, dove gli anelli girano in mezzo
+  all'asfalto), sull'asfalto fuori dalla sede 6, nessun tirante sopra un'altra sede
   (`tests/linea-aerea.spec.js`, con le soglie).
 - [x] **Pali della linea aerea fuori dalla strada** (11 novembre): dove non c'è una facciata a cui agganciare il
   tirante, il palo va dove finisce l'asfalto (marciapiede, isola, verde) entro 9 m e, se fin lì è tutta carreggiata,
