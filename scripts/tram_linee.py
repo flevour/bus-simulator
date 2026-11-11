@@ -43,13 +43,9 @@ MANUAL = {
 }
 # fermate con la banchina a sinistra del verso di marcia: in stazione le banchine stanno dentro l'anello interno
 LEFT = {'Stazione nord', 'Stazione sud'}
-# fermate spostate lungo il binario, in metri nel verso di marcia: (linea, verso, fermata). A Voltabarozzo la fermata
-# d'arrivo di OSM sta sulla curva d'ingresso al capolinea (raggio 24-58 m fino a 112 m dalla fine del binario): con il
-# muso a fine banchina metà tram restava in curva (segnalazione dell'11 novembre). 33 m più avanti tram e banchina stanno
-# sul dritto, e oltre resta il binario tronco per lo scambio e il cambio cabina
-SPOSTA = {('SIR3', 'Voltabarozzo', 'Voltabarozzo'): 33}
 # corse per linea e verso: le fermate del KML in ordine (quelle con "*" sono i capolinea intermedi dei rami, saltati)
 KML_SKIP = {'Trieste', 'Stazione nord', 'Stazione sud'}
+BANCHINA_NEAR = 25  # m: banchina OSM della fermata (dal nodo della fermata al vertice più vicino)
 LINES = [
     {'id': 'SIR3', 'nome': 'Stazione ↔ Voltabarozzo', 'colore': '#e65100', 'moduli': 3, 'durata': 18 * 60, 'ogni': 8, 'anello': True,
      'versi': [
@@ -187,6 +183,19 @@ def stazione(staz, full, pos, first, last):
     return new, s0, s_of(pos[last], s0) - s0
 
 
+def proietta(path, pos, cum, p):
+    """Punto p (metri) sul percorso: (distanza, progressiva) del punto del percorso più vicino."""
+    best = (1e18, 0.0)
+    for i, (a, b) in enumerate(zip(path, path[1:])):
+        (ax, ay), (bx, by) = pos[a], pos[b]
+        L2 = (bx - ax) ** 2 + (by - ay) ** 2 or 1e-9
+        t = max(0, min(1, ((p[0] - ax) * (bx - ax) + (p[1] - ay) * (by - ay)) / L2))
+        d = math.hypot(ax + (bx - ax) * t - p[0], ay + (by - ay) * t - p[1])
+        if d < best[0]:
+            best = (d, cum[i] + t * math.sqrt(L2))
+    return best
+
+
 def punto(path, pos, s):
     """(lat, lon) del percorso (nodi lat, lon) a s metri dall'inizio."""
     acc = 0.0
@@ -197,6 +206,44 @@ def punto(path, pos, s):
             return round(a[0] + (b[0] - a[0]) * t, 7), round(a[1] + (b[1] - a[1]) * t, 7)
         acc += l
     return path[-1]
+
+
+def fermate_sul_binario(path, pos, osm_stops, banchine):
+    """Fermate OSM sul percorso, in ordine, con la progressiva: come tram_percorsi.stops_on, ma per ogni nome il nodo
+    più vicino al binario (lo stop_position di questo verso), non il primo che si incontra. Con i due binari a meno di
+    8 m l'uno dall'altro tutte e due le fermate di un capolinea stanno "sul percorso": a Voltabarozzo l'arrivo prendeva
+    la fermata di partenza (in testa alla banchina) e la partenza quella d'arrivo (in coda, sopra lo scambio).
+    Dove OSM ha la banchina (railway=platform, banchine: poligoni in metri) lungo il binario, a meno di BANCHINA_NEAR
+    metri dalla fermata, la fermata va a metà della banchina: nel gioco il punto della fermata è il centro della
+    banchina e il muso si ferma TRAM_STOP_AHEAD (12 m) più avanti, mentre gli stop_position di OSM stanno dove si ferma
+    il muso (a Voltabarozzo ai due capi della banchina centrale: le banchine del gioco restavano sfalsate di 24 m)."""
+    cum = [0.0]
+    for a, b in zip(path, path[1:]):
+        cum.append(cum[-1] + math.dist(pos[a], pos[b]))
+    best = {}
+    for name, ll, p in osm_stops:
+        d, s = proietta(path, pos, cum, p)
+        if d >= tp.ON_PATH:
+            continue
+        # a pari distanza (mezzo metro) il primo che si incontra
+        o = best.get(name)
+        if o is None or d < o[0] - 0.5 or (d < o[0] + 0.5 and s < o[1]):
+            best[name] = (d, s, ll, p)
+    out = []
+    for name, (_, s, ll, p) in best.items():
+        for poly in banchine:
+            if min(math.dist(p, q) for q in poly) > BANCHINA_NEAR:
+                continue
+            pr = [proietta(path, pos, cum, q) for q in poly]
+            # lungo questo binario: il lato della banchina verso il binario a meno di 3,5 m (una banchina laterale
+            # dell'altro binario sta a più di 6 m)
+            if min(d for d, _ in pr) > 3.5:
+                continue
+            s = (min(x for _, x in pr) + max(x for _, x in pr)) / 2
+            ll = punto(path, pos, s)
+            break
+        out.append({'s': round(s), 'name': name, 'lat': ll[0], 'lon': ll[1]})
+    return sorted(out, key=lambda f: f['s'])
 
 
 def headways(ogni):
@@ -218,6 +265,8 @@ def headways(ogni):
 
 def main(osm, stops_json, out):
     adj, pos, own, cons, osm_stops, way = load(osm)
+    banchine = [[tp.P(q['lat'], q['lon']) for q in e['geometry']] for e in json.load(open(osm))['elements']
+                if e['type'] == 'way' and e.get('tags', {}).get('railway') == 'platform']
     staz = tram_stazione.Stazione.from_osm(osm)
     kml = json.load(open(stops_json))['kml']
     manual_nodes = {name: split_at(adj, pos, way, ll, ws) for name, (ll, ws) in MANUAL.items()}
@@ -261,14 +310,9 @@ def main(osm, stops_json, out):
             # fermate sul percorso, quelle OSM e quelle messe a mano, in ordine. Il punto del KML al capolinea può
             # stare poco prima della fermata OSM (Voltabarozzo): oltre gli estremi conta solo la fermata del capolinea
             ends = (tp.norm(seq[0]), tp.norm(seq[-1]))
-            st = [s for s in tp.stops_on(full, pos, osm_stops + manual_stops)
+            st = [s for s in fermate_sul_binario(full, pos, osm_stops + manual_stops, banchine)
                   if s0 - 3 <= s['s'] <= s0 + Lp + 3 or (s['s'] < s0 and tp.norm(s['name']) & ends[0])
                   or (s['s'] > s0 + Lp and tp.norm(s['name']) & ends[1])]
-            for s in st:
-                d = SPOSTA.get((L['id'], headsign, s['name']))
-                if d:
-                    s['s'] += d
-                    s['lat'], s['lon'] = punto(full, pos, s['s'])
             st = [{'nome': s['name'], 's': round(s['s']), 'lat': s['lat'], 'lon': s['lon'], 'osm': s['name'] not in MANUAL,
                    'lato': -1 if s['name'] in LEFT else 1} for s in st]
             versi.append({'headsign': headsign, 'lunghezza': round(Lp), 'contromano': round(wrong), 'cantiere': round(building),
