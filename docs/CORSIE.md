@@ -517,7 +517,13 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   sull'altro binario, poi cambia cabina in fondo e torna indietro fino alla fermata giusta. A Voltabarozzo (foto
   dall'alto `images/20.png`, con il deposito: due binari dalla via, una comunicazione all'inizio, un binario lungo il
   lato ovest fino a un anello di ritorno in fondo, e dall'anello 3-4 binari che entrano nella rimessa da sud) va
-  rifatta allo stesso modo, con la fermata d'arrivo sul dritto. Prove: per ogni capolinea dei tram (SIR1, SIR2, SIR3),
+  rifatta allo stesso modo, con la fermata d'arrivo sul dritto. Per i binari di Voltabarozzo il riferimento è lo
+  schema OSM mandato da chi gioca (`images/23.png`, ci sono anche nell'export `data/osm-padova-tram-cantiere.json`):
+  due binari dalla via con le banchine ai due lati, una comunicazione subito dopo le banchine, due binari paralleli
+  verso sud lungo il lato ovest con un'altra comunicazione, l'anello di ritorno in fondo e da lì i binari della rimessa
+  (quattro nel capannone più uno a est). Il **segnale dello scambio** all'arrivo è un pannello nero senza indicazione
+  (`images/22.png`): deve mostrare la posizione dello scambio (diritto o deviato), e con la manovra automatica la via
+  che il tram sta per prendere. Se è una lanterna di `TramSignals`, insieme a `traffico`. Prove: per ogni capolinea dei tram (SIR1, SIR2, SIR3),
   la sequenza sopra con il pilota di `tests/guida.js`, fino alla prima fermata della corsa nuova.
 - **Poi gli scambi manovrabili** (chiesto da chi gioca l'11 novembre, foto di uno scambio a un capolinea:
   `images/14.png` della sessione del checkout principale):

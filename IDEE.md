@@ -96,6 +96,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        `tram_linee.py`); in fondo al binario B fa ripartire nell'altro verso (correzione del tram incastrato, prova
        "in fondo al binario"), corsia `tram-turni`;
      - [ ] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`;
+     - [ ] binari di Voltabarozzo come in OSM (comunicazioni, anello di ritorno, rimessa) e segnale dello scambio che
+       mostra la posizione (all'arrivo è un pannello nero), corsia `tram-turni`;
      - [ ] manovra al capolinea come nella realtà: scarico, avanti fino in fondo, B (cambio cabina e visuale), lo scambio
        si mette da solo sull'altro binario, fermata di partenza (Pontevigodarzere e Voltabarozzo dall'alto), corsia
        `tram-turni`;
