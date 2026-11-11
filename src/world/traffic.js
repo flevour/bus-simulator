@@ -931,14 +931,20 @@ export class TramSim {
   // automatico (e nemmeno la corsa intera che la contiene)
   setService(lines, day, mine = null) {
     while (this.trams.length) this.remove(this.trams[0]);
-    let runs = tramRuns(lines, (L) => this.tracks[L.id], day);
-    const ml = mine && lines.find((L) => L.variants.includes(mine.v)), mt = ml && this.tracks[ml.id];
-    if (mt) {
-      const st0 = mine.v.stops[0], dir = mt.dirOf(mine.v);
-      runs = runs.filter((r) => r.line !== ml || r.dir !== dir || !r.v.stops.some((s, i) => Math.hypot(s.x - st0.x, s.z - st0.z) < 150 && Math.abs(r.times[i] - mine.t) <= 180));
-    }
-    this.runs = runs;
+    this.lines = lines;
+    this.runs = tramRuns(lines, (L) => this.tracks[L.id], day);
+    if (mine) this.exclude(mine);
     this.lastClock = null;
+  }
+  // corsa del giocatore { v, t } (anche la successiva del suo turno, al capolinea): via dall'orario dei tram automatici,
+  // e il tram che la stava facendo esce
+  exclude(mine) {
+    const ml = this.runs && this.lines.find((L) => L.variants.includes(mine.v)), mt = ml && this.tracks[ml.id];
+    if (!mt) return;
+    const st0 = mine.v.stops[0], dir = mt.dirOf(mine.v);
+    const same = (r) => r.line === ml && r.dir === dir && r.v.stops.some((s, i) => Math.hypot(s.x - st0.x, s.z - st0.z) < 150 && Math.abs(r.times[i] - mine.t) <= 180);
+    for (const r of this.runs) if (same(r) && r.tram && this.trams.includes(r.tram)) this.remove(r.tram);
+    this.runs = this.runs.filter((r) => !same(r));
   }
   destOf(run) { return run.v.headsign.replace(/ \(.*$/, ''); }
   // posizione che l'orario dà alla corsa all'ora clock (tra due fermate, in proporzione al tempo)

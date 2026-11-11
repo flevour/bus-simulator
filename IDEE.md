@@ -12,9 +12,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      altri si fermano, tram e traffico allo stesso modo (11 novembre, corsia `traffico`);
    - interni più curati;
    - pedoni che attraversano la sede e si fermano;
-   - [ ] **turni del tram e deposito della Guizza**, come per il bus (vedi "Fatto"): la prima corsa del turno esce dal
-     deposito, l'ultima ci rientra; al capolinea cambio cabina (B) e corsa successiva senza tornare al menu. Il
-     deposito è accanto al capolinea della Guizza: in OSM ci sono i binari di servizio (`railway=tram`,
+   - [~] **turni del tram e deposito della Guizza**, come per il bus (vedi "Fatto"): al capolinea cambio cabina (B) e
+     corsa successiva senza tornare al menu fatto (vedi "Fatto"); restano la prima corsa del turno che esce dal
+     deposito e l'ultima che ci rientra. Il deposito è accanto al capolinea della Guizza: in OSM ci sono i binari di servizio (`railway=tram`,
      `service=yard`, Busitalia Veneto, verso 45.3670, 11.8756), alcuni dentro la rimessa (`tunnel=building_passage`),
      e sono già nell'export `data/osm-padova-tram.json` (35 binari di servizio), da vedere se il gioco li usa. Il
      binario tronco "che entra in un edificio" è forse l'ingresso della rimessa: da verificare;
@@ -84,8 +84,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        attraversano tutte le corsie (vedi "Fatto");
      - [ ] in stazione il binario di destra parallelo alla banchina, senza la S verso sinistra; la curva a sinistra
        dell'anello interno più regolare; niente intrecci a S all'uscita della banchina (corsia `tram-turni`);
-     - [ ] al capolinea del tram B fa partire la corsa successiva, come per il bus, senza tornare al menu (corsia
-       `tram-turni`);
+     - [x] al capolinea del tram B fa partire la corsa successiva, come per il bus, senza tornare al menu (vedi
+       "Fatto");
      - [ ] linee del bus complete fino al capolinea, senza la scritta "tratto in città" (corsia `capolinea`, prima del
        SIR2).
 
@@ -206,6 +206,14 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   segnalazioni di chi gioca (coordinate da ricontrollare a ogni build, sezione 6.2 del piano della città).
 
 ## Fatto
+
+- [x] **B al capolinea del tram** (corsia `tram-turni`, 11 novembre): a fine corsa B cambia cabina (all'anello della
+  stazione il SIR3 passa sul binario dell'altro verso senza cambiarla) e fa partire la corsa successiva del turno
+  dalla prima fermata dell'altro verso, come la "Prossima corsa" del bus: orario dal turno ricavato dall'orario
+  (`turni.js`, ora anche per il tram), pannello della linea, display del tram e salvataggio aggiornati. Con le porte
+  ancora aperte B le chiude e poi cambia cabina. Dove le banchine dei due versi sono sfalsate (Voltabarozzo, i
+  capolinea del SIR2) il tram si porta a fine banchina. Il tram automatico gemello della corsa dopo non parte; nel
+  menu la nota "Corsa n di m del turno del tram". Prova in `tests/turni-tram.spec.js`.
 
 - [x] **Gamepad e volante con pedaliera** (corsia `guida`, 11 novembre, `src/game/gamepad.js`): il gamepad con la
   mappatura standard va subito (levetta sinistra volante, RT gas, LT freno e retromarcia da fermo, pulsanti come i

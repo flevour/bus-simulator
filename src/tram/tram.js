@@ -893,6 +893,11 @@ export class Tram {
   }
   setPassengerVisuals() {}
   setInnerDisplay() {}
+  // display di linea delle due cabine (al capolinea, per la corsa dopo)
+  setDestination(line, dest) {
+    const tex = ledTexture(line, dest);
+    for (const m of this.modules) if (m.led) { m.led.material.map.dispose(); m.led.material.map = tex; m.led.material.needsUpdate = true; }
+  }
   dispose() {
     this.scene.remove(this.group);
     this.group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });

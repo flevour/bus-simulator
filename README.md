@@ -283,7 +283,7 @@ future potranno averne 4.
 | **F** | porte (da fermo; si sale e si scende da tutte le porte) |
 | **H** | campanello |
 | **O** | abbassa / alza il pantografo |
-| **B** | cambio cabina al capolinea |
+| **B** | al capolinea: cambio cabina e corsa successiva del turno |
 | **Spazio** | freno di stazionamento |
 
 * Ci si ferma con il muso a fine banchina; nelle curve strette il limite scende (fino a 15 km/h).

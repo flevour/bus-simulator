@@ -329,8 +329,21 @@ function onKeyPress(code) {
   }
 }
 
-// Tram: cambio cabina. Al capolinea (o in giro libero alle estremità) si passa alla corsia del verso opposto.
+// Tram: cambio cabina. Al capolinea (o in giro libero alle estremità) si passa alla corsia del verso opposto; in servizio,
+// a fine corsa, parte anche la corsa successiva del turno (tramNextRun)
+let cabAfterDoors = false; // B a fine corsa con le porte aperte: si chiudono, poi si cambia cabina
 function changeTramCab() {
+  const service = !mission.free && !mission.transfer;
+  if (service && !mission.finished) {
+    hud.toast(mission.nextStop >= mission.stops.length - 1 ? 'Capolinea: fai scendere tutti (porte aperte, F), poi B per la corsa successiva' : 'Si cambia cabina solo al capolinea, a fine corsa', 'info');
+    return;
+  }
+  if (service && Math.abs(bus.v) < 0.05 && bus.doorTarget > 0) {
+    toggleDoors();
+    cabAfterDoors = true;
+    hud.toast('Porte in chiusura, poi si cambia cabina', 'info');
+    return;
+  }
   if (Math.abs(bus.v) > 0.05 || !bus.doorsClosed || bus.doorTarget > 0) { hud.toast('Fermati con le porte chiuse per cambiare cabina', 'bad'); return; }
   const P = bus.path, sf = bus.sFront, T = bus.track, nd = -bus.dirSig, np = T.path(nd);
   // capolinea ad anello (SIR3 in stazione): negli ultimi 200 m il binario dell'altro verso continua davanti al muso, si
@@ -341,7 +354,8 @@ function changeTramCab() {
     bus.setPath(np, nd, 0);
     bus.setFront(pr.s);
     bus.parking = true;
-    hud.toast('🔁 Fine dell\'anello: si riparte verso l\'altro capolinea, senza cambiare cabina', 'info');
+    if (service) tramNextRun();
+    else hud.toast('🔁 Fine dell\'anello: si riparte verso l\'altro capolinea, senza cambiare cabina', 'info');
     return;
   }
   // binario dell'altro verso (lungo tutta la linea), col muso dove ora c'è la coda: si passa dallo scambio
@@ -351,6 +365,44 @@ function changeTramCab() {
   bus.parking = true;
   chase.init = false;
   hud.toast('🔁 Cabina cambiata: ora guidi dall\'altra estremità', 'info');
+  if (service) tramNextRun();
+}
+// tram a fine corsa, già sul binario dell'altro verso (intero, dopo changeTramCab): la corsa successiva del turno parte
+// dalla prima fermata. Ai capolinea le banchine dei due versi sono sfalsate: dopo il cambio cabina il muso resta fino a
+// 32 m oltre la banchina di partenza (Voltabarozzo), e lì si porta alla banchina. Se è più indietro sul binario ci
+// arriva chi guida
+function tramNextRun() {
+  const t = nextOfTurno(), next = t && t.next;
+  if (!next) { hud.toast('Era l\'ultima corsa del turno: dal menu (Esc) scegli una corsa nuova', 'info'); return; }
+  $('results').classList.add('hidden');
+  countRun(mission);
+  Object.assign(settings, { vIdx: next.v.idx, departure: next.t, depDur: next.d });
+  const L = settings.line, V = next.v, dest = V.stops[V.stops.length - 1].name, clock = mission.clock;
+  const tr = tramRoute(bus.track, V, L.modules, false);
+  V.trackPath = tr.path;
+  const sNow = tr.sig === bus.dirSig ? bus.pathOffset + bus.sFront - tr.offset : -1;
+  bus.setPath(tr.path, tr.sig, tr.offset);
+  const m = new Mission({ ...missionCommon(), route: V, departure: next.t, depDur: next.d });
+  m.clock = clock;
+  const at = m.stops[0].s - 0.5; // muso a fine banchina
+  if (sNow >= 0 && sNow < at - 15) bus.setFront(sNow);
+  else {
+    bus.setFront(at);
+    if (Math.abs(sNow - at) > 3) chase.init = false;
+    if (sNow < 0 || sNow > at + 60) hud.toast(`🌀 Il tram è alla banchina di partenza ${m.stops[0].name}`, 'info');
+  }
+  bus.parking = true;
+  m.s = Math.max(0, bus.sFront - TRAM.ref);
+  m.dest = dest;
+  switchMission(m);
+  trams.exclude({ v: V, t: next.t });
+  const after = nextOfTurno();
+  if (after && after.next) trams.exclude({ v: after.next.v, t: after.next.t });
+  bus.setDestination(L.id, dest);
+  hud.setLine(L, dest);
+  hud.toast(`Linea ${L.id} per ${dest} – partenza ${fmtHM(next.t)}: apri le porte (F)`, 'info');
+  capture('mission_started', { vehicle_type: 'tram', mission_mode: 'service', line_id: L.id, service_day: settings.variant, weather: settings.weather, turno_run: turno.corse + 1 });
+  saveGame();
 }
 
 function setDirection(d) {
@@ -672,13 +724,15 @@ function refreshStops() {
 }
 // posto della corsa nel turno del bus (ricavato dall'orario); la prima del turno può uscire dal deposito
 function refreshTurno() {
-  const L = settings.line, tn = L.tram || settings.mode !== 'service' ? null : turnoOf(L, settings.variant, curVariant(), settings.departure);
+  const L = settings.line, tn = settings.mode !== 'service' ? null : turnoOf(L, settings.variant, curVariant(), settings.departure);
   let txt = '';
   if (tn) {
-    txt = tn.of === 1 ? 'Corsa unica del turno del bus' : `Corsa ${tn.n} di ${tn.of} del turno del bus`;
+    const mezzo = L.tram ? 'tram' : 'bus';
+    txt = tn.of === 1 ? `Corsa unica del turno del ${mezzo}` : `Corsa ${tn.n} di ${tn.of} del turno del ${mezzo}`;
     const out = tn.first && canLeaveDepot(curVariant());
     if (out) txt += ' · esce dal deposito della Stanga';
-    if (tn.last && depot) txt += out ? ' e poi ci rientra' : ' · l\'ultima: poi si rientra in deposito';
+    if (tn.last && depot && !L.tram) txt += out ? ' e poi ci rientra' : ' · l\'ultima: poi si rientra in deposito';
+    if (L.tram && !tn.last) txt += ' · al capolinea B riparte con la corsa dopo';
   }
   $('turno-note').textContent = txt;
   $('from-depot').hidden = !(tn && tn.first && canLeaveDepot(curVariant()));
@@ -866,6 +920,10 @@ function startMission(resume = null) {
   // tram automatici: quelli in servizio all'ora della corsa secondo l'orario GTFS; la corsa che guida il giocatore
   // non ha un gemello automatico
   trams.setService(TRAM_LINES, settings.variant, bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
+  // e nemmeno quella dopo del turno, che al capolinea parte con B
+  const after = bus.isTram && nextOfTurno();
+  if (after && after.next) trams.exclude({ v: after.next.v, t: after.next.t });
+  cabAfterDoors = false;
   if (!mission.transfer) mission.dest = destName;
   const st0 = mission.stops[0];
   if (mission.transfer) {
@@ -937,7 +995,7 @@ function startMission(resume = null) {
     hud.toast(`Linea ${L.id} per ${destName} – partenza ${fmtHM(settings.departure)}`, 'info');
     setTimeout(() => running && hud.toast('Apri le porte (F) per far salire i passeggeri', 'info'), 1800);
   }
-  if (!resume && bus.isTram) setTimeout(() => running && hud.toast('🚋 Tram: W/S manipolatore · F porte · H campanello · O pantografo · B cambio cabina al capolinea', 'info'), 3200);
+  if (!resume && bus.isTram) setTimeout(() => running && hud.toast('🚋 Tram: W/S manipolatore · F porte · H campanello · O pantografo · B al capolinea: corsa dopo', 'info'), 3200);
   if (!resume) setTimeout(() => running && hud.toast('Premi I per l\'elenco dei comandi', 'info'), 4500);
   saveGame();
 }
@@ -953,7 +1011,14 @@ function missionCommon() {
 function wireMission() {
   const m = mission;
   greet = new Greetings(hud, m);
-  m.onFinish = m.transfer ? () => transferDone(m) : () => setTimeout(showResults, 3500);
+  m.onFinish = m.transfer ? () => transferDone(m) : () => setTimeout(() => mission === m && showResults(), 3500);
+}
+// la corsa finita entra nel conto del turno (una volta sola: il tram può ripartire prima del riepilogo)
+function countRun(m) {
+  if (m.counted) return;
+  m.counted = true;
+  turno.corse++;
+  turno.score += m.score;
 }
 function switchMission(m) {
   scene.remove(mission.crowd.mesh);
@@ -1000,7 +1065,7 @@ function beginService() {
   saveGame();
 }
 function nextOfTurno() {
-  if (bus.isTram || settings.mode !== 'service') return null;
+  if (settings.mode !== 'service') return null;
   const tn = turnoOf(settings.line, settings.variant, curVariant(), settings.departure);
   return tn ? { tn, next: tn.run.next } : null;
 }
@@ -1008,6 +1073,8 @@ function nextOfTurno() {
 function chainNext() {
   const t = nextOfTurno(), next = t && t.next;
   if (!next) return;
+  // tram: si cambia cabina (B) e la corsa riparte dall'altro verso
+  if (bus.isTram) { changeTramCab(); return; }
   $('results').classList.add('hidden');
   Object.assign(settings, { vIdx: next.v.idx, departure: next.t, depDur: next.d });
   const L = settings.line, V = next.v, dest = V.stops[V.stops.length - 1].name, goal = startGoal(net, city, V);
@@ -1064,8 +1131,7 @@ function showShiftEnd() {
 function showResults() {
   if (!mission) return;
   clearSave();
-  turno.corse++;
-  turno.score += mission.score;
+  countRun(mission);
   const s = mission.stats;
   const n = mission.stops.length;
   const maxPts = n * 130 + 400;
@@ -1095,15 +1161,16 @@ function showResults() {
   if (next) {
     const wait = Math.round((next.t - mission.clock) / 60);
     const fuori = curVariant().cutEnd || next.v.cutStart; // il giro fino al capolinea vero è fuori mappa
-    $('res-next').textContent = `▶ Prossima corsa: ${next.v.headsign} alle ${fmtHM(next.t)} (${wait > 0 ? `${fuori ? 'giro al capolinea fuori mappa e sosta' : 'sosta'}: ${wait} min` : 'sei in ritardo: si riparte subito'})`;
+    $('res-next').textContent = `▶ Prossima corsa${bus.isTram ? ' (B)' : ''}: ${next.v.headsign} alle ${fmtHM(next.t)} (${wait > 0 ? `${fuori ? 'giro al capolinea fuori mappa e sosta' : 'sosta'}: ${wait} min` : 'sei in ritardo: si riparte subito'})`;
   }
-  $('res-depot').hidden = !t || !depot;
+  $('res-depot').hidden = !t || !depot || bus.isTram; // il tram non ha ancora il suo deposito
   $('res-depot').classList.toggle('primary', !next);
-  $('res-menu').classList.toggle('primary', !t);
+  $('res-menu').classList.toggle('primary', !next && $('res-depot').hidden);
   $('res-menu').textContent = t ? 'Torna al menu' : 'Nuova corsa';
   const parts = [];
   if (turno.corse > 1 || turno.depot) parts.push(`Turno: ${turno.corse} ${turno.corse > 1 ? 'corse' : 'corsa'}, ${turno.score} punti in tutto`);
-  if (t && !next && depot) parts.push('Era l\'ultima corsa del turno: il bus torna in deposito.');
+  if (t && !next && depot && !bus.isTram) parts.push('Era l\'ultima corsa del turno: il bus torna in deposito.');
+  else if (t && !next) parts.push('Era l\'ultima corsa del turno.');
   $('res-turno').textContent = parts.join(' · ');
   $('results').classList.remove('hidden');
 }
@@ -1341,6 +1408,7 @@ function step(dt) {
     bus._crashCd = 0.6;
   }
   if (bus._crashCd) bus._crashCd = Math.max(0, bus._crashCd - dt);
+  if (cabAfterDoors && bus.doorsClosed && bus.doorTarget === 0) { cabAfterDoors = false; changeTramCab(); }
   // sbuffo dei freni ad aria quando ci si ferma
   const moving = Math.abs(bus.v) > 0.6;
   if (wasMoving && Math.abs(bus.v) < 0.05) audio.airBrake();
