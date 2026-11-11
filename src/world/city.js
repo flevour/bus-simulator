@@ -1464,6 +1464,7 @@ export class City {
     };
     for (const j of this.tramNet.junctions) { place(j.panel.sig); j.sign = this.switchSign(j.panel); }
     for (const Y of this.tramYards) for (const sw of Y.switches.values()) { place(sw.panel.sig); sw.sign = this.switchSign(sw.panel); }
+    for (const Y of this.tramYards) for (const pt of Y.ports) if (pt.panel) { place(pt.panel.sig); pt.sign = this.switchSign(pt.panel); }
     const tex = TX.tramLaneTexture();
     if (redS.pos.length) this.group.add(new THREE.Mesh(redS.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 4.5)));
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));

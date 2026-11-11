@@ -472,10 +472,55 @@ export class TramYard {
       if (!best) continue;
       // il ramo dalla porta in avanti (verso il deposito), senza i punti OSM nei primi 6 m (raccordo dolce); dietro si toglie
       const r = raw[best.ri], ahead = best.fwd ? r.pts.slice(best.i + 1) : r.pts.slice(0, best.i + 1).reverse();
-      const pts = [{ x: q.x, z: q.z }, ...ahead.filter((p, k) => k === ahead.length - 1 || Math.hypot(p.x - q.x, p.z - q.z) > 6)];
+      const pts = [{ x: q.x, z: q.z }, ...ahead.filter((p, k) => k === ahead.length - 1 || count.get(key(p)) >= 2 || Math.hypot(p.x - q.x, p.z - q.z) > 6)];
       raw[best.ri] = { pts: best.fwd ? pts : pts.slice().reverse(), way: r.way, port: true };
       this.ports.push({ T: track, dir: d, kind, s, x: q.x, z: q.z, out: { x: kind === 'end' ? -q.dx : q.dx, z: kind === 'end' ? -q.dz : q.dz } });
     }
+    // porte a metà di un binario della linea: un ramo di servizio o una comunicazione che finisce lì senza altri rami, a
+    // 1,5 m dal binario e quasi parallelo (la seconda comunicazione di Voltabarozzo, sul binario di partenza). Dal deposito
+    // si prosegue sul binario; chi lo percorre nell'altro verso passa nel deposito solo con lo scambio messo così (state
+    // 'deposito', N)
+    // prima via i pezzi di way che corrono sopra i binari del gioco (per il 70% a meno di 1,2 m e paralleli): le code dei
+    // binari della linea; le comunicazioni dei capolinea restano staccate e si tolgono con quello che non si raggiunge
+    const lines = [track.path(1), track.path(-1)];
+    const sopra = (r) => {
+      const P = new TrackPath(r.pts);
+      let n = 0, k = 0;
+      for (let t = 0; t <= P.len; t += 3, n++) {
+        const q = P.at(t);
+        if (lines.some((L) => { const pr = L.projectNear(q.x, q.z, 1.2); if (!pr) return false; const c = L.at(pr.s); return Math.abs(c.dx * q.dx + c.dz * q.dz) > 0.9; })) k++;
+      }
+      return k >= 0.7 * n;
+    };
+    raw = raw.filter((r) => r.port || !sopra(r));
+    const ends = new Map();
+    raw.forEach((r) => { for (const p of [r.pts[0], r.pts[r.pts.length - 1]]) ends.set(key(p), (ends.get(key(p)) || 0) + 1); });
+    raw.forEach((r) => {
+      if (r.way.service === 'linea' || r.port) return;
+      // dall'altro capo il ramo deve essere attaccato al deposito
+      for (const atEnd of [false, true]) {
+        const p = atEnd ? r.pts[r.pts.length - 1] : r.pts[0], o = atEnd ? r.pts[r.pts.length - 2] : r.pts[1], other = atEnd ? r.pts[0] : r.pts[r.pts.length - 1];
+        if (ends.get(key(p)) !== 1 || ends.get(key(other)) < 2) continue;
+        for (const d of [1, -1]) {
+          const P = track.path(d), pr = P.projectNear(p.x, p.z, 1.5);
+          if (!pr || pr.s < 10 || pr.s > P.len - 10) continue;
+          const q = P.at(pr.s), l = Math.hypot(p.x - o.x, p.z - o.z) || 1, al = ((p.x - o.x) * q.dx + (p.z - o.z) * q.dz) / l;
+          if (Math.abs(al) < 0.85) continue;
+          // il ramo arriva nel verso del binario: dal deposito si va avanti ('start', come all'inizio del binario)
+          const kind = al > 0 ? 'start' : 'end', pt = { T: track, dir: d, kind, mid: true, s: pr.s, x: q.x, z: q.z, out: { x: al > 0 ? q.dx : -q.dx, z: al > 0 ? q.dz : -q.dz }, state: 'linea' };
+          if (atEnd) r.pts[r.pts.length - 1] = { x: q.x, z: q.z }; else r.pts[0] = { x: q.x, z: q.z };
+          // segnale per chi arriva sul binario nel verso in cui lo scambio si prende di punta, 4 m prima
+          const ax = -pt.out.x, az = -pt.out.z;
+          pt.panel = {
+            sig: { x: q.x - ax * 4 - az * (TRAM.lane + 0.9), z: q.z - az * 4 + ax * (TRAM.lane + 0.9), dx: ax, dz: az },
+            side: (o.x - q.x) * -az + (o.z - q.z) * ax > 0 ? 1 : -1,
+            get state() { return pt.state === 'deposito' ? 'deviato' : 'diritto'; },
+          };
+          this.ports.push(pt);
+          return;
+        }
+      }
+    });
     // nodi e rami
     this.nodes = [];
     const nodeOf = new Map();
@@ -526,7 +571,10 @@ export class TramYard {
       sw.state = sw.home;
     }
   }
-  reset() { for (const sw of this.switches.values()) sw.state = sw.home; }
+  reset() {
+    for (const sw of this.switches.values()) sw.state = sw.home;
+    for (const pt of this.ports) if (pt.mid) pt.state = 'linea';
+  }
   // capi del nodo n che continuano quello da cui si arriva (indice i)
   through(n, i) {
     const N = this.nodes[n], E = N.ends[i], out = [];
@@ -1149,7 +1197,7 @@ export class Tram {
       }
     }
     for (const Y of this.yards) for (const pt of Y.ports) {
-      if (pt.T !== this.track || pt.dir !== this.dirSig || (pt.kind === 'end') !== fw) continue;
+      if (pt.T !== this.track || pt.dir !== this.dirSig || (pt.kind === 'end') !== fw || (pt.mid && pt.state !== 'deposito')) continue;
       const d = fw ? pt.s - sf : sf - pt.s;
       if (d < -1 || d > 3) continue;
       const back = fw ? Math.max(0, sf - this.length - 30) : Math.min(pt.T.path(pt.dir).len, sf + this.length + 30);
@@ -1235,14 +1283,16 @@ export class Tram {
     }
     if (!this.yards) return null;
     const sf = this.pathOffset + this.sFront, fw = this.facing > 0;
+    let best = null;
     for (const Y of this.yards) for (const pt of Y.ports) {
       if (pt.T !== this.track || pt.dir !== this.dirSig || (pt.kind === 'end') !== fw) continue;
       const d = fw ? pt.s - sf : sf - pt.s;
-      if (d < 0 || d > max) continue;
+      if (d < 0 || d > max || (best && best.d <= d)) continue;
+      if (pt.mid) { best = { port: pt, d }; continue; }
       const r = Y.route(pt.node, Y.portEnd(pt), max - d);
-      if (r.sws.length) return { sw: r.sws[0].sw, d: d + r.sws[0].at };
+      if (r.sws.length) best = { sw: r.sws[0].sw, d: d + r.sws[0].at };
     }
-    return null;
+    return best;
   }
   offAt(t) { return (this.xover && this.xover.off(t)) || (this.xend && this.xend.off(t)) || null; }
   // punto del percorso a s; sullo scambio del capolinea (il binario di partenza fino allo scambio corre su quello

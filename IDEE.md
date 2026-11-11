@@ -23,8 +23,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [~] **girare nei depositi con gli scambi** (chiesto l'11 novembre): rete dei binari con i bivi, dove il tram di chi
      gioca prosegue sul ramo su cui è messo lo scambio (in servizio da soli secondo la linea, in Esplorazione e Giro
      libero con N, anche tra le linee): fatti i bivi tra le linee e i depositi della Guizza e di Voltabarozzo (vedi
-     "Fatto"), con l'uscita dalla rimessa e il rientro nei turni; restano Rubano e la seconda comunicazione di
-     Voltabarozzo. Corsia `tram-scambi`;
+     "Fatto"), con l'uscita dalla rimessa e il rientro nei turni e la seconda comunicazione di Voltabarozzo; resta
+     Rubano. Corsia `tram-scambi`;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
 2. [~] **Nuovo piazzale della stazione e linee SIR2, SIR3**: grafo dei binari con i due anelli e le due linee nel
    gioco per il tratto in città fatti (vedi "Fatto"; dettagli in [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md)).
@@ -265,6 +265,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Seconda comunicazione di Voltabarozzo** (corsia `tram-scambi`, 11 novembre): la comunicazione OSM 1453989053 tra il
+  binario ovest verso sud e il binario di partenza, che tocca a metà, è una porta del deposito a metà binario
+  (`TramYard`: un ramo di servizio o una comunicazione che finisce accanto a un binario della linea, quasi parallelo,
+  attaccato al deposito dall'altro capo), con lo scambio sul binario della linea e il suo segnale; N lo gira. Le
+  comunicazioni dei capolinea restano fuori dal grafo: i pezzi di way OSM che corrono sopra i binari del gioco si tolgono
+  e loro restano staccate. N sceglie lo scambio davanti al tram (quello del capolinea alle spalle conta 100 m in più).
+  Prova in `tests/depositi-tram.spec.js`.
 - [x] **Uscita dalla rimessa e rientro del tram nei turni** (corsia `tram-scambi`, 11 novembre): in servizio, con
   "Parti dal deposito", la prima corsa di un turno da un capolinea col deposito (Guizza, Voltabarozzo) comincia su un
   binario della rimessa, fuori servizio, 5 minuti prima della partenza: gli scambi li mette il gioco fino alla porta del

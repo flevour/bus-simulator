@@ -824,9 +824,9 @@ In quest'ordine:
    `tramToDepot`, `tramDepotCheck` in `main.js`; `Mission.depotOut` in `mission.js`; per `tram-turni`: le corse sono quelle
    di `turnoOf`, l'uscita comincia 5 minuti prima della partenza, il rientro è un pulsante del riepilogo come per il bus,
    `showShiftEnd` dice "tram in rimessa"; nel menu `refreshTurno` mostra "Esci dal deposito" e la nota della rimessa anche
-   per il tram). Restano la seconda comunicazione di
-   Voltabarozzo (053, tra i due binari verso sud: tocca il binario di partenza a metà, va fatta come porta a metà
-   binario); i tram automatici nel deposito.
+   per il tram). Fatta anche la seconda comunicazione di Voltabarozzo (053): porta a metà del binario di partenza
+   (`pt.mid`, `state` 'linea'/'deposito', N); `tram_depositi.py` ora tiene le comunicazioni, e quelle dei capolinea
+   cadono da sole (i pezzi di way sopra i binari del gioco si tolgono). Restano i tram automatici nel deposito.
 4. **Voltabarozzo** sulla stessa rete: anello di ritorno e rimessa (quattro binari nel capannone più uno a est) dallo
    schema OSM (foto 23 e 20). Fatto con la Guizza (sopra): in fondo i due binari si uniscono nel binario della rimessa
    (non è un anello: si gira cambiando cabina).

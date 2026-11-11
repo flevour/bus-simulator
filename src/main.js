@@ -546,17 +546,30 @@ function toggleTramSwitch() {
     const d = fw ? s - sf : sf - s;
     if (TramNet.facing(j, fw) && d >= 0 && d < jd) { jd = d; jn = j; }
   }
-  let sw = null, bd = 120;
-  for (const w of city.tramSwitches || []) { const d = Math.hypot(w.term.sig.x - bus.x, w.term.sig.z - bus.z); if (d < bd) { bd = d; sw = w; } }
+  // lo scambio del capolinea dietro al muso conta 100 m in più: vince quello davanti, se c'è (in fondo al tronco, prima
+  // del cambio cabina, resta lui)
+  let sw = null, bd = Infinity;
+  const fr = bus.at(bus.sFront), fdx = fr.dx * bus.facing, fdz = fr.dz * bus.facing;
+  for (const w of city.tramSwitches || []) {
+    const ex = w.term.sig.x - fr.x, ez = w.term.sig.z - fr.z, d = Math.hypot(ex, ez);
+    if (d < 120 && d + (ex * fdx + ez * fdz < 0 ? 100 : 0) < bd) { bd = d + (ex * fdx + ez * fdz < 0 ? 100 : 0); sw = w; }
+  }
   // scambio del deposito davanti (nel deposito, o dopo la porta verso cui si va)
   const ys = bus.yardAhead();
   if (!jn && !sw && !ys) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
   if (!mission.free) { hud.toast('In servizio gli scambi si girano da soli, secondo la linea', 'info'); return; }
   if (ys && (!jn || ys.d < jd) && (!sw || ys.d < bd || bus.yard)) {
+    audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
+    if (ys.port) {
+      // scambio sul binario della linea verso il deposito (porta a metà binario)
+      ys.port.state = ys.port.state === 'deposito' ? 'linea' : 'deposito';
+      ys.port.sign.update();
+      hud.toast(ys.port.state === 'deposito' ? `↗️ Scambio tra ${Math.round(ys.d)} m: verso il deposito` : `⬆️ Scambio tra ${Math.round(ys.d)} m: si resta sul binario`, 'info');
+      return;
+    }
     ys.sw.state = (ys.sw.state + 1) % ys.sw.options.length;
     ys.sw.sign.update();
     if (bus.yard) bus.yard.dirty = true;
-    audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
     hud.toast(`${ys.sw.state ? '↗️ Scambio deviato' : '⬆️ Scambio diritto'} tra ${Math.round(ys.d)} m`, 'info');
     return;
   }
@@ -1224,7 +1237,7 @@ function startMission(resume = null) {
   cabAfterDoors = false;
   // bivi tra le linee: verso la linea della corsa, nessuno girato a mano (i tram automatici li rimettono per sé)
   for (const j of city.tramNet ? city.tramNet.junctions : []) { j.manual = false; j.state = j.o.T.id === L.id && j.x.T.id !== L.id ? 'o' : 'x'; j.sign.update(); }
-  for (const Y of city.tramYards || []) { Y.reset(); for (const sw of Y.switches.values()) sw.sign.update(); }
+  for (const Y of city.tramYards || []) { Y.reset(); for (const sw of Y.switches.values()) sw.sign.update(); for (const pt of Y.ports) if (pt.sign) pt.sign.update(); }
   junctionT = 0;
   tramRientro = null;
   if (!mission.transfer) mission.dest = destName;

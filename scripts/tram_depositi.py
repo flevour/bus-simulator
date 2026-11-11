@@ -1,9 +1,9 @@
 """Binari dei depositi del tram da OSM: la Guizza dall'export del SIR1, Voltabarozzo da quello del cantiere del SIR3.
 Per ogni deposito le way railway=tram con almeno un vertice entro r metri dal centro, tagliate al cerchio: i binari di
-servizio (yard, siding, spur) e i pezzi dei binari di linea che ci portano, senza le comunicazioni (service=crossover:
-quelle dei capolinea le fa TramTrack.terminal nel gioco). Il gioco ne fa il grafo dei binari del deposito (TramYard in
-src/tram/tram.js) e lo attacca alla fine dei binari della linea; i pezzi che corrono accanto a quelli del gioco li
-toglie lui.
+servizio (yard, siding, spur), le comunicazioni e i pezzi dei binari di linea che ci portano. Il gioco ne fa il grafo dei
+binari del deposito (TramYard in src/tram/tram.js) e lo attacca alla fine dei binari della linea; i pezzi che corrono
+accanto a quelli del gioco li toglie lui, e con loro le comunicazioni dei capolinea (quelle le fa TramTrack.terminal);
+una comunicazione che dal deposito arriva a metà di un binario della linea (Voltabarozzo) diventa una porta lì.
 
 Uso: python3 scripts/tram_depositi.py data/osm-padova-tram.json data/osm-padova-tram-cantiere.json data/tram-depositi.json
 """
@@ -27,7 +27,7 @@ def main(sir1, cantiere, out):
         binari = []
         for e in fonti[D['fonte']]:
             t = e.get('tags', {})
-            if e['type'] != 'way' or t.get('railway') != 'tram' or t.get('service') == 'crossover':
+            if e['type'] != 'way' or t.get('railway') != 'tram':
                 continue
             # tratti consecutivi dentro il cerchio
             run = []

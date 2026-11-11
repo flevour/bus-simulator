@@ -234,3 +234,42 @@ test('rimessa della Guizza in servizio: uscita della prima corsa del turno e rie
   expect([r.entrato, r.rimessa, r.fine], t2).toEqual([true, true, 'Turno finito: tram in rimessa']);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Voltabarozzo: la seconda comunicazione (OSM 1453989053) va dal binario ovest verso sud a metà del binario di partenza.
+// Sul binario di partenza, con la cabina girata verso sud, N mette lo scambio verso il deposito e il tram scende sulla
+// comunicazione; senza N resta sul binario di partenza fino al suo inizio (e lì entra nel deposito dall'altra porta)
+test('Voltabarozzo: la seconda comunicazione, a metà del binario di partenza, con N', async ({ pagina, gioco }) => {
+  const giro = async (gira) => {
+    await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: 1, modo: 'roam' });
+    return pagina.evaluate((gira) => {
+      const g = window.__game, bus = g.bus, dt = 1 / 30, Y = g.city.tramYards.find((y) => y.name === 'Voltabarozzo'), mid = Y.ports.find((p) => p.mid);
+      bus.setFront(98);
+      g.sim(0.3, dt, false);
+      g.press('KeyB');
+      g.sim(0.2, dt, false);
+      const a = bus.yardAhead();
+      const out = { mezzo: !!mid, davanti: !!(a && a.port === mid) };
+      if (gira) g.press('KeyN');
+      out.stato = mid.state;
+      bus.parking = false;
+      let prev = bus.modules.map((m) => [m.group.position.x, m.group.position.z]), salto = 0, primo = null;
+      for (let t = 0; t < 60 && !primo; t += dt) {
+        if (Math.abs(bus.v) < 4.7) g.keys.add('KeyW'); else g.keys.delete('KeyW');
+        g.sim(dt, dt, false);
+        const c = bus.modules.map((m) => [m.group.position.x, m.group.position.z]);
+        if (Math.abs(bus.v) > 0.02) salto = Math.max(salto, ...c.map((p, i) => Math.hypot(p[0] - prev[i][0], p[1] - prev[i][1]) - Math.abs(bus.v) * dt));
+        prev = c;
+        // il primo ramo del deposito dopo il binario della linea
+        if (bus.yard) primo = bus.yard.pieces.find((pc) => pc.e).e.service;
+      }
+      g.keys.delete('KeyW');
+      return { ...out, primo, salto: Math.round(salto * 100) / 100 };
+    }, gira);
+  };
+  const si = await giro(true), no = await giro(false);
+  const testo = JSON.stringify({ si, no });
+  expect([si.mezzo, si.davanti, si.stato, si.primo], testo).toEqual([true, true, 'deposito', 'crossover']);
+  expect([no.stato, no.primo], testo).toEqual(['linea', 'spur']);
+  expect([si.salto < 0.05, no.salto < 0.05], testo).toEqual([true, true]);
+  expect(gioco.errori()).toEqual([]);
+});
