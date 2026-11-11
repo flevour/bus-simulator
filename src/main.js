@@ -1457,10 +1457,12 @@ function updateCamera(dt) {
   camera.updateProjectionMatrix();
 }
 
-function updateMirrors() {
+// draw: ridisegna anche le immagini (a disegni alterni); le cornici si mostrano o nascondono sempre
+let mirrorsShown = null;
+function updateMirrors(draw) {
   const show = camMode === 0;
-  ['mirror-frame-l', 'mirror-frame-r'].forEach((id) => ($(id).style.display = show ? 'block' : 'none'));
-  if (!show) return false;
+  if (show !== mirrorsShown) { mirrorsShown = show; ['mirror-frame-l', 'mirror-frame-r'].forEach((id) => ($(id).style.display = show ? 'block' : 'none')); }
+  if (!show || !draw) return show;
   const sides = [1, -1];
   for (let i = 0; i < 2; i++) {
     const s = sides[i];
@@ -1630,9 +1632,10 @@ function render(dt) {
   }
   renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
-  const mirrors = frame % 2 === 0 ? updateMirrors() : camMode === 0;
-  // il monitor della porta si aggiorna un disegno sì e uno no
-  if (renders++ % 2) updateDoorCam();
+  // specchietti e monitor della porta si ridisegnano a disegni alterni
+  const even = renders++ % 2 === 0;
+  const mirrors = updateMirrors(even);
+  if (!even) updateDoorCam();
   if (mirrors) {
     renderer.autoClear = false;
     renderer.clearDepth();

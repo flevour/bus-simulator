@@ -461,8 +461,8 @@ si riattiva.
 - **Specchietti regolabili, fatti l'11 novembre**: `mirrorAdj` in `main.js` (spostamento del punto guardato, 31 m
   dietro, in fuori e in basso), trascinamento sulle cornici `#mirror-frame-l` e `#mirror-frame-r`.
 - Brief finito l'11 novembre. Restano aperti: lo sterzo da tastiera dopo il rilascio (punto sopra, da decidere), la
-  prova con un volante vero, colonnine vere ai capolinea se ci sono dati. Col ciclo fermo (`requestAnimationFrame`
-  spento nelle prove) gli specchietti si ridisegnano solo nei fotogrammi pari di `frame`, che `sim` non fa avanzare.
+  prova con un volante vero, colonnine vere ai capolinea se ci sono dati. Specchietti e monitor della porta si
+  ridisegnano a disegni alterni (`renders` in `render`), quindi anche con `sim(…, true)` nelle prove.
 - Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
 ### tram-turni
