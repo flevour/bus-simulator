@@ -329,7 +329,13 @@ Prossimo lavoro, in quest'ordine:
   su tutta la mappa) tornano nella rete, con il rettangolo degli edifici e gli edifici a meno di 60 m dai binari (per
   spostare i binari fuori dalle facciate e per i tiranti); nelle aree restano edifici, marciapiedi, verde e alberi
   (8,8 MB in 161 aree), quello che serve solo da vicino; JavaScript 7,2 MB. Prossimo passo: le aree a richiesta, che
-  riscrive `city.js`;
+  riscrive `city.js`.
+  **Dall'11 novembre, ore 11:30, `capolinea` lavora su `city.js`** (aree a richiesta): le altre corsie non toccano
+  `city.js` finché il lavoro non è su `main` (lo si scrive qui). Cambiano `buildSurfaces` (marciapiedi e verde per
+  area), `buildTreesAndLamps` (gli alberi del DBGT per area), `buildRealBuildings`, `ensureTiles`, `streamTiles` e
+  `buildTile` (edifici scaricati e liberati per distanza), una riga di `buildTramway` (gli edifici vicini ai binari della
+  rete) e `inOsmArea`; in `src/data/padova.js` la riga di `clearOfBuildings` e `buildingBBox`, in
+  `src/world/spatial.js` la rimozione dalla griglia;
 - gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da
   togliere per le linee che arrivano ai capolinea. Tra i capolinea richiesti da chi gioca (sondaggio del 9 novembre,
   linea 3 in Via Fondà): quelli della 3 e della 22 e le fermate della 10 e della 11 fuori dall'area.
