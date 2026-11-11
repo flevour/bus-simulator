@@ -68,8 +68,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        Controllato linea per linea e corretto nei dati (vedi "Fatto" e
        [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md)).
    - dal sondaggio del 9 novembre (quattro richieste, tutte dopo la correzione del Borgomagno):
-     - [ ] semafori in centro tra Riviera Tito Livio e Riviera dei Ponti Romani: gli autobus si bloccano e bloccano i
-       tram (linea 3 alle 8:54 di gioco, x 81, z -133; corsia `traffico`);
+     - [x] semafori in centro tra Riviera Tito Livio e Riviera dei Ponti Romani: gli autobus si bloccano e bloccano i
+       tram (linea 3 alle 8:54 di gioco, x 81, z -133; corsia `traffico`, vedi "Fatto");
      - [ ] cavalcavia da sistemare (linea 22 in Via Orlandini, x 1315, z -1022) e, da un giocatore nuovo, "i ponti o
        cavalcavia come quello della stazione e il Camerini" (linea 13 in Viale Codalunga): il Cavalcavia Camerini non
        l'ha mai guardato nessuno, il Borgomagno va ricontrollato (corsia `mappa`);
@@ -174,8 +174,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Traffico e regole
 
-- [ ] Bus automatici che non si bloccano ai semafori e non bloccano i tram (Tito Livio e Ponti Romani, segnalazione
-  del 9 novembre, corsia `traffico`).
+- [~] Bus automatici che non si bloccano ai semafori e non bloccano i tram (Tito Livio e Ponti Romani, segnalazione
+  del 9 novembre, corsia `traffico`): fatto l'incrocio di Tito Livio e Ponti Romani (vedi "Fatto"); resta il
+  controllo su tutta la mappa alle 8:15 e alle 17:30.
 - [ ] Le auto rispettano STOP, precedenze e rotonde (oggi solo semafori).
 - [ ] Pedoni che attraversano sulle strisce con obbligo di precedenza (e punti).
 - [ ] Penalità per non dare precedenza a chi arriva (rotonde, dare precedenza).
@@ -215,6 +216,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Semafori e tram tra Riviera Tito Livio e Riviera dei Ponti Romani** (segnalazione del 9 novembre, corsia
+  `traffico`, 11 novembre): la chiamata del tram dava il rosso a tutti i bracci del semaforo, anche dove il tram corre
+  lungo la strada; il bus fermo al rosso sul binario non partiva, il tram dietro di lui teneva viva la chiamata e dopo
+  20 s ci passava attraverso (fino a 82 s di fermo all'incrocio di Tito Livio, 98 s per un SIR2 in Piazza Garibaldi).
+  Ora resta verde la fase che corre lungo il binario, il rosso è per chi lo taglia; il tram aspetta i bus fermi al
+  rosso o alla fermata e passa solo se il bus aspetta lui; i bus non entrano nell'incrocio se oltre non c'è posto.
+  Prova: `tests/traffico.spec.js` (la 3 delle 8:36 guidata nel traffico, nessuno fermo più di un ciclo semaforico).
 - [x] **Telecamera della porta posteriore** (corsia `guida`, 11 novembre): monitor in basso nella visuale dalla
   cabina, accanto agli strumenti, con l'immagine di una telecamera sopra l'ultima porta (la centrale sul 12 m a due
   porte, quella del rimorchio sullo snodato) che guarda gradini e marciapiede. Si accende da fermi (sotto i 5 km/h) e

@@ -3,12 +3,13 @@
 // dosa gas e freno con i tasti W e S per stare sotto la velocità che permettono le curve e la fermata; alla fermata
 // apre le porte, aspetta la salita, chiude e riparte. Il tram segue il binario da solo: si guidano solo manipolatore,
 // porte e pantografo. Si guida senza traffico (auto, bus e tram automatici tolti) e senza badare ai semafori: la
-// prova riguarda strade, percorsi e fermate.
+// prova riguarda strade, percorsi e fermate. Con `traffico` (solo bus) il traffico resta e il pilota si ferma ai rossi
+// e dietro chi ha davanti, come chi gioca: serve alle prove sul traffico.
 
 // Guida la corsa avviata fino a `fermate` fermate più avanti. Per ogni fermata un esito: { arrivato, motivo, nome,
 // tempo, metri, urti, marciapiede, ... }; ci si ferma alla prima non raggiunta.
-export async function guidaFermate(page, { fermate = 1, fermaAlPrimoUrto = false } = {}) {
-  await page.evaluate(installaPilota, { fermaAlPrimoUrto });
+export async function guidaFermate(page, { fermate = 1, fermaAlPrimoUrto = false, traffico = false } = {}) {
+  await page.evaluate(installaPilota, { fermaAlPrimoUrto, traffico });
   const esiti = [];
   for (let k = 0; k < fermate; k++) {
     let r;
@@ -20,14 +21,49 @@ export async function guidaFermate(page, { fermate = 1, fermaAlPrimoUrto = false
 }
 
 // Gira nella pagina: deve bastare a sé stessa (Playwright la passa come testo).
-function installaPilota({ fermaAlPrimoUrto }) {
+function installaPilota({ fermaAlPrimoUrto, traffico }) {
   const g = window.__game, m = g.mission, bus = g.bus, R = m.route, tram = !!bus.isTram, dt = 1 / 30;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   // senza traffico
-  g.traffic.target = 0;
-  g.traffic.cars.splice(0);
-  g.buses.setService([], m.variant);
-  if (g.trams.track) g.trams.setService([], m.variant);
+  if (!traffico) {
+    g.traffic.target = 0;
+    g.traffic.cars.splice(0);
+    g.buses.setService([], m.variant);
+    if (g.trams.track) g.trams.setService([], m.variant);
+  }
+  // col traffico: semafori del percorso (linea d'arresto come in buildLane di buses.js) e chi c'è davanti (pezzi dei bus
+  // automatici, auto, tram) entro 2,4 m dalla retta di marcia
+  const semafori = [];
+  if (traffico) for (let i = 1; i < R.seq.length; i++) {
+    const n = g.net.nodes[R.seq[i]], e = R.segs[i - 1].edge, ap = n.signal && e.id != null && g.lights.approach(n, e);
+    if (ap) semafori.push({ s: R.cum[i] - (ap.stop ?? (n.radius || 0) + 1.2) - 0.3, n, e });
+  }
+  const davanti = () => {
+    const fx = Math.sin(bus.h), fz = Math.cos(bus.h), mx = bus.x + fx * 6, mz = bus.z + fz * 6;
+    let gap = Infinity;
+    const prova = (x, z, r) => {
+      const a = (x - mx) * fx + (z - mz) * fz, l = Math.abs((x - mx) * fz - (z - mz) * fx);
+      if (a > -1 && a < 40 && l < 2.4) gap = Math.min(gap, a - r);
+    };
+    for (const p of g.buses.parts) prova(p.x, p.z, 1.6);
+    for (const c of g.traffic.cars) prova(c.x, c.z, 2.2);
+    for (const p of g.trams.near(mx, mz, 40)) prova(p.x, p.z, 1.6);
+    return gap;
+  };
+  // velocità permessa da semaforo e traffico (m.s è il centro del mezzo, il muso 6 m avanti)
+  const vincoli = () => {
+    let v = Infinity;
+    for (const sg of semafori) {
+      const d = sg.s - (m.s + 6);
+      if (d < -0.5 || d > 70) continue;
+      const c = g.lights.lightFor(sg.n, sg.e);
+      if (c === 'R' || (c === 'Y' && d > Math.abs(bus.v) * 1.5 + 2)) v = Math.min(v, d < 0.5 ? 0 : Math.sqrt(2 * 1.6 * (d - 0.5)));
+      break;
+    }
+    const gp = davanti();
+    if (gp < 40) v = Math.min(v, gp < 3 ? 0 : Math.sqrt(2 * 2 * (gp - 3)));
+    return v;
+  };
 
   // punto del percorso a s (come pointAt di routes.js)
   const punto = (s) => {
@@ -126,13 +162,14 @@ function installaPilota({ fermaAlPrimoUrto }) {
         const st = m.stops[P.obiettivo];
         if (m.nextStop > P.obiettivo) return P.esito(false, 'fermata superata senza fermarsi');
         if (!tram) sterza(st); else pantografo();
-        const vt = velocita(st);
+        const vt = traffico ? Math.min(velocita(st), vincoli()) : velocita(st);
         pedali(vt);
         const resto = st.s - 6.5 - m.s;
         if (resto < 0.8 && Math.abs(bus.v) < 0.05) { pedali(0); g.press('KeyF'); P.fase = 'arrivo'; P.ta = P.t; }
         P.fermo = Math.abs(bus.v) < 0.2 && resto > 3 ? P.fermo + dt : 0;
-        if (P.fermo > 15) return P.esito(false, 'mezzo bloccato');
-        if (P.t - P.t0 > P.limite) return P.esito(false, 'tempo scaduto');
+        // col traffico si aspetta ai rossi e in coda
+        if (P.fermo > (traffico ? 150 : 15)) return P.esito(false, 'mezzo bloccato');
+        if (P.t - P.t0 > P.limite + (traffico ? 600 : 0)) return P.esito(false, 'tempo scaduto');
       } else if (P.fase === 'arrivo') {
         const st = m.stops[P.obiettivo];
         if (st.delay !== undefined) return P.esito(true, 'arrivato');

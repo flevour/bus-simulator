@@ -48,7 +48,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 | `scripts/build_map.py`, `scripts/street_surfaces.py` | `mappa` (dettagli dentro l'area) e `capolinea` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a queste corsie |
 | `scripts/tram_linee.py`, `data/tram-linee-nuove.json` | `capolinea` (SIR2 fino ai capolinea) e `tram-turni` (binari della stazione) | chi cambia una funzione dell'altra lo scrive qui; dopo, si rigenera la mappa (la sede nella pianta delle strade segue i binari) |
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
-| `src/world/traffic.js` | `Traffic`/`Walkers`/`TrafficLights` a `traffico`, `TramSim`/`TramSignals` al tram | stesse classi in due corsie = conflitti; `traffico` può toccare `TramSim` solo dove serve allo sblocco dei tram, scrivendolo qui |
+| `src/world/traffic.js` | `Traffic`/`Walkers`/`TrafficLights`/`TramSignals` e in `TramSim` chi il tram aspetta (`others`, `busT`) a `traffico`, il resto di `TramSim` al tram | stesse classi in due corsie = conflitti; `traffico` tocca `TramSim` solo dove serve allo sblocco dei tram, scrivendolo qui |
 | `src/world/buses.js` | `traffico` (comportamento dei bus automatici) | `mappa` ci ha messo l'uscita dal binario opposto (`buildLane`, `ahead`): chi la cambia lo scrive qui |
 | `src/bus/bus.js` | `guida` (sterzo, pedali, cruscotto) | gli altri solo per piccole cose, segnalate qui |
 | `src/main.js` | tutti, ognuno nelle sue funzioni | |
@@ -365,6 +365,29 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   3. Una prova in `tests/` su quel tratto (bus e tram non restano fermi oltre 90 s fuori dalle fermate e dai rossi),
      poi lo stesso controllo su tutta la mappa per 40 minuti di gioco alle 8:15 e alle 17:30, per trovare gli altri
      blocchi (elenco in questa sezione).
+
+  Fatti 1, 2 e la prova del punto 3 (11 novembre). La segnalazione è delle 16:56 del 9 novembre, col codice prima di
+  `d1ac5cf`: guidando la 3 delle 8:36 in quel codice l'11B resta fermo 82 s e il 13 58 s al rosso dell'incrocio di
+  Riviera Tito Livio (nodo 2270), un SIR2 98 s in Piazza Garibaldi. Causa: la chiamata del tram (`TramSignals`) dava il
+  rosso a tutti i bracci, anche a quelli lungo il binario; il bus fermo al rosso sul binario davanti al tram non
+  partiva e il tram dietro teneva viva la chiamata, finché dopo 20 s gli passava attraverso. Correzione:
+  - `TrafficLights.tramCall`: resta verde (o lo diventa dopo giallo e tutto rosso) la fase libera per tutti i tram
+    chiamati (`x.free`, calcolata in `TramSignals`: bracci paralleli al binario che non sono la strada che lo taglia);
+    rosso a chi lo taglia; senza fase libera rosso per tutti come prima. A fine chiamata chi aveva il verde passa dal
+    giallo. La fase scelta resta finché va bene a tutti i tram chiamati (prima di questo il SIR2 di Piazza Garibaldi
+    aspettava 79 s: la fase cambiava a ogni passo e il conteggio ripartiva);
+  - `TramSignals.update`: l'incrocio è occupato solo da chi lo attraversa, non da chi va lungo il binario;
+  - `TramSim.move` (tocca alla corsia `tram-turni`, qui solo chi il tram aspetta): i pezzi del tram portano il loro
+    tram (`tram`), il tram non guarda i bus lontani dal giocatore (`b.near`, come i bus non guardano lui), e passa
+    attraverso un bus fermo solo se il bus aspetta lui (`waitTram`, `waitX`, dopo 4 s), altrimenti dopo 90 s;
+  - `buses.js`: chi non può liberare l'incrocio (semaforo o sede del tram) non ci entra (`out` nelle corsie).
+  Prova: `tests/traffico.spec.js`, la 3 delle 8:36 guidata nel traffico dal pilota (`guidaFermate` con `traffico`)
+  fino a Garibaldi giardini; nel tratto da Tito Livio a Piazza Garibaldi nessuno fermo oltre 60 s (un ciclo; lì il
+  rosso dura al massimo 29 s). Col codice del 9 novembre 81 s, ora 29 s. Visti nel tratto, non corretti:
+  - Riviera Tito Livio tra z 250 e 300: carreggiata da 8,3 m con il binario nello stesso verso a 2 m dalla corsia del
+    bus; i bus aspettano dietro il tram fermo alla sua fermata (anche 40 s se è in anticipo) e alla fermata dei bus
+    (x -30, z 260) bus e tram si sovrappongono (dati della corsia `mappa`);
+  - alla fermata Ponti Romani 68, sul binario, tre bus di fila fanno aspettare il tram dietro anche un minuto.
 - **Subito dopo, gli incroci tra traffico e tram** (chiesto da chi gioca l'11 novembre): se il tram ha il passaggio,
   auto e bus si fermano prima della sede; se lo ha la strada, il tram si ferma. Vale per i tram automatici e per
   quello di chi gioca, per i bus automatici e per le auto. Ai semafori vuol dire coordinare `TramSignals` con

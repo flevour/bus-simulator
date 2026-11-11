@@ -31,10 +31,10 @@ export const test = base.extend({
 export { expect };
 
 // Sceglie dal menu mezzo e linea (id della scheda: '24', 'SIR1'...), il verso (0 andata, 1 ritorno) e la modalità,
-// poi avvia la corsa. La corsa resta quella che il menu propone (la più vicina alle 8:15 nei giorni feriali), senza
-// uscita dal deposito: si parte dal capolinea.
-export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 'service' }) {
-  return page.evaluate(({ linea, tram, verso, modo }) => {
+// poi avvia la corsa. La corsa è quella che il menu propone (la più vicina alle 8:15 nei giorni feriali) o, con
+// `partenza` ('08:36'), quella che parte a quell'ora; senza uscita dal deposito: si parte dal capolinea.
+export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 'service', partenza = null }) {
+  return page.evaluate(({ linea, tram, verso, modo, partenza }) => {
     const g = window.__game, $ = (q) => document.querySelector(q);
     // il menu propone la corsa più vicina a quella scelta prima: senza scelta, quella delle 8:15 (giorno feriale)
     g.settings.departure = 0;
@@ -44,11 +44,17 @@ export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 
     if (!card) throw new Error(`linea ${linea} non presente nel menu`);
     card.click();
     $(`#direction button[data-d="${verso ? -1 : 1}"]`).click();
+    if (partenza) {
+      const sel = $('#departure'), i = [...sel.options].findIndex((o) => o.textContent.startsWith(partenza));
+      if (i < 0) throw new Error(`nessuna corsa della linea ${linea} alle ${partenza}`);
+      sel.value = String(i);
+      sel.dispatchEvent(new Event('change'));
+    }
     $(`#mode button[data-m="${modo}"]`).click();
     g.settings.fromDepot = false;
     if (g.settings.line.id !== linea) throw new Error(`il menu ha scelto la linea ${g.settings.line.id} invece di ${linea}`);
     g.startMission();
     const m = g.mission;
     return { linea, fermate: m.stops.length, prima: m.stops[0].name, ultima: m.stops[m.stops.length - 1].name, partenza: g.settings.departure };
-  }, { linea, tram, verso, modo });
+  }, { linea, tram, verso, modo, partenza });
 }

@@ -177,7 +177,7 @@ function buildLane(net, city, v, tramSignals) {
     const n = N[k], e = segs[k - 1].e;
     const ap = n.signal && e && n.signal.appr.find((a) => a.node === n && a.edge === e);
     if (!ap) continue;
-    signals.push({ s: ls(cum[k] - (ap.stop ?? (n.radius || 0) + 1.2) - 0.3), node: n, edge: e });
+    signals.push({ s: ls(cum[k] - (ap.stop ?? (n.radius || 0) + 1.2) - 0.3), out: ls(cum[k] + (n.radius || 0) + 2), node: n, edge: e });
   }
   // incroci a raso con la sede del tram: ci si ferma prima del primo binario se un tram ha chiamato l'incrocio
   const tram = [];
@@ -187,7 +187,7 @@ function buildLane(net, city, v, tramSignals) {
     const list = xs.map((x) => ({ x, at: cum[k] + (g.fwd ? x.tE : g.e.len - x.tE) - x.halfE })).sort((a, b) => a.at - b.at);
     for (const it of list) {
       const first = list.find((o) => o.at <= it.at && it.at - o.at < 14) || it;
-      tram.push({ x: it.x, s: ls(first.at - 2.5) });
+      tram.push({ x: it.x, s: ls(first.at - 2.5), out: ls(it.at + it.x.halfE + 1) });
     }
   });
   // velocità massima: curve (accelerazione laterale da bus urbano) e limiti del tratto, poi l'inviluppo di frenata
@@ -498,7 +498,7 @@ export class BusSim {
     for (const b of this.buses) {
       const L = b.L, P = L.P, st = L.stops;
       const front = b.s + FRONT;
-      const near = !player || Math.hypot(b.x - player.x, b.z - player.z) < NEAR;
+      const near = (b.near = !player || Math.hypot(b.x - player.x, b.z - player.z) < NEAR);
       // fermo in fermata: porte aperte, poi (all'orario) si chiudono e si riparte
       if (b.atStop) {
         b.v = 0;
@@ -545,6 +545,12 @@ export class BusSim {
       }
       if (b.passT > 0) { b.passT -= dt; wantLat = -3.2; }
       b.lat += Math.max(-0.9 * dt, Math.min(0.9 * dt, wantLat - b.lat));
+      // chi c'è davanti sulla corsia (solo vicino al giocatore)
+      const ob = near ? this.ahead(b, front, player, traffic, trams) : null;
+      const stopAt = (d) => (d < 0.3 ? 0 : Math.sqrt(2 * 1.6 * (d - 0.3)));
+      // chi non può liberare l'incrocio non ci entra: oltre l'uscita la coda non lascia posto al bus (12 m più i 3 da
+      // chi ha davanti)
+      const full = (out) => ob && ob.v < 1.5 && front + ob.gap < out + 15;
       // semaforo
       while (b.sig < L.signals.length && L.signals[b.sig].s < front - 1) b.sig++;
       const sg = L.signals[b.sig];
@@ -552,32 +558,40 @@ export class BusSim {
         const d = sg.s - front;
         if (d < 70) {
           const c = lights.lightFor(sg.node, sg.edge);
-          if (c === 'R' || (c === 'Y' && d > b.v * 1.5 + 2)) vt = Math.min(vt, d < 0.3 ? 0 : Math.sqrt(2 * 1.6 * (d - 0.3)));
+          if (c === 'R' || (c === 'Y' && d > b.v * 1.5 + 2) || (d > -0.5 && full(sg.out))) vt = Math.min(vt, stopAt(d));
         }
       }
-      // incrocio con la sede chiamato da un tram
+      // incrocio con la sede: ci si ferma prima del primo binario se un tram l'ha chiamato o se oltre non c'è posto.
+      // waitX: l'incrocio chiamato per cui il bus è fermo (il tram che l'ha chiamato non aspetta lui)
       while (b.tx < L.tram.length && L.tram[b.tx].s < front - 0.5) b.tx++;
+      b.waitX = null;
       for (let j = b.tx; j < L.tram.length && L.tram[j].s - front < 60; j++) {
-        if (L.tram[j].x.req > 0) { const d = L.tram[j].s - front; vt = Math.min(vt, d < 0.3 ? 0 : Math.sqrt(2 * 1.6 * (d - 0.3))); break; }
+        const X = L.tram[j];
+        if (X.x.req > 0 || full(X.out)) {
+          const v = stopAt(X.s - front);
+          vt = Math.min(vt, v);
+          if (X.x.req > 0 && v < 0.3) b.waitX = X.x;
+          break;
+        }
       }
-      // chi c'è davanti sulla corsia (solo vicino al giocatore)
+      // waitTram: il tram per cui il bus è fermo (il tram non aspetta un bus che aspetta lui)
       b.blocker = null;
-      if (near) {
-        const ob = this.ahead(b, front, player, traffic, trams);
-        if (ob && ob.bus) b.blocker = ob.bus;
-        if (ob) {
-          vt = Math.min(vt, Math.max(0, ob.v) + Math.sqrt(2 * 2.5 * Math.max(0, ob.gap - 3)));
-          if (ob.gap < 3) vt = 0;
-          if (b.v < 0.3 && vt < 0.3) {
-            b.blockT += dt;
-            // il giocatore fermo in mezzo alla corsia: dopo un po' lo si sorpassa; un'auto incastrata sparisce;
-            // due bus che si aspettano a vicenda: uno passa
-            if (ob.player && b.blockT > 10 && Math.abs(player.v) < 0.3) { b.passT = 12; b.blockT = 0; }
-            else if (ob.car && b.blockT > 15 && (!player || Math.hypot(ob.car.x - player.x, ob.car.z - player.z) > 60)) { ob.car.overlapT = 3; b.blockT = 0; }
-            else if (ob.bus && ob.bus.blocker === b && b.blockT > 8 && b.id < ob.bus.id) { b.ignoreBusT = 4; b.blockT = 0; }
-          }
-        } else b.blockT = 0;
-      }
+      b.waitTram = null;
+      if (ob) {
+        if (ob.bus) b.blocker = ob.bus;
+        const v = ob.gap < 3 ? 0 : Math.max(0, ob.v) + Math.sqrt(2 * 2.5 * Math.max(0, ob.gap - 3));
+        vt = Math.min(vt, v);
+        if (ob.tram && v < 0.3) b.waitTram = ob.tram;
+        if (b.v < 0.3 && vt < 0.3) {
+          b.blockT += dt;
+          // il giocatore fermo in mezzo alla corsia: dopo un po' lo si sorpassa; un'auto incastrata sparisce;
+          // due bus che si aspettano a vicenda: uno passa. Il tram in sosta alla fermata si aspetta: dove la sede è
+          // la carreggiata (Riviera Tito Livio) non c'è posto per sorpassarlo
+          if (ob.player && b.blockT > 10 && Math.abs(player.v) < 0.3) { b.passT = 12; b.blockT = 0; }
+          else if (ob.car && b.blockT > 15 && (!player || Math.hypot(ob.car.x - player.x, ob.car.z - player.z) > 60)) { ob.car.overlapT = 3; b.blockT = 0; }
+          else if (ob.bus && ob.bus.blocker === b && b.blockT > 8 && b.id < ob.bus.id) { b.ignoreBusT = 4; b.blockT = 0; }
+        }
+      } else b.blockT = 0;
       if (b.ignoreBusT > 0) b.ignoreBusT -= dt;
       const a = vt > b.v ? Math.min(1.1, (vt - b.v) * 1.2) : Math.max(-3.5, (vt - b.v) * 2.5);
       b.v = Math.max(0, b.v + a * dt);
@@ -717,7 +731,7 @@ export class BusSim {
     }
     // dei tram h è la quota, non la direzione: senza direzione il tram conta anche quando viene incontro (prima il bus
     // lo prendeva per un mezzo nell'altra corsia e ci entrava dentro, in Piazza Garibaldi)
-    if (trams) for (const p of trams.near(fp.x, fp.z, 40)) test(p.x, p.z, null, 0, 1.6, 2.5, { tram: true });
+    if (trams) for (const p of trams.near(fp.x, fp.z, 40)) test(p.x, p.z, null, 0, 1.6, 2.5, { tram: p.tram || true });
     return best;
   }
   // pezzi dei bus per le collisioni (due cerchi per pezzo, come le auto) e per le auto che li seguono

@@ -25,6 +25,7 @@ function guessSignals(net) {
 // Tempi (art. 159–168 Regolamento CdS, Nota MIT 67906/2007 per il giallo). Il ciclo è comune a tutti gli impianti,
 // così l'onda verde tiene: 60 s, più corto dei 90 s tipici ma con le stesse proporzioni
 const CYCLE = 60, ALL_RED = 2, PED_GREEN = 12;
+const TRAM_Y = 3; // giallo di chi lascia il verde al tram
 const WAVE_V = 12; // m/s (circa 43 km/h): velocità dell'onda verde lungo le vie coordinate
 const WAVE_REACH = 700; // m: distanza massima tra due impianti coordinati
 const HEAD_Y = 2.3; // bordo inferiore della lanterna sul palo (2–3 m)
@@ -366,13 +367,43 @@ export class TrafficLights {
     }
   }
 
+  // Chiamata di un tram in arrivo (TramSignals): calls sono gli incroci col tram chiamati vicino all'impianto, ognuno con
+  // le fasi che non tagliano il suo binario (x.free). La fase libera per tutti i tram chiamati resta verde, o lo diventa
+  // dopo il giallo e il tutto rosso delle altre, che vanno in rosso; senza fase libera rosso per tutti. Prima il rosso
+  // era per tutti anche dove il tram corre lungo la strada (Riviera Tito Livio, Riviera dei Ponti Romani): il bus fermo
+  // al rosso sul binario davanti al tram non partiva, il tram dietro di lui teneva viva la chiamata e il rosso durava
+  tramCall(sig, calls, dt) {
+    if (calls.length) {
+      const shown = [this.stateOf(sig, 0), this.stateOf(sig, 1)];
+      const free = [0, 1].filter((p) => sig.appr.some((a) => a.phase === p) && calls.every((x) => x.free.includes(p)));
+      // la fase scelta resta finché va bene a tutti i tram chiamati (il tutto rosso va bene sempre): cambiarla fa
+      // ripartire il conteggio e il segnale del tram non darebbe mai via libera
+      const keep = sig.tramT > 0 && (sig.tramPh === -1 || free.includes(sig.tramPh));
+      const ph = keep ? sig.tramPh : free.length ? free.find((p) => shown[p] === 'G') ?? free[0] : -1;
+      // chiamata nuova, o un altro tram che chiede un'altra fase: si riparte da quello che si vede
+      if (!(sig.tramT > 0) || ph !== sig.tramPh) { sig.tramFrom = shown; sig.tramPh = ph; sig.tramT = 0; }
+      sig.tramT += dt;
+      sig.postT = 0;
+    } else if (sig.tramT > 0) {
+      sig.postFrom = [this.stateOf(sig, 0), this.stateOf(sig, 1)];
+      sig.tramT = 0;
+      sig.postT = dt;
+    } else if (sig.postT > 0) sig.postT = sig.postT + dt < TRAM_Y + ALL_RED ? sig.postT + dt : 0;
+  }
   stateOf(sig, phase) {
-    // fase del tram (chiamata da un tram in arrivo): chi aveva il verde passa al giallo per 3 s, poi rosso per tutti
     if (sig.tramT > 0) {
-      const base = this.cycleState(sig, phase);
-      return sig.tramT < 3 && base !== 'R' ? 'Y' : 'R';
+      const s0 = sig.tramFrom[phase], t = sig.tramT;
+      if (phase === sig.tramPh) return s0 === 'G' || t >= TRAM_Y + ALL_RED ? 'G' : s0 === 'Y' && t < TRAM_Y ? 'Y' : 'R';
+      return s0 !== 'R' && t < TRAM_Y ? 'Y' : 'R';
     }
-    return this.cycleState(sig, phase);
+    const base = this.cycleState(sig, phase);
+    if (sig.postT > 0) {
+      // fine della chiamata: chi aveva il verde del tram lo lascia col giallo, gli altri aspettano l'incrocio libero
+      const s1 = sig.postFrom[phase];
+      if (s1 === 'G') return base === 'G' ? 'G' : sig.postT < TRAM_Y ? 'Y' : 'R';
+      if (sig.postFrom[1 - phase] === 'G') return 'R';
+    }
+    return base;
   }
   cycleState(sig, phase) {
     let t = (this.time + sig.offset) % sig.total;
@@ -1051,7 +1082,9 @@ export class TramSim {
       for (const o of others) if (o && o.isBus && ahead(o) < 1.5) beside.add(o.bus);
       tr.ignoreBusT = Math.max(0, (tr.ignoreBusT || 0) - dt);
       for (const o of others) {
-        if (!o || (o.isBus && (beside.has(o.bus) || tr.ignoreBusT > 0))) continue;
+        // lontano dal giocatore i bus non guardano chi hanno davanti (nessuno li vede): nemmeno il tram guarda loro,
+        // altrimenti aspetta dietro i bus alle fermate sul binario mentre gli altri bus gli passano attraverso
+        if (!o || (o.isBus && (beside.has(o.bus) || tr.ignoreBusT > 0 || o.bus.near === false))) continue;
         if (o.isTram && o.trackPoints) for (const p of o.trackPoints()) obst.push({ p, min: -2 });
         else obst.push({ p: o, min: -2, bus: o.isBus });
       }
@@ -1063,17 +1096,20 @@ export class TramSim {
         if (t2.id > tr.id && (head.x - h2.x) * h2.fx + (head.z - h2.z) * h2.fz > -0.5 && Math.hypot(head.x - h2.x, head.z - h2.z) < 30) continue;
         for (const p of t2.parts) obst.push({ p, min: -2 });
       }
-      let byBus = false;
+      let byBus = null;
       for (const { p: o, min, bus } of obst) {
         const rx = o.x - head.x, rz = o.z - head.z;
         if (Math.abs(rx) > 60 || Math.abs(rz) > 60) continue;
         const a = rx * head.fx + rz * head.fz, lat = Math.abs(rx * -head.fz + rz * head.fx), v2 = Math.max(0, (a - 7) * 0.5);
-        if (lat < 2.2 && a > min && a < 30 && v2 < vt) { vt = v2; byBus = !!bus; }
+        if (lat < 2.2 && a > min && a < 30 && v2 < vt) { vt = v2; byBus = bus ? o.bus : null; }
       }
       // dove la corsia del bus incrocia il binario quasi di striscio (o ci corre sopra) un bus fermo sui binari e il tram
-      // possono aspettarsi a vicenda: dopo 20 s il tram passa lo stesso, per 10 s non guarda i bus
+      // possono aspettarsi a vicenda: il bus ha davanti questo tram, o aspetta l'incrocio che questo tram ha chiamato.
+      // Allora dopo 4 s il tram passa lo stesso e per 10 s non guarda i bus. Un bus fermo al rosso o in coda invece si
+      // aspetta (prima dopo 20 s il tram ci passava attraverso); oltre i 90 s si passa comunque
+      const mutual = byBus && (byBus.waitTram === tr || (byBus.waitX && byBus.waitX.refs.some((r) => r.track === T && r.dir === tr.dir && r.sT > tr.s - 2)));
       tr.busT = byBus && tr.v < 0.1 ? (tr.busT || 0) + dt : 0;
-      if (tr.busT > 20) { tr.ignoreBusT = 10; tr.busT = 0; }
+      if (tr.busT > (mutual ? 4 : 90)) { tr.ignoreBusT = 10; tr.busT = 0; }
       tr.v += Math.max(-2.5, Math.min(1.0, vt - tr.v)) * dt * 2;
       tr.v = Math.max(0, tr.v);
       tr.s += tr.v * dt;
@@ -1105,7 +1141,7 @@ export class TramSim {
         m.group.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
         m.group.rotation.x = -Math.atan2(ha - hb, m.len);
         const h = m.group.rotation.y;
-        for (const f of [0.15, 0.5, 0.85]) tr.parts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, h, isTram: true, bump: 0 });
+        for (const f of [0.15, 0.5, 0.85]) tr.parts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, h, isTram: true, tram: tr, bump: 0 });
         if (k < tr.mods.length - 1) {
           const j = this.lanePoint(sb - TRAM.gap / 2, tr.dir, T);
           tr.bellows[k].position.set(j.x, Y_ROAD + 1.41 + hb, j.z);
@@ -1198,8 +1234,13 @@ export class TramSignals {
       let best = null, bd = 35;
       for (const sg of (lights && lights.signals) || []) for (const n of sg.nodes) { const d = Math.hypot(n.x - x.px, n.z - x.pz); if (d < bd) { bd = d; best = sg; } }
       x.sig = best;
-      if (best) this.sigs.add(best);
+      if (!best) continue;
+      this.sigs.add(best);
+      // fasi che non tagliano il binario: i bracci corrono lungo il tram (stessa direzione o opposta) e non sono la
+      // strada che lo attraversa qui
+      x.free = [0, 1].filter((p) => best.appr.every((a) => a.phase !== p || (a.edge !== x.e && Math.abs(a.out.x * x.tdx + a.out.z * x.tdz) > 0.8)));
     }
+    this.lights = lights;
     this.buildHeads(scene);
   }
   // un segnale per incrocio, a destra del binario, prima della strada: lanterna a tre luci in colonna (dall'alto barra
@@ -1260,7 +1301,7 @@ export class TramSignals {
   // sapere se l'incrocio è sgombro
   update(dt, occ, traffic) {
     this.violations.length = 0;
-    for (const sg of this.sigs) sg._call = false;
+    for (const sg of this.sigs) sg._calls = [];
     for (const x of this.list) {
       let need = false;
       for (const o of occ) {
@@ -1279,8 +1320,9 @@ export class TramSignals {
       }
       if (need) {
         x.req += dt;
-        if (x.sig) x.sig._call = true;
-        const busy = traffic && traffic.near(x.px, x.pz, 4.5).some((c) => !c.isTram && c.v > 0.2);
+        if (x.sig) x.sig._calls.push(x);
+        // incrocio occupato da chi lo attraversa; chi va lungo il binario (col verde del tram) non conta
+        const busy = traffic && traffic.near(x.px, x.pz, 4.5).some((c) => !c.isTram && c.v > 0.2 && Math.abs(Math.sin(c.h) * x.tdx + Math.cos(c.h) * x.tdz) < 0.8);
         // con un semaforo stradale: via libera solo dopo giallo e rosso per le auto
         const ready = x.sig ? x.sig.tramT > 4.5 : x.req > 2.5;
         if (x.state !== 'V' && ready && !busy) x.state = 'V';
@@ -1292,7 +1334,7 @@ export class TramSignals {
         x.req = 0;
       }
     }
-    for (const sg of this.sigs) sg.tramT = sg._call ? (sg.tramT || 0) + dt : 0;
+    for (const sg of this.sigs) this.lights.tramCall(sg, sg._calls, dt);
     this.drawHeads(false);
   }
   // le auto si fermano prima della sede se l'incrocio è chiamato da un tram
