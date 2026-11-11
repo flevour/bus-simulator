@@ -84,6 +84,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [ ] segni bianchi della carreggiata sulla sede rossa del tram, lungo un binario a fianco della strada (corsia
        `mappa`);
      - [ ] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (corsia `mappa`);
+     - [ ] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
+       stanno alla quota degli argini (corsia `mappa`);
      - [x] pali della linea aerea in mezzo alla strada dove i due binari corrono separati, con i tiranti che
        attraversano tutte le corsie (vedi "Fatto");
      - [ ] in stazione il binario di destra parallelo alla banchina, senza la S verso sinistra; la curva a sinistra

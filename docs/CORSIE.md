@@ -207,6 +207,13 @@ Prossimo lavoro, in quest'ordine:
   0,3 s. Viene dagli impalcati in triangoli da 4 m (`14cbf9f`): da guardare, è la parte più lenta dell'avvio;
 - sede del tram pulita (segnalazioni dell'11 novembre, sopra): niente segni della carreggiata né asfalto sopra la
   sede, su tutte le linee;
+- **ponte tra Cornaro e Voltabarozzo** (SIR3 e Via Piovese sul canale Scaricatore; foto di chi gioca dell'11
+  novembre): "la discesa verso nord deve essere molto più dolce". Nella foto i ponti (quello della strada, una
+  travata reticolare d'acciaio, e quello nuovo del tram accanto) stanno alla quota degli argini e le strade ci
+  arrivano quasi in piano: la discesa verso nord è una pendenza di pochi percento, non una rampa da cavalcavia.
+  Misurare la pendenza di strada e binario nel gioco, correggerla, foto dal posto di guida e guida del SIR3 e di una
+  linea del bus che ci passa. `city.js` lo sta riscrivendo `capolinea` (aree a richiesta): la correzione va nei dati
+  o in `tram.js`, oppure aspetta che il lavoro di `capolinea` sia su `main`;
 - cavalcavia del sondaggio del 9 novembre (sopra): foto dal posto di guida e guida di una linea che ci passa sul
   Cavalcavia Camerini, sul Borgomagno e su quelli lungo la 22 attorno a Via Orlandini; poi, al Borgomagno, la piega
   dei fili del tram e il gradino di 20 cm;
