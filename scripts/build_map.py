@@ -1294,6 +1294,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             ttrips.setdefault(t['shape_id'], t['trip_id'])
     tram = []
     tram_lanes = False
+    staz = None
     tram_stop_ids = set()
     if tshapes:
         main_shape = max(tshapes, key=tshapes.get)
@@ -1402,6 +1403,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'nodes': nodes_flat, 'edges': [v for e in edges for v in e], 'names': names,
         'stops': gt['stops'], 'lines': lines_out,
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramStops': tram_stops,
+        'tramStazione': tram_stazione.zona(staz, xz) if staz else None,
         'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
         # corsie dai tag OSM: [arco, codice] (lane_code), e frecce a terra [arco, avanti, indietro]
         'lanes': [v for k, lt in sorted(edge_lanes.items()) for v in (k, lane_code(lt))], 'turnLanes': turns,

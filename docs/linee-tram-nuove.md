@@ -279,6 +279,61 @@ python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-ferma
 * **Prove** (40 minuti di gioco alle 8.15 e alle 17.30, il giocatore lontano dai binari): nessun tram fermo fuori dalle
   fermate; corse guidate intere del SIR3 nei due versi (fino all'anello) e del SIR2 nei due versi.
 
+## Binari della stazione (11 novembre)
+
+Tre foto di chi gioca dell'11 novembre: alla banchina di Stazione sud il binario di destra (l'anello esterno del SIR1)
+fa una S verso sinistra e si unisce a quello della banchina; dove il SIR3 entra nell'anello girando a sinistra la curva
+è spigolosa; all'uscita della banchina i binari si intrecciano a S e si incrociano più volte. Le cause, nei dati:
+l'anello esterno viene dallo shape GTFS del SIR1 agganciato a tratti ai binari OSM e corre a 2-4 m dall'interno, a
+volte si avvicina e si fonde con lui; le due testate est si sovrappongono e si incrociano; i raccordi OSM verso Pace e
+verso ovest girano con raggi di 8-12 m; gli scambi tra gli anelli sono lunghi 10 m.
+
+**Riferimento: il rendering del progetto del piazzale** (immagine mandata da chi gioca, non nel repository). Ne ho preso:
+
+* due anelli ovali concentrici attorno all'isola dei bus, percorsi tutti e due in senso antiorario;
+* i lati lunghi dritti e paralleli tra loro (le banchine e le pensiline del tram corrono lungo il lato verso il piazzale
+  pedonale della stazione);
+* le testate a semicerchio, con i binari dei due anelli concentrici a distanza costante;
+* i raccordi verso le vie con curve morbide, senza S né intrecci; dove OSM fa S e intrecci vale il rendering.
+
+Non ne ho preso la posizione delle banchine: nel gioco restano Stazione nord e Stazione sud sui due lati lunghi, dentro
+l'anello interno (scelta della tappa 2), e la topologia resta quella di OSM: quattro scambi tra gli anelli, uscita e
+entrata verso Pace a est, verso Corso del Popolo e la Stazione FS a ovest.
+
+**Come** (`scripts/tram_stazione.py`, usato da `tram_linee.py` per SIR2 e SIR3 e da `build_map.py` per il SIR1, così
+binari del gioco e sede nella pianta delle strade seguono la stessa geometria):
+
+* anello interno: lo stadio (due lati dritti paralleli e due semicerchi) che segue meglio l'anello interno di OSM (way
+  1332833374, 966705987, 966705990, ricampionate ogni metro): raggio delle testate 13,2 m, lunghezza 142 m, asse a
+  12,8° sotto l'est; i lati stanno sul binario OSM (scarto mediano 0, al più 0,6 m);
+* anello esterno: lo stesso stadio allargato di 3,4 m, l'interasse del doppio binario del gioco: le due corsie rosse si
+  toccano come nel rendering (i binari OSM dei lati lunghi stanno a 4,0 m, e con 4 m restava una striscia d'asfalto
+  tra le due sedi);
+* ogni binario che corre lungo gli anelli in senso antiorario, nella fascia da 2 m dentro l'interno a 5 m fuori
+  dall'esterno, va sull'anello più vicino (sotto 1,2 m dall'interno è interno); dove passa dall'uno all'altro uno
+  scostamento a S di 24 m (raggio minimo 34 m), centrato dove passava il binario OSM, uguale per tutte le linee che
+  usano lo stesso scambio;
+* dove arriva da una via o ci va, un raccordo rettilineo, arco, rettilineo con il raggio più grande che sta tra il
+  binario com'era 20 m prima e l'anello 14 m dopo. Il SIR2 verso Rubano esce a nord-ovest lungo la testata esterna e si
+  innesta tangente sul binario verso sud (prima girava con 8 m di raggio).
+
+Raggi minimi nel piazzale dopo: SIR1 16,3 m, SIR2 verso Busa di Vigonza 16,3 m, le testate dell'anello interno 13,2 m
+(SIR3 e SIR2, la larghezza del piazzale in OSM). Fuori dalla stazione i binari restano quelli di prima punto per punto.
+
+**Nel gioco** (`TramTrack` in `src/tram/tram.js`): la media mobile che leviga i punti GTFS rumorosi non tocca i binari
+della stazione (`tramStazione` nella rete: centri delle testate, raggio, fascia; la scrive `build_map.py` dallo stesso
+modulo), perché restringerebbe le testate interne più di quelle esterne. I tratti in comune tra le sedi finiscono dove
+il binario comincia a staccarsi, non a 1,5 m, e oltre si sfuma solo lo scarto rimasto: prima la prima metà della S
+finiva schiacciata sull'altro binario e il resto faceva un gradino (le foto). Il binario in comune è il più vicino, non
+il primo della lista: il SIR2 resta sulla S del SIR3 fino all'anello esterno.
+
+**Prove**: `tests/stazione-tram.spec.js` guida SIR3 e SIR2 nei due versi attraverso gli anelli (tutte le fermate, senza
+urti); 40 minuti di tram automatici alle 8.15 e alle 17.30 senza tram fermi fuori dalle fermate; foto dall'alto e dalla
+cabina nei tre punti delle foto di chi gioca.
+
+**Aperto**: le banchine sul lato del piazzale pedonale come nel rendering (oggi una per lato lungo, dentro l'anello
+interno).
+
 ## Piano
 
 Prima il SIR3 (apre per primo e la parte nel gioco è quasi tutta già dentro la mappa), poi il SIR2.

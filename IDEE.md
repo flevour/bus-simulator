@@ -99,8 +99,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] mappa grande (M) da trascinare per spostarsi (vedi "Fatto");
      - [x] pali della linea aerea in mezzo alla strada dove i due binari corrono separati, con i tiranti che
        attraversano tutte le corsie (vedi "Fatto");
-     - [ ] in stazione il binario di destra parallelo alla banchina, senza la S verso sinistra; la curva a sinistra
-       dell'anello interno più regolare; niente intrecci a S all'uscita della banchina (corsia `tram-turni`);
+     - [x] in stazione il binario di destra parallelo alla banchina, senza la S verso sinistra; la curva a sinistra
+       dell'anello interno più regolare; niente intrecci a S all'uscita della banchina (vedi "Fatto");
      - [x] al capolinea del tram B fa partire la corsa successiva, come per il bus, senza tornare al menu (vedi
        "Fatto");
      - [ ] linee del bus complete fino al capolinea, senza la scritta "tratto in città" (corsia `capolinea`, prima del
@@ -227,6 +227,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Binari della stazione** (corsia `tram-turni`, 11 novembre): i due anelli del piazzale regolari e concentrici
+  come nel rendering del progetto (lati lunghi dritti e paralleli, testate a semicerchio, 3,4 m tra gli anelli), scambi
+  a S di 24 m tra gli anelli, raccordi a raggio costante verso Pace e verso ovest (raggi minimi da 8-12 m a 16 m).
+  `scripts/tram_stazione.py`, usato da `tram_linee.py` (SIR2, SIR3) e `build_map.py` (SIR1); nel gioco niente media
+  mobile in stazione e tratti in comune che finiscono dove il binario si stacca (`TramTrack`). Dettagli in
+  [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md), "Binari della stazione"; prova in
+  `tests/stazione-tram.spec.js`.
 - [x] **Ponte tra Cornaro e Voltabarozzo** (segnalazione dell'11 novembre, corsia `mappa`): il SIR3 scendeva
   dall'argine dello Scaricatore verso nord al 20% (3 m in 15 m), perché corre accanto al rilevato di Via Piovese e il
   DTM non ha ancora il terrapieno del binario nuovo. Lungo i binari delle linee nuove, fuori dalle carreggiate, il

@@ -175,9 +175,12 @@ export class TramTrack {
       south = north.map((p, i) => { const q = C.at(ns[i]); return { x: q.x + q.dz * TRAM.lane, z: q.z - q.dx * TRAM.lane }; }).reverse();
       wS = wN.slice().reverse();
     }
-    // i punti GTFS fitti e rumorosi (anello della stazione, Borgomagno) lasciano spigoli che i raccordi non tolgono:
-    // media mobile su ±9 m, due passate, estremi fermi. Una curva vera di 28 m si sposta di circa mezzo metro
-    smoothLane(north); smoothLane(south);
+    // i punti GTFS fitti e rumorosi (Borgomagno) lasciano spigoli che i raccordi non tolgono: media mobile su ±9 m, due
+    // passate, estremi fermi. Una curva vera di 28 m si sposta di circa mezzo metro. In stazione i binari sono già gli
+    // anelli regolari di scripts/tram_stazione.py (net.tramStazione): la media stringerebbe di più le testate interne e
+    // la distanza tra gli anelli non sarebbe più costante
+    const fixed = inStazione(net.tramStazione);
+    smoothLane(north, 3, 2, fixed); smoothLane(south, 3, 2, fixed);
     // tratti in comune con le sedi già posate e scambi ai loro capi
     this.shared = { 1: [], '-1': [] };
     this.switches = [];
@@ -272,31 +275,49 @@ export class TramTrack {
     return h[i] + ((h[Math.min(h.length - 1, i + 1)] ?? h[i]) - h[i]) * t;
   }
 }
-function smoothLane(pts, k = 3, passes = 2) {
+function smoothLane(pts, k = 3, passes = 2, fixed = null) {
+  const keep = fixed ? pts.map(fixed) : null;
   for (let pass = 0; pass < passes; pass++) {
     const src = pts.map((p) => ({ x: p.x, z: p.z }));
     for (let i = k; i < pts.length - k; i++) {
+      if (keep && keep[i]) continue;
       let x = 0, z = 0;
       for (let j = -k; j <= k; j++) { x += src[i + j].x; z += src[i + j].z; }
       pts[i].x = x / (2 * k + 1); pts[i].z = z / (2 * k + 1);
     }
   }
 }
+// zona della stazione (net.tramStazione: centri delle testate a e b, raggio r, near): punti a meno di near metri
+// dall'anello interno
+function inStazione(Z) {
+  if (!Z) return null;
+  const [ax, az] = Z.a, ex = Z.b[0] - ax, ez = Z.b[1] - az, l2 = ex * ex + ez * ez || 1e-6;
+  return (p) => {
+    const t = Math.max(0, Math.min(1, ((p.x - ax) * ex + (p.z - az) * ez) / l2));
+    return Math.hypot(p.x - ax - ex * t, p.z - az - ez * t) - Z.r < Z.near;
+  };
+}
 function dedupIdx(pts) { const out = []; pts.forEach((p, i) => { if (i === 0 || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 0.05) out.push(i); }); return out; }
 // Binario che corre sopra quello di un'altra sede, nello stesso verso (entro 1,5 m, per almeno 20 m): i punti diventano
-// quelli dell'altro binario, con un raccordo di 20 m ai capi (lo scambio). Restituisce per ogni punto { o, s } (binario
-// e progressiva su cui corre) o null.
+// quelli dell'altro binario. Il tratto in comune finisce dove il binario comincia a staccarsi (la distanza cresce verso
+// il capo): lì c'è lo scambio, e lo scostamento del binario resta com'è (in stazione la S di 24 m tra gli anelli). Oltre
+// i capi lo scarto che c'era tra i due binari si sfuma in 20 m. Restituisce per ogni punto { o, s } (binario e
+// progressiva su cui corre) o null.
 const SHARE = 1.5, SHARE_MIN = 20, SWITCH_LEN = 20;
 function snapShared(pts, others) {
   const n = pts.length, hit = new Array(n).fill(null);
   if (!others.length) return hit;
   for (let i = 0; i < n; i++) {
     const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    // il binario più vicino; a pari distanza (5 cm) quello del punto prima (in stazione il SIR2 sulla S del SIR3, che
+    // finisce sul SIR1)
     for (const o of others) {
       const pr = o.P.projectNear(pts[i].x, pts[i].z, SHARE);
       if (!pr) continue;
       const q = o.P.at(pr.s);
-      if ((q.dx * (b.x - a.x) + q.dz * (b.z - a.z)) / l > 0.9) { hit[i] = { o, s: pr.s }; break; }
+      if ((q.dx * (b.x - a.x) + q.dz * (b.z - a.z)) / l <= 0.9) continue;
+      const h = hit[i], prev = i > 0 && hit[i - 1] && hit[i - 1].o;
+      if (!h || pr.d < h.d - 0.05 || (pr.d < h.d + 0.05 && o === prev)) hit[i] = { o, s: pr.s, d: pr.d };
     }
   }
   // via i tratti più corti (binari che si incrociano o si sfiorano)
@@ -307,14 +328,37 @@ function snapShared(pts, others) {
     if (hit[i] && j - i < minRun) for (let k = i; k < j; k++) hit[k] = null;
     i = j;
   }
-  const ref = hit.slice(), w = hit.map((h) => (h ? 1 : 0)), k = STEP / SWITCH_LEN;
-  for (let i = 1; i < n; i++) if (w[i - 1] - k > w[i]) { w[i] = w[i - 1] - k; ref[i] = ref[i - 1]; }
-  for (let i = n - 2; i >= 0; i--) if (w[i + 1] - k > w[i]) { w[i] = w[i + 1] - k; ref[i] = ref[i + 1]; }
-  for (let i = 0; i < n; i++) {
-    if (!w[i]) continue;
-    const P = ref[i].o.P, q = P.at(hit[i] ? hit[i].s : P.project(pts[i].x, pts[i].z).s);
-    pts[i] = { x: pts[i].x + (q.x - pts[i].x) * w[i], z: pts[i].z + (q.z - pts[i].z) * w[i] };
+  // capi: indietro finché il binario si sta allontanando dall'altro (oltre SPLIT: sotto, i due binari sono lo stesso,
+  // tracciato da due fonti)
+  const SPLIT = 0.3;
+  for (let i = 0; i < n;) {
+    if (!hit[i]) { i++; continue; }
+    let j = i;
+    while (j + 1 < n && hit[j + 1] && hit[j + 1].o === hit[i].o) j++;
+    let a = i, b = j;
+    while (b > a && hit[b].d > SPLIT && hit[b].d > hit[b - 1].d + 0.02) hit[b--] = null;
+    while (a < b && hit[a].d > SPLIT && hit[a].d > hit[a + 1].d + 0.02) hit[a++] = null;
+    i = j + 1;
   }
+  // punti del tratto in comune sull'altro binario; prima e dopo, lo scarto del capo sfumato (curva morbida)
+  const off = new Array(n).fill(null);
+  const fade = (from, dir, D) => {
+    for (let m = 1, i = from + dir; m * STEP < SWITCH_LEN && i >= 0 && i < n && !hit[i]; m++, i += dir) {
+      const u = (m * STEP) / SWITCH_LEN, w = 1 - u * u * (3 - 2 * u);
+      const o = off[i] || { x: 0, z: 0 };
+      off[i] = { x: o.x + D.x * w, z: o.z + D.z * w };
+    }
+  };
+  for (let i = 0; i < n;) {
+    if (!hit[i]) { i++; continue; }
+    let j = i;
+    while (j + 1 < n && hit[j + 1] && hit[j + 1].o === hit[i].o) j++;
+    const at = (k) => { const q = hit[k].o.P.at(hit[k].s); return { x: q.x - pts[k].x, z: q.z - pts[k].z }; };
+    fade(i, -1, at(i)); fade(j, 1, at(j));
+    for (let k = i; k <= j; k++) { const q = hit[k].o.P.at(hit[k].s); pts[k] = { x: q.x, z: q.z }; }
+    i = j + 1;
+  }
+  for (let i = 0; i < n; i++) if (off[i]) pts[i] = { x: pts[i].x + off[i].x, z: pts[i].z + off[i].z };
   return hit;
 }
 function resampleW(P, pts, w) {

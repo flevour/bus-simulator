@@ -468,14 +468,15 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
 `data/tram-linee-nuove.json` (con `capolinea`, tabella dei file condivisi), la parte del tram di `buildTramway` in
 `src/world/city.js`.
 
-- **Prima di tutto B al capolinea** (chiesto da chi gioca l'11 novembre): "una volta al capolinea (es. SIR3 al
-  capolinea Stazione sud) vorrei poter premere B e ricominciare come per i bus, senza fare nuova corsa". Oggi B cambia
-  cabina (`changeTramCab`; all'anello della stazione si riparte senza cambiarla), ma per la corsa dopo si torna al
-  menu. Al capolinea B deve cambiare cabina e far partire la corsa successiva del turno nel verso opposto, come
-  `chainNext` per il bus: orario dal turno, pannello della linea, indicatori e fermate aggiornati, salvataggio. Vale
-  anche al capolinea ad anello. Prova in `tests/`: SIR3 fino al capolinea, B, la corsa nuova parte dalla prima fermata
-  dell'altro verso.
-- **Poi i binari della stazione** (tre foto dell'11 novembre, nel pannello del checkout principale):
+- **B al capolinea**: fatto l'11 novembre (IDEE, "Fatto"; `tramNextRun` in `main.js`, `tests/turni-tram.spec.js`).
+- **Binari della stazione**: fatto l'11 novembre (IDEE, "Fatto"; [`linee-tram-nuove.md`](linee-tram-nuove.md),
+  "Binari della stazione"). Fuori dai miei file, piccoli: in `build_map.py` i binari del SIR1 passano da
+  `scripts/tram_stazione.py` (`stazione_xz`, dopo `tram_lane`) e la rete ha la chiave `tramStazione`; in
+  `tram_linee.py` il percorso passa dallo stesso modulo prima delle fermate (`stazione`); in `TramSim` di `traffic.js`
+  `exclude` (la corsa dopo del giocatore). La mappa l'ho rigenerata ma pubblicata solo nei binari del SIR1, in
+  `tramStazione` e nelle quattro celle da 200 m della stazione (area `0_-2`): il resto cambiava solo per la versione
+  di shapely (qui 2.2.0); soglia del marciapiede stretto da 176.000 a 176.010. Chi rigenera dopo trova gli stessi
+  binari. Il brief:
   - "rendiamo la corsia di destra in stazione parallela, senza lo sbandamento a sinistra": alla banchina di Stazione
     sud (SIR2 fermo), il binario di destra fa una S verso sinistra invece di correre parallelo a quello della
     banchina;

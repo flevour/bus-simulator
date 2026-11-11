@@ -349,7 +349,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = MAP.edificiBBox || [Infinity, Infinity, -Infinity, -Infinity];
   if (!MAP.edificiBBox) for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramLines, tramStazione: MAP.tramStazione || null, surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m

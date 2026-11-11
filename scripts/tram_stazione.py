@@ -20,10 +20,11 @@ import json, math
 
 # anello interno in OSM (way del cantiere): lato nord con le due testate, lato sud
 RING = (1332833374, 966705987, 966705990)
-GAP = 4.0     # m tra i due anelli: l'interasse mediano dei binari OSM sui lati lunghi
+GAP = 3.4     # m tra i due anelli: l'interasse del doppio binario nel gioco (TRAM.lane * 2), le due corsie rosse si
+              # toccano come nel rendering (in OSM i lati lunghi stanno a 4,0 m, con una striscia d'asfalto in mezzo)
 SPLIT = 1.2   # m dall'anello interno: più vicino è interno, più lontano esterno (in OSM l'esterno sta a 2-3 m)
 BAND = 2.0    # m dentro l'anello interno: oltre, il binario non è sull'anello
-BAND_OUT = 4.5  # m fuori dall'anello esterno: alle testate i binari di OSM che vanno alle vie girano più stretti
+BAND_OUT = 5.0  # m fuori dall'anello esterno: alle testate i binari di OSM che vanno alle vie girano più stretti
               # (raggio 8 m a nord-ovest) e più in fuori dell'anello; dentro la fascia seguono la testata
 ALIGN = 0.85  # coseno minimo tra il binario e il verso dell'anello (antiorario)
 LX = 24.0     # m: lunghezza dello scostamento a S tra i due anelli
@@ -38,12 +39,14 @@ M_LAT = 111130.0
 
 
 class Stazione:
-    def __init__(self, ring_ll):
-        """ring_ll: punti (lat, lon) dell'anello interno di OSM."""
-        self.lat0 = sum(p[0] for p in ring_ll) / len(ring_ll)
-        self.lon0 = sum(p[1] for p in ring_ll) / len(ring_ll)
+    def __init__(self, ways_ll):
+        """ways_ll: le way (punti lat, lon) dell'anello interno di OSM. Ricampionate ogni metro: ogni metro di binario
+        pesa uguale (i nodi OSM sono fitti all'inizio delle curve e radi sui rettilinei)."""
+        allp = [p for w in ways_ll for p in w]
+        self.lat0 = sum(p[0] for p in allp) / len(allp)
+        self.lon0 = sum(p[1] for p in allp) / len(allp)
         self.m_lon = 111320.0 * math.cos(math.radians(self.lat0))
-        pts = [self.loc(*p) for p in ring_ll]
+        pts = [q for w in ways_ll for q in resample([self.loc(*p) for p in w], 1.0)]
         # asse lungo: direzione principale dei punti, poi la pendenza comune dei due lati dritti
         cx = sum(p[0] for p in pts) / len(pts); cy = sum(p[1] for p in pts) / len(pts)
         sxx = sum((p[0] - cx) ** 2 for p in pts); syy = sum((p[1] - cy) ** 2 for p in pts)
@@ -78,11 +81,9 @@ class Stazione:
 
     @classmethod
     def from_osm(cls, path, ways=RING):
-        pts = []
-        for e in json.load(open(path))['elements']:
-            if e['type'] == 'way' and e['id'] in ways:
-                pts += [(p['lat'], p['lon']) for p in e['geometry']]
-        return cls(pts) if pts else None
+        ww = [[(p['lat'], p['lon']) for p in e['geometry']] for e in json.load(open(path))['elements']
+              if e['type'] == 'way' and e['id'] in ways]
+        return cls(ww) if ww else None
 
     # coordinate: (lat, lon) -> metri (x est, y nord) -> (a lungo l'asse, b verso il lato nord)
     def loc(self, lat, lon):
@@ -334,6 +335,14 @@ def hermite(p0, d0, p1, d1, n):
         out.append((h00 * p0[0] + h10 * c * d0[0] + h01 * p1[0] + h11 * c * d1[0],
                     h00 * p0[1] + h10 * c * d0[1] + h01 * p1[1] + h11 * c * d1[1]))
     return out
+
+
+def zona(st, xz):
+    """Zona della stazione per il gioco: i centri delle due testate (x, z del gioco con xz(lat, lon)), il raggio
+    dell'anello interno e NEAR. Dentro (a meno di near metri dall'anello) i binari sono già quelli di questo modulo."""
+    a, b = st.xy(-st.L, 0), st.xy(st.L, 0)
+    r2 = lambda v: round(v, 2)
+    return {'a': [r2(v) for v in xz(*st.ll(*a))], 'b': [r2(v) for v in xz(*st.ll(*b))], 'r': r2(st.r), 'near': NEAR}
 
 
 def fix_ll(st, path_ll):
