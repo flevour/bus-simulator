@@ -213,6 +213,12 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [ ] Penalità per non dare precedenza a chi arriva (rotonde, dare precedenza).
 - [ ] Corsie preferenziali vere: bonus per il bus, auto che non le usano.
 - [ ] Traffico più lento con pioggia e nebbia.
+- [ ] **Traffico e corse dinamici** (obiettivo a lungo termine, chiesto l'11 novembre): quantità di auto che segue l'ora
+  del giorno e il giorno, con ingorghi veri nelle ore di punta; bus e tram automatici che accumulano ritardo nel
+  traffico invece di seguire l'orario alla lettera, con le conseguenze sulle corse dopo (turni, soste ai capolinea,
+  tram che si avvicinano). Oggi `tram-turni` distribuisce i tram sugli orari perché non si ammucchino ai capolinea:
+  le scelte di adesso (turni, soste, posti ai capolinea) devono reggere anche corse che arrivano in ritardo. Corsie
+  `traffico` e `tram-turni`, quando hanno finito il lavoro in corso.
 
 ## Passeggeri e servizio
 

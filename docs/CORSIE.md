@@ -396,6 +396,10 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
 - Poi, in quest'ordine: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza e penalità
   per chi non la dà; svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (passate da
   `mappa`); corsie preferenziali vere, con le auto che non le usano; traffico più lento con pioggia e nebbia.
+- **Obiettivo a lungo termine** (chi gioca, 11 novembre): traffico e corse dinamici, con ingorghi nelle ore di punta e
+  mezzi automatici che accumulano ritardo (IDEE, "Traffico e regole"). Non è il prossimo lavoro, ma ciò che si fa ora
+  (densità delle auto, semafori, bus automatici) non deve dare per scontato un traffico costante né mezzi sempre in
+  orario. Le corse dei tram le gestisce `tram-turni`: quando si arriva lì, ci si accorda scrivendolo qui.
 - Con il tram: `TramSim` e `TramSignals` restano della futura corsia `tram-turni`, tranne il coordinamento con il
   traffico (sopra); per il resto, se lo sblocco dei tram chiede di toccarli, si scrive qui cosa e perché.
 - Verifiche: regola 3, più le foto dal posto di guida nei punti cambiati e la guida della 3 su Riviera dei Ponti Romani.
@@ -556,7 +560,11 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   disegnato diverso.
 - **Dall'11 novembre pomeriggio** scambi, cambio cabina, riquadro di fine corsa del tram, rete dei binari e depositi
   sono della corsia `tram-scambi` (sotto), compresa la segnalazione urgente delle 16:30 su Voltabarozzo arrivata qui.
-  Qui restano, in quest'ordine: turni del tram (in corso), interni.
+  Qui restano, in quest'ordine: turni del tram (in corso: tram distribuiti sugli orari perché non si ammucchino ai
+  capolinea), interni.
+- **Obiettivo a lungo termine** (chi gioca, 11 novembre): traffico e corse dinamici, con ingorghi nelle ore di punta e
+  tram che arrivano in ritardo (IDEE, "Traffico e regole"). Turni, soste e posti ai capolinea vanno fatti in modo da
+  reggere anche corse in ritardo, non solo l'orario esatto.
 - Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
 
 ### tram-scambi
