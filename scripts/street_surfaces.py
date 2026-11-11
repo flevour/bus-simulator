@@ -692,6 +692,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
 TERRAIN_CLOSE = 4  # celle (10 m): mezza larghezza della finestra quadrata della chiusura (riempie fino a ~80 m)
 TRAM_GRADE = 0.03  # pendenza massima del terreno lungo i binari fuori dalle strade (rilevati del tram)
 TRAM_BANK = 8.0  # m: mezza larghezza della striscia alzata attorno a un binario (celle del terreno da 10 m)
+ROAD_GRADE = 0.06  # pendenza massima della strada che passa un ponte sui fiumi, teste e accessi compresi
+ROAD_APPROACH = 60.0  # m: accessi del ponte considerati da ogni parte
 
 
 def closing(h, r):
@@ -766,7 +768,7 @@ def terrain_for_game(dtm, nodes, edges, heights, tram=None):
             at[e[0]].append(k)
             at[e[1]].append(k)
     hx = lambda x, z: float(h[min(nz - 1, max(0, round((z - z0) / step))), min(nx - 1, max(0, round((x - x0) / step)))])
-    seen, bridges = set(), []
+    seen, bridges, river = set(), [], []
     for k0 in {k for ks in at.values() for k in ks}:
         if k0 in seen:
             continue
@@ -809,6 +811,7 @@ def terrain_for_game(dtm, nodes, edges, heights, tram=None):
                 s += math.dist(pts[i - 1], p)
             flatpts += [round(p[0], 1), round(p[1], 1), round(h0 + (h1 - h0) * s / L, 2)]
         bridges.append([round(w, 1), *flatpts])
+        river.append((order, comp, w))
     # variante "via" (strade, edifici, prato): gli avvallamenti stretti (alvei, fossi, fino a circa 80 m) riempiti alla
     # quota delle sponde con una chiusura morfologica, così nessuna strada scende in un fiume anche dove OSM non segna
     # il ponte; poi i ponti lunghi (Brenta). Solo acqua e sponde seguono l'alveo (variante "fondo")
@@ -827,62 +830,63 @@ def terrain_for_game(dtm, nodes, edges, heights, tram=None):
             t = np.clip(((xs - ax) * ex + (zs - az) * ez) / (ex * ex + ez * ez or 1), 0, 1)
             sub = hv[sl]
             sub[m] = np.maximum(sub[m], ah + (bh - ah) * t)
-    # rilevati del tram: il SIR3 sul canale Scaricatore, accanto al rilevato di Via Piovese, scendeva dall'argine al 20%
-    # (il terrapieno del binario nuovo non c'è nel DTM). Lungo ogni binario l'inviluppo del profilo con pendenza
-    # TRAM_GRADE; dove sta sopra il terreno, una spezzata con quota come quelle dei ponti (si alza soltanto). Non sulle
-    # carreggiate (si alzerebbe la sede e non le corsie accanto), sotto i tratti in quota del gioco o fuori dalla griglia
-    ramps, rilevati = [], []
-    if tram:
-        import shapely
+    def hb(x, z):
+        fx = min(max((x - x0) / step, 0), nx - 1.001)
+        fz = min(max((z - z0) / step, 0), nz - 1.001)
+        i, j = int(fx), int(fz)
+        tx, tz = fx - i, fz - j
+        return (hv[j, i] * (1 - tx) + hv[j, i + 1] * tx) * (1 - tz) + (hv[j + 1, i] * (1 - tx) + hv[j + 1, i + 1] * tx) * tz
 
-        def hb(x, z):
-            fx = min(max((x - x0) / step, 0), nx - 1.001)
-            fz = min(max((z - z0) / step, 0), nz - 1.001)
-            i, j = int(fx), int(fz)
-            tx, tz = fx - i, fz - j
-            return (hv[j, i] * (1 - tx) + hv[j, i + 1] * tx) * (1 - tz) + (hv[j + 1, i] * (1 - tx) + hv[j + 1, i + 1] * tx) * tz
-        roads = unary_union([LineString([nodes[e[0]], nodes[e[1]]]).buffer(e[3] / 2 + 1, quad_segs=2) for e in edges
-                             if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3] + up)
-        shapely.prepare(roads)
-        for t in tram:
-            P = [(t[i], t[i + 1]) for i in range(0, len(t) - 1, 2)]
-            dense = [P[0]]
-            for p, q in zip(P, P[1:]):
-                n = max(1, int(math.dist(p, q) // 5))
-                dense += [(p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n) for k in range(1, n + 1)]
-            if len(dense) < 3:
+    def raise_along(P, grade, blocked, bank, deck=None):
+        """Rilevati lungo la spezzata P: dove l'inviluppo del profilo di hv con pendenza `grade` sta sopra il terreno,
+        spezzate con quota come quelle dei ponti (si alza soltanto), applicate subito a hv. blocked(xs, zs): punti senza
+        vincolo (restano come sono). deck = (s0, s1): tratto tenuto dritto tra le due teste (l'impalcato del ponte)."""
+        import shapely
+        dense, cum = [P[0]], [0.0]
+        for p, q in zip(P, P[1:]):
+            n = max(1, int(math.dist(p, q) // 5))
+            for k in range(1, n + 1):
+                dense.append((p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n))
+                cum.append(cum[-1] + math.dist(p, q) / n)
+        if len(dense) < 3:
+            return [], []
+        xs_, zs_ = np.array([p[0] for p in dense]), np.array([p[1] for p in dense])
+        free = ~blocked(xs_, zs_) & (xs_ >= x0) & (xs_ <= x0 + (nx - 1) * step) & (zs_ >= z0) & (zs_ <= z0 + (nz - 1) * step)
+        hs = [hb(*p) for p in dense]
+        ds = [0.0] + [cum[i] - cum[i - 1] for i in range(1, len(cum))]
+        env = list(hs)
+        for i in range(1, len(env)):
+            if free[i]:
+                env[i] = max(env[i], env[i - 1] - grade * ds[i])
+        for i in range(len(env) - 2, -1, -1):
+            if free[i]:
+                env[i] = max(env[i], env[i + 1] - grade * ds[i + 1])
+        if deck:
+            idx = [i for i, c in enumerate(cum) if deck[0] - 0.01 <= c <= deck[1] + 0.01]
+            if len(idx) >= 2:
+                i0, i1 = idx[0], idx[-1]
+                for i in idx:
+                    if free[i]:
+                        t = (cum[i] - cum[i0]) / ((cum[i1] - cum[i0]) or 1)
+                        env[i] = max(env[i], env[i0] + (env[i1] - env[i0]) * t)
+        out, info, run = [], [], []
+        for i in range(len(dense) + 1):
+            if i < len(dense) and env[i] > hs[i] + 0.05:
+                if not run and i:
+                    run.append(i - 1)
+                run.append(i)
                 continue
-            xs_, zs_ = np.array([p[0] for p in dense]), np.array([p[1] for p in dense])
-            free = ~shapely.contains_xy(roads, xs_, zs_) & (xs_ >= x0) & (xs_ <= x0 + (nx - 1) * step) & (zs_ >= z0) & (zs_ <= z0 + (nz - 1) * step)
-            hs = [hb(*p) for p in dense]
-            ds = [0.0] + [math.dist(p, q) for p, q in zip(dense, dense[1:])]
-            env = list(hs)
-            for i in range(1, len(env)):
-                if free[i]:
-                    env[i] = max(env[i], env[i - 1] - TRAM_GRADE * ds[i])
-            for i in range(len(env) - 2, -1, -1):
-                if free[i]:
-                    env[i] = max(env[i], env[i + 1] - TRAM_GRADE * ds[i + 1])
-            run = []
-            for i in range(len(dense) + 1):
-                up_i = i < len(dense) and env[i] > hs[i] + 0.05
-                if up_i:
-                    if not run and i:
-                        run.append(i - 1)
+            if run:
+                if i < len(dense):
                     run.append(i)
-                    continue
-                if run:
-                    if i < len(dense):
-                        run.append(i)
-                    line = [v for k in run for v in (round(dense[k][0], 1), round(dense[k][1], 1), round(float(env[k]), 2))]
-                    ramps.append([TRAM_BANK, *line])
-                    rilevati.append((round(dense[run[0]][0]), round(dense[run[0]][1]), round(sum(ds[k] for k in run[1:])),
-                                     round(float(max(env[k] - hs[k] for k in run)), 1)))
-                    run = []
-        for br in ramps:
+                out.append([bank, *[v for k in run for v in (round(dense[k][0], 1), round(dense[k][1], 1), round(float(env[k]), 2))]])
+                info.append((round(dense[run[0]][0]), round(dense[run[0]][1]), round(cum[run[-1]] - cum[run[0]]),
+                             round(float(max(env[k] - hs[k] for k in run)), 1)))
+                run = []
+        for br in out:
             for k in range(1, len(br) - 5, 3):
                 ax, az, ah, bx, bz, bh = br[k:k + 6]
-                near = cells_near(LineString([(ax, az), (bx, bz)]), TRAM_BANK)
+                near = cells_near(LineString([(ax, az), (bx, bz)]), bank)
                 if not near:
                     continue
                 sl, m = near
@@ -891,7 +895,72 @@ def terrain_for_game(dtm, nodes, edges, heights, tram=None):
                 tt = np.clip(((xs - ax) * ex + (zs - az) * ez) / (ex * ex + ez * ez or 1), 0, 1)
                 sub = hv[sl]
                 sub[m] = np.maximum(sub[m], ah + (bh - ah) * tt)
-    bridges += ramps
+        return out, info
+
+    import shapely
+    U_up = unary_union(up) if up else Polygon()
+    shapely.prepare(U_up)
+    # strade sui ponti dei fiumi: la variante "via" riempie l'alveo, ma alle teste la strada poteva salire o scendere di
+    # colpo verso la cresta dell'argine (Corso Primo Maggio: 2,2 m in 10 m, 29%; Ponte Sabbionari, Via Pontevigodarzere
+    # e Ponte Isonzo 9-10%). Lungo la strada che passa il ponte, con ROAD_APPROACH metri di accessi per parte, il profilo
+    # non sale né scende più di ROAD_GRADE e l'impalcato resta dritto tra le teste
+    drive_adj = defaultdict(list)
+    for k, e in enumerate(edges):
+        if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3:
+            drive_adj[e[0]].append(k)
+            drive_adj[e[1]].append(k)
+
+    def follow(n, prev, comp):
+        """La strada che prosegue dal nodo n (arrivando da prev) per ROAD_APPROACH metri: a ogni nodo l'arco più
+        allineato, fuori dal ponte."""
+        out, acc, cur, p = [], 0.0, n, prev
+        while acc < ROAD_APPROACH:
+            a, b = nodes[p], nodes[cur]
+            la = math.dist(a, b) or 1
+            dx, dz = (b[0] - a[0]) / la, (b[1] - a[1]) / la
+            best, bd = None, 0.5
+            for k in drive_adj[cur]:
+                if k in comp:
+                    continue
+                o = edges[k][1] if edges[k][0] == cur else edges[k][0]
+                if o == p:
+                    continue
+                q = nodes[o]
+                lq = math.dist(b, q) or 1
+                d = ((q[0] - b[0]) * dx + (q[1] - b[1]) * dz) / lq
+                if d > bd:
+                    bd, best = d, o
+            if best is None:
+                break
+            acc += math.dist(nodes[cur], nodes[best])
+            out.append(nodes[best])
+            p, cur = cur, best
+        return out
+    accessi, teste = [], []
+    for order, comp, w in river:
+        before = follow(order[0], order[1], comp)[::-1]
+        after = follow(order[-1], order[-2], comp)
+        P = before + [nodes[n] for n in order] + after
+        s0 = sum(math.dist(p, q) for p, q in zip(P[:len(before) + 1], P[1:len(before) + 1]))
+        s1 = s0 + sum(math.dist(nodes[a], nodes[b]) for a, b in zip(order, order[1:]))
+        r, inf = raise_along(P, ROAD_GRADE, lambda xs, zs: shapely.contains_xy(U_up, xs, zs), max(TRAM_BANK, w), (s0, s1))
+        accessi += r
+        teste += inf
+    # rilevati del tram: il SIR3 sul canale Scaricatore, accanto al rilevato di Via Piovese, scendeva dall'argine al 20%
+    # (il terrapieno del binario nuovo non c'è nel DTM). Lungo ogni binario l'inviluppo del profilo con pendenza
+    # TRAM_GRADE. Non sulle carreggiate (si alzerebbe la sede e non le corsie accanto), sotto i tratti in quota del
+    # gioco o fuori dalla griglia
+    ramps, rilevati = [], []
+    if tram:
+        roads = unary_union([LineString([nodes[e[0]], nodes[e[1]]]).buffer(e[3] / 2 + 1, quad_segs=2) for e in edges
+                             if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3] + up)
+        shapely.prepare(roads)
+        for t in tram:
+            P = [(t[i], t[i + 1]) for i in range(0, len(t) - 1, 2)]
+            r, inf = raise_along(P, TRAM_GRADE, lambda xs, zs: shapely.contains_xy(roads, xs, zs), TRAM_BANK)
+            ramps += r
+            rilevati += inf
+    bridges += accessi + ramps
 
     def adjust_heights(hts):
         """Quote dei nodi delle rampe dove la variante "via" riempie la striscia spianata sotto la rampa fino alla
@@ -932,4 +1001,5 @@ def terrain_for_game(dtm, nodes, edges, heights, tram=None):
     out = np.clip(np.round((h - lo) / scale), 0, 255).astype(np.uint8)
     g.update({'scale': round(scale, 5), 'offset': round(lo, 3), 'data': base64.b64encode(out.tobytes()).decode(), 'bridges': bridges,
               'close': TERRAIN_CLOSE})
-    return g, {'celle_spianate': flat, 'ponti': len(bridges) - len(ramps), 'rilevati_tram': rilevati}, hfun, adjust_heights
+    return g, {'celle_spianate': flat, 'ponti': len(river), 'accessi_ponti': sorted(teste, key=lambda r: -r[3])[:12],
+               'rilevati_tram': rilevati}, hfun, adjust_heights
