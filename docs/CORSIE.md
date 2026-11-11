@@ -409,7 +409,10 @@ si riattiva.
   `main.js`. Il tasto O del bus (X del gamepad) è la colonnina; X non è più la marcia: col gamepad la retromarcia si
   mette ripremendo LT da fermo. Numeri in IDEE ("Fatto"). Non ci sono dati su colonnine vere ai capolinea di Padova:
   se si trovano, vanno messe dove sono.
-- Prossimo lavoro, in quest'ordine: telecamera della porta posteriore sul cruscotto; specchietti regolabili.
+- **Telecamera della porta posteriore, fatta l'11 novembre**: come gli specchietti è un riquadro sopra la scena
+  (`doorRT`, `doorCam`, `doorQuad` e `updateDoorCam` in `main.js`, cornice `#door-frame`), perché il cruscotto 3D
+  della cabina resta sotto l'inquadratura. Solo per il bus.
+- Prossimo lavoro: specchietti regolabili.
 - Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
 ### tram-turni

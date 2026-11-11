@@ -150,6 +150,12 @@ const mirrorQuads = mirrorRT.map((rt) => {
   overlayScene.add(m);
   return m;
 });
+// monitor della telecamera sopra l'ultima porta: sul cruscotto, acceso da fermi e con le porte aperte (non specchiato)
+const doorRT = new THREE.WebGLRenderTarget(320, 240);
+const doorCam = new THREE.PerspectiveCamera(80, 4 / 3, 0.1, 200);
+const doorQuad = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: doorRT.texture, toneMapped: false }));
+doorQuad.visible = false;
+overlayScene.add(doorQuad);
 function layoutMirrors() {
   const W = window.innerWidth, H = window.innerHeight;
   overlayCam.right = W; overlayCam.top = H; overlayCam.updateProjectionMatrix();
@@ -169,6 +175,15 @@ function layoutMirrors() {
     f.style.width = mw + 8 + 'px';
     f.style.height = mh + 8 + 'px';
   });
+  // monitor in basso, a sinistra del limite di velocità e degli strumenti
+  const dw = 200, dh = 150, dx = W - 470 - dw / 2, dy = 34 + dh / 2;
+  doorQuad.position.set(dx, dy, 0);
+  doorQuad.scale.set(dw, dh, 1);
+  const f = $('door-frame');
+  f.style.left = dx - dw / 2 - 4 + 'px';
+  f.style.top = H - dy - dh / 2 - 4 + 'px';
+  f.style.width = dw + 8 + 'px';
+  f.style.height = dh + 8 + 'px';
 }
 
 // ------------------------------------------------------------------
@@ -1426,6 +1441,26 @@ function updateMirrors() {
   renderer.setRenderTarget(null);
   return true;
 }
+let doorOn = false, renders = 0;
+function updateDoorCam() {
+  const on = camMode === 0 && !!bus && !bus.isTram && (bus.doorsAnyOpen || bus.doorTarget > 0 || bus.speedKmh < 5);
+  if (on !== doorOn) {
+    doorOn = on; doorQuad.visible = on; $('door-frame').style.display = on ? 'block' : 'none';
+    // sul 12 m a due porte l'ultima è quella centrale
+    if (on) $('door-frame').firstElementChild.textContent = `📷 Porta ${bus.doors.length === 2 ? 'centrale' : 'posteriore'}`;
+  }
+  if (!on) return false;
+  // sopra l'ultima porta, appena fuori dalla fiancata, guarda in giù verso gradini e marciapiede
+  const d = bus.doors[bus.doors.length - 1], zc = (d.z0 + d.z1) / 2;
+  const at = (lx, lz) => (d.u ? bus.toWorldT(lx, lz) : bus.toWorld(lx, lz));
+  const p = at(-1.45, zc + 1.3), t = at(-2.4, zc - 1.0), y = bus.elev || 0;
+  doorCam.position.set(p.x, y + 3.0, p.z);
+  doorCam.lookAt(t.x, y + 0.2, t.z);
+  renderer.setRenderTarget(doorRT);
+  renderer.render(scene, doorCam);
+  renderer.setRenderTarget(null);
+  return true;
+}
 
 // ------------------------------------------------------------------
 // Loop principale
@@ -1560,6 +1595,8 @@ function render(dt) {
   renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
   const mirrors = frame % 2 === 0 ? updateMirrors() : camMode === 0;
+  // il monitor della porta si aggiorna un disegno sì e uno no
+  if (renders++ % 2) updateDoorCam();
   if (mirrors) {
     renderer.autoClear = false;
     renderer.clearDepth();

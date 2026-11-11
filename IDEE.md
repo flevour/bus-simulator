@@ -162,7 +162,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [x] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata (vedi
   "Fatto").
 - [x] Volante e pedaliera o gamepad (Gamepad API, vedi "Fatto").
-- [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
+- [x] Telecamera della porta posteriore sul cruscotto (vedi "Fatto").
+- [ ] Specchietti regolabili.
 - [ ] Altre livree storiche (anni '80–'90).
 
 ## Traffico e regole
@@ -208,6 +209,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Telecamera della porta posteriore** (corsia `guida`, 11 novembre): monitor in basso nella visuale dalla
+  cabina, accanto agli strumenti, con l'immagine di una telecamera sopra l'ultima porta (la centrale sul 12 m a due
+  porte, quella del rimorchio sullo snodato) che guarda gradini e marciapiede. Si accende da fermi (sotto i 5 km/h) e
+  con le porte aperte, si aggiorna un disegno sì e uno no. Prova in `tests/cruscotto.spec.js`.
 - [x] **Bus elettrico con batteria e ricarica al capolinea** (corsia `guida`, 11 novembre): batteria da 350 kWh (500
   lo snodato), trazione con rendimento 0,9 e recupero in frenata 0,85, servizi di bordo 8 kW sul tempo della corsa.
   Si parte pieni dal deposito, altrimenti col 5% in meno per ogni ora di servizio dalle 5:30; sotto il 10% la potenza
