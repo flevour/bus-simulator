@@ -87,6 +87,18 @@ Tavo e Montà.
 Con il corridoio la mappa arriverebbe a circa **25–35 MB** (8–10 compressi). È una stima in proporzione all'area,
 più bassa in periferia dove ci sono meno edifici: i dati non li ho generati.
 
+### Fatto: la mappa fuori dal bundle (11 novembre, corsia `capolinea`)
+
+Primo passo, senza toccare `city.js`: `build_map.py` scrive la rete in `src/data/padova-map.json` (2,4 MB con il
+terreno) ed edifici, pianta delle strade e alberi in 170 aree da 800 m in `public/mappa/aree/<ix>_<iz>.json` (da 120
+byte a 275 KB, 11 MB in tutto; `scripts/aree_mappa.py`). All'avvio `src/data/aree.js` le scarica tutte e le rimette in
+`MAP` prima di `buildNetwork`, in ordine di chiave: la città si costruisce come prima (prove e rapporti uguali). Il
+JavaScript passa da 14,6 a 3,7 MB (1,3 MB compresso); la mappa cambia senza far riscaricare il codice e viceversa.
+Nella pagina autosufficiente (`npm run build:single`) le aree sono dentro la pagina (modulo `virtual:aree-mappa` in
+`vite.config.js`). Gli script che leggono la mappa intera usano `aree_mappa.load` (`verifica_mappa.py`).
+
+Resta da fare il caricamento a richiesta (punti 2-5 sotto), che riscrive `city.js`.
+
 ### Proposta
 
 1. **Due livelli di dati.**

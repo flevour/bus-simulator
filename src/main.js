@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildNetwork, LINES, TRAM_LINES, fmtHM } from './data/padova.js';
+import { loadAllAreas } from './data/aree.js';
 import { Tram, tramRoute, TRAM } from './tram/tram.js';
 import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
@@ -1618,7 +1619,7 @@ window.addEventListener('resize', () => {
 });
 
 // avvio
-setTimeout(() => {
+setTimeout(async () => {
   if (mobileBlocked) {
     $('loading').style.display = 'none';
     $('solo-computer').classList.add('dispositivo');
@@ -1627,6 +1628,10 @@ setTimeout(() => {
     return;
   }
   try {
+    // edifici, strade e alberi per aree (src/data/aree.js), poi la città
+    await loadAllAreas((n, tot) => { $('loading-sub').textContent = `mappa: ${n} aree su ${tot}`; });
+    $('loading-sub').textContent = 'strade, palazzi, Prato della Valle';
+    await new Promise((ok) => setTimeout(ok, 0));
     buildWorld();
   } catch (e) {
     $('loading-sub').textContent = 'Errore: ' + e.message;

@@ -25,7 +25,8 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 4. Conflitti nel rebase:
    - `src/data/novita.js` e `IDEE.md`: si tengono le righe di tutti; in `novita.js` la riga nuova va in cima con
      `n` successivo all'ultimo di `main`;
-   - `src/data/padova-map.json` (solo nella corsia della mappa): si prende quello di `main` e si rigenera.
+   - `src/data/padova-map.json` e `public/mappa/aree/` (solo nelle corsie che rigenerano la mappa): si prende la
+     mappa di `main` (rete e aree) e si rigenera.
 5. Ognuno il suo `node_modules` (`npm install` nel worktree): la cache di Vite sta in `node_modules/.vite` e due
    server che la condividono si pestano i piedi.
 6. Porte fisse per corsia (tabella sotto). Nel worktree non c'è `.env` e non va creato: le chiavi di PostHog si
@@ -43,7 +44,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 
 | File | Chi lo modifica | Perché |
 |---|---|---|
-| `src/data/padova-map.json` | `mappa`, `capolinea` e `tram-turni`, una rigenerazione alla volta | una riga sola da 12 MB: due rigenerazioni non si uniscono, si prende quella di `main` e si rigenera (regola 4) |
+| `src/data/padova-map.json`, `public/mappa/aree/` | `mappa`, `capolinea` e `tram-turni`, una rigenerazione alla volta | la rete (una riga sola da 2,4 MB) e le aree da 800 m (edifici, pianta delle strade, alberi) le scrive `build_map.py`: due rigenerazioni non si uniscono, si prende la mappa di `main` e si rigenera (regola 4) |
 | `scripts/build_map.py`, `scripts/street_surfaces.py` | `mappa` (dettagli dentro l'area) e `capolinea` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a queste corsie |
 | `scripts/tram_linee.py`, `data/tram-linee-nuove.json` | `capolinea` (SIR2 fino ai capolinea) e `tram-turni` (binari della stazione) | chi cambia una funzione dell'altra lo scrive qui; dopo, si rigenera la mappa (la sede nella pianta delle strade segue i binari) |
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
@@ -314,7 +315,11 @@ Prossimo lavoro, in quest'ordine:
 - caricamento per aree (onda 3, sezione 4 di `ESTENSIONE_LINEE.md`), **prima del gruppo 2**: deciso l'11 novembre.
   Con il SIR2 la mappa arriverebbe a 17,7 MB; gli autobus fino ai capolinea la porterebbero a 25-35 MB. Prima la rete
   sempre caricata e le aree in `public/` (pipeline), poi `city.js`. Quando si arriva a `city.js` lo si scrive qui: da
-  lì le altre corsie non toccano `city.js` finché il lavoro non è su `main`;
+  lì le altre corsie non toccano `city.js` finché il lavoro non è su `main`.
+  Fatto l'11 novembre il primo passo, senza `city.js`: rete in `src/data/padova-map.json`, edifici, pianta delle
+  strade e alberi in 170 aree da 800 m in `public/mappa/aree/` (`scripts/aree_mappa.py`), scaricate tutte all'avvio da
+  `src/data/aree.js`; JavaScript da 14,6 a 3,7 MB. Per chi rigenera la mappa non cambia niente (stesso comando, regola
+  4 anche per le aree). Prossimo passo: le aree a richiesta, che riscrive `city.js`;
 - gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da
   togliere per le linee che arrivano ai capolinea. Tra i capolinea richiesti da chi gioca (sondaggio del 9 novembre,
   linea 3 in Via Fondà): quelli della 3 e della 22 e le fermate della 10 e della 11 fuori dall'area.

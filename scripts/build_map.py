@@ -25,6 +25,7 @@ from collections import Counter, defaultdict
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import build_gtfs  # noqa: E402  (riusa lettura GTFS e conversioni)
 import street_surfaces  # noqa: E402  (pianta delle strade con Shapely)
+import aree_mappa  # noqa: E402  (rete e aree della mappa)
 
 ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
@@ -1341,8 +1342,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         **({'terrain': terrain} if terrain else {}),
         **signage,
     }
-    with open(out, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
+    # la rete in out (nel bundle del gioco), edifici, pianta delle strade e alberi per aree (public/mappa/aree)
+    print('aree della mappa:', aree_mappa.write(data, out))
     print(f'inversioni a U sostituite da un giro: {uturns_fixed}')
     print(f'nodi {len(nodes)} archi {len(edges)} edifici {len(buildings)} binari {len(rails)} acque {len(water)} linee {len(lines_out)} varianti non agganciate {failed}')
 

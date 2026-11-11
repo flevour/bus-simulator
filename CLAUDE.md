@@ -51,6 +51,11 @@ python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.j
 python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore sopra le soglie
 ```
 
+`build_map.py` scrive la mappa in due parti (`scripts/aree_mappa.py`): la rete (nodi, archi, linee, fermate,
+segnaletica, terreno) in `src/data/padova-map.json`, dentro il bundle, ed edifici, pianta delle strade e alberi in un
+file per riquadro da 800 m in `public/mappa/aree/`, che il gioco scarica all'avvio (`src/data/aree.js`). Gli script che
+leggono la mappa intera usano `aree_mappa.load`.
+
 `data/misure-strade.json` (larghezze misurate di carreggiate e marciapiedi) e `data/dbgt-volumi.json` (altezze degli
 edifici) vengono dal DBGT della Regione del Veneto con `scripts/measure_streets.py` e `scripts/dbgt_volumes.py`;
 `data/dtm-padova.json` (quote del terreno) dal DTM a 5 m della Regione con `scripts/dtm_grid.py`; `data/dbgt-verde.json`

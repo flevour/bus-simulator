@@ -30,6 +30,9 @@ from shapely import STRtree
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import substring, unary_union
 
+sys.path.insert(0, __file__.rsplit('/', 1)[0])
+import aree_mappa  # noqa: E402
+
 BUS_NEAR = 6.0  # m: oltre metà carreggiata, un edificio è "lungo il percorso" fin qui dall'asse
 BUS_HW = 1.3  # m: metà larghezza del bus (2,55 m) e un poco di margine
 INVADE = 0.2  # m: un edificio invade se, tolti 20 cm da ogni lato della sovrapposizione, resta qualcosa (arrotondamenti)
@@ -254,7 +257,7 @@ def main():
     ap.add_argument('--elenco', action='store_true', help='elenca i casi trovati (con le coordinate del gioco)')
     ap.add_argument('--json', help='scrive il rapporto completo in questo file')
     args = ap.parse_args()
-    mappa = Mappa(json.load(open(args.mappa, encoding='utf-8')))
+    mappa = Mappa(aree_mappa.load(args.mappa))  # la rete con le sue aree
 
     casi = {'edifici_in_carreggiata': edifici_in_carreggiata(mappa)}
     casi['edifici_in_carreggiata_bus'] = lungo_i_percorsi(mappa, casi['edifici_in_carreggiata'])
