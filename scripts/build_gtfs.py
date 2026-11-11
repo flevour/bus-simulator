@@ -210,8 +210,10 @@ def main(src, out):
         print(l['id'], len(l['variants']), 'varianti;', v['headsign'], '|', len(v['fer']), 'fer', len(v['fes']), 'fes')
 
 
-def load(src):
-    """Linee urbane con varianti (tracciato in lat/lon), fermate e orari, senza costruire la rete."""
+def load(src, full=()):
+    """Linee urbane con varianti (tracciato in lat/lon), fermate e orari, senza costruire la rete. Delle linee in full
+    (quelle che arrivano ai capolinea veri, CORRIDOI_BUS di build_map.py) tutte le varianti, anche oltre RADIUS e oltre
+    le prime 10."""
     rd = lambda f: csv.DictReader(open(f'{src}/{f}', encoding='utf-8-sig'))
     routes = {r['route_id']: r for r in rd('routes.txt')}
     trips = {t['trip_id']: t for t in rd('trips.txt')}
@@ -258,7 +260,7 @@ def load(src):
             if len(fer) + len(fes) < 2:
                 continue
             pts = [(la, lo) for _, la, lo in sorted(shapes[sid])]
-            if any(math.hypot(*xz(la, lo)) > RADIUS for la, lo in pts):
+            if lid not in full and any(math.hypot(*xz(la, lo)) > RADIUS for la, lo in pts):
                 continue
             ref = sorted(fer or fes, key=lambda t: times[t['trip_id']][-1][1] - times[t['trip_id']][0][1])[len(fer or fes) // 2]
             st = sorted(times[ref['trip_id']])
@@ -279,7 +281,7 @@ def load(src):
             })
         if variants:
             variants.sort(key=lambda v: -(len(v['fer']) + len(v['fes'])))
-            lines.append({'id': lid, 'color': color, 'variants': variants[:10]})
+            lines.append({'id': lid, 'color': color, 'variants': variants if lid in full else variants[:10]})
 
     def sort_key(l):
         m = re.match(r'(\d+)(.*)', l['id'])

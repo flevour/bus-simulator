@@ -54,9 +54,14 @@ FOCUS_BORDI = [
 FOCUS_BOXES = [FOCUS, FOCUS_SUD] + FOCUS_BORDI
 # l'area fino ai capolinea veri (corsia capolinea, docs/ESTENSIONE_LINEE.md): corridoi di celle da CELLA metri attorno ai
 # percorsi completi delle linee, più una cella di margine, invece di rettangoli più grandi. Tram: le linee di
-# data/tram-linee-nuove.json (il SIR3 fino a Voltabarozzo, con il deposito accanto al capolinea)
+# data/tram-linee-nuove.json (il SIR3 fino a Voltabarozzo, con il deposito accanto al capolinea). Autobus: le celle
+# toccate dai tracciati GTFS di tutte le varianti delle linee di CORRIDOI_BUS, senza margine (le vie e gli edifici a
+# meno di 0,0015 gradi da una cella entrano lo stesso, in_focus); quelle linee hanno tutte le varianti
+# (build_gtfs.load); per prime la 24, la 3, la 22, la 10 e la 11 (gruppo 2, dopo il SIR2). Strade e segnaletica fuori
+# dagli export di oggi in data/osm-corridoio.json (scripts/filter_osm_corridoio.py)
 CELLA = 250.0
 CORRIDOI_TRAM = ('SIR3',)
+CORRIDOI_BUS = ()
 TRAM_NUOVE = __file__.rsplit('/', 2)[0] + '/data/tram-linee-nuove.json'
 FOCUS_CELLE = set()  # (ix, iz) delle celle, riempito da main()
 WATER_W ={'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
@@ -276,6 +281,11 @@ def tram_corridors(path=TRAM_NUOVE, ids=CORRIDOI_TRAM):
     return corridor_cells([v['percorso'] for l in linee if l['id'] in ids for v in l['versi']])
 
 
+def bus_corridors(gt, ids=CORRIDOI_BUS):
+    """Celle toccate dai tracciati GTFS delle linee ids (gt: build_gtfs.load con quelle linee in full)."""
+    return corridor_cells([v['shape_pts'] for l in gt['lines'] if l['id'] in ids for v in l['variants']], ring=0)
+
+
 STOP_WORDS = {'via', 'viale', 'corso', 'piazza', 'piazzale', 'p', 'zza', 'largo', 'fr', 'ang', 'incr', 'angolo', 'di', 'del',
               'della', 'dei', 'de', 'da', 'e', 'f', 't'}
 
@@ -488,17 +498,20 @@ def measured_piece(meas, s):
     return None
 
 
-def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None, dtm_path=None, green_path=None, streets_path=None, osm_stops_path=None):
+def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None, dtm_path=None, green_path=None, streets_path=None, osm_stops_path=None, corridor_path=None):
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
+    if corridor_path:
+        els += [e for e in json.load(open(corridor_path, encoding='utf-8'))['elements'] if e['type'] == 'way']
     # larghezze misurate di carreggiate e marciapiedi (scripts/measure_streets.py), per via OSM
     measures = json.load(open(measures_path, encoding='utf-8'))['vie'] if measures_path else {}
+    gt = build_gtfs.load(gtfs_dir, full=CORRIDOI_BUS)
     FOCUS_CELLE.update(tram_corridors())
+    FOCUS_CELLE.update(bus_corridors(gt))
     print(f'corridoi fino ai capolinea: {len(FOCUS_CELLE)} celle da {CELLA:.0f} m ({len(FOCUS_CELLE) * CELLA * CELLA / 1e6:.1f} km²)')
     # solo gli elementi che toccano l'area di gioco (con un piccolo margine)
     ways =[e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
 
     # ---------------- strade ----------------
-    gt = build_gtfs.load(gtfs_dir)
     on_gtfs = gtfs_cover(gt)
     links = gtfs_links(els, ways, on_gtfs)
     print('vie fuori dall\'area tra due vie dell\'area, dove passa un bus:', ', '.join(f"{w['tags'].get('name', '')} ({w['id']})" for w in links))
@@ -544,7 +557,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             names.append(s)
         return name_idx[s]
 
-    sign_els = load_nodes(nodes_path) if nodes_path else []
+    sign_els = (load_nodes(nodes_path) if nodes_path else []) + (load_nodes(corridor_path) if corridor_path else [])
     ped_gap = ped_signal_gaps(sign_els)
 
     edges = []  # a, b, cls, width, name, flags, speed, layer
@@ -1026,37 +1039,84 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         osm_st = json.load(open(osm_stops_path, encoding='utf-8'))
         print('fermate spostate sulla palina OSM:', snap_stops_to_osm(gt['stops'], osm_st['fermate']))
         print('fermate portate sulla banchina:', onto_platforms(gt['stops'], osm_st.get('banchine') or []))
+    def variant_path(v, shape):
+        """Cammino della variante v agganciando il tracciato shape (lat, lon): (cammino, inversioni tolte, metri
+        agganciati, metri del tracciato), o None."""
+        res = match(shape)
+        if not res or len(res[0]) < 3:
+            return None
+        seq, gaps = res
+        seq, n_loops = no_uturns(seq, [gt['stops'][si][:2] for si in v['stops']])
+        # capolinea: il tracciato GTFS parte (o finisce) alla fermata, ma l'aggancio può cominciare all'incrocio dopo
+        # (Largo Debussy: la fermata è nel piazzale, l'aggancio partiva da Via Leonardo da Vinci). Si riattacca il
+        # tratto fino al nodo vicino alla prima (o ultima) fermata, se è a pochi metri di strada
+        seq = extend_to_stop(seq, gt['stops'][v['stops'][0]], True)
+        seq = extend_to_stop(seq, gt['stops'][v['stops'][-1]], False)
+        # e si comincia (o si finisce) sull'arco lungo cui sta la fermata del capolinea
+        seq = stop_edge(seq, gt['stops'][v['stops'][0]], True)
+        seq = stop_edge(seq, gt['stops'][v['stops'][-1]], False)
+        seq = terminal_lane(seq, gt['stops'][v['stops'][0]], True)
+        seq = terminal_lane(seq, gt['stops'][v['stops'][-1]], False)
+        seq = stop_lanes(seq, [gt['stops'][si] for si in v['stops'][1:-1]])
+        seq = drop_spurs(seq, [gt['stops'][si] for si in v['stops']])
+        sp = [xz(la, lo) for la, lo in shape]
+        Lg = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(sp, sp[1:]))
+        Lm = sum(math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1]) for a, b in zip(seq, seq[1:]))
+        return seq, n_loops, Lm, Lg
+
+    def area_pieces(shape_pts, gap=300.0, step=25.0):
+        """Il tracciato GTFS (lat, lon) diviso nei pezzi dentro l'area (punti ogni step metri con una strada a 30 m),
+        separati da tratti di almeno gap metri senza strade."""
+        dense = []
+        for (la0, lo0), (la1, lo1) in zip(shape_pts, shape_pts[1:]):
+            n = max(1, int(math.dist(xz(la0, lo0), xz(la1, lo1)) // step))
+            dense += [(la0 + (la1 - la0) * i / n, lo0 + (lo1 - lo0) * i / n) for i in range(n)]
+        dense.append(tuple(shape_pts[-1]))
+        inside = [i for i, p in enumerate(dense) if candidates(*xz(*p))]
+        pieces, a = [], 0
+        for k in range(1, len(inside) + 1):
+            if k == len(inside) or (inside[k] - inside[k - 1]) * step >= gap:
+                pieces.append(dense[inside[a]:inside[k - 1] + 1])
+                a = k
+        return [p for p in pieces if len(p) > 1]
+
+    def stops_near(pts, stops, r=60.0):
+        """Quante fermate (x, z) stanno a meno di r metri dalla polilinea pts (lat, lon)."""
+        q = [xz(*p) for p in pts]
+
+        def near(st):
+            for (ax, az), (bx, bz) in zip(q, q[1:]):
+                dx, dz = bx - ax, bz - az
+                t = max(0.0, min(1.0, ((st[0] - ax) * dx + (st[1] - az) * dz) / (dx * dx + dz * dz or 1e-9)))
+                if math.hypot(st[0] - ax - dx * t, st[1] - az - dz * t) < r:
+                    return True
+            return False
+        return sum(1 for st in stops if near(st))
+
     lines_out = []
     failed = 0
     uturns_fixed = 0
     for line in gt['lines']:
         variants = []
         for v in line['variants']:
-            res = match(v['shape_pts'])
-            if not res or len(res[0]) < 3:
+            r = variant_path(v, v['shape_pts'])
+            # controllo: lunghezza agganciata vs lunghezza del tracciato GTFS. Un tracciato che esce dall'area e ci
+            # rientra si aggancia con un giro dentro l'area al posto del pezzo fuori (la 22 da Torre, con il capolinea
+            # in un corridoio e Via Madonna del Rosario fuori): allora si aggancia il pezzo dentro l'area con più fermate
+            if r and r[2] > 1.5 * max(1, r[3]):
+                pieces = area_pieces(v['shape_pts'])
+                if len(pieces) > 1:
+                    n_st = [stops_near(p, [gt['stops'][si][:2] for si in v['stops']]) for p in pieces]
+                    r2 = variant_path(v, pieces[n_st.index(max(n_st))])
+                    if r2 and r2[2] <= 1.5 * max(1, r2[3]):
+                        print(f'  {line["id"]} {v["headsign"]}: esce dall\'area e rientra, agganciato il pezzo con {max(n_st)} fermate di {len(pieces)}')
+                        r = r2
+            if not r:
                 failed += 1
                 continue
-            seq, gaps = res
-            seq, n_loops = no_uturns(seq, [gt['stops'][si][:2] for si in v['stops']])
+            seq, n_loops, Lm, Lg = r
             uturns_fixed += n_loops
-            # capolinea: il tracciato GTFS parte (o finisce) alla fermata, ma l'aggancio può cominciare all'incrocio dopo
-            # (Largo Debussy: la fermata è nel piazzale, l'aggancio partiva da Via Leonardo da Vinci). Si riattacca il
-            # tratto fino al nodo vicino alla prima (o ultima) fermata, se è a pochi metri di strada
-            seq = extend_to_stop(seq, gt['stops'][v['stops'][0]], True)
-            seq = extend_to_stop(seq, gt['stops'][v['stops'][-1]], False)
-            # e si comincia (o si finisce) sull'arco lungo cui sta la fermata del capolinea
-            seq = stop_edge(seq, gt['stops'][v['stops'][0]], True)
-            seq = stop_edge(seq, gt['stops'][v['stops'][-1]], False)
-            seq = terminal_lane(seq, gt['stops'][v['stops'][0]], True)
-            seq = terminal_lane(seq, gt['stops'][v['stops'][-1]], False)
-            seq = stop_lanes(seq, [gt['stops'][si] for si in v['stops'][1:-1]])
-            seq = drop_spurs(seq, [gt['stops'][si] for si in v['stops']])
-            # controllo: lunghezza agganciata vs lunghezza del tracciato GTFS
-            sp = [xz(la, lo) for la, lo in v['shape_pts']]
-            Lg = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(sp, sp[1:]))
-            Lm = sum(math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1]) for a, b in zip(seq, seq[1:]))
-            ratio = Lm / max(1, Lg)
-            if ratio > 1.5:
+            if Lm > 1.5 * max(1, Lg):
                 print(f'  scartata {line["id"]} {v["headsign"]}: agganciato {Lm:.0f} m su {Lg:.0f} m')
                 failed += 1
                 continue
@@ -2047,4 +2107,4 @@ if __name__ == '__main__':
          pick(lambda a: a.endswith('.json') and 'misure' in a), pick(lambda a: a.endswith('.json') and 'volumi' in a),
          pick(lambda a: a.endswith('.json') and 'dtm' in a), pick(lambda a: a.endswith('.json') and 'verde' in a),
          pick(lambda a: a.endswith('.json') and 'strade' in a and 'misure' not in a),
-         pick(lambda a: a.endswith('.json') and 'fermate' in a))
+         pick(lambda a: a.endswith('.json') and 'fermate' in a), pick(lambda a: a.endswith('.json') and 'corridoio' in a))
