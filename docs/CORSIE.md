@@ -171,7 +171,8 @@ delle strade di `src/world/city.js`, `src/data/padova.js`, `src/data/padova-map.
   Camerini" (linea 13 in Viale Codalunga, alle 20:36). Il **Cavalcavia Camerini** (nella rete con questo nome) non l'ha
   mai guardato nessuno; il **Borgomagno** va rivisto dal posto di guida come lo vede chi gioca.
 - Segnalazioni di chi gioca dell'11 novembre, sulla sede del tram (due foto dal SIR3 verso Cornaro, nel pannello del
-  checkout principale):
+  checkout principale), fatte l'11 novembre (dettagli in IDEE, "Fatto"), con l'avvio lento per `buildDecks` segnalato
+  da `capolinea` (17 s, ora 0,1 s):
   - **"sporchessi" sulla linea**: trattini e segni bianchi corti sparsi sulla sede rossa, di traverso e lungo il
     binario. Sembrano i segni della carreggiata (divisorie, frecce, strisce) rimasti sopra la sede; si vedono anche
     dove il binario corre da solo a fianco della strada;
@@ -198,15 +199,11 @@ dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.
 carreggiata non basta: da 6.460 a 635 punti di corsia sopra un binario opposto, quasi tutti incroci obliqui) e si
 fermano davanti a un tram che arriva (passavano come direzione dei pezzi del tram la loro quota); in `tram.js` la
 media delle quote del binario non lo porta sotto la strada (`setHeights`); in `city.js` gli alberi dei viali e quelli
-sparsi fuori dall'asfalto vero (`buildTreesAndLamps`).
+sparsi fuori dall'asfalto vero (`buildTreesAndLamps`); in `main.js` il terreno passato a `City` (`{ terrain }`, per
+l'asfalto vicino alla sede del tram).
 
 Prossimo lavoro, in quest'ordine:
 
-- segnalato dalla corsia `capolinea` l'11 novembre: l'avvio è lento per `buildDecks`, 17 s su 21 di costruzione
-  della città misurati in SwiftShader su una macchina carica (`__game.city.timings`); nel build del 9 novembre erano
-  0,3 s. Viene dagli impalcati in triangoli da 4 m (`14cbf9f`): da guardare, è la parte più lenta dell'avvio;
-- sede del tram pulita (segnalazioni dell'11 novembre, sopra): niente segni della carreggiata né asfalto sopra la
-  sede, su tutte le linee;
 - **ponte tra Cornaro e Voltabarozzo** (SIR3 e Via Piovese sul canale Scaricatore; foto di chi gioca dell'11
   novembre): "la discesa verso nord deve essere molto più dolce". Nella foto i ponti (quello della strada, una
   travata reticolare d'acciaio, e quello nuovo del tram accanto) stanno alla quota degli argini e le strade ci

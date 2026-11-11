@@ -70,9 +70,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - dal sondaggio del 9 novembre (quattro richieste, tutte dopo la correzione del Borgomagno):
      - [x] semafori in centro tra Riviera Tito Livio e Riviera dei Ponti Romani: gli autobus si bloccano e bloccano i
        tram (linea 3 alle 8:54 di gioco, x 81, z -133; corsia `traffico`, vedi "Fatto");
-     - [ ] cavalcavia da sistemare (linea 22 in Via Orlandini, x 1315, z -1022) e, da un giocatore nuovo, "i ponti o
-       cavalcavia come quello della stazione e il Camerini" (linea 13 in Viale Codalunga): il Cavalcavia Camerini non
-       l'ha mai guardato nessuno, il Borgomagno va ricontrollato (corsia `mappa`);
+     - [~] cavalcavia da sistemare (linea 22 in Via Orlandini, x 1315, z -1022) e, da un giocatore nuovo, "i ponti o
+       cavalcavia come quello della stazione e il Camerini" (linea 13 in Viale Codalunga): al Camerini l'impalcato
+       spuntava sopra l'asfalto (sistemato, vedi "Fatto"); Borgomagno, Grassi e Ponte dell'Unità d'Italia guardati dal
+       posto di guida senza difetti nuovi; restano i fili del tram e il gradino di 20 cm al Borgomagno (corsia
+       `mappa`);
      - [x] sterzo troppo sensibile, "era meglio la guida vecchia" (stesso giocatore nuovo): regolazione
        "Sensibilità dello sterzo" nel menu e nella pausa, che parte più dolce di prima (vedi "Fatto");
      - [~] mappa più grande fino ai capolinea della 3 e della 22 e alle fermate della 10 e della 11 (linea 3 in Via
@@ -81,9 +83,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] sul tram niente ritardatario né fermate prenotate: il tram ferma a tutte le fermate (vedi "Fatto");
      - [ ] incroci tra traffico e tram: se il tram ha il passaggio gli altri si fermano, e viceversa (corsia
        `traffico`);
-     - [ ] segni bianchi della carreggiata sulla sede rossa del tram, lungo un binario a fianco della strada (corsia
-       `mappa`);
-     - [ ] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (corsia `mappa`);
+     - [x] segni bianchi della carreggiata sulla sede rossa del tram, lungo un binario a fianco della strada (vedi
+       "Fatto");
+     - [x] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (vedi "Fatto");
      - [ ] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
        stanno alla quota degli argini (corsia `mappa`);
      - [x] SIR2 intero fino a Rubano e al capolinea prima della rotonda per Venezia / SR11 (vedi "Fatto");
@@ -223,6 +225,19 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Sede del tram pulita e avvio veloce** (segnalazioni dell'11 novembre dal SIR3 verso Cornaro, corsia `mappa`):
+  i "trattini" bianchi sparsi su tutte le linee erano i dischi di raccordo nei giunti del binario, con la texture della
+  sede presa dalle coordinate del mondo (pezzi storti delle righe di bordo), e le righe di bordo delle due corsie dove i
+  binari sono vicini, a pari livello; ora dischi in tinta unita e il verso di ritorno un gradino sopra. I segni della
+  strada (righe, strisce, frecce, scritte BUS, dossi, zigzag delle fermate, linee d'arresto, righe delle isole) si
+  fermano al bordo della sede, con la sua quota (non sotto un viadotto). Le macchie d'asfalto: lo shader alza
+  l'asfalto alla quota del terreno solo ai vertici, e i triangoli lunghi decine di metri passavano sopra la sede dove
+  il terreno si incurva (argine del canale prima di Cornaro, fino a 3 m); vicino alla sede l'asfalto ora si divide dove
+  il terreno si stacca dalla corda. Nel rapporto della mappa (`tests/mappa.spec.js`) i quadrati di 10 m con segni o
+  asfalto sopra la sede, soglie 0 (erano 904 e 840). Stesso giorno: al Cavalcavia Camerini l'impalcato, con un lato di
+  170 m, tagliava la rampa a corda e spuntava sopra l'asfalto; impalcati e carreggiate in quota ora si dividono dove la
+  quota a metà lato si stacca dalla corda (la prima versione, ogni lato oltre 4 m, portava l'avvio da 0,3 a 17 s in
+  `buildDecks`: ora 0,1 s).
 - [x] **Mappa grande da trascinare** (11 novembre): con M aperta si trascina col mouse (`HUD.panBigMap`, pan rispetto al
   mezzo, azzerato a ogni apertura); un clic senza trascinare (meno di 5 px) teletrasporta come prima.
 - [x] **SIR2 intero, da Rubano a Vigonza** (corsia `capolinea`, 11 novembre): corridoio di celle attorno ai binari
