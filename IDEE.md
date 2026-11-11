@@ -158,7 +158,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [x] Tram: SIR1 e SIR3 a 3 moduli, SIR2 a 4 moduli (vedi "Fatto").
 - [x] Sensibilità dello sterzo regolabile (vedi "Fatto").
 - [ ] Bus elettrico: batteria, consumo, ricarica al capolinea (pantografo); punti per il recupero in frenata.
-- [ ] Volante e pedaliera o gamepad (Gamepad API).
+- [x] Volante e pedaliera o gamepad (Gamepad API, vedi "Fatto").
 - [ ] Telecamera della porta posteriore sul cruscotto; specchietti regolabili.
 - [ ] Altre livree storiche (anni '80–'90).
 
@@ -205,6 +205,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Gamepad e volante con pedaliera** (corsia `guida`, 11 novembre, `src/game/gamepad.js`): il gamepad con la
+  mappatura standard va subito (levetta sinistra volante, RT gas, LT freno e retromarcia da fermo, pulsanti come i
+  tasti, levetta destra per guardare ai lati); volanti e pedaliere si impostano una volta dalla pausa (volante a
+  sinistra, gas e freno a fondo e lasciati) e l'impostazione resta nel browser per ogni modello. Prova con un
+  controller finto in `tests/gamepad.spec.js`; con un volante vero non è ancora stato provato.
 - [x] **Pali della linea aerea fuori dalla strada** (11 novembre): dove non c'è una facciata a cui agganciare il
   tirante, il palo va dove finisce l'asfalto (marciapiede, isola, verde) entro 9 m e, se fin lì è tutta carreggiata,
   sul cordolo della sede. Prima si fermava a 9 m anche in mezzo alla strada: con i binari separati dalle corsie, pali

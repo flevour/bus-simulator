@@ -374,8 +374,17 @@ ingressi in `src/main.js` (oggetto `input`, comandi touch), menu e pausa in `ind
   - Se il giocatore la trova ancora diversa da prima: quello che resta è il ritorno al centro lento dopo il rilascio.
     Si può renderlo più svelto solo dopo un tasto (il pilota delle prove non preme tasti), ma cambia la guida di
     tutti: da decidere.
-- Prossimo lavoro, in quest'ordine: gamepad e volante (Gamepad API); bus elettrico con batteria e ricarica al capolinea;
-  telecamera della porta posteriore sul cruscotto; specchietti regolabili.
+- **Gamepad e volante, fatto l'11 novembre** (`src/game/gamepad.js`, letto in `readInput` come i comandi touch e,
+  in pausa e nel menu, dal ciclo principale). Gamepad standard: levetta sinistra = posizione del volante (zona morta
+  0,15, curva 1,5), grilletti = pedali analogici, pulsanti = `onKeyPress` (tabella in testa al file; col tram X è il
+  pantografo e la croce giù il cambio cabina). Lo sterzo del gamepad vale finché si preme un tasto di sterzo, poi
+  torna alla tastiera fino alla prossima mossa della levetta. Volanti e pedaliere (mappatura non standard, o standard
+  se si vuole): impostazione dalla pausa in tre passi, salvata in `localStorage` (`padova-bus-sim-volante`, per `id`
+  del dispositivo), che legge assi e valori dei pulsanti; prima dell'impostazione vanno solo i pulsanti 0-3, 8 e 9.
+  Prove con un controller finto in `tests/gamepad.spec.js`. Da provare con un volante vero (G29 o simili): range del
+  volante, pedali che danno 0 finché non si toccano (gestito), palette e pulsanti dei diversi modelli.
+- Prossimo lavoro, in quest'ordine: bus elettrico con batteria e ricarica al capolinea; telecamera della porta
+  posteriore sul cruscotto; specchietti regolabili.
 - Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
 ### tram-turni

@@ -179,6 +179,7 @@ button.primary:disabled { filter: grayscale(1); opacity: .5; cursor: default; }
 #pause .seg button.sel { background: #ffb300; color: #1a1a1a; border-color: #ffb300; }
 #pause h3 { text-align: left; }
 #pause select { margin-bottom: 6px; }
+#pad-info.learn { font-size: 15px; opacity: 1; color: #ffca28; } /* passo dell'impostazione di volante e pedali */
 
 /* saluto ai colleghi: la mano sale dal basso a sinistra e oscilla */
 #wave-hand { position: absolute; left: 22%; bottom: -140px; font-size: 120px; line-height: 1; opacity: 0; pointer-events: none; transform-origin: 50% 100%; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }

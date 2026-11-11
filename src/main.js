@@ -15,6 +15,7 @@ import { posthog, isPostHogConfigured, posthogGameLogger } from './posthog.js';
 import { initNews } from './game/news.js';
 import { Greetings } from './game/greetings.js';
 import { TouchControls, isTouchDevice } from './game/touch.js';
+import { GamepadControls } from './game/gamepad.js';
 import { liveryPreviews, disposeTree } from './game/liveryPreview.js';
 import { Terrain } from './world/terrain.js';
 
@@ -177,6 +178,7 @@ window.addEventListener('keydown', (e) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
   if (!e.repeat) onKeyPress(e.code);
   keys.add(e.code);
+  if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) pad.keyboardSteer();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
@@ -184,9 +186,14 @@ window.addEventListener('blur', () => keys.clear());
 const touch = new TouchControls({ press: (code) => onKeyPress(code), keys });
 if (isTouchDevice()) touch.enable();
 window.addEventListener('touchstart', () => { if (!touch.enabled) { touch.enable(); layoutMirrors(); } }, { passive: true, once: true });
-function readInput() {
-  const T = touch.state;
-  const fwdKey = keys.has('KeyW') || keys.has('ArrowUp') || T.gas > 0, backKey = keys.has('KeyS') || keys.has('ArrowDown') || T.brake > 0;
+// gamepad e volante: anche loro passano i pulsanti da onKeyPress; levetta, volante e pedali sono analogici
+const pad = new GamepadControls({ press: (code) => onKeyPress(code), keys, onChange: () => padChanged() });
+function readInput(dt) {
+  pad.isTram = !!(bus && bus.isTram);
+  pad.poll(dt);
+  const T = touch.state, P = pad.state;
+  const gas = Math.max(T.gas, P.gas), brk = Math.max(T.brake, P.brake);
+  const fwdKey = keys.has('KeyW') || keys.has('ArrowUp') || gas > 0, backKey = keys.has('KeyS') || keys.has('ArrowDown') || brk > 0;
   // in retromarcia, appena fermi, W rimette la marcia avanti
   if (bus && bus.dir < 0 && fwdKey && Math.abs(bus.v) < 0.15) setDirection(1);
   // in retromarcia i pedali si scambiano: S dà gas all'indietro, W frena
@@ -195,11 +202,12 @@ function readInput() {
   input.brake = rev ? fwdKey : backKey;
   input.left = keys.has('KeyA') || keys.has('ArrowLeft');
   input.right = keys.has('KeyD') || keys.has('ArrowRight');
-  input.shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
-  // pedali touch: forza proporzionale (in retromarcia il freno touch dà gas all'indietro, come S)
-  input.thrAxis = (rev ? T.brake : T.gas) || null;
-  input.brkAxis = (rev ? T.gas : T.brake) || null;
-  input.steerAxis = T.steer;
+  // gas o freno del gamepad quasi a fondo valgono Shift (il manipolatore del tram va alla tacca piena)
+  input.shift = keys.has('ShiftLeft') || keys.has('ShiftRight') || P.gas > 0.9 || P.brake > 0.9;
+  // pedali touch e del gamepad: forza proporzionale (in retromarcia il freno dà gas all'indietro, come S)
+  input.thrAxis = (rev ? brk : gas) || null;
+  input.brkAxis = (rev ? gas : brk) || null;
+  input.steerAxis = T.steer != null ? T.steer : P.steer;
   input.steerSens = settings.steerSens;
   if (bus) bus.horn = keys.has('KeyH');
 }
@@ -470,12 +478,15 @@ function togglePause(force) {
     // cambio di autobus: solo col bus (con lo snodato le anteprime sono dello snodato)
     $('pause-bus').hidden = !bus || bus.isTram;
     if (bus && !bus.isTram) { markLivery(bus.livery); fillLiveryPreviews($('pause-livery'), !!bus.articulated); }
+    updatePadBox();
     touch.release();
     const ok = saveGame();
     $('pause-info').textContent = ok ? `Progressi salvati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: potrai riprendere da qui anche dopo aver chiuso la pagina.` : 'Salvataggio non disponibile in questo browser.';
     if ('speechSynthesis' in window) speechSynthesis.pause();
     audio.setMuted(true);
   } else if (running) {
+    // impostazione di volante e pedali lasciata a metà: si riparte con quella di prima
+    if (pad.learn) pad.cancelLearn();
     if ('speechSynthesis' in window) speechSynthesis.resume();
     audio.setMuted(!!audio.muted);
   }
@@ -698,6 +709,29 @@ function setVehicle(k) {
   refreshMenu();
 }
 
+// gamepad o volante collegato: avviso in corsa e riquadro nella pausa, con l'impostazione di volante e pedali
+let padToasted = null;
+function padChanged() {
+  if (pad.connected && running && pad.pad.id !== padToasted) {
+    padToasted = pad.pad.id;
+    hud.toast(pad.standard || pad.calibration ? '🎮 Gamepad collegato: levetta sinistra per sterzare, grilletti per gas e freno'
+      : '🎮 Volante collegato: imposta volante e pedali dalla pausa (P)', 'info');
+  }
+  updatePadBox();
+}
+function updatePadBox() {
+  $('pause-pad').hidden = !pad.connected;
+  if (!pad.connected) return;
+  // "Logitech G29 Driving Force Racing Wheel (Vendor: 046d Product: c24f)" → nome senza i codici
+  const name = pad.pad.id.replace(/\s*\(.*\)\s*$/, '').slice(0, 48) || 'Gamepad';
+  $('pad-info').classList.toggle('learn', !!pad.learn);
+  $('pad-info').textContent = pad.learn ? pad.learnText()
+    : pad.calibration ? `🎮 ${name}: volante e pedali impostati.`
+    : pad.standard ? `🎮 ${name}: levetta sinistra per sterzare, RT gas, LT freno; gli altri pulsanti sono nell'aiuto (I). Con un volante, impostalo qui sotto.`
+    : `🎮 ${name}: imposta volante e pedali per guidare; i pulsanti principali vanno già.`;
+  $('pad-learn').textContent = pad.learn ? 'Annulla' : pad.calibration ? '🎮 Imposta di nuovo volante e pedali' : '🎮 Imposta volante e pedali';
+}
+
 function buildMenu() {
   renderLines();
   const seg = (id, attr, fn) => document.querySelectorAll(`#${id} button`).forEach((b) => b.addEventListener('click', () => {
@@ -725,6 +759,7 @@ function buildMenu() {
   // sensibilità dello sterzo: stessa scelta nel menu e nella pausa, ricordata in questo browser
   const steerBtns = document.querySelectorAll('#steer-sens button, #pause-steer-sens button');
   const markSteer = () => steerBtns.forEach((x) => x.classList.toggle('sel', Number(x.dataset.s) === settings.steerSens));
+  $('pad-learn').addEventListener('click', () => { if (pad.learn) pad.cancelLearn(); else pad.startLearn(); });
   steerBtns.forEach((b) => b.addEventListener('click', () => {
     settings.steerSens = Number(b.dataset.s);
     try { localStorage.setItem(STEER_KEY, String(settings.steerSens)); } catch (e) { /* ignorato */ }
@@ -1266,7 +1301,7 @@ function tramOccupancy() {
 }
 
 function step(dt) {
-  readInput();
+  readInput(dt);
   const wxChanging = updateWeather(dt);
   world.wet = wx.wet > 0.35;
   // superficie
@@ -1410,10 +1445,11 @@ function loop() {
     const n = dt > 0.025 ? 2 : 1;
     for (let i = 0; i < n; i++) step(dt / n);
     render(dt);
-  } else if (running) {
-    render(0);
-  } else if (net) {
-    renderMenuBackdrop(dt);
+  } else {
+    // in pausa e nel menu il gamepad serve ancora: Start riprende la corsa, si impostano volante e pedali
+    pad.poll(dt);
+    if (running) render(0);
+    else if (net) renderMenuBackdrop(dt);
   }
 }
 
@@ -1455,6 +1491,6 @@ setTimeout(() => {
   city.setNight(0);
   window.__game = { get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot,
-    sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
+    pad, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
 }, 50);
