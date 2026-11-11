@@ -379,7 +379,9 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   arriva mai. Riprodurre (corsa del SIR3 dalla stazione), trovare chi tiene il rosso (fase dei semafori stradali,
   occupazione di un tratto da parte di un altro tram o di un bus, coordinamento nuovo di Tito Livio), correggere e
   aggiungere una prova: su tutte le lanterne del tram il verde arriva entro un ciclo. Se la causa è nei binari o in
-  `TramSim`, insieme a `tram-turni`.
+  `TramSim`, insieme a `tram-turni`. Passando a via impedita chi gioca non ha preso la penalità: lanterna disegnata,
+  stato usato dalla logica e penalità (`tramSignals.violations` in `main.js`) devono coincidere; anche questo nella
+  prova.
 - **Subito dopo, gli incroci tra traffico e tram** (chiesto da chi gioca l'11 novembre): se il tram ha il passaggio,
   auto e bus si fermano prima della sede; se lo ha la strada, il tram si ferma. Vale per i tram automatici e per
   quello di chi gioca, per i bus automatici e per le auto. Ai semafori vuol dire coordinare `TramSignals` con
