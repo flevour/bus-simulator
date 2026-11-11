@@ -26,6 +26,7 @@ sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import build_gtfs  # noqa: E402  (riusa lettura GTFS e conversioni)
 import street_surfaces  # noqa: E402  (pianta delle strade con Shapely)
 import aree_mappa  # noqa: E402  (rete e aree della mappa)
+import tram_stazione  # noqa: E402  (binari della stazione sugli anelli del piazzale nuovo)
 
 ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
@@ -1324,6 +1325,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         # binari veri: ogni shape (uno per verso) agganciato ai binari OSM
         if tram_path:
             tram = [tram_lane(t, *tram_grid(tram_path)) for t in tram]
+            # in stazione l'anello esterno regolare e concentrico a quello di SIR2 e SIR3 (scripts/tram_stazione.py)
+            staz = tram_stazione.Stazione.from_osm(tram_path)
+            tram = [stazione_xz(staz, t) for t in tram]
             tram_lanes = True
         trip = ttrips[main_shape]
         for r in rd('stop_times.txt'):
@@ -1512,6 +1516,12 @@ def snap_tram_stops(path, tram, tram_stops, tram_lines, reach=25.0):
         for x in st:
             snap(x, lines[0 if fwd else 1])
     return moved, total
+
+
+def stazione_xz(staz, flat):
+    """Binario (x, z in fila) rifatto sugli anelli della stazione (tram_stazione)."""
+    pts = [latlon(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+    return [round(v, 2) for p in tram_stazione.fix_ll(staz, pts) for v in xz(*p)]
 
 
 def tram_lane(flat, segs, grid, cell):

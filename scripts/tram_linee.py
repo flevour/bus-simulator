@@ -8,6 +8,8 @@ Si appoggia a scripts/tram_percorsi.py (grafo dei binari, instradamento per ferm
   l'anello, a sinistra; De Gasperi sul Corso del Popolo dove c'era Trieste): un nodo nuovo sul binario, che il percorso
   deve toccare;
 * i tratti di binario prima della prima fermata e dopo l'ultima (ci sta il convoglio, si cambia cabina);
+* in stazione i binari sugli anelli regolari e concentrici del piazzale nuovo (scripts/tram_stazione.py), al posto
+  delle S e degli intrecci dei binari OSM;
 * l'orario: frequenza per fascia oraria e tempi tra le fermate dalla velocità commerciale.
 
 SIR2 e SIR3 passano dall'anello interno, il SIR1 resta su quello esterno: il SIR3 gira tutto l'anello (arriva a Stazione
@@ -20,6 +22,7 @@ from collections import defaultdict
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import tram_percorsi as tp
+import tram_stazione
 
 # anello interno e raccordi tra i due anelli della stazione: verso di percorrenza rispetto all'ordine dei nodi della
 # way (+1 come la way, -1 al contrario). Senso antiorario: verso est sul lato sud, verso ovest sul lato nord
@@ -151,6 +154,33 @@ def extend(adj, pos, path, dist, back):
     return pts[::-1] if back else pts
 
 
+def stazione(staz, full, pos, first, last):
+    """Percorso rifatto sugli anelli della stazione (tram_stazione): nodi (lat, lon) nuovi e progressive dei punti più
+    vicini a first e last (il primo e l'ultimo nodo del percorso senza i tratti prima e dopo)."""
+    new = [(round(la, 7), round(lo, 7)) for la, lo in tram_stazione.fix_ll(staz, full)]
+    new = [n for k, n in enumerate(new) if not k or n != new[k - 1]]
+    for n in new:
+        pos.setdefault(n, tp.P(*n))
+    cum = [0.0]
+    for a, b in zip(new, new[1:]):
+        cum.append(cum[-1] + math.dist(pos[a], pos[b]))
+
+    def s_of(p, from_s=0.0):
+        best = (1e18, from_s)
+        for i, (a, b) in enumerate(zip(new, new[1:])):
+            if cum[i + 1] < from_s:
+                continue
+            (ax, ay), (bx, by) = pos[a], pos[b]
+            L2 = (bx - ax) ** 2 + (by - ay) ** 2 or 1e-9
+            t = max(0, min(1, ((p[0] - ax) * (bx - ax) + (p[1] - ay) * (by - ay)) / L2))
+            d = math.hypot(ax + (bx - ax) * t - p[0], ay + (by - ay) * t - p[1])
+            if d < best[0] - 1e-6:
+                best = (d, cum[i] + t * math.sqrt(L2))
+        return best[1]
+    s0 = s_of(pos[first])
+    return new, s0, s_of(pos[last], s0) - s0
+
+
 def headways(ogni):
     """Partenze (secondi dalla mezzanotte) per giorno: frequenza piena di giorno, meno la sera e di primo mattino."""
     bands = {
@@ -170,6 +200,7 @@ def headways(ogni):
 
 def main(osm, stops_json, out):
     adj, pos, own, cons, osm_stops, way = load(osm)
+    staz = tram_stazione.Stazione.from_osm(osm)
     kml = json.load(open(stops_json))['kml']
     manual_nodes = {name: split_at(adj, pos, way, ll, ws) for name, (ll, ws) in MANUAL.items()}
     manual_stops = [(name, ll, tp.P(*ll)) for name, (ll, _) in MANUAL.items()]
@@ -208,8 +239,7 @@ def main(osm, stops_json, out):
             building = sum(math.dist(pos[a], pos[b]) for a, b in E if (a, b) in cons)
             # binario prima e dopo, per il convoglio fermo al capolinea e il cambio cabina
             full = extend(adj, pos, extend(adj, pos, path, EXTEND, True), EXTEND, False)
-            i0 = full.index(path[0])
-            s0 = sum(math.dist(pos[full[j]], pos[full[j + 1]]) for j in range(i0))
+            full, s0, Lp = stazione(staz, full, pos, path[0], path[-1])
             # fermate sul percorso, quelle OSM e quelle messe a mano, in ordine. Il punto del KML al capolinea può
             # stare poco prima della fermata OSM (Voltabarozzo): oltre gli estremi conta solo la fermata del capolinea
             ends = (tp.norm(seq[0]), tp.norm(seq[-1]))
