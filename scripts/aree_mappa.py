@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """Mappa del gioco divisa in rete e aree (caricamento per aree, docs/ESTENSIONE_LINEE.md sezione 4).
 
-La rete (nodi, archi, nomi, linee, fermate, segnaletica, terreno, impalcati) resta in src/data/padova-map.json, dentro
-il bundle del gioco. Edifici, pianta delle strade (le celle da 200 m di street_surfaces) e alberi vanno in un file per
-riquadro da LATO metri, public/mappa/aree/<ix>_<iz>.json, che il gioco scarica (src/data/aree.js). La rete elenca le
-aree in "aree": {"lato": LATO, "chiavi": [...]}; edifici, celle e alberi restano nella rete come liste vuote.
+La rete resta in src/data/padova-map.json, dentro il bundle del gioco: nodi, archi, nomi, linee, fermate,
+segnaletica, terreno, impalcati e, della pianta delle strade (celle da 200 m di street_surfaces), carreggiate e isole,
+che servono ovunque (fisica, paline, semafori, lampioni). Il resto, che serve solo da vicino, va in un file per
+riquadro da LATO metri, public/mappa/aree/<ix>_<iz>.json, che il gioco scarica (src/data/aree.js): edifici,
+marciapiedi e verde della pianta delle strade, alberi. La rete elenca le aree in "aree": {"lato": LATO, "chiavi":
+[...]}; gli edifici e gli alberi restano nella rete come liste vuote, le celle hanno marciapiedi e verde vuoti.
+
+Per quello che il gioco calcola su tutta la mappa all'avvio la rete ha anche:
+* "edificiBBox": il rettangolo che contiene gli edifici (fuori il gioco ne genera di procedurali);
+* "edificiTram": gli edifici a meno di VICINO_TRAM metri dai binari del tram (SIR1 della mappa e linee di
+  data/tram-linee-nuove.json), per spostare i binari fuori dalle facciate e agganciare i tiranti della linea aerea.
 
 Un edificio va nell'area del baricentro dei vertici del contorno, una cella nell'area del suo angolo, un albero in
 quella del suo punto. Dentro un'area l'ordine è quello della mappa intera; rimessa insieme (load, o il gioco) la mappa
-ha le aree in ordine di chiave.
+ha edifici e alberi in ordine di chiave dell'area, le celle nell'ordine di prima.
 
 Uso:
     python3 scripts/aree_mappa.py dividi src/data/padova-map.json    # divide una mappa intera (build_map.py lo fa da sé)
@@ -23,6 +30,9 @@ import os
 import sys
 
 LATO = 800.0
+VICINO_TRAM = 60.0  # m: oltre quanto il gioco sposta i binari (5 m) e cerca le facciate dei tiranti (celle da 20 m)
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 
 
 def aree_dir(path):
@@ -38,28 +48,68 @@ def key(x, z):
     return f'{math.floor(x / LATO)}_{math.floor(z / LATO)}'
 
 
+def tram_tracks(data):
+    """Binari del tram (liste di punti x, z): quelli della mappa e quelli delle linee in costruzione."""
+    out = [list(zip(t[0::2], t[1::2])) for t in data.get('tram') or []]
+    path = os.path.join(ROOT, 'data', 'tram-linee-nuove.json')
+    if os.path.exists(path):
+        import build_gtfs
+        for L in json.load(open(path, encoding='utf-8'))['linee']:
+            out += [[build_gtfs.xz(la, lo) for la, lo in v['percorso']] for v in L['versi']]
+    return out
+
+
+def near_tram(buildings, tracks, r=VICINO_TRAM):
+    """Gli edifici con il rettangolo a meno di r metri da un binario (celle da r metri)."""
+    C, cells = r, set()
+    for t in tracks:
+        for (ax, az), (bx, bz) in zip(t, t[1:]):
+            n = max(1, int(math.dist((ax, az), (bx, bz)) // 5))
+            for i in range(n + 1):
+                x, z = ax + (bx - ax) * i / n, az + (bz - az) * i / n
+                cells.update((math.floor(x / C) + a, math.floor(z / C) + b) for a in (-1, 0, 1) for b in (-1, 0, 1))
+    out = []
+    for b in buildings:
+        f = b[3]
+        i0, i1 = math.floor(min(f[0::2]) / C), math.floor(max(f[0::2]) / C)
+        j0, j1 = math.floor(min(f[1::2]) / C), math.floor(max(f[1::2]) / C)
+        if any((i, j) in cells for i in range(i0, i1 + 1) for j in range(j0, j1 + 1)):
+            out.append(b)
+    return out
+
+
 def split(data):
     """(rete, {chiave: area}) da una mappa intera; data non cambia."""
     aree = {}
 
     def area(k):
         return aree.setdefault(k, {'edifici': [], 'celle': [], 'alberi': []})
-    for b in data.get('buildings') or []:
+    blds = data.get('buildings') or []
+    for b in blds:
         f = b[3]
         n = len(f) // 2
         area(key(sum(f[0::2]) / n, sum(f[1::2]) / n))['edifici'].append(b)
+    rete = dict(data)
+    rete['buildings'] = []
+    if blds:
+        xs = [v for b in blds for v in b[3][0::2]]
+        zs = [v for b in blds for v in b[3][1::2]]
+        rete['edificiBBox'] = [min(xs), min(zs), max(xs), max(zs)]
+        rete['edificiTram'] = near_tram(blds, tram_tracks(data))
     S = data.get('surfaces')
     if S:
         T = S['tile']
+        cells = []
         for c in S.get('cells') or []:
-            area(key(c[0] * T, c[1] * T))['celle'].append(c)
+            ix, iz, A, W, I = c[:5]
+            V = c[5] if len(c) > 5 else None
+            cells.append([ix, iz, A, [], I, []])
+            if W or V:
+                area(key(ix * T, iz * T))['celle'].append([ix, iz, W, V or []])
         tr = S.get('trees') or []
         for i in range(0, len(tr), 2):
             area(key(tr[i], tr[i + 1]))['alberi'] += tr[i:i + 2]
-    rete = dict(data)
-    rete['buildings'] = []
-    if S:
-        rete['surfaces'] = {**S, 'cells': [], 'trees': []}
+        rete['surfaces'] = {**S, 'cells': cells, 'trees': []}
     order = sorted(aree, key=lambda k: tuple(int(v) for v in k.split('_')))
     rete['aree'] = {'lato': LATO, 'chiavi': order}
     return rete, {k: aree[k] for k in order}
@@ -69,16 +119,21 @@ def merge(rete, aree):
     """Mappa intera dalla rete e dalle aree (in ordine di chiave), come la rimette insieme il gioco."""
     m = dict(rete)
     m['buildings'] = list(rete.get('buildings') or [])
+    for k in ('aree', 'edificiBBox', 'edificiTram'):
+        m.pop(k, None)
     S = rete.get('surfaces')
+    cell = {}
     if S:
-        m['surfaces'] = {**S, 'cells': list(S.get('cells') or []), 'trees': list(S.get('trees') or [])}
+        m['surfaces'] = {**S, 'cells': [list(c) for c in S.get('cells') or []], 'trees': list(S.get('trees') or [])}
+        cell = {(c[0], c[1]): c for c in m['surfaces']['cells']}
     for k in rete['aree']['chiavi']:
         a = aree[k]
         m['buildings'] += a['edifici']
         if S:
-            m['surfaces']['cells'] += a['celle']
+            for ix, iz, W, V in a['celle']:
+                c = cell[(ix, iz)]
+                c[3], c[5] = W, V
             m['surfaces']['trees'] += a['alberi']
-    del m['aree']
     return m
 
 

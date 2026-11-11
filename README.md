@@ -83,9 +83,9 @@ La mappa unisce due fonti aperte:
 
 `scripts/build_map.py` aggancia ogni tracciato GTFS alle strade OSM (map matching), così i bus percorrono le vie
 vere, e produce la mappa del gioco in due parti (`scripts/aree_mappa.py`): la rete (nodi, archi, linee, fermate,
-segnaletica, terreno) in `src/data/padova-map.json`, dentro il bundle, ed edifici, pianta delle strade e alberi in un
-file per riquadro da 800 m in `public/mappa/aree/`, che il gioco scarica all'avvio (`src/data/aree.js`; nella pagina
-autosufficiente di `npm run build:single` sono dentro la pagina).
+segnaletica, terreno, carreggiate e isole) in `src/data/padova-map.json`, dentro il bundle, ed edifici, marciapiedi,
+verde e alberi in un file per riquadro da 800 m in `public/mappa/aree/`, che il gioco scarica all'avvio
+(`src/data/aree.js`; nella pagina autosufficiente di `npm run build:single` sono dentro la pagina).
 
 **Pianta delle strade** (`scripts/street_surfaces.py`, con Shapely): carreggiate, marciapiedi e isole sono aree vere,
 calcolate una volta sola invece di nastri sovrapposti disegnati dal gioco:
@@ -383,7 +383,7 @@ future potranno averne 4.
 src/
   data/padova.js     carica la mappa: strade, edifici, ferrovia, acque, linee
   data/padova-map.json  rete della mappa generata da scripts/build_map.py (OSM + GTFS)
-  data/aree.js       scarica le aree della mappa (public/mappa/aree: edifici, pianta delle strade, alberi)
+  data/aree.js       scarica le aree della mappa (public/mappa/aree: edifici, marciapiedi, verde, alberi)
   world/city.js      generazione della città
   world/traffic.js   semafori, auto, pedoni
   bus/bus.js         modello 3D e fisica del bus

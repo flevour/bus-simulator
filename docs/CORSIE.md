@@ -44,7 +44,7 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
 
 | File | Chi lo modifica | Perché |
 |---|---|---|
-| `src/data/padova-map.json`, `public/mappa/aree/` | `mappa`, `capolinea` e `tram-turni`, una rigenerazione alla volta | la rete (una riga sola da 2,4 MB) e le aree da 800 m (edifici, pianta delle strade, alberi) le scrive `build_map.py`: due rigenerazioni non si uniscono, si prende la mappa di `main` e si rigenera (regola 4) |
+| `src/data/padova-map.json`, `public/mappa/aree/` | `mappa`, `capolinea` e `tram-turni`, una rigenerazione alla volta | la rete (una riga sola da 5,9 MB) e le aree da 800 m (edifici, marciapiedi, verde, alberi) le scrive `build_map.py`: due rigenerazioni non si uniscono, si prende la mappa di `main` e si rigenera (regola 4) |
 | `scripts/build_map.py`, `scripts/street_surfaces.py` | `mappa` (dettagli dentro l'area) e `capolinea` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte o li chiede a queste corsie |
 | `scripts/tram_linee.py`, `data/tram-linee-nuove.json` | `capolinea` (SIR2 fino ai capolinea) e `tram-turni` (binari della stazione) | chi cambia una funzione dell'altra lo scrive qui; dopo, si rigenera la mappa (la sede nella pianta delle strade segue i binari) |
 | `src/world/city.js` | tutti, ognuno nelle sue funzioni | il caricamento per aree (onda 3) lo riscrive: parte quando nessun'altra corsia ci lavora |
@@ -202,6 +202,9 @@ sparsi fuori dall'asfalto vero (`buildTreesAndLamps`).
 
 Prossimo lavoro, in quest'ordine:
 
+- segnalato dalla corsia `capolinea` l'11 novembre: l'avvio è lento per `buildDecks`, 17 s su 21 di costruzione
+  della città misurati in SwiftShader su una macchina carica (`__game.city.timings`); nel build del 9 novembre erano
+  0,3 s. Viene dagli impalcati in triangoli da 4 m (`14cbf9f`): da guardare, è la parte più lenta dell'avvio;
 - sede del tram pulita (segnalazioni dell'11 novembre, sopra): niente segni della carreggiata né asfalto sopra la
   sede, su tutte le linee;
 - cavalcavia del sondaggio del 9 novembre (sopra): foto dal posto di guida e guida di una linea che ci passa sul
@@ -322,7 +325,11 @@ Prossimo lavoro, in quest'ordine:
   Fatto l'11 novembre il primo passo, senza `city.js`: rete in `src/data/padova-map.json`, edifici, pianta delle
   strade e alberi in 170 aree da 800 m in `public/mappa/aree/` (`scripts/aree_mappa.py`), scaricate tutte all'avvio da
   `src/data/aree.js`; JavaScript da 14,6 a 3,7 MB. Per chi rigenera la mappa non cambia niente (stesso comando, regola
-  4 anche per le aree). Prossimo passo: le aree a richiesta, che riscrive `city.js`;
+  4 anche per le aree). Secondo passo, sempre senza `city.js`: carreggiate e isole (fisica, paline, semafori, lampioni
+  su tutta la mappa) tornano nella rete, con il rettangolo degli edifici e gli edifici a meno di 60 m dai binari (per
+  spostare i binari fuori dalle facciate e per i tiranti); nelle aree restano edifici, marciapiedi, verde e alberi
+  (8,8 MB in 161 aree), quello che serve solo da vicino; JavaScript 7,2 MB. Prossimo passo: le aree a richiesta, che
+  riscrive `city.js`;
 - gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da
   togliere per le linee che arrivano ai capolinea. Tra i capolinea richiesti da chi gioca (sondaggio del 9 novembre,
   linea 3 in Via Fondà): quelli della 3 e della 22 e le fermate della 10 e della 11 fuori dall'area.

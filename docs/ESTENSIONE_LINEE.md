@@ -97,7 +97,15 @@ JavaScript passa da 14,6 a 3,7 MB (1,3 MB compresso); la mappa cambia senza far 
 Nella pagina autosufficiente (`npm run build:single`) le aree sono dentro la pagina (modulo `virtual:aree-mappa` in
 `vite.config.js`). Gli script che leggono la mappa intera usano `aree_mappa.load` (`verifica_mappa.py`).
 
-Resta da fare il caricamento a richiesta (punti 2-5 sotto), che riscrive `city.js`.
+Secondo passo (11 novembre): nella rete tornano carreggiate e isole della pianta delle strade, che il gioco usa su
+tutta la mappa all'avvio (fisica, paline con `allStopPlacements`, semafori, lampioni), il rettangolo degli edifici
+(`edificiBBox`, per gli edifici procedurali fuori) e gli edifici a meno di 60 m dai binari (`edificiTram`, 5.647, per
+`clearOfBuildings` e i tiranti di `buildTramway`). Nelle aree restano edifici, marciapiedi, verde e alberi: 8,8 MB in
+161 aree, solo da vicino (da vedere e da urtare). Rete 5,9 MB, JavaScript 7,2 MB (2,5 MB compresso).
+
+Resta da fare il caricamento a richiesta (punti 2-5 sotto), che riscrive `city.js`. Misura dell'avvio (11 novembre,
+SwiftShader su una macchina carica): `buildDecks` prende 17 s su 21 di costruzione della città (0,3 s nel build del 9
+novembre: impalcati in triangoli da 4 m, corsia `mappa`), `buildRoads` con tutta la pianta delle strade meno di 1 s.
 
 ### Proposta
 
