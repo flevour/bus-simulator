@@ -469,6 +469,11 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
 `src/world/city.js`.
 
 - **B al capolinea**: fatto l'11 novembre (IDEE, "Fatto"; `tramNextRun` in `main.js`, `tests/turni-tram.spec.js`).
+- **Tram incastrato al capolinea** (segnalazione dell'11 novembre, SIR3 a Voltabarozzo): il binario finisce 17 m oltre
+  il punto di fermata, la zona della fermata arrivava a 10 m. Fermo più avanti il capolinea non si serviva, il tram non
+  poteva né proseguire né tornare indietro e B chiedeva di far scendere tutti. Fuori dai miei file, piccolo: in
+  `mission.js` al capolinea del tram la zona arriva fino alla fine del binario, e chi si ferma oltre la banchina perde
+  10 punti come chi si ferma troppo indietro. Prova in `tests/turni-tram.spec.js` ("in fondo al binario").
 - **Binari della stazione**: fatto l'11 novembre (IDEE, "Fatto"; [`linee-tram-nuove.md`](linee-tram-nuove.md),
   "Binari della stazione"). Fuori dai miei file, piccoli: in `build_map.py` i binari del SIR1 passano da
   `scripts/tram_stazione.py` (`stazione_xz`, dopo `tram_lane`) e la rete ha la chiave `tramStazione`; in

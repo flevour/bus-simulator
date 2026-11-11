@@ -4,10 +4,11 @@ import { test, expect, avviaCorsa } from './gioco.js';
 import { guidaFermate } from './guida.js';
 
 // Salta alla fine della corsa: fermate prima del capolinea servite, tram 40 m prima della fine della banchina. Poi
-// fino alla banchina col manipolatore, porte aperte finché scendono tutti (la corsa finisce) e B con le porte ancora
-// aperte: si chiudono da sole e si cambia cabina.
-async function capolineaEB(page) {
-  return page.evaluate(() => {
+// fino alla banchina col manipolatore (oltre: metri oltre la fine della banchina, al più fino alla fine del binario),
+// porte aperte finché scendono tutti (la corsa finisce) e B con le porte ancora aperte: si chiudono da sole e si
+// cambia cabina.
+async function capolineaEB(page, oltre = 0) {
+  return page.evaluate((oltre) => {
     const g = window.__game, m = g.mission, bus = g.bus, n = m.stops.length, last = m.stops[n - 1], dt = 1 / 30;
     g.traffic.target = 0;
     g.traffic.cars.splice(0);
@@ -17,8 +18,9 @@ async function capolineaEB(page) {
     m.s = bus.sFront - 12.45;
     m.clock = last.sched - 120;
     bus.parking = false;
+    const meta = Math.min(bus.path.len - 1.2, last.s - 0.5 + oltre);
     for (let i = 0; i < 30 * 90; i++) {
-      const resto = last.s - 0.5 - bus.sFront, vt = Math.min(5, Math.sqrt(2 * 0.8 * Math.max(0, resto - 0.3))), e = vt - Math.abs(bus.v);
+      const resto = meta - bus.sFront, vt = Math.min(5, Math.sqrt(2 * 0.8 * Math.max(0, resto - 0.3))), e = vt - Math.abs(bus.v);
       if (vt > 0.05 && e > 0.3) g.keys.add('KeyW'); else g.keys.delete('KeyW');
       if ((vt <= 0.05 && Math.abs(bus.v) > 0.01) || e < -0.3) g.keys.add('KeyS'); else g.keys.delete('KeyS');
       g.sim(dt, dt, false);
@@ -37,18 +39,22 @@ async function capolineaEB(page) {
       ...prima, nuova: m2 !== m, verso2: bus.dirSig, cabina: giro > Math.PI / 2, prima2: m2.stops[0].name, dest: m2.dest,
       partenza: g.settings.departure, prossima: m2.departure, inZona: !!(si && si.inZone && si.st.idx === 0), muso: si && Math.round(si.along * 10) / 10,
       corse: g.turno.corse, riepilogo: !document.getElementById('results').classList.contains('hidden'),
+      fermo: Math.round((meta - last.s) * 10) / 10, // metri del muso oltre la palina al capolinea
     };
-  });
+  }, oltre);
 }
 
 for (const c of [
   { nome: 'SIR3 a Stazione sud (anello, senza cambio cabina)', verso: 1, cabina: false, poi: 'Voltabarozzo' },
   { nome: 'SIR3 a Voltabarozzo (cambio cabina)', verso: 0, cabina: true, poi: 'Stazione sud' },
+  // segnalazione dell'11 novembre: fermo oltre la banchina, in fondo al binario, il capolinea non si serviva più
+  { nome: 'SIR3 a Voltabarozzo in fondo al binario', verso: 0, cabina: true, poi: 'Stazione sud', oltre: 30 },
 ]) {
   test(`B al capolinea: ${c.nome}`, async ({ pagina, gioco }) => {
     const corsa = await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: c.verso });
-    const r = await capolineaEB(pagina);
+    const r = await capolineaEB(pagina, c.oltre || 0);
     const testo = JSON.stringify(r);
+    if (c.oltre) expect(r.fermo, testo).toBeGreaterThan(10);
     expect(r.finita, testo).toBe(true);
     expect(r.nuova, testo).toBe(true);
     expect(r.verso2, testo).toBe(-r.verso);

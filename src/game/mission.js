@@ -203,7 +203,10 @@ export class Mission {
       const along = sFront - st.s; // 0 = muso del bus alla palina
       // accostamento misurato dal cordolo vero della fermata (kerb), se c'è
       const kerb = st.kerb ?? st.hw;
-      const inZone = along > -12 && along < 10 && proj.d < Math.max(st.hw, kerb) + 2.5;
+      // al capolinea del tram fino alla fine del binario (17 m oltre la banchina): fermo più avanti non poteva servire il
+      // capolinea, né proseguire, né tornare indietro
+      const end = this.tram && st.idx === this.stops.length - 1 ? Infinity : 10;
+      const inZone = along > -12 && along < end && proj.d < Math.max(st.hw, kerb) + 2.5;
       const lat = Math.abs(proj.lat - ((st.kl ?? kerb) - 1.6));
       this.stopInfo = { st, along, inZone, lat };
       const stopped = Math.abs(bus.v) < 0.3;
@@ -396,6 +399,7 @@ export class Mission {
       // il tram è sulla rotaia: conta solo fermarsi col muso a fine banchina
       if (Math.abs(along) < 2) this.addScore(15, 'Fermata precisa a fine banchina');
       else if (along < -8) this.addScore(-10, 'Fermato troppo indietro: l\'ultima porta è fuori dalla banchina');
+      else if (along > 8) this.addScore(-10, 'Fermato oltre la fine della banchina: la prima porta è fuori');
     } else if (lat < 0.6) this.addScore(15, 'Accostamento perfetto');
     else if (lat > 1.8) this.addScore(-10, 'Troppo lontano dal marciapiede');
   }

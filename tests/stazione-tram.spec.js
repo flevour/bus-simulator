@@ -23,6 +23,7 @@ for (const c of [
   { linea: 'SIR3', verso: 1, da: 'Gozzi', fermate: 3 }, // da Pace sulla testata est, scambio nord-est, anello interno
   { linea: 'SIR2', verso: 0, da: 'Eremitani', fermate: 3 }, // da ovest sull'anello esterno, scambio sud-ovest, Stazione sud
   { linea: 'SIR2', verso: 1, da: 'Pace', fermate: 3 }, // Stazione nord, scambio nord-ovest, testata esterna, verso sud
+  { linea: 'SIR3', verso: 0, da: 'Nani', fermate: 2 }, // fino al capolinea di Voltabarozzo
 ]) {
   test(`tram in stazione: ${c.linea} da ${c.da}, ${c.fermate} fermate`, async ({ pagina, gioco }, info) => {
     await avviaCorsa(pagina, { linea: c.linea, tram: true, verso: c.verso });
