@@ -8,7 +8,7 @@ import { BusSim } from './world/buses.js';
 import { Bus } from './bus/bus.js';
 import { Mission, Transfer, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
 import { pointAt, projectOnRoute, startGoal, planTransfer, findPath, stopPose } from './game/routes.js';
-import { turnoOf } from './game/turni.js';
+import { turnoOf, impostaSostaTram } from './game/turni.js';
 import { DEPOT_NAME, depotGate, DepotGate } from './world/depot.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
@@ -124,6 +124,12 @@ function buildWorld() {
   city = new City(scene, net, { terrain });
   lights = new TrafficLights(scene, net, city);
   city.buildSigns();
+  // turni del tram (di chi guida e automatici): sosta più breve al capolinea di 3 minuti dove c'è la manovra con lo
+  // scambio, di 1 all'anello della stazione
+  impostaSostaTram((L, v) => {
+    const T = (city.tramTracks && city.tramTracks[L.id]) || city.tramTrack;
+    return T && T.terminals && !T.terminals[T.dirOf(v) > 0 ? 1 : -1] ? 60 : 180;
+  });
   trams = new TramSim(scene, net, { track: city.tramTrack, tracks: city.tramTracks });
   // incroci con la sede: precedenza al tram e semafori a barre
   tramSignals = new TramSignals(scene, city, lights);

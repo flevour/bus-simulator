@@ -6,7 +6,7 @@ import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
 import { driveOffset, laneSpan } from '../data/padova.js';
-import { concatena } from '../game/turni.js';
+import { turni } from '../game/turni.js';
 
 // ------------------------------------------------------------------
 // Semafori
@@ -988,50 +988,37 @@ export class Walkers {
 // dalla comunicazione ('dopo') o dal tronco ('avanti')
 function terminalClear(t) { return (t.field === 'dep' ? t.heel : t.link) + 1; }
 
-// Viaggi dei tram dall'orario GTFS (giorno 'feriale' | 'festivo'). Il GTFS pubblica ogni viaggio anche spezzato in tratti
-// (Guizza → Cavalletto, Stazione → Pontevigodarzere, Santo → Pontevigodarzere…) che si sovrappongono alla corsa intera:
-// un tratto la cui prima e ultima fermata sono servite da una corsa più lunga, nello stesso verso, entro 3 minuti è lo
-// stesso tram. Restano i viaggi veri: nei feriali 12-13 tram in servizio per quasi tutto il giorno, concatenati in turni.
+// Viaggi dei tram dall'orario GTFS (giorno 'feriale' | 'festivo'), con i turni di turni.js: gli stessi di chi guida il
+// tram, senza i tratti in cui il GTFS spezza ogni viaggio (nei feriali 12-13 tram in servizio per quasi tutto il
+// giorno). Al capolinea ogni tram prende la corsa dopo del suo turno; aspettano al più due tram (uno alla banchina di
+// partenza, uno che arriva o fa la manovra), gli altri rientrano. La sosta più breve, dai binari, la dà
+// impostaSostaTram (main.js): 3 minuti dove c'è la manovra con lo scambio, 1 all'anello della stazione (l'orario del
+// SIR3 arriva lì un minuto prima di una partenza, e la banchina di Stazione sud la usa anche il SIR2).
 // trackOf(L): la sede della linea (TramTrack)
 export function tramRuns(lines, trackOf, day) {
   const runs = [];
   for (const L of lines) {
     const track = trackOf(L);
     if (!track) continue;
-    for (const v of L.variants) {
-      const dir = track.dirOf(v), P = track.path(dir);
-      // progressiva del muso fermo a fine banchina (12 m oltre la palina), sempre crescente lungo la corsa
-      const ss = [];
-      for (const st of v.stops) ss.push(Math.max(ss.length ? ss[ss.length - 1] : -Infinity, P.project(st.x, st.z).s + 12));
-      // partenza dal capolinea con lo scambio: il muso più avanti se serve perché la coda sia fuori dallo scambio (a
-      // Voltabarozzo la banchina di partenza comincia subito dopo la comunicazione), così chi arriva può fare la manovra
-      const t0 = track.terminals && track.terminals[dir > 0 ? -1 : 1];
-      if (t0 && ss[0] < terminalClear(t0) + 200) ss[0] = Math.min(ss[1] - 1, Math.max(ss[0], terminalClear(t0) + 0.5 + tramLength(L.modules || 3)));
-      for (const { t, d } of v[day] || []) {
-        const times = v.offsets.map((o) => t + (o * d) / v.duration);
-        runs.push({ line: L, track, v, t, d, dir, ss, times, end: times[times.length - 1], prev: null, next: null });
+    const ssOf = new Map(), mine = new Map();
+    for (const r of turni(L, day).runs) {
+      const v = r.v, dir = track.dirOf(v);
+      if (!ssOf.has(v)) {
+        // progressiva del muso fermo a fine banchina (12 m oltre la palina), sempre crescente lungo la corsa
+        const P = track.path(dir), ss = [];
+        for (const st of v.stops) ss.push(Math.max(ss.length ? ss[ss.length - 1] : -Infinity, P.project(st.x, st.z).s + 12));
+        // partenza dal capolinea con lo scambio: il muso più avanti se serve perché la coda sia fuori dallo scambio (a
+        // Voltabarozzo la banchina di partenza comincia subito dopo la comunicazione), così chi arriva può fare la manovra
+        const t0 = track.terminals && track.terminals[dir > 0 ? -1 : 1];
+        if (t0 && ss[0] < terminalClear(t0) + 200) ss[0] = Math.min(ss[1] - 1, Math.max(ss[0], terminalClear(t0) + 0.5 + tramLength(L.modules || 3)));
+        ssOf.set(v, ss);
       }
+      const times = v.offsets.map((o) => r.t + (o * r.d) / v.duration);
+      mine.set(r, { line: L, track, v, t: r.t, d: r.d, dir, ss: ssOf.get(v), times, prev: null, next: null });
     }
+    for (const [r, x] of mine) { x.prev = mine.get(r.prev) || null; x.next = mine.get(r.next) || null; runs.push(x); }
   }
-  runs.sort((a, b) => a.t - b.t);
-  // c passa dalla fermata st verso l'ora t: una sua fermata entro 150 m, entro 3 minuti (al capolinea del SIR1 ci sono
-  // due fermate Pontevigodarzere a 3 minuti l'una dall'altra: conta quella giusta, non la più vicina)
-  const passes = (c, st, t) => c.v.stops.some((s2, i) => Math.hypot(s2.x - st.x, s2.z - st.z) < 150 && Math.abs(c.times[i] - t) <= 180);
-  const covers = (c, k) => c !== k && c.line === k.line && c.dir === k.dir && c.v.stops.length > k.v.stops.length && c.t <= k.t + 180 && c.t + c.d >= k.t + k.d - 180 &&
-    passes(c, k.v.stops[0], k.t) && passes(c, k.v.stops[k.v.stops.length - 1], k.t + k.d);
-  let lo = 0;
-  const kept = runs.filter((k) => {
-    while (runs[lo].t < k.t - 4000) lo++;
-    for (let i = lo; i < runs.length && runs[i].t <= k.t + 180; i++) if (covers(runs[i], k)) return false;
-    return true;
-  });
-  // turni come quelli di chi guida (turni.js): al capolinea ogni tram prende la corsa dopo del suo turno. Ai capolinea
-  // aspettano al più due tram (uno alla banchina di partenza, uno che arriva o fa la manovra); gli altri rientrano. Sosta
-  // di almeno 3 minuti dove c'è la manovra con lo scambio, di 1 all'anello della stazione: l'orario del SIR3 arriva lì un
-  // minuto prima di una partenza, e la banchina di Stazione sud la usa anche il SIR2
-  const sostaMin = (r) => (r.track.terminals && r.track.terminals[r.dir > 0 ? 1 : -1] ? 180 : 60);
-  for (const L of lines) concatena(kept.filter((r) => r.line === L), { posti: 2, sostaMin });
-  return kept;
+  return runs.sort((a, b) => a.t - b.t);
 }
 
 export class TramSim {

@@ -606,19 +606,23 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   sono della corsia `tram-scambi` (sotto), compresa la segnalazione urgente delle 16:30 su Voltabarozzo arrivata qui.
   Qui restano, in quest'ordine: turni del tram (in corso: tram distribuiti sugli orari perché non si ammucchino ai
   capolinea), interni.
-- **Turni dei tram automatici**: fatti l'11 novembre. `tramRuns` toglie i tratti del GTFS (ogni viaggio del SIR1 c'è
-  anche spezzato: Santo → Pontevigodarzere restava perché la corsa intera ha due fermate Pontevigodarzere a 3 minuti e
-  il confronto prendeva la prima; giravano due tram a un minuto tra Santo e Pontevigodarzere) e concatena le corse in
-  turni con `concatena` di `turni.js`, la regola dei turni di chi guida: al più due tram in sosta a ogni capolinea,
+- **Turni dei tram automatici**: fatti l'11 novembre. Senza i tratti del GTFS (ogni viaggio del SIR1 c'è anche
+  spezzato: Santo → Pontevigodarzere restava perché la corsa intera ha due fermate Pontevigodarzere a 3 minuti e il
+  confronto prendeva la prima; giravano due tram a un minuto tra Santo e Pontevigodarzere) e concatenati in turni con
+  la regola dei turni di chi guida (`turni.js`, sotto): al più due tram in sosta a ogni capolinea,
   sosta di almeno 3 minuti dove c'è la manovra e di 1 all'anello della stazione (l'orario del SIR3 arriva lì un minuto
   prima di una partenza: la banchina di Stazione sud la usa anche il SIR2). `endRun` prende la corsa dopo del turno.
   Con i ritardi: una corsa il cui tram è ancora sulla corsa prima non entra nuova al capolinea, la fa lui in ritardo
   (`schedule`); un terzo tram al capolinea aspetta alla banchina d'arrivo che lo scambio sia libero. Le prime corse dei
   turni entrano alla banchina di partenza e le ultime escono alla banchina d'arrivo: è lì che si attaccheranno uscita
   e rientro dal deposito. Prova in `tests/turni-tram.spec.js` ("tram automatici"), con un tram per linea fermo 4
-  minuti. Resta: i turni di chi guida il tram (`turni()`, "Corsa n di m", la corsa dopo con B) usano ancora le corse a
-  tratti del GTFS, e a Pontevigodarzere la corsa dopo può essere un tratto (→ Stazione FS) invece della corsa intera:
-  vanno presi dagli stessi turni dei tram automatici. Poi gli interni.
+  minuti.
+- **Turni di chi guida il tram**: fatti l'11 novembre. `turni()` di `turni.js` è l'unica fonte dei turni del tram:
+  toglie i tratti (`senzaTratti`), concatena con i posti e le soste dei capolinea (`impostaSostaTram`, da `main.js`
+  con i binari) e `tramRuns` prende da lì le corse dei tram automatici, con gli stessi `prev` e `next`. Un tratto scelto
+  dal menu sta nel turno della corsa intera che lo contiene (`per`): prosegue con la sua corsa dopo se finisce al
+  capolinea con lei, altrimenti è l'ultima. Prima a Pontevigodarzere la corsa dopo con B poteva essere un tratto (→
+  Stazione FS). Prova in `tests/turni-tram.spec.js` ("turni del tram di chi guida"). Prossimo: gli interni.
 - **Per `tram-scambi`**: anche i tram automatici fanno la manovra ai capolinea con lo scambio (discesa, fondo del
   binario, cambio cabina, fermata di partenza) invece di saltare sull'altro binario: `TramSim.turnAt`, `termBusy`,
   `termLimit` e `lanePoint`, che sposta il tram sulla comunicazione con `TramTrack.terminalOff` (nuovo, accanto a

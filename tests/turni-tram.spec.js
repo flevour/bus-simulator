@@ -355,3 +355,38 @@ test('B a metà linea: in Esplorazione e in servizio', async ({ pagina, gioco })
   expect([servizio.facing, servizio.stessa, servizio.ferme < 0.1, servizio.nav, servizio.indietro > 2, servizio.diNuovo], testo).toEqual([-1, true, true, 'Cambia cabina (B)', true, 1]);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Turni di chi guida il tram: gli stessi dei tram automatici, senza i tratti in cui il GTFS spezza ogni viaggio del
+// SIR1. Prima, a Pontevigodarzere, la corsa dopo del turno poteva essere un tratto (→ Stazione FS, → Santo) invece
+// della corsa intera per la Guizza (dalle 7 alle 18 ci sono solo corse intere; la sera anche corse corte vere, fino a
+// Cavalletto). Un tratto scelto dal menu sta nel turno della corsa intera: prosegue con la sua corsa dopo se finisce al
+// capolinea, altrimenti è l'ultima
+test('turni del tram di chi guida: corse intere, come i tram automatici, e i tratti nel turno della corsa intera', async ({ pagina, gioco }) => {
+  await avviaCorsa(pagina, { linea: 'SIR1', tram: true });
+  const r = await pagina.evaluate(() => {
+    const g = window.__game, L = g.settings.line, sim = g.trams.runs.filter((x) => x.line === L);
+    const nome = (v) => `${v.stops[0].name} → ${v.stops[v.stops.length - 1].name}`;
+    const out = { diverse: 0, dopo: new Set(), tratti: [] };
+    for (const v of L.variants) for (const { t } of v.feriale) {
+      const tn = g.turnoOf(L, 'feriale', v, t);
+      if (!tn) continue;
+      const nx = tn.run.next;
+      if (nx && t > 7 * 3600 && t < 18 * 3600) out.dopo.add(nome(nx.v));
+      // la stessa corsa nei tram automatici ha la stessa corsa dopo
+      const s = !tn.run.per && sim.find((x) => x.v === v && x.t === t);
+      if (s && ((s.next && s.next.v) !== (nx && nx.v) || (s.next && s.next.t) !== (nx && nx.t))) out.diverse++;
+      if (tn.run.per && t > 8 * 3600 && t < 8.5 * 3600) out.tratti.push({ tratto: nome(v), finisceInsieme: nome(v).endsWith(tn.run.per.v.stops[tn.run.per.v.stops.length - 1].name), ultima: tn.last, dopo: nx ? nome(nx.v) : null, nDiOf: tn.n <= tn.of });
+    }
+    out.dopo = [...out.dopo].sort();
+    return out;
+  });
+  const testo = JSON.stringify(r);
+  expect(r.diverse, testo).toBe(0);
+  expect(r.dopo, testo).toEqual(['Guizza Capolinea → Pontevigodarzere', 'Pontevigodarzere → Guizza Capolinea']);
+  expect(r.tratti.length, testo).toBeGreaterThan(4);
+  for (const x of r.tratti) {
+    expect(x.nDiOf, testo).toBe(true);
+    expect(x.ultima, testo).toBe(!x.finisceInsieme || x.dopo == null);
+  }
+  expect(gioco.errori()).toEqual([]);
+});
