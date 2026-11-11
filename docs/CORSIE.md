@@ -294,14 +294,25 @@ Prossimo lavoro, in quest'ordine:
   SIR3 sono in costruzione). Il gruppo 1b (SIR2) si pubblica solo se è a un passo; altrimenti resta sul ramo locale e
   si riprende dopo. Poi, in ordine, il caricamento per aree e il gruppo 2 per tutte le linee; la scritta "(tratto in
   città)" del capolinea si toglie linea per linea, quando la linea arriva al capolinea vero;
-- gruppo 1b, SIR2 fino a Rubano e alla Busa di Vigonza: 173 celle nuove (10,8 km², stima 3-4 MB di mappa). Servono gli
-  export fuori dal riquadro di oggi: nodi OSM (`scripts/overpass-nodes.ql` sul corridoio), paline (Overture
-  `base/infrastructure`), edifici Overture, DTM, DBGT dei lotti di Rubano e Vigonza o le misure della sezione 3 del
-  piano; i rami di Romagnoli e San Lazzaro se OSM ha i binari;
+- gruppo 1b, SIR2 fino a Rubano e alla Busa di Vigonza: **deciso l'11 novembre di non pubblicarlo ora**, è sul ramo
+  locale `corsia/capolinea-sir2` del worktree `capolinea` (commit `fd9f1a5`, mappa da rigenerare). Non era a un passo:
+  - fatti i dati: strade e segnaletica OSM delle due teste in `data/osm-corridoio.json`
+    (`scripts/overpass-corridoio.ql`, `scripts/filter_osm_corridoio.py`), paline ed edifici Overture, terreno allargato
+    (`dtm_grid.py --riquadro --come`, le celle di oggi restano uguali; DTM regionale con una richiesta WPS
+    `ras:CropCoverage` su `rv:DTM_RV_5m_3003`). Tutte le 35 fermate del SIR2 hanno una strada a meno di 120 m, quindi
+    nel gioco sarebbe intero; la 10 arriverebbe intera a Sarmeola e a Ponte di Brenta, 6, 7 e 25 più avanti;
+  - aggancio: i tracciati che escono dall'area e ci rientrano (la 22 da Torre, nel corridoio, per Via Madonna del
+    Rosario che è fuori) si agganciavano con un giro dentro l'area e venivano scartati (22 da e per Torre, 2 Diretto
+    Piazze). Sul ramo il tracciato si divide nei pezzi dentro l'area (`area_pieces`) e si aggancia quello con più
+    fermate: 22 e 2 tornano come prima, ma la 25 circolare sceglie il pezzo sbagliato (perde 9 fermate in centro) e la
+    19 perde Roma 35/88. Servirà anche agli autobus del gruppo 2;
+  - mancano le verifiche (regola 3, giri e foto ai capolinea) e il DBGT di Rubano e Vigonza (vale la sezione 3 del
+    piano). La mappa arriverebbe a 17,7 MB (terreno 2,2 MB invece di 0,8): spazio tolto agli autobus prima del
+    caricamento per aree. Si riprende dopo il gruppo 2, con il caricamento per aree già fatto;
 - binari del deposito di Voltabarozzo (OSM `service=yard`, in `data/osm-padova-tram-cantiere.json`): non disegnati, li
   può prendere la corsia `tram-turni` con il deposito della Guizza;
 - caricamento per aree (onda 3, sezione 4 di `ESTENSIONE_LINEE.md`), **prima del gruppo 2**: deciso l'11 novembre.
-  Con il SIR2 la mappa arriva a circa 17 MB; gli autobus fino ai capolinea la porterebbero a 25-35 MB. Prima la rete
+  Con il SIR2 la mappa arriverebbe a 17,7 MB; gli autobus fino ai capolinea la porterebbero a 25-35 MB. Prima la rete
   sempre caricata e le aree in `public/` (pipeline), poi `city.js`. Quando si arriva a `city.js` lo si scrive qui: da
   lì le altre corsie non toccano `city.js` finché il lavoro non è su `main`;
 - gruppo 2, autobus (24 a Mandriola per prima), con i limiti di `build_gtfs.load` (10 varianti per linea, 9 km) da

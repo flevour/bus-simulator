@@ -210,7 +210,7 @@ Capolinea che sono già nella mappa (entro 60 m dalla rete) ma fuori dalle corse
 | Gruppo | Cosa | Stato |
 |---|---|---|
 | 1a | SIR3 fino a Voltabarozzo, con i due rami e il deposito | fatto il 9 novembre |
-| 1b | SIR2 fino a Rubano e alla Busa di Vigonza; rami di Romagnoli e Ospedale San Lazzaro se OSM ha i binari | da fare |
+| 1b | SIR2 fino a Rubano e alla Busa di Vigonza; rami di Romagnoli e Ospedale San Lazzaro se OSM ha i binari | sul ramo locale `corsia/capolinea-sir2`, dopo il gruppo 2 (11 novembre: prima gli autobus) |
 | 2 | autobus, dai capolinea più usati e da quelli segnalati (Volta fr. 24 e Mandriola sulla 24, salti ad Altichiero e Saletto) | da fare |
 
 **Gruppo 1a.** In `build_map.py` l'area comprende i corridoi di celle da 250 m attorno ai binari completi delle linee di
@@ -237,5 +237,10 @@ l'altra no.
 **Gruppo 1b, cosa serve.** Il corridoio del SIR2 aggiunge 173 celle (10,8 km², da lon 11,772 a 11,958): in proporzione
 al SIR3 circa 3-4 MB di mappa, quindi 17 MB circa, sotto il limite di 20 MB. Fuori dal riquadro di oggi mancano
 l'export dei nodi OSM (semafori e cartelli) e delle paline (strato Overture `base/infrastructure`), gli edifici
-Overture, il DTM e il DBGT di Rubano e Vigonza (altri lotti); l'export delle strade `data/osm-padova.json` arriva già
-fin là.
+Overture, il DTM e il DBGT di Rubano e Vigonza (altri lotti). L'export delle strade `data/osm-padova.json` arriva a est
+fino a Vigonza ma a ovest solo fino a lon 11,81: Rubano no.
+
+**Gruppo 1b, stato (11 novembre).** Sul ramo locale `corsia/capolinea-sir2` (dettagli in `docs/CORSIE.md`, sezione
+`capolinea`): dati del corridoio fatti, 166 celle nuove (10,4 km²), mappa a 17,7 MB, SIR2 intero. Prima di pubblicare:
+la scelta del pezzo di tracciato dentro l'area per le linee che escono e rientrano (la 25 circolare, la 19), le
+verifiche e i giri ai capolinea. Rimandato dopo il gruppo 2: prima gli autobus.
