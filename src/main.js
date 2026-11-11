@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildNetwork, LINES, TRAM_LINES, fmtHM, toXZ, LANDMARKS } from './data/padova.js';
 import { loadAreasNear } from './data/aree.js';
-import { Tram, tramRoute, TRAM } from './tram/tram.js';
+import { Tram, tramRoute, TRAM, TramNet } from './tram/tram.js';
 import { City, zoneOf } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
 import { BusSim } from './world/buses.js';
@@ -473,18 +473,54 @@ function tramNav() {
   const tail = bus.pathOffset + bus.sFront - bus.length, need = Math.max(1, (term.field === 'arr' ? term.heel : term.link) - tail + 1);
   return { dist: need, dir: 'straight', text: `Avanti ${Math.ceil(need)} m: tutto il tram oltre lo scambio`, street: 'Poi cambia cabina (B)' };
 }
-// Tram: lo scambio del capolinea più vicino (entro 120 m) nell'altra posizione. In servizio si gira da solo; non si gira
-// mentre il tram ci passa sopra
+// Tram: N gira lo scambio più vicino davanti al tram: un bivio tra le linee preso di punta sul binario, entro 250 m
+// (TramNet), o lo scambio del capolinea entro 120 m. In servizio si girano da soli; non si girano mentre il tram ci passa
 function toggleTramSwitch() {
+  let jn = null, jd = 250;
+  const sf = bus.pathOffset + bus.sFront, fw = bus.facing > 0;
+  for (const { j, s } of city.tramNet ? city.tramNet.on(bus.track, bus.dirSig) : []) {
+    const d = fw ? s - sf : sf - s;
+    if (TramNet.facing(j, fw) && d >= 0 && d < jd) { jd = d; jn = j; }
+  }
   let sw = null, bd = 120;
   for (const w of city.tramSwitches || []) { const d = Math.hypot(w.term.sig.x - bus.x, w.term.sig.z - bus.z); if (d < bd) { bd = d; sw = w; } }
-  if (!sw) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
-  if (!mission.free) { hud.toast('In servizio lo scambio del capolinea si gira da solo', 'info'); return; }
+  if (!jn && !sw) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
+  if (!mission.free) { hud.toast('In servizio gli scambi si girano da soli, secondo la linea', 'info'); return; }
+  if (jn && (!sw || jd < bd)) {
+    jn.state = jn.state === 'x' ? 'o' : 'x';
+    jn.manual = true;
+    jn.sign.update();
+    audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
+    hud.toast(`${jn.state === jn.dev ? '↗️' : '⬆️'} Bivio tra ${Math.round(jd)} m: verso il binario del ${jn.name(jn.state)}`, 'info');
+    return;
+  }
   if (bus.xover === sw.term || (bus.xend === sw.term && bus.pathOffset + bus.sFront > sw.term.toe - 1)) { hud.toast('Scambio bloccato: il tram ci sta passando', 'bad'); return; }
   sw.term.state = sw.term.state === 'deviato' ? 'diritto' : 'deviato';
   sw.update();
   audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
   hud.toast(sw.term.state === 'deviato' ? '↗️ Scambio deviato: col cambio cabina si passa sull\'altro binario' : '⬆️ Scambio diritto: col cambio cabina si resta sul binario', 'info');
+}
+// Bivi tra le linee (TramNet), ogni mezzo secondo: si mettono da soli per il tram più vicino che ci arriva (entro 150 m):
+// in servizio quello di chi gioca o uno automatico, ognuno sul binario della sua linea; in Esplorazione e Giro libero
+// quello di chi gioca, finché non si gira il bivio con N (poi resta com'è)
+let junctionT = 0;
+function updateJunctions(dt) {
+  if (!city.tramNet || (junctionT -= dt) > 0) return;
+  junctionT = 0.5;
+  const free = mission.free, who = [];
+  if (bus.isTram) who.push({ T: bus.track, dir: bus.dirSig, s: bus.pathOffset + bus.sFront, fw: bus.facing > 0 });
+  if (!free) for (const tr of trams.trams) who.push({ T: tr.track, dir: tr.dir, s: tr.s, fw: true });
+  for (const j of city.tramNet.junctions) {
+    if (free && j.manual) continue;
+    let best = null, bd = 150;
+    for (const w of who) for (const role of ['x', 'o']) {
+      const r = j[role];
+      if (r.T !== w.T || r.dir !== (w.dir > 0 ? 1 : -1)) continue;
+      const d = w.fw ? r.s - w.s : w.s - r.s;
+      if (d > -5 && d < bd) { bd = d; best = role; }
+    }
+    if (best && best !== j.state) { j.state = best; j.sign.update(); }
+  }
 }
 function refreshSwitch(term) { for (const w of city.tramSwitches || []) if (w.term === term) w.update(); }
 function setSwitch(term, state) { if (term.state !== state) { term.state = state; refreshSwitch(term); } }
@@ -1073,6 +1109,13 @@ function startMission(resume = null) {
     V.trackPath = tr.path;
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
+    // fuori servizio i bivi tra le linee portano il tram sull'altro binario (TramNet); in servizio la corsa resta sul suo
+    bus.net = settings.mode !== 'service' ? city.tramNet : null;
+    bus.onJunction = (o) => {
+      const ln = TRAM_LINES.find((x) => x.id === o.T.id), st = o.T.stopsDir[o.dir];
+      hud.setLine({ id: o.T.id, color: ln ? ln.color : L.color }, settings.mode === 'roam' ? 'Esplorazione' : 'Giro libero');
+      hud.toast(`🔀 Bivio: sei sul binario del ${o.T.id}${st.length ? ' verso ' + st[st.length - 1].name : ''}`, 'info');
+    };
     // in servizio gli scambi dei capolinea si mettono da soli per l'arrivo: diritto dove si passa sull'altro binario
     // dopo il cambio cabina (lo si gira con B), deviato dove si passa prima. In Esplorazione e Giro libero si comincia
     // con tutti deviati, come li lascia la manovra
@@ -1098,6 +1141,9 @@ function startMission(resume = null) {
   const after = bus.isTram && nextOfTurno();
   if (after && after.next) trams.exclude({ v: after.next.v, t: after.next.t });
   cabAfterDoors = false;
+  // bivi tra le linee: verso la linea della corsa, nessuno girato a mano (i tram automatici li rimettono per sé)
+  for (const j of city.tramNet ? city.tramNet.junctions : []) { j.manual = false; j.state = j.o.T.id === L.id && j.x.T.id !== L.id ? 'o' : 'x'; j.sign.update(); }
+  junctionT = 0;
   if (!mission.transfer) mission.dest = destName;
   const st0 = mission.stops[0];
   if (mission.transfer) {
@@ -1694,6 +1740,7 @@ function step(dt) {
   }
   lights.update(dt);
   trams.update(dt, [bus, ...buses.parts, ...(traffic ? traffic.cars : [])], mission.clock);
+  updateJunctions(dt);
   // incroci col tram: chiamata dei tram in arrivo, segnali a barre, precedenza delle auto
   tramSignals.update(dt, tramOccupancy(), traffic, bus);
   if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, x.ap ? '🚦 Passato col rosso!' : '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');

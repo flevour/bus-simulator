@@ -793,6 +793,18 @@ In quest'ordine:
    scambio più vicino davanti al tram, anche tra le linee. Ogni scambio si vede, col segnale della posizione. I tram
    automatici seguono la stessa rete (oggi al capolinea saltano ancora sull'altro binario). Prove: in Esplorazione uno
    scambio girato porta il tram sull'altro ramo, in servizio ogni linea resta sul suo percorso.
+
+   **Fatti i bivi tra le linee l'11 novembre** (IDEE, "Fatto"). `TramNet` in `tram.js` (accanto a `TramTrack`, costruita
+   in `buildTramway`, `city.tramNet`): un bivio per capo di ogni tratto in comune di `TramTrack.shared` dove il tram più
+   lungo ci sta tutto (10 bivi: SIR2 su SIR1 e su SIR3 nei due versi, il ritorno del SIR3 sull'andata in stazione; fuori
+   gli incroci da 9-27 m tra gli anelli). Il tram di chi gioca, fuori servizio (`bus.net`), lo prende di punta in
+   `Tram.checkJunctions` e passa sull'altro binario con `switchTo` (anche cambio di `track`); in servizio la corsa resta
+   sul suo percorso. Posizione: `updateJunctions` in `main.js` ogni mezzo secondo, per il tram più vicino che ci arriva
+   entro 150 m (in servizio anche quelli automatici, dalla loro `track`, `dir` e `s`); N (`toggleTramSwitch`) gira il
+   bivio più vicino davanti al tram entro 250 m o lo scambio del capolinea entro 120 m. I tram automatici non cambiano
+   linea: seguono il loro binario, e i bivi si mettono per loro. Gli scambi dei capolinea restano `TramTrack.terminal`
+   (con la manovra dei tram automatici di `tram-turni`): passarli nella stessa rete serve ai depositi, ed è il prossimo
+   passo con la Guizza.
 3. **Deposito della Guizza**, primo caso della rete: i binari di servizio sono già nell'export
    `data/osm-padova-tram.json` (`service=yard`, 35 binari, alcuni `tunnel=building_passage` dentro la rimessa) e il
    gioco non li usa; anello di ritorno, ventaglio di 8-9 binari e anello esterno dallo schema OSM (foto 24); binario

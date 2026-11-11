@@ -20,10 +20,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      `service=yard`, Busitalia Veneto, verso 45.3670, 11.8756), alcuni dentro la rimessa (`tunnel=building_passage`),
      e sono già nell'export `data/osm-padova-tram.json` (35 binari di servizio), da vedere se il gioco li usa. Il
      binario tronco "che entra in un edificio" è forse l'ingresso della rimessa: da verificare;
-   - [ ] **girare nei depositi con gli scambi** (chiesto l'11 novembre): rete dei binari con i bivi, dove il tram di chi
+   - [~] **girare nei depositi con gli scambi** (chiesto l'11 novembre): rete dei binari con i bivi, dove il tram di chi
      gioca prosegue sul ramo su cui è messo lo scambio (in servizio da soli secondo la linea, in Esplorazione e Giro
-     libero con N, anche tra le linee); poi i binari di servizio della Guizza (già nell'export OSM, il gioco non li
-     usa), Voltabarozzo e Rubano. Corsia `tram-scambi`;
+     libero con N, anche tra le linee): fatti i bivi tra le linee (vedi "Fatto"); restano i binari di servizio della
+     Guizza (già nell'export OSM, il gioco non li usa), Voltabarozzo e Rubano. Corsia `tram-scambi`;
    - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
 2. [~] **Nuovo piazzale della stazione e linee SIR2, SIR3**: grafo dei binari con i due anelli e le due linee nel
    gioco per il tratto in città fatti (vedi "Fatto"; dettagli in [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md)).
@@ -263,6 +263,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Bivi tra le linee del tram** (corsia `tram-scambi`, 11 novembre): dove il SIR2 corre sui binari del SIR1 e del
+  SIR3 (e il ritorno del SIR3 sul binario d'andata in stazione) ai capi del tratto in comune c'è un bivio con una
+  posizione e il segnale con la freccia (`TramNet` in `src/tram/tram.js`, segnali in `buildTramway`). Il tram di chi
+  gioca che prende un bivio di punta (in avanti dove i binari si separano, all'indietro dopo il cambio cabina dove si
+  uniscono) prosegue sul ramo su cui è messo: passa sul binario dell'altra linea negli ultimi metri prima della
+  separazione, dove i due binari coincidono, senza spostarsi. In servizio i bivi si mettono da soli per il tram più
+  vicino che ci arriva (quello di chi gioca o uno automatico, ognuno sulla sua linea); in Esplorazione e Giro libero N
+  gira il bivio più vicino davanti al tram (o lo scambio del capolinea, se è più vicino) e i bivi non girati seguono
+  chi gioca. Restano fuori gli incroci tra gli anelli della stazione (tratti in comune da 9-27 m, il tram non ci sta).
+  Prove in `tests/bivi-tram.spec.js`.
 - [x] **Bus automatici in anticipo che andavano a passo d'uomo** (segnalazione di chi gioca, corsia `traffico`, 11
   novembre: "in Prato della Valle a 20 all'ora"): rallentavano fino a 18 km/h per arrivare in orario ed erano quasi
   sempre in anticipo. Ora vanno al più il 15% sotto il limite e l'anticipo lo recuperano aspettando in fermata (in

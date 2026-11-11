@@ -5,7 +5,7 @@ import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
 import { LINES, TRAM_LINES, laneLayout, laneSpan, parseBuilding } from '../data/padova.js';
 import { AREA_SIZE, AREA_KEYS, areaData, requestArea, dropArea, areaKeysNear, loadAllAreas } from '../data/aree.js';
-import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, tramLength } from '../tram/tram.js';
+import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, TramNet, tramLength } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 import { applyTerrain } from './terrain.js';
 
@@ -1435,6 +1435,18 @@ export class City {
       this.tramSwitches.push(this.switchSign(t));
     }
     redS.uv.fill(0.5);
+    // bivi tra le linee (TramNet), ognuno col segnale della posizione per chi lo prende di punta. Il segnale sta a destra
+    // di chi arriva, qualche metro prima del bivio; in stazione, dove i binari sono fitti, il primo posto a 2,3 m da ogni
+    // binario, a destra o a sinistra
+    this.tramNet = new TramNet(tracks);
+    const lanes = tracks.flatMap((T) => [T.path(1), T.path(-1)]);
+    const free = (x, z) => !lanes.some((P) => P.projectNear(x, z, L + 0.6));
+    for (const j of this.tramNet.junctions) {
+      const s = j.panel.sig, w = L + 0.9, bx = s.x + s.dx * 4 + s.dz * w, bz = s.z + s.dz * 4 - s.dx * w; // il punto sul binario
+      const spot = [4, 7, 10, 2, 13].flatMap((a) => [w, -w, w + 0.8, -w - 0.8].map((l) => ({ x: bx - s.dx * a - s.dz * l, z: bz - s.dz * a + s.dx * l }))).find((p) => free(p.x, p.z));
+      if (spot) Object.assign(s, spot);
+      j.sign = this.switchSign(j.panel);
+    }
     const tex = TX.tramLaneTexture();
     if (redS.pos.length) this.group.add(new THREE.Mesh(redS.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 4.5)));
     const rm = new THREE.Mesh(red.build(), layer(new THREE.MeshLambertMaterial({ map: tex }), 5));

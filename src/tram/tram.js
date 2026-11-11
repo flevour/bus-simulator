@@ -386,6 +386,52 @@ export class TramTrack {
     return h[i] + ((h[Math.min(h.length - 1, i + 1)] ?? h[i]) - h[i]) * t;
   }
 }
+// ---------- rete dei binari: i bivi tra le linee ----------
+// Nei tratti in comune (TramTrack.shared) il binario di una sede corre sopra quello di una sede già posata, con la stessa
+// geometria; ai capi c'è un bivio dove i due binari si separano ('diramazione', andando avanti) o si uniscono ('unione').
+// Il bivio ha una posizione: il binario su cui prosegue il tram che lo prende di punta (in avanti le diramazioni,
+// all'indietro le unioni, dopo un cambio cabina); di calcio si resta sul proprio. Il tram passa sull'altro binario poco
+// prima del punto di separazione, dove i due coincidono: non si sposta (Tram.checkJunctions). Solo i tratti dove il
+// tram più lungo ci sta tutto: quelli da 9-27 m sono incroci tra gli anelli della stazione.
+// Ogni bivio: kind, x e o (i due binari: { T, dir, s }), state ('x' o 'o'), dev (il ramo che devia), manual (girato con
+// N), panel (per il segnale: sig, side, state 'deviato'/'diritto'), name(ruolo) (linea e capolinea del ramo)
+export class TramNet {
+  constructor(tracks) {
+    this.junctions = [];
+    this.byPath = new Map(); // 'SIR1:1' -> [{ j, role, s }]
+    const len = Math.max(...tracks.flatMap((T) => T.lines.map((ln) => tramLength(ln.modules || 3))));
+    for (const T of tracks) for (const sw of T.switches) {
+      const d = sw.dir > 0 ? 1 : -1, sh = T.shared[d].find(([a, b]) => Math.abs(a - sw.s) < 1 || Math.abs(b - sw.s) < 1);
+      const O = tracks.find((t) => t.id === sw.other.id);
+      if (!sh || !O || sh[1] - sh[0] < len + 10) continue;
+      const j = { kind: sw.kind, x: { T, dir: d, s: sw.s }, o: { T: O, dir: sw.other.dir > 0 ? 1 : -1, s: sw.other.s }, state: 'x', manual: false };
+      // verso di chi lo prende di punta e i due rami 15 m oltre: devia quello che si scosta di più dalla retta
+      const fw = j.kind === 'diramazione' ? 1 : -1, P = T.path(d), p = P.at(sw.s), ax = p.dx * fw, az = p.dz * fw;
+      const lat = (r) => { const q = r.T.path(r.dir).at(r.s + 15 * fw); return (q.x - p.x) * -az + (q.z - p.z) * ax; };
+      const lx = lat(j.x), lo = lat(j.o);
+      j.dev = Math.abs(lx) > Math.abs(lo) ? 'x' : 'o';
+      j.panel = {
+        // segnale a destra di chi arriva, 4 m prima del punto di separazione
+        sig: { x: p.x - ax * 4 - az * (TRAM.lane + 0.9), z: p.z - az * 4 + ax * (TRAM.lane + 0.9), dx: ax, dz: az },
+        side: (j.dev === 'x' ? lx : lo) > 0 ? 1 : -1,
+        get state() { return j.state === j.dev ? 'deviato' : 'diritto'; },
+      };
+      j.name = (role) => { const r = j[role], st = r.T.stopsDir[r.dir]; return `${r.T.id}${st.length ? ' per ' + st[st.length - 1].name : ''}`; };
+      this.junctions.push(j);
+      for (const role of ['x', 'o']) {
+        const k = TramNet.key(j[role].T, j[role].dir);
+        if (!this.byPath.has(k)) this.byPath.set(k, []);
+        this.byPath.get(k).push({ j, role, s: j[role].s });
+      }
+    }
+  }
+  static key(T, dir) { return T.id + ':' + (dir > 0 ? 1 : -1); }
+  // bivi sul binario (T, dir) con la progressiva s del bivio su quel binario
+  on(T, dir) { return this.byPath.get(TramNet.key(T, dir)) || []; }
+  // il bivio è preso di punta da chi va avanti (fw) sul binario?
+  static facing(j, fw) { return j.kind === 'diramazione' ? fw : !fw; }
+}
+
 function smoothLane(pts, k = 3, passes = 2, fixed = null) {
   const keep = fixed ? pts.map(fixed) : null;
   for (let pass = 0; pass < passes; pass++) {
@@ -853,6 +899,30 @@ export class Tram {
     this.aFwd = wasA === keepCab ? 1 : -1;
     this.setFront(sFront);
   }
+  // bivi della rete (this.net, TramNet: solo sul binario intero, fuori servizio) presi di punta: se il bivio è messo
+  // sull'altro binario il tram ci passa negli ultimi metri prima del punto di separazione, dove i due binari coincidono,
+  // con la stessa velocità e la stessa cabina. Il ramo preso ({ T, dir, s }), o null
+  checkJunctions() {
+    if (!this.net || this.pathOffset) return null;
+    const sf = this.sFront, fw = this.facing > 0;
+    for (const { j, role, s } of this.net.on(this.track, this.dirSig)) {
+      if (j.state === role || !TramNet.facing(j, fw)) continue;
+      const d = fw ? s - sf : sf - s;
+      if (d < -1 || d > 4) continue;
+      const o = j[role === 'x' ? 'o' : 'x'];
+      this.switchTo(o.T, o.dir, o.s + (sf - s));
+      return o;
+    }
+    return null;
+  }
+  // sul binario intero (dir) di un'altra sede, col muso a sFront: ogni cassa resta dov'è, velocità e cabina restano
+  switchTo(track, dir, sFront) {
+    const v = this.v;
+    this.track = track;
+    this.setPath(track.path(dir), dir, 0, null);
+    this.sA = this.facing === this.aFwd ? sFront : sFront + this.aFwd * this.length;
+    this.v = v;
+  }
   offAt(t) { return (this.xover && this.xover.off(t)) || (this.xend && this.xend.off(t)) || null; }
   // punto del percorso a s; sullo scambio del capolinea (il binario di partenza fino allo scambio corre su quello
   // d'arrivo) spostato verso il binario d'arrivo
@@ -1012,6 +1082,8 @@ export class Tram {
       }
     }
     this.sA += this.facing * this.v * dt;
+    const jn = this.checkJunctions();
+    if (jn && this.onJunction) this.onJunction(jn);
     // il convoglio resta sul percorso
     const sf = this.sFront;
     if (sf > this.path.len - 1 && this.facing > 0) { this.sA -= sf - (this.path.len - 1); this.v = 0; }
