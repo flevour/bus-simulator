@@ -834,6 +834,16 @@ In quest'ordine:
    progetto del 2022"; il lotto è già nelle celle del corridoio, `0856b09`); in OSM ci sono il lotto, la rimessa, le
    banchine e le comunicazioni, il resto si disegna dalla tavola e dalla foto del cantiere (foto 21).
 
+   **Fermo l'11 novembre, da decidere con chi gioca.** In OSM i binari del deposito non ci sono ancora; le cime dei due
+   tronchi (1453139695, 1453139696) puntano verso ovest, sull'angolo sud-est della rimessa, circa 100 m a est del suo
+   asse e 20 m a nord della testata sud, e quella di partenza va lasciata andando verso est-sud-est. Con la rimessa di
+   Overture (lunga da sud a nord, nella mappa come edificio pieno) un ingresso dalla testata sud non si raccorda ai
+   tronchi senza curve da 5 m di raggio; e i binari passerebbero dentro un edificio pieno (andrebbe tolto e sostituito
+   con `buildDepotShed`). Strade possibili: aspettare i binari in OSM; disegnare l'ingresso dal lato est della rimessa
+   (binari passanti trasversali o un ventaglio dal lato lungo); o usare la way OSM della rimessa (1453139704, 20 m più a
+   est e girata di 10°, non ancora negli export) al posto di quella di Overture. Una bozza di generatore con ventagli e
+   anello (`rubano()` per `tram_depositi.py`) è rimasta fuori dal repository.
+
 Verifiche: regola 3, guida con il pilota a ogni capolinea dei tram e nei depositi, foto dalla cabina agli scambi, tram
 automatici per 40 minuti senza blocchi. Il segnale dello scambio visto da dietro a Voltabarozzo (pannello nero) è una
 lanterna di `TramSignals`: corsia `traffico`.
