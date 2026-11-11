@@ -42,6 +42,11 @@ MANUAL = {
 }
 # fermate con la banchina a sinistra del verso di marcia: in stazione le banchine stanno dentro l'anello interno
 LEFT = {'Stazione nord', 'Stazione sud'}
+# fermate spostate lungo il binario, in metri nel verso di marcia: (linea, verso, fermata). A Voltabarozzo la fermata
+# d'arrivo di OSM sta sulla curva d'ingresso al capolinea (raggio 24-58 m fino a 112 m dalla fine del binario): con il
+# muso a fine banchina metà tram restava in curva (segnalazione dell'11 novembre). 33 m più avanti tram e banchina stanno
+# sul dritto, e oltre resta il binario tronco per lo scambio e il cambio cabina
+SPOSTA = {('SIR3', 'Voltabarozzo', 'Voltabarozzo'): 33}
 # corse per linea e verso: le fermate del KML in ordine (quelle con "*" sono i capolinea intermedi dei rami, saltati)
 KML_SKIP = {'Trieste', 'Stazione nord', 'Stazione sud'}
 LINES = [
@@ -181,6 +186,18 @@ def stazione(staz, full, pos, first, last):
     return new, s0, s_of(pos[last], s0) - s0
 
 
+def punto(path, pos, s):
+    """(lat, lon) del percorso (nodi lat, lon) a s metri dall'inizio."""
+    acc = 0.0
+    for a, b in zip(path, path[1:]):
+        l = math.dist(pos[a], pos[b])
+        if acc + l >= s and l > 0:
+            t = (s - acc) / l
+            return round(a[0] + (b[0] - a[0]) * t, 7), round(a[1] + (b[1] - a[1]) * t, 7)
+        acc += l
+    return path[-1]
+
+
 def headways(ogni):
     """Partenze (secondi dalla mezzanotte) per giorno: frequenza piena di giorno, meno la sera e di primo mattino."""
     bands = {
@@ -246,6 +263,11 @@ def main(osm, stops_json, out):
             st = [s for s in tp.stops_on(full, pos, osm_stops + manual_stops)
                   if s0 - 3 <= s['s'] <= s0 + Lp + 3 or (s['s'] < s0 and tp.norm(s['name']) & ends[0])
                   or (s['s'] > s0 + Lp and tp.norm(s['name']) & ends[1])]
+            for s in st:
+                d = SPOSTA.get((L['id'], headsign, s['name']))
+                if d:
+                    s['s'] += d
+                    s['lat'], s['lon'] = punto(full, pos, s['s'])
             st = [{'nome': s['name'], 's': round(s['s']), 'lat': s['lat'], 'lon': s['lon'], 'osm': s['name'] not in MANUAL,
                    'lato': -1 if s['name'] in LEFT else 1} for s in st]
             versi.append({'headsign': headsign, 'lunghezza': round(Lp), 'contromano': round(wrong), 'cantiere': round(building),

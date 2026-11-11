@@ -63,7 +63,9 @@ for (const c of [
     expect(r.prima2, testo).toBe(corsa.ultima);
     expect(r.partenza, testo).toBe(r.prossima);
     expect(r.partenza, testo).toBeGreaterThan(corsa.partenza);
-    expect(r.inZona, testo).toBe(true);
+    // in fondo al binario il tram riparte qualche decina di metri prima della banchina di partenza e ci arriva guidando
+    if (c.oltre) expect(r.muso > -60 && r.muso < 10, testo).toBe(true);
+    else expect(r.inZona, testo).toBe(true);
     expect(r.corse, testo).toBe(1);
     expect(r.riepilogo, testo).toBe(false);
     // la corsa nuova: salita alla prima fermata e guida fino alla seconda

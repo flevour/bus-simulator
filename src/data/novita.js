@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 85, d: '2026-11-11', t: 'SIR3 a Voltabarozzo: la banchina d\'arrivo del capolinea non è più sulla curva d\'ingresso. È più avanti, sul tratto dritto, di fronte a quella di partenza, e il tram ci sta tutto.' },
   { n: 84, d: '2026-11-11', t: 'Tram: dove i binari corrono in mezzo alla strada, i pali della linea aerea partono dai marciapiedi e il tirante passa sopra le corsie, come nel progetto. Dove i due binari sono separati dalle corsie delle auto, ognuno ha i pali dal suo lato e un braccio sopra il filo: nessun tirante passa sopra l\'altro binario. Molti meno pali sul bordo della sede rossa.' },
   { n: 83, d: '2026-11-11', t: 'Tram: al capolinea non si resta più incastrati se ci si ferma oltre la banchina. Anche fermi in fondo al binario si aprono le porte, scendono tutti e con B si riparte con la corsa dopo (fermarsi oltre la banchina costa qualche punto).' },
   { n: 82, d: '2026-11-11', t: 'Tram: in stazione i binari sono due anelli regolari, uno dentro l\'altro, come nel progetto del piazzale. Alla banchina di Stazione sud il binario accanto corre dritto e parallelo, la curva dove il SIR3 entra nell\'anello arrivando da Pace è morbida, e all\'uscita delle banchine i binari non si intrecciano più: ci sono solo gli scambi a S tra un anello e l\'altro.' },

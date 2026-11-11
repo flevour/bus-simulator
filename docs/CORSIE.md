@@ -473,7 +473,13 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   il punto di fermata, la zona della fermata arrivava a 10 m. Fermo più avanti il capolinea non si serviva, il tram non
   poteva né proseguire né tornare indietro e B chiedeva di far scendere tutti. Fuori dai miei file, piccolo: in
   `mission.js` al capolinea del tram la zona arriva fino alla fine del binario, e chi si ferma oltre la banchina perde
-  10 punti come chi si ferma troppo indietro. Prova in `tests/turni-tram.spec.js` ("in fondo al binario").
+  10 punti come chi si ferma troppo indietro. Prova in `tests/turni-tram.spec.js` ("in fondo al binario": capolinea
+  servito in fondo al binario, B, ripartenza fino alla banchina di partenza). La seconda foto di Voltabarozzo ("mi
+  blocco qui e non riesco a invertire la rotta", in fondo oltre la banchina) è lo stesso caso.
+- **Banchina d'arrivo di Voltabarozzo in curva** (foto dell'11 novembre, "spostiamola in là"): la fermata OSM stava
+  sulla curva d'ingresso (raggio 24-58 m fino a 112 m dalla fine del binario). In `tram_linee.py` `SPOSTA` la porta 33 m
+  più avanti, sul dritto di fronte a quella di partenza. La mappa non cambia (`build_map.py` e `aree_mappa.py` leggono
+  solo i percorsi di `tram-linee-nuove.json`, non le fermate).
 - **Binari della stazione**: fatto l'11 novembre (IDEE, "Fatto"; [`linee-tram-nuove.md`](linee-tram-nuove.md),
   "Binari della stazione"). Fuori dai miei file, piccoli: in `build_map.py` i binari del SIR1 passano da
   `scripts/tram_stazione.py` (`stazione_xz`, dopo `tram_lane`) e la rete ha la chiave `tramStazione`; in
