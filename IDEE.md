@@ -93,6 +93,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [ ] linee del bus allungate fino ai capolinea del GTFS, con tracciato e orario interi (la 24 da Mandriola oggi
        parte da Volta fr. 24), corsia `capolinea`;
      - [ ] tram incastrato al capolinea di Voltabarozzo (SIR3, 13/13 a 0 m), corsia `tram-turni`;
+     - [ ] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`;
      - [ ] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
        manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`);
      - [x] mappa grande (M) da trascinare per spostarsi (vedi "Fatto");

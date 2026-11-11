@@ -373,6 +373,13 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
     bus; i bus aspettano dietro il tram fermo alla sua fermata (anche 40 s se è in anticipo) e alla fermata dei bus
     (x -30, z 260) bus e tram si sovrappongono (dati della corsia `mappa`);
   - alla fermata Ponti Romani 68, sul binario, tre bus di fila fanno aspettare il tram dietro anche un minuto.
+- **Subito, il semaforo del tram che non diventa mai verde** (foto di chi gioca dell'11 novembre, `images/16.png` della
+  sessione del checkout principale): SIR3 verso Voltabarozzo, alle 8:31 di gioco, fermata 2/13 "Pace" a 57 m. Il tram è
+  fermo prima dell'incrocio dove i binari si dividono verso Pace, con le lanterne del tram a via impedita, e il verde non
+  arriva mai. Riprodurre (corsa del SIR3 dalla stazione), trovare chi tiene il rosso (fase dei semafori stradali,
+  occupazione di un tratto da parte di un altro tram o di un bus, coordinamento nuovo di Tito Livio), correggere e
+  aggiungere una prova: su tutte le lanterne del tram il verde arriva entro un ciclo. Se la causa è nei binari o in
+  `TramSim`, insieme a `tram-turni`.
 - **Subito dopo, gli incroci tra traffico e tram** (chiesto da chi gioca l'11 novembre): se il tram ha il passaggio,
   auto e bus si fermano prima della sede; se lo ha la strada, il tram si ferma. Vale per i tram automatici e per
   quello di chi gioca, per i bus automatici e per le auto. Ai semafori vuol dire coordinare `TramSignals` con
