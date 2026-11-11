@@ -323,10 +323,11 @@ function loadSteerSens() {
 }
 const settings = { line: L24, variant: 'feriale', vIdx: L24.pair[0], departure: 0, depDur: 0, weather: 'variable', mode: 'service', livery: 'moderna', vehicle: 'bus', lightHour: null, fromDepot: true, steerSens: loadSteerSens() };
 // modalità: servizio di linea, giro libero (regole della strada) o esplorazione (nessuna regola, il tram non deraglia)
+const FREE_VMAX = 120; // km/h al limitatore fuori servizio (giro libero, esplorazione)
 const MODE_NOTE = {
   service: 'Corsa con orario, fermate, passeggeri e punteggio.',
-  free: 'Niente orari né fermate; valgono semafori, limiti e marciapiedi.',
-  roam: 'Nessuna regola né punteggio: niente linea, limiti o semafori da rispettare, e il tram non deraglia.',
+  free: 'Niente orari, fermate né traffico, e il mezzo arriva a 120 km/h; valgono semafori, limiti e marciapiedi.',
+  roam: 'Nessuna regola né punteggio e niente traffico: niente linea, limiti o semafori da rispettare, il mezzo arriva a 120 km/h e il tram non deraglia.',
 };
 let indAccum = 0, lastBlinkOn = false, wasMoving = false;
 let showHelp = false;
@@ -975,9 +976,13 @@ function startMission(resume = null) {
   mission = tn && tn.first && settings.fromDepot && canLeaveDepot(V) ? depotExit(V) : null;
   if (!mission) mission = new Mission({ ...missionCommon(), route: V, departure: settings.departure, depDur: settings.depDur, free: settings.mode !== 'service', roam: settings.mode === 'roam' });
   bus.noDerail = settings.mode === 'roam';
+  // fuori servizio (giro libero, esplorazione) il limitatore arriva a 120 km/h e non c'è traffico simulato: niente auto,
+  // bus e tram automatici
+  const service = settings.mode === 'service';
+  bus.vmax = service ? bus.vmaxService : FREE_VMAX;
   // tram automatici: quelli in servizio all'ora della corsa secondo l'orario GTFS; la corsa che guida il giocatore
   // non ha un gemello automatico
-  trams.setService(TRAM_LINES, settings.variant, bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
+  trams.setService(service ? TRAM_LINES : [], settings.variant, bus.isTram && service ? { v: V, t: settings.departure } : null);
   // e nemmeno quella dopo del turno, che al capolinea parte con B
   const after = bus.isTram && nextOfTurno();
   if (after && after.next) trams.exclude({ v: after.next.v, t: after.next.t });
@@ -1005,13 +1010,13 @@ function startMission(resume = null) {
   if (resume) applySave(resume);
   city.ensureTiles(bus.x, bus.z, 650);
   // bus automatici: le corse in servizio a quell'ora (non quella del giocatore), prima delle auto che li evitano
-  buses.setService(LINES, settings.variant, !bus.isTram && settings.mode === 'service' ? { v: V, t: settings.departure } : null);
+  buses.setService(service ? LINES : [], settings.variant, !bus.isTram && service ? { v: V, t: settings.departure } : null);
   buses.schedule(mission.clock, bus);
   buses.updateParts();
   lights.time = mission.clock;
   const hour = (settings.departure / 3600) % 24;
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
-  const count = Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1));
+  const count = service ? Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1)) : 0;
   traffic = new Traffic(scene, net, city, lights, { count, seed: Math.floor(settings.departure) });
   traffic.bigs = buses.buses;
   walkers = new Walkers(scene, net, Math.round(140 * (settings.variant === 'festivo' ? 1.2 : 1) * (hour > 21 || hour < 6.5 ? 0.3 : 1)), city);

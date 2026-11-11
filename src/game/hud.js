@@ -161,7 +161,8 @@ export class HUD {
       c.fillText(unit, 0, r * 0.45 + 16);
       c.restore();
     };
-    dial(80, 80, 66, bus.speedKmh, 80, 5, Math.round(bus.speedKmh), 'km/h', '#ff7043');
+    const top = bus.vmax > 80 ? 120 : 80; // scala più lunga fuori servizio, dove il limitatore arriva a 120
+    dial(80, 80, 66, bus.speedKmh, top, top > 80 ? 10 : 5, Math.round(bus.speedKmh), 'km/h', '#ff7043');
     if (bus.isTram) dial(W - 80, 80, 66, Math.max(0, bus.powerKw), 500, 50, bus.powerKw < -2 ? 'REC' : bus.wired ? 'T' : 'BAT', 'kW', bus.powerKw < -2 ? '#66bb6a' : bus.wired ? '#4fc3f7' : '#ffb74d');
     else if (bus.electric) dial(W - 80, 80, 66, Math.max(0, bus.powerKw), 200, 25, bus.dir < 0 ? 'R' : bus.powerKw < -2 ? 'REC' : 'E', 'kW', bus.powerKw < -2 ? '#66bb6a' : '#a6d22e');
     else dial(W - 80, 80, 66, bus.rpm, 2500, 250, bus.dir < 0 ? 'R' : bus.speedKmh < 0.5 && bus.throttle < 0.05 ? 'D' : 'D' + bus.gear, 'rpm', '#4fc3f7');

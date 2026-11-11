@@ -37,3 +37,30 @@ test('il tram ferma a tutte le fermate, senza prenotazione', async ({ pagina, gi
   expect(stato.riquadro).toBe(true);
   expect(gioco.errori()).toEqual([]);
 });
+
+// fuori servizio (giro libero, esplorazione): niente traffico simulato e limitatore a 120 km/h; in servizio come prima
+test('fuori servizio niente traffico e fino a 120 km/h, in servizio limitatore a 72', async ({ pagina, gioco }) => {
+  await avviaCorsa(pagina, { linea: '24', modo: 'free' });
+  const libero = await pagina.evaluate(() => {
+    const g = window.__game;
+    g.sim(3, 1 / 30, false);
+    return { vmax: g.bus.vmax, auto: g.traffic.cars.length, bus: g.buses.buses.length, tram: g.trams.trams.length };
+  });
+  expect(libero).toEqual({ vmax: 120, auto: 0, bus: 0, tram: 0 });
+  // il tram in esplorazione (non deraglia) lanciato a 90 km/h accelera ancora
+  await avviaCorsa(pagina, { linea: 'SIR1', tram: true, modo: 'roam' });
+  const tram = await pagina.evaluate(() => {
+    const g = window.__game, t = g.bus;
+    g.sim(1, 1 / 30, false);
+    t.parking = false; t.v = 25;
+    g.keys.add('KeyW'); g.sim(3, 1 / 30, false); g.keys.delete('KeyW');
+    return { vmax: t.vmax, kmh: t.speedKmh };
+  });
+  expect(tram.vmax).toBe(120);
+  expect(tram.kmh).toBeGreaterThan(90);
+  await avviaCorsa(pagina, { linea: '24' });
+  const servizio = await pagina.evaluate(() => { const g = window.__game; g.sim(3, 1 / 30, false); return { vmax: g.bus.vmax, auto: g.traffic.cars.length }; });
+  expect(servizio.vmax).toBe(72);
+  expect(servizio.auto).toBeGreaterThan(0);
+  expect(gioco.errori()).toEqual([]);
+});

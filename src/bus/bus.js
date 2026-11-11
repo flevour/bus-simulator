@@ -53,6 +53,8 @@ export class Bus {
     this.throttle = 0; this.brake = 0;
     this.gear = 1; this.dir = 1; // 1 = D, -1 = R
     this.rpm = IDLE; this.shiftTimer = 0; this.powerKw = 0;
+    // limitatore (km/h): 72 in servizio; fuori servizio (giro libero, esplorazione) lo alza main.js
+    this.vmaxService = 72; this.vmax = this.vmaxService;
     // batteria dei bus elettrici (0..1), energia della corsa in kWh, potenza di ricarica dalla colonnina
     this.battery = 1; this.energy = { used: 0, regen: 0 }; this.chargeKw = 0;
     this.parking = true;
@@ -736,7 +738,7 @@ export class Bus {
     }
     // batteria quasi scarica: la potenza cala fino a un terzo, quanto basta per arrivare al capolinea
     if (this.electric && this.battery < 0.1) Fdrive *= 0.35 + 6.5 * this.battery;
-    if (sp * 3.6 > (this.dir < 0 ? 12 : 72)) Fdrive = 0; // limitatore
+    if (sp * 3.6 > (this.dir < 0 ? 12 : this.vmax)) Fdrive = 0; // limitatore
     // potenza erogata (kW), negativa in recupero di energia quando si frena
     this.powerKw += ((Fdrive * sp - (this.electric ? this.brake * Math.min(1, sp / 2) * 90000 : 0)) / 1000 - this.powerKw) * Math.min(1, dt * 5);
     if (this.electric) {
@@ -927,7 +929,7 @@ export class Bus {
       x.textAlign = 'center';
       x.fillText(label, cx, 78);
     };
-    gauge(64, this.speedKmh, 80, Math.round(this.speedKmh), '#4fc3f7');
+    gauge(64, this.speedKmh, this.vmax > 80 ? 120 : 80, Math.round(this.speedKmh), '#4fc3f7');
     if (this.electric) gauge(192, Math.max(0, this.powerKw), 200, this.dir < 0 ? 'R' : this.powerKw < -2 ? 'REC' : 'E', this.powerKw < -2 ? '#66bb6a' : '#a6d22e');
     else gauge(192, this.rpm, 2500, this.dir < 0 ? 'R' : 'D' + this.gear, '#ffb74d');
     if (state.doors) { x.fillStyle = '#ff5252'; x.fillRect(116, 10, 24, 14); }

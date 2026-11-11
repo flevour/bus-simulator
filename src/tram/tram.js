@@ -582,6 +582,8 @@ export class Tram {
     this.sA = 0;
     this.v = 0; this.dir = 1; this.gear = 1; this.rpm = 0; this.powerKw = 0;
     this.throttle = 0; this.brake = 0; this.parking = true;
+    // limitatore (km/h): 70 in servizio; fuori servizio (giro libero, esplorazione) lo alza main.js
+    this.vmaxService = 70; this.vmax = this.vmaxService;
     this.aLong = 0; this.aLat = 0; this.yawRate = 0; this.odometer = 0;
     this.indicator = 0; this.blink = 0; this.steerIn = 0; this.kneelTarget = 0;
     this.lights = false; this.horn = false; this.passengers = 0;
@@ -773,7 +775,7 @@ export class Tram {
     // trazione: 48 kN fino a ~36 km/h, poi potenza costante (480 kW dal filo, 160 kW a batteria); niente trazione a porte aperte
     const Pmax = this.wired ? 480000 : this.battery > 0.03 ? 160000 : 0;
     let F = doorHold || this.derailT > 0 ? 0 : this.throttle * Math.min(48000, Pmax / Math.max(1, sp));
-    if (sp * 3.6 > 70) F = 0;
+    if (sp * 3.6 > this.vmax) F = 0;
     const res = 0.004 * m * 9.81 + 0.5 * 1.2 * 2.6 * 3.1 * sp * sp;
     // frenata di servizio: ~1,3 m/s² con S, ~2,2 m/s² con Shift+S; col manipolatore in neutro un leggero freno
     // elettrico (~0,3 m/s²) fa rallentare il tram come quelli veri
@@ -876,11 +878,12 @@ export class Tram {
     x.strokeStyle = '#26302a'; x.lineWidth = 3;
     x.beginPath(); x.arc(128, 92, 58, Math.PI * 0.8, Math.PI * 2.2); x.stroke();
     x.lineWidth = 2;
-    for (let v = 0; v <= 80; v += 10) {
-      const a = Math.PI * 0.8 + (Math.PI * 1.4 * v) / 80;
+    const top = this.vmax > 80 ? 120 : 80;
+    for (let v = 0; v <= top; v += top / 8) {
+      const a = Math.PI * 0.8 + (Math.PI * 1.4 * v) / top;
       x.beginPath(); x.moveTo(128 + Math.cos(a) * 50, 92 + Math.sin(a) * 50); x.lineTo(128 + Math.cos(a) * 58, 92 + Math.sin(a) * 58); x.stroke();
     }
-    const a = Math.PI * 0.8 + (Math.PI * 1.4 * Math.min(80, this.speedKmh)) / 80;
+    const a = Math.PI * 0.8 + (Math.PI * 1.4 * Math.min(top, this.speedKmh)) / top;
     x.strokeStyle = '#111'; x.lineWidth = 3;
     x.beginPath(); x.moveTo(128, 92); x.lineTo(128 + Math.cos(a) * 52, 92 + Math.sin(a) * 52); x.stroke();
     x.fillStyle = '#111'; x.font = 'bold 24px monospace'; x.textAlign = 'center';
