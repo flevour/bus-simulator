@@ -169,7 +169,7 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   "Fatto").
 - [x] Volante e pedaliera o gamepad (Gamepad API, vedi "Fatto").
 - [x] Telecamera della porta posteriore sul cruscotto (vedi "Fatto").
-- [ ] Specchietti regolabili.
+- [x] Specchietti regolabili (vedi "Fatto").
 - [ ] Altre livree storiche (anni '80–'90).
 
 ## Traffico e regole
@@ -216,6 +216,10 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Specchietti regolabili** (corsia `guida`, 11 novembre): nella visuale dalla cabina gli specchietti si
+  trascinano col mouse (verso il loro lato guardano più in fuori, in giù più in basso, fino a una ventina di gradi),
+  il doppio clic li rimette a posto; la regolazione resta nel browser (`padova-bus-sim-specchietti`). Prova in
+  `tests/cruscotto.spec.js`.
 - [x] **Semafori e tram tra Riviera Tito Livio e Riviera dei Ponti Romani** (segnalazione del 9 novembre, corsia
   `traffico`, 11 novembre): la chiamata del tram dava il rosso a tutti i bracci del semaforo, anche dove il tram corre
   lungo la strada; il bus fermo al rosso sul binario non partiva, il tram dietro di lui teneva viva la chiamata e dopo

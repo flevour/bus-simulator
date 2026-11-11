@@ -150,6 +150,40 @@ const mirrorQuads = mirrorRT.map((rt) => {
   overlayScene.add(m);
   return m;
 });
+// specchietti regolabili: si trascinano col mouse (verso l'esterno guardano più in fuori, verso il basso più in basso),
+// il doppio clic li rimette a posto; la regolazione resta in questo browser
+const MIRROR_KEY = 'padova-bus-sim-specchietti';
+const mirrorAdj = (() => {
+  try {
+    const a = JSON.parse(localStorage.getItem(MIRROR_KEY) || 'null');
+    if (Array.isArray(a) && a.length === 2) return a.map((m) => ({ yaw: Number(m.yaw) || 0, pitch: Number(m.pitch) || 0 }));
+  } catch (e) { /* ignorato */ }
+  return [{ yaw: 0, pitch: 0 }, { yaw: 0, pitch: 0 }];
+})();
+const saveMirrors = () => { try { localStorage.setItem(MIRROR_KEY, JSON.stringify(mirrorAdj)); } catch (e) { /* ignorato */ } };
+['mirror-frame-l', 'mirror-frame-r'].forEach((id, i) => {
+  const el = $(id), s = i ? -1 : 1;
+  let drag = null;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    el.setPointerCapture?.(e.pointerId);
+    el.classList.add('dragging');
+    e.preventDefault();
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const a = mirrorAdj[i];
+    // trascinato verso il suo lato (a sinistra il sinistro, a destra il destro) guarda più in fuori
+    a.yaw = Math.max(-0.3, Math.min(0.35, a.yaw - s * (e.clientX - drag.x) * 0.002));
+    a.pitch = Math.max(-0.12, Math.min(0.2, a.pitch + (e.clientY - drag.y) * 0.002));
+    drag.x = e.clientX; drag.y = e.clientY;
+  });
+  const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; el.classList.remove('dragging'); saveMirrors(); } };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('dblclick', () => { mirrorAdj[i] = { yaw: 0, pitch: 0 }; saveMirrors(); hud.toast('Specchietto rimesso a posto', 'info'); });
+});
 // monitor della telecamera sopra l'ultima porta: sul cruscotto, acceso da fermi e con le porte aperte (non specchiato)
 const doorRT = new THREE.WebGLRenderTarget(320, 240);
 const doorCam = new THREE.PerspectiveCamera(80, 4 / 3, 0.1, 200);
@@ -1430,11 +1464,13 @@ function updateMirrors() {
   const sides = [1, -1];
   for (let i = 0; i < 2; i++) {
     const s = sides[i];
+    // regolazione dello specchietto: il punto guardato, 31 m dietro, si sposta in fuori e in basso
+    const a = mirrorAdj[i];
     const p = bus.toWorld(s * 1.6, 6.1);
-    const t = bus.toWorld(s * 2.6, -25);
+    const t = bus.toWorld(s * (2.6 + 31 * Math.tan(a.yaw)), -25);
     const cam = mirrorCams[i];
     cam.position.set(p.x, 2.45 + (bus.elev || 0), p.z);
-    cam.lookAt(t.x, 0.9 + (bus.elev || 0), t.z);
+    cam.lookAt(t.x, 0.9 - 31 * Math.tan(a.pitch) + (bus.elev || 0), t.z);
     renderer.setRenderTarget(mirrorRT[i]);
     renderer.render(scene, cam);
   }
@@ -1691,6 +1727,6 @@ setTimeout(async () => {
   city.setNight(0);
   window.__game = { get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get tramSignals() { return tramSignals; }, city, net, lights, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot,
-    pad, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
+    pad, mirrorAdj, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
 }, 50);

@@ -458,7 +458,11 @@ si riattiva.
 - **Telecamera della porta posteriore, fatta l'11 novembre**: come gli specchietti è un riquadro sopra la scena
   (`doorRT`, `doorCam`, `doorQuad` e `updateDoorCam` in `main.js`, cornice `#door-frame`), perché il cruscotto 3D
   della cabina resta sotto l'inquadratura. Solo per il bus.
-- Prossimo lavoro: specchietti regolabili.
+- **Specchietti regolabili, fatti l'11 novembre**: `mirrorAdj` in `main.js` (spostamento del punto guardato, 31 m
+  dietro, in fuori e in basso), trascinamento sulle cornici `#mirror-frame-l` e `#mirror-frame-r`.
+- Brief finito l'11 novembre. Restano aperti: lo sterzo da tastiera dopo il rilascio (punto sopra, da decidere), la
+  prova con un volante vero, colonnine vere ai capolinea se ci sono dati. Col ciclo fermo (`requestAnimationFrame`
+  spento nelle prove) gli specchietti si ridisegnano solo nei fotogrammi pari di `frame`, che `sim` non fa avanzare.
 - Verifiche: regola 3; il giro guidato di `npm test` deve restare uguale.
 
 ### tram-turni
