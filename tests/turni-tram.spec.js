@@ -176,3 +176,56 @@ test('scambio del capolinea girato in Esplorazione', async ({ pagina, gioco }) =
   expect(r.sulBinario, testo).toBeLessThan(0.05);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Tram automatici con i turni dell'orario: ai capolinea con lo scambio fanno la manovra come chi gioca (discesa, fondo
+// del binario, cambio cabina, scambio, fermata di partenza), senza salti; ad aspettare la partenza ci sono al più due
+// tram e nessuno resta fermo fuori dalle soste. Un tram per linea, a qualche fermata dal capolinea, resta fermo 4 minuti:
+// fa comunque la corsa dopo del suo turno, in ritardo, e nessuna corsa resta senza tram. Chi gioca guida un bus lontano
+// dai binari. Col codice di prima i tram saltavano sull'altro binario, e a Pontevigodarzere arrivavano due tram per ogni
+// partenza (le corse Santo → Pontevigodarzere doppie del GTFS restavano: l'altra corsa ha due fermate Pontevigodarzere)
+test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e con i ritardi', async ({ pagina, gioco }) => {
+  test.setTimeout(300_000);
+  await avviaCorsa(pagina, { linea: '24' });
+  const r = await pagina.evaluate(() => {
+    const g = window.__game, T = g.trams, dt = 1 / 30;
+    g.teleport(-2500, 3000);
+    const nome = (t) => { for (const [id, k] of Object.entries(g.city.tramTracks)) for (const d of [1, -1]) if (k.terminals[d] === t) return `${id} ${k.stopsDir[d].slice(-1)[0].name}`; return '?'; };
+    const prima = new Map(), fermo = new Map(), manovre = {}, attesa = {}, salti = [], fermi = [], ritardati = [];
+    const t0 = g.mission.clock;
+    for (let sec = 0; sec < 25 * 60; sec++) {
+      g.sim(1, dt, false);
+      if (sec === 60) for (const id of ['SIR1', 'SIR2', 'SIR3']) {
+        const tr = T.trams.find((x) => x.line === id && x.run && x.run.next && !x.man && x.k >= 2 && x.k >= x.run.ss.length - 6 && x.k < x.run.ss.length - 1 && x.track.terminals[x.dir > 0 ? 1 : -1]);
+        if (tr) { tr.wait = 240; ritardati.push({ tr, next: tr.run.next }); }
+      }
+      const per = {};
+      for (const tr of T.trams) {
+        // ogni cassa a un secondo di distanza è vicina a una cassa di prima (al cambio cabina la testa diventa la coda)
+        const c = tr.mods.map((m) => [m.group.position.x, m.group.position.z]), p = prima.get(tr);
+        if (p && p.length === c.length && c.some((a) => Math.min(...p.map((b) => Math.hypot(a[0] - b[0], a[1] - b[1]))) > 12)) salti.push({ id: tr.id, line: tr.line });
+        prima.set(tr, c);
+        const t = tr.man ? tr.man.t : tr.esce || (tr.run && tr.k <= 1 && tr.s < tr.run.ss[0] + 1 && tr.track.terminals[tr.dir > 0 ? -1 : 1]);
+        if (t) per[nome(t)] = (per[nome(t)] || 0) + 1;
+        if (tr.man && tr.man.fase === 'fondo') manovre[nome(tr.man.t)] = true;
+        const f = tr.v < 0.1 && tr.wait <= 0 && !tr.man && !(tr.run && tr.k === 0) ? (fermo.get(tr) || 0) + 1 : 0;
+        fermo.set(tr, f);
+        if (f === 90) fermi.push({ id: tr.id, line: tr.line, x: Math.round(tr.parts[0].x), z: Math.round(tr.parts[0].z) });
+      }
+      for (const [n, k] of Object.entries(per)) attesa[n] = Math.max(attesa[n] || 0, k);
+    }
+    // le corse dopo dei tram fermati le fa lo stesso tram; nessuna corsa partita nel frattempo è rimasta senza tram
+    const turno = ritardati.map((r) => ({ line: r.tr.line, stesso: r.next.tram === r.tr, partitaDa: r.tr.run === r.next ? Math.round(g.mission.clock - r.next.t) : null }));
+    const perse = T.runs.filter((r) => r.t > t0 + 120 && r.t < g.mission.clock - 60 && !r.tram).map((r) => `${r.line.id} ${r.v.stops[0].name}`);
+    return { salti, manovre: Object.keys(manovre).sort(), attesa, fermi, turno, perse };
+  });
+  const testo = JSON.stringify(r);
+  console.log('tram automatici:', testo);
+  expect(r.salti, testo).toEqual([]);
+  expect(r.manovre, testo).toEqual(['SIR1 Guizza Capolinea', 'SIR1 Pontevigodarzere', 'SIR2 Busa di Vigonza', 'SIR2 Rubano', 'SIR3 Voltabarozzo']);
+  expect(Math.max(...Object.values(r.attesa)), testo).toBeLessThanOrEqual(2);
+  expect(r.fermi, testo).toEqual([]);
+  expect(r.turno.map((x) => x.line), testo).toEqual(['SIR1', 'SIR2', 'SIR3']);
+  expect(r.turno.every((x) => x.stesso), testo).toBe(true);
+  expect(r.perse, testo).toEqual([]);
+  expect(gioco.errori()).toEqual([]);
+});

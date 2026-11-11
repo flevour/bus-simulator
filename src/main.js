@@ -128,6 +128,8 @@ function buildWorld() {
   // incroci con la sede: precedenza al tram e semafori a barre
   tramSignals = new TramSignals(scene, city, lights);
   trams.signals = tramSignals;
+  // i tram automatici in manovra al capolinea girano lo scambio, se il tram di chi gioca non ci sta passando
+  trams.onSwitch = (t, state) => { if (!bus || (bus.xover !== t && bus.xend !== t)) setSwitch(t, state); };
   // bus automatici delle linee urbane dall'orario
   buses = new BusSim(scene, net, city, { tramSignals });
   // deposito: da qui escono le prime corse del turno, qui rientrano le ultime

@@ -6,6 +6,7 @@ import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
 import { driveOffset, laneSpan } from '../data/padova.js';
+import { concatena } from '../game/turni.js';
 
 // ------------------------------------------------------------------
 // Semafori
@@ -983,10 +984,14 @@ export class Walkers {
 // ------------------------------------------------------------------
 // Tram (Translohr): i convogli in servizio secondo l'orario, ognuno sulla sede della sua linea, con le fermate delle corse
 // ------------------------------------------------------------------
+// progressiva sul binario di partenza oltre la quale la coda di un tram lascia libero lo scambio del capolinea t: fuori
+// dalla comunicazione ('dopo') o dal tronco ('avanti')
+function terminalClear(t) { return (t.field === 'dep' ? t.heel : t.link) + 1; }
+
 // Viaggi dei tram dall'orario GTFS (giorno 'feriale' | 'festivo'). Il GTFS pubblica ogni viaggio anche spezzato in tratti
 // (Guizza → Cavalletto, Stazione → Pontevigodarzere, Santo → Pontevigodarzere…) che si sovrappongono alla corsa intera:
 // un tratto la cui prima e ultima fermata sono servite da una corsa più lunga, nello stesso verso, entro 3 minuti è lo
-// stesso tram. Restano i viaggi veri: nei feriali 12-13 tram in servizio per quasi tutto il giorno.
+// stesso tram. Restano i viaggi veri: nei feriali 12-13 tram in servizio per quasi tutto il giorno, concatenati in turni.
 // trackOf(L): la sede della linea (TramTrack)
 export function tramRuns(lines, trackOf, day) {
   const runs = [];
@@ -998,24 +1003,35 @@ export function tramRuns(lines, trackOf, day) {
       // progressiva del muso fermo a fine banchina (12 m oltre la palina), sempre crescente lungo la corsa
       const ss = [];
       for (const st of v.stops) ss.push(Math.max(ss.length ? ss[ss.length - 1] : -Infinity, P.project(st.x, st.z).s + 12));
-      for (const { t, d } of v[day] || []) runs.push({ line: L, track, v, t, d, dir, ss, times: v.offsets.map((o) => t + (o * d) / v.duration) });
+      // partenza dal capolinea con lo scambio: il muso più avanti se serve perché la coda sia fuori dallo scambio (a
+      // Voltabarozzo la banchina di partenza comincia subito dopo la comunicazione), così chi arriva può fare la manovra
+      const t0 = track.terminals && track.terminals[dir > 0 ? -1 : 1];
+      if (t0 && ss[0] < terminalClear(t0) + 200) ss[0] = Math.min(ss[1] - 1, Math.max(ss[0], terminalClear(t0) + 0.5 + tramLength(L.modules || 3)));
+      for (const { t, d } of v[day] || []) {
+        const times = v.offsets.map((o) => t + (o * d) / v.duration);
+        runs.push({ line: L, track, v, t, d, dir, ss, times, end: times[times.length - 1], prev: null, next: null });
+      }
     }
   }
   runs.sort((a, b) => a.t - b.t);
-  const passAt = (c, st) => {
-    let best = null, bd = 150;
-    c.v.stops.forEach((s2, i) => { const d = Math.hypot(s2.x - st.x, s2.z - st.z); if (d < bd) { bd = d; best = c.times[i]; } });
-    return best;
-  };
-  const near = (a, b) => a != null && Math.abs(a - b) <= 180;
+  // c passa dalla fermata st verso l'ora t: una sua fermata entro 150 m, entro 3 minuti (al capolinea del SIR1 ci sono
+  // due fermate Pontevigodarzere a 3 minuti l'una dall'altra: conta quella giusta, non la più vicina)
+  const passes = (c, st, t) => c.v.stops.some((s2, i) => Math.hypot(s2.x - st.x, s2.z - st.z) < 150 && Math.abs(c.times[i] - t) <= 180);
   const covers = (c, k) => c !== k && c.line === k.line && c.dir === k.dir && c.v.stops.length > k.v.stops.length && c.t <= k.t + 180 && c.t + c.d >= k.t + k.d - 180 &&
-    near(passAt(c, k.v.stops[0]), k.t) && near(passAt(c, k.v.stops[k.v.stops.length - 1]), k.t + k.d);
+    passes(c, k.v.stops[0], k.t) && passes(c, k.v.stops[k.v.stops.length - 1], k.t + k.d);
   let lo = 0;
-  return runs.filter((k) => {
+  const kept = runs.filter((k) => {
     while (runs[lo].t < k.t - 4000) lo++;
     for (let i = lo; i < runs.length && runs[i].t <= k.t + 180; i++) if (covers(runs[i], k)) return false;
     return true;
   });
+  // turni come quelli di chi guida (turni.js): al capolinea ogni tram prende la corsa dopo del suo turno. Ai capolinea
+  // aspettano al più due tram (uno alla banchina di partenza, uno che arriva o fa la manovra); gli altri rientrano. Sosta
+  // di almeno 3 minuti dove c'è la manovra con lo scambio, di 1 all'anello della stazione: l'orario del SIR3 arriva lì un
+  // minuto prima di una partenza, e la banchina di Stazione sud la usa anche il SIR2
+  const sostaMin = (r) => (r.track.terminals && r.track.terminals[r.dir > 0 ? 1 : -1] ? 180 : 60);
+  for (const L of lines) concatena(kept.filter((r) => r.line === L), { posti: 2, sostaMin });
+  return kept;
 }
 
 export class TramSim {
@@ -1099,23 +1115,29 @@ export class TramSim {
       for (const r of this.runs) r.tram = null;
       for (const r of this.runs) if (r.t <= clock && clock < r.t + r.d) this.spawnAt(r, clock);
     } else {
-      // corse che partono ora senza un tram che le aspetti al capolinea: ne entra uno nuovo
-      for (const r of this.runs) if (r.t > this.lastClock && r.t <= clock && !r.tram) this.spawnAt(r, clock);
+      // corse che partono ora senza un tram che le aspetti al capolinea: ne entra uno nuovo. Se il tram del turno è
+      // ancora sulla corsa prima (in ritardo) la prende lui, appena arriva
+      const late = (r) => r.prev && r.prev.tram && r.prev.tram.run === r.prev && this.trams.includes(r.prev.tram);
+      for (const r of this.runs) if (r.t > this.lastClock && r.t <= clock && !r.tram && !late(r)) this.spawnAt(r, clock);
     }
     this.lastClock = clock;
   }
-  // fine corsa: al capolinea il tram prende la prossima corsa della sua linea che parte da lì entro 20 minuti, altrimenti
-  // esce
+  // fine corsa: al capolinea il tram prende la corsa dopo del suo turno (se nessun altro tram l'ha presa nel frattempo e
+  // non è quella di chi gioca), altrimenti rientra (esce)
   endRun(tr, clock) {
-    const last = tr.run.v.stops[tr.run.v.stops.length - 1];
-    let next = null;
-    for (const r of this.runs) {
-      if (r.tram || r.line !== tr.run.line || r.t < clock - 30 || r.t > clock + 1200) continue;
-      const s0 = r.v.stops[0];
-      if (Math.hypot(s0.x - last.x, s0.z - last.z) < 60 && (!next || r.t < next.t)) next = r;
-    }
+    const next = tr.run.next && !tr.run.next.tram && this.runs.includes(tr.run.next) ? tr.run.next : null;
     if (!next) { this.remove(tr); return; }
     const T = tr.track, P = T.path(tr.dir), N = T.path(next.dir), head = P.at(tr.s), pr = N.projectNear(head.x, head.z, 1.5);
+    const t = this.terminalOf(tr);
+    if (t && next.dir === t.dep) {
+      // capolinea con lo scambio: la discesa, poi la manovra come il tram di chi gioca, quando lo scambio è libero. I
+      // turni ci fanno aspettare al più due tram (tramRuns); con i ritardi un terzo resta alla banchina d'arrivo finché
+      // chi è nel tronco non è uscito dallo scambio, e la corsa dopo parte in ritardo
+      tr.man = { t, next, fase: 'scarico' };
+      tr.v = 0; tr.wait = 20;
+      next.tram = tr;
+      return;
+    }
     if (pr && N.at(pr.s).dx * head.dx + N.at(pr.s).dz * head.dz > 0.7) {
       // capolinea ad anello (SIR3 in stazione): il binario della nuova corsa continua quello d'arrivo, niente cambio cabina
       tr.dir = next.dir; tr.s = pr.s;
@@ -1128,9 +1150,50 @@ export class TramSim {
     next.tram = tr;
     this.setDest(tr, this.destOf(next));
   }
+  // punto del binario a s, spostato sullo scambio del capolinea dove il tram ci passa in manovra
   lanePoint(s, dir, track = this.track) {
-    const p = track.path(dir).at(s);
-    return { x: p.x, z: p.z, fx: p.dx, fz: p.dz };
+    const p = track.path(dir).at(s), o = track.terminalOff && track.terminalOff(dir, s);
+    return o ? { x: p.x + o.x, z: p.z + o.z, fx: p.dx, fz: p.dz } : { x: p.x, z: p.z, fx: p.dx, fz: p.dz };
+  }
+  // scambio del capolinea dove finisce la corsa del tram (TramTrack.terminal), se la corsa arriva fin lì
+  terminalOf(tr) {
+    const T = tr.track, t = T.terminals && T.terminals[tr.dir > 0 ? 1 : -1], ss = tr.run && tr.run.ss;
+    return t && ss && t.fondo - ss[ss.length - 1] < 300 ? t : null;
+  }
+  // fin dove arriva col muso il tram che arriva al capolinea t mentre un altro fa la manovra: prima della comunicazione
+  // (prima della fermata, se la comunicazione è subito dopo)
+  termLimit(t) { return t.field === 'dep' ? t.link - (t.heel - t.toe) - 2 : t.toe - 2; }
+  // lo scambio del capolinea t è occupato: un altro tram automatico in manovra, o quello di chi gioca oltre il limite
+  // del binario d'arrivo o sul tronco di quello di partenza
+  termBusy(t, tr, others) {
+    if (t.occ && t.occ !== tr && this.trams.includes(t.occ)) return true;
+    const T = tr.track, A = T.path(t.arr), B = T.path(t.dep), lim = this.termLimit(t);
+    for (const o of others) {
+      if (!o || !o.isTram || !o.trackPoints || o.track !== T) continue;
+      for (const p of o.trackPoints()) {
+        const a = A.projectNear(p.x, p.z, 2.5);
+        if (a && a.s > lim) return true;
+        const b = t.field === 'arr' && B.projectNear(p.x, p.z, 2.5);
+        if (b && b.s < t.link + 2) return true;
+      }
+    }
+    return false;
+  }
+  // cambio cabina in fondo al binario: ogni cassa resta dov'è, il muso diventa l'altra estremità, sul binario della corsa
+  // nuova (con le distanze lungo i binari dello scambio, come Tram.transfer); poi si va alla prima fermata
+  turnAt(tr) {
+    const { t, next } = tr.man, tail = tr.s - tr.L;
+    const s = t.field === 'arr' ? (tail >= t.heel ? t.other(tail) : -1) : (tail >= t.link ? t.toe - (tail - t.link) : -1);
+    tr.man = null;
+    if (s < 0) {
+      const q = tr.track.path(tr.dir).at(tail);
+      tr.s = tr.track.path(next.dir).project(q.x, q.z).s;
+      if (t.occ === tr) t.occ = null;
+    }
+    else { tr.s = s; tr.esce = t; }
+    tr.dir = next.dir; tr.run = next; tr.k = 0; tr.v = 0; tr.wait = 10;
+    this.setDest(tr, this.destOf(next));
+    if (t.field === 'dep' && this.onSwitch) this.onSwitch(t, 'deviato');
   }
   // clock: ora del gioco (secondi), per il servizio dall'orario
   update(dt, others = [], clock = null) {
@@ -1143,23 +1206,38 @@ export class TramSim {
     for (let i = 0; i < n; i++) this.move(dt, others, clock - (n - 1 - i) * dt);
   }
   move(dt, others, clock) {
-    const ended = [];
+    const ended = [], turned = [];
     for (const tr of this.trams) {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
       const T = tr.track, P = T.path(tr.dir);
       let vt = 8.5;
       if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
-      else if (tr.run) {
+      else if (tr.man) {
+        // al capolinea: a scambio libero avanti fino in fondo al binario (a 15 km/h), poi il cambio cabina
+        const m = tr.man;
+        if (m.fase === 'scarico' && !this.termBusy(m.t, tr, others)) { m.fase = 'fondo'; m.t.occ = tr; }
+        if (m.fase === 'fondo') {
+          const d = Math.min(m.t.fondo - 1, P.len - 2.5) - tr.s;
+          vt = Math.min(4, Math.sqrt(2 * 0.9 * Math.max(0, d)) + 0.3);
+          if (d < 0.8) turned.push(tr);
+        } else vt = 0;
+      } else if (tr.run) {
         const d = tr.run.ss[tr.k] - tr.s;
         // in linea alla velocità che porta alla prossima fermata in orario (tra 11 e 30 km/h), arrivando 15 s prima
         // della partenza; in ritardo si va al massimo
         const left = tr.run.times[tr.k] - 15 - clock;
         if (left > 0) vt = Math.max(3, Math.min(8.5, d / left));
         vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d)) + 0.3);
+        // sullo scambio del capolinea a 15 km/h; arrivando, se un altro tram fa la manovra ci si ferma prima della
+        // comunicazione
+        if (tr.esce) vt = Math.min(vt, 4);
+        const t = tr.k === tr.run.ss.length - 1 && this.terminalOf(tr), lim = t && this.termLimit(t);
+        if (t && tr.s > lim - 150 && this.termBusy(t, tr, others)) vt = Math.min(vt, lim - tr.s > 0.8 ? Math.sqrt(2 * 0.9 * (lim - tr.s)) + 0.3 : 0);
         if (d < 0.8) {
           if (tr.k >= tr.run.ss.length - 1) ended.push(tr);
-          // in anticipo sull'orario si aspetta la partenza (al massimo 2 minuti); in fermata comunque almeno 15 s
-          else { tr.wait = Math.max(15, Math.min(120, tr.run.times[tr.k] - clock)); tr.k++; }
+          // in anticipo sull'orario si aspetta la partenza (al massimo 2 minuti, alla prima fermata fino all'ora); in
+          // fermata comunque almeno 15 s
+          else { const early = tr.run.times[tr.k] - clock; tr.wait = Math.max(15, tr.k ? Math.min(120, early) : early); tr.k++; }
         }
       } else {
         const stopAt = (x) => x + 12;
@@ -1219,9 +1297,16 @@ export class TramSim {
       tr.v += Math.max(-2.5, Math.min(1.0, vt - tr.v)) * dt * 2;
       tr.v = Math.max(0, tr.v);
       tr.s += tr.v * dt;
+      // uscito dallo scambio del capolinea (la coda oltre la comunicazione): lo scambio è libero
+      if (tr.esce && tr.s - tr.L > terminalClear(tr.esce)) {
+        const t = tr.esce;
+        tr.esce = null;
+        if (t.occ === tr) t.occ = null;
+        if (t.field === 'dep' && this.onSwitch) this.onSwitch(t, 'diritto');
+      }
       // al capolinea il guidatore cambia cabina: il muso diventa l'altra estremità, sul binario dell'altro verso
       if (tr.s >= P.len - 2) {
-        if (tr.run) { tr.s = P.len - 2; tr.v = 0; if (!ended.includes(tr)) ended.push(tr); }
+        if (tr.run) { tr.s = P.len - 2; tr.v = 0; if (!ended.includes(tr) && !tr.man) ended.push(tr); }
         else {
           const tail = P.at(tr.s - tr.L);
           tr.dir *= -1; tr.s = T.path(tr.dir).project(tail.x, tail.z).s; tr.wait = 30; tr.v = 0; tr.served = null;
@@ -1257,6 +1342,7 @@ export class TramSim {
       });
     }
     for (const tr of ended) this.endRun(tr, clock);
+    for (const tr of turned) this.turnAt(tr);
   }
   // indicatore di linea e destinazione sulle due cabine
   setDest(tr, dest) {

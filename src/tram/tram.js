@@ -314,13 +314,21 @@ export class TramTrack {
     const t = {
       arr: d, dep: -d, kind, field, toe, heel, link, other, len, fondo, ox, oz, side, state: 'deviato',
       sig: { x: pt.x + o.x / 2, z: pt.z + o.z / 2, dx: pt.dx, dz: pt.dz },
-      off(s) {
-        if (s < 0 || (field === 'dep' && s >= heel) || (field === 'arr' && (s <= toe || t.state !== 'deviato'))) return null;
+      // dev: lo scambio è deviato (i tram automatici lo passano sempre deviato)
+      off(s, dev = t.state === 'deviato') {
+        if (s < 0 || (field === 'dep' && s >= heel) || (field === 'arr' && (s <= toe || !dev))) return null;
         const i = Math.min(n - 2, Math.floor(s)), f = s - i;
         return { x: ox[i] + (ox[i + 1] - ox[i]) * f, z: oz[i] + (oz[i + 1] - oz[i]) * f };
       },
     };
     return t;
+  }
+  // scostamento a s sul binario del verso dir per gli scambi dei capolinea, presi sempre deviati: per i tram automatici,
+  // che li passano solo facendo la manovra (sul binario d'arrivo oltre la comunicazione 'avanti', su quello di partenza
+  // prima della comunicazione 'dopo')
+  terminalOff(dir, s) {
+    const a = this.terminals[dir > 0 ? 1 : -1], b = this.terminals[dir > 0 ? -1 : 1];
+    return (a && a.field === 'arr' && a.off(s, true)) || (b && b.field === 'dep' && b.off(s, true)) || null;
   }
   // punti ogni 2 m della S dello scambio al capolinea (verso d del binario d'arrivo), per disegnarla
   terminalCurve(d) {

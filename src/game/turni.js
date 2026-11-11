@@ -18,21 +18,35 @@ export function turni(L, day) {
   if (cache.has(key)) return cache.get(key);
   const runs = [];
   for (const v of L.variants) for (const { t, d } of v[day] || []) runs.push({ L, v, t, d, end: t + tripDuration(v, d), prev: null, next: null });
-  const byDep = runs.slice().sort((a, b) => a.t - b.t);
+  concatena(runs);
+  const res = { runs, find: (v, t) => runs.find((r) => r.v === v && Math.abs(r.t - t) < 60) || null };
+  cache.set(key, res);
+  return res;
+}
+
+// Le corse (con v, t ed end) in turni: in ordine d'arrivo ogni corsa prosegue con la prima che parte vicino al suo
+// capolinea dopo la sosta, tra quelle che nessuna ha già preso (prev e next). Anche per i tram automatici (tramRuns),
+// una linea alla volta: posti, i mezzi che possono aspettare insieme a un capolinea (se è pieno la corsa che arriva è
+// l'ultima del turno: il mezzo rientra e la partenza la prende un altro); sostaMin(r), la sosta più breve dopo la corsa r
+export function concatena(runs, { posti = Infinity, sostaMin = () => SOSTA_MIN } = {}) {
+  const byDep = runs.slice().sort((a, b) => a.t - b.t), soste = new Map();
   for (const r of runs.slice().sort((a, b) => a.end - b.end)) {
     const to = r.v.stops[r.v.stops.length - 1];
+    // in sosta lì all'arrivo di r: le soste già decise cominciano tutte prima (si va in ordine d'arrivo)
+    const qui = soste.get(to.name) || [];
+    if (qui.filter((t) => t > r.end).length >= posti) continue;
+    const min = sostaMin(r);
     for (const q of byDep) {
-      if (q.t < r.end + SOSTA_MIN || q.prev) continue;
+      if (q.t < r.end + min || q.prev) continue;
       if (q.t > r.end + SOSTA_FUORI) break;
       const fuori = r.v.cutEnd || q.v.cutStart, from = q.v.stops[0];
       if (q.t > r.end + (fuori ? SOSTA_FUORI : SOSTA_MAX) || Math.hypot(from.x - to.x, from.z - to.z) > (fuori ? VICINO_FUORI : VICINO)) continue;
       r.next = q; q.prev = r;
+      soste.set(to.name, [...qui, q.t]);
       break;
     }
   }
-  const res = { runs, find: (v, t) => runs.find((r) => r.v === v && Math.abs(r.t - t) < 60) || null };
-  cache.set(key, res);
-  return res;
+  return runs;
 }
 
 // la corsa e il suo posto nel turno: { run, first, last, n (corsa n-esima), of (corse del turno) }
