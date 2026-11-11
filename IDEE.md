@@ -25,7 +25,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - la sede di SIR2 e SIR3 nella pianta delle strade (tappa 3, corsia `mappa`): oggi i binari sono disegnati sopra
      l'asfalto e in diversi tratti la corsia dei bus ci passa sopra o accanto (richiesta in `docs/CORSIE.md`);
    - [x] l'area di Voltabarozzo (tappa 4): il SIR3 intero fino al capolinea (vedi "Fatto");
-   - il SIR2 fino ai capolinea veri (Rubano, Busa di Vigonza), corsia `capolinea`;
+   - il SIR2 fino ai capolinea veri (Rubano, Busa di Vigonza), corsia `capolinea`: il capolinea lato Vigonza è prima
+     della rotonda per Venezia / SR11; tracciato, fermate e capolinea del progetto del 2022 in
+     [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md);
+   - il deposito di Rubano (rimesse passanti, anelli, officina, dalla tavola del progetto del 2022), corsia
+     `tram-turni` quando il corridoio del SIR2 arriva a Rubano;
    - i rami del SIR2 per Romagnoli e per l'Ospedale San Lazzaro, ancora in cantiere in OSM;
    - SIR4 e SIR5, e le linee passanti della rete SMART (T1, T2 e le altre) sugli stessi binari;
    - la linea 10 resta tra gli autobus (deciso il 9 novembre); quando il SIR2 sarà in servizio si potrà toglierla.

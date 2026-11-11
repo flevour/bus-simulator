@@ -295,7 +295,10 @@ Prossimo lavoro, in quest'ordine:
   SIR3 sono in costruzione). Il gruppo 1b (SIR2) si pubblica solo se è a un passo; altrimenti resta sul ramo locale e
   si riprende dopo. Poi, in ordine, il caricamento per aree e il gruppo 2 per tutte le linee; la scritta "(tratto in
   città)" del capolinea si toglie linea per linea, quando la linea arriva al capolinea vero;
-- gruppo 1b, SIR2 fino a Rubano e alla Busa di Vigonza: **deciso l'11 novembre di non pubblicarlo ora**, è sul ramo
+- gruppo 1b, SIR2 fino a Rubano e alla Busa di Vigonza. Quando si riprende: dettagli del progetto del 2022 in
+  `linee-tram-nuove.md` ("SIR2 nel progetto del 2022"), e **il capolinea lato Vigonza è prima della rotonda per
+  Venezia / SR11** (indicazione di chi gioca dell'11 novembre: niente tratto fino alla stazione di Busa né
+  parcheggio). **Deciso l'11 novembre di non pubblicarlo ora**, è sul ramo
   locale `corsia/capolinea-sir2` del worktree `capolinea` (commit `fd9f1a5`, mappa da rigenerare). Non era a un passo:
   - fatti i dati: strade e segnaletica OSM delle due teste in `data/osm-corridoio.json`
     (`scripts/overpass-corridoio.ql`, `scripts/filter_osm_corridoio.py`), paline ed edifici Overture, terreno allargato
@@ -445,7 +448,10 @@ di `traffico`), `smoothTrack` e `NEW_TRAM_LINES` in `src/data/padova.js`, `scrip
   raccordi, scambi dove servono e non intrecci), rigenerare la mappa (regola 4), poi foto dall'alto e dalla cabina e
   una corsa guidata di SIR2 e SIR3 in stazione, con i tram automatici per 40 minuti senza blocchi.
 - Poi, in quest'ordine: turni del tram e deposito della Guizza (uscita e rientro, IDEE punto 1), binario tronco della
-  Guizza, binari dei depositi (Guizza e Voltabarozzo, OSM `service=yard`), interni.
+  Guizza, binari dei depositi (Guizza e Voltabarozzo, OSM `service=yard`), interni. Il **deposito di Rubano** del
+  SIR2 (rimesse passanti, anelli, officina: struttura in `linee-tram-nuove.md`, "SIR2 nel progetto del 2022") quando
+  il corridoio del SIR2 arriva a Rubano (corsia `capolinea`, dopo gli autobus); in OSM non c'è, si disegna dalla
+  tavola.
 - Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
 
 ### tram-reti (chiusa il 9 novembre)

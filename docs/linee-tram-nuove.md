@@ -22,6 +22,11 @@ Lette direttamente il 9 novembre 2026:
   [`scripts/overpass-tram-cantiere.ql`](../scripts/overpass-tram-cantiere.ql), salvato in
   [`data/osm-padova-tram-cantiere.json`](../data/osm-padova-tram-cantiere.json).
 * **Wikipedia** "Tranvia di Padova" e "Trams in Padua".
+* **Presentazione "Il progetto SIR 2"** di Diego Galiazzo per il dibattito pubblico sul tram, 18 febbraio 2022
+  (letta l'11 novembre 2026): https://dptrampadova.it/wp-content/uploads/2022/02/DP-progetto-Galiazzo.pdf. Tavole
+  del tracciato a tratti, capolinea di Rubano con il deposito, capolinea di Vigonza, sezione tipo e fermata con
+  pensilina. È il progetto del 2022: dove è diverso dalla presentazione di dicembre 2025, da OSM o da quello che si
+  sa del cantiere, valgono le fonti più recenti. Dettagli sotto, in "SIR2 nel progetto del 2022".
 * Indicazione di chi gestisce il progetto: **il SIR2 prenderà il posto della linea di autobus 10** e avrà **convogli
   da 4 casse**.
 
@@ -68,6 +73,65 @@ Le fermate dei KML e quelle di OSM, in ordine lungo i percorsi, sono in
 * **Stato**: obiettivo PNRR certificato il 2 agosto 2026 (21,3 km di piattaforma, rotaia su oltre 16 km, deposito di
   Rubano); settembre 2026: asfaltature in corso Milano e a Chiesanuova, fermata sud di via Vicenza da finire, via
   Tommaseo dalla stazione alla Stanga a seguire.
+
+#### SIR2 nel progetto del 2022
+
+Dalla presentazione del dibattito pubblico (febbraio 2022, fonti sopra).
+
+* **Numeri**: 17,5 km, 34 + 2 fermate, 84% in sede riservata o separata dalle auto, collegamento di 0,85 km al nuovo
+  polo ospedaliero (San Lazzaro), pista ciclabile lungo tutto il tracciato. Nello schema SMART il SIR2 è la linea
+  **T2 Rubano – Vigonza** (azzurra); sugli stessi binari T3 Rubano – San Lazzaro, T4 Voltabarozzo – Vigonza, T7
+  Guizza – Vigonza.
+* **Fermate** nello schema SMART del 2022, da ovest: Rubano Pria Fosca (capolinea), Treviso, Roma, Cimitero Rubano,
+  Galilei, Sarmeola, Sant'Antonio, Brentella Ovest, Brentella Est, Chiesanuova, Pierobon, Cimitero, Vicenza,
+  Savonarola, Milano, Dante, Garibaldi, Eremitani, Popolo, Stazione PD, Pace, Tribunale – Fiera, Università, Stanga
+  Questura, Venezia, Net Center Savelli, Palasport S. Lazzaro, San Marco, Ippodromo, Villa Breda, Ponte di Brenta,
+  Busa di Vigonza, Busa di Vigonza RFI (capolinea). L'elenco OSM sopra è più recente e ha qualche nome diverso.
+* **Tracciato**, una tavola per tratto, da Vigonza a Rubano: capolinea di Vigonza (stazione di Busa di Vigonza,
+  tangenziale nord, rotonda per Venezia / SR11); fiume Brenta e Villa Breda; Ponte di Brenta; ippodromo e autostrada
+  (tangenziale est); via San Marco e via Einaudi (raccordo Gandhi); collegamento al nuovo ospedale (fermata FS);
+  cavalcavia San Marco – via Friburgo (Net Center); via Venezia; Stanga; Fiera e università; stazione (Tribunale,
+  corso del Popolo, via Gozzi); Scrovegni e Arena (giardini dell'Arena, via Trieste); centro storico (piazza
+  Insurrezione, corso Milano); via Vicenza (sopra la ferrovia Padova – Bologna); Chiesanuova (Cimitero Maggiore,
+  corso Australia); Chiesanuova Pierobon (caserma); Chiesanuova Romagnoli (ex caserma, fiume Brentella); Rubano
+  Brentelle (SR11 via della Provvidenza); Rubano via Po – via Borromeo; Rubano zona industriale (cimitero); Rubano via
+  Europa; Rubano centro (via Roma, municipio); Rubano centro (via Palù); capolinea di Rubano (via Pria Fosca).
+* **Capolinea di Vigonza**: nel progetto del 2022 la linea arriva da Ponte di Brenta, gira alla rotonda per Venezia /
+  SR11, prosegue verso est accanto alla stazione di Busa di Vigonza, sale lungo la ferrovia fino alla tangenziale
+  nord e finisce in un capolinea con un grande parcheggio scambiatore. **Oggi il capolinea è prima della rotonda per
+  Venezia / SR11** (indicazione di chi gioca, 11 novembre 2026): il tratto oltre la rotonda, la fermata della stazione
+  e il parcheggio non ci sono. Nel gioco il SIR2 finisce prima della rotonda.
+* **Capolinea di Rubano**: in via Pria Fosca, a est della SR11 e della sua rotonda, accanto a un grande parcheggio
+  scambiatore a nord della via. Ci si arriva dalla SR11: all'altezza di via Palù i binari lasciano la statale verso
+  nord, girano attorno all'isolato e corrono verso ovest su una via parallela alla SR11, con una fermata a metà, fino
+  al capolinea. Dopo la banchina i binari proseguono verso est ed entrano nel deposito.
+* **Deposito di Rubano** (tavola "Rubano capolinea"): a est del capolinea, oltre la via d'accesso, su un lotto
+  allungato da ovest a est, più largo a ovest, con il lato nord in diagonale, tutto bordato di verde. Misure lette a
+  occhio dalla tavola: il lotto è circa due volte e mezza più lungo che largo.
+  - **Ingresso** nell'angolo sud-ovest: due binari arrivano dal capolinea, salgono verso nord lungo il lato ovest e si
+    aprono a ventaglio con gli scambi.
+  - **Due rimesse** affiancate nella metà ovest, lunghe da ovest a est, una sopra l'altra: capannoni passanti con
+    5-6 binari ciascuno, a cui si entra dai due lati con un ventaglio di scambi a ogni testata.
+  - **Anello** attorno a ciascuna rimessa e uno esterno che le gira tutte e due: il tram fa il giro senza invertire.
+  - **Officina** a nord-est: un edificio quadrato con 5-6 binari che entrano da est, con le fosse di manutenzione
+    (le fasce grigie alle due estremità dei binari).
+  - Tra rimesse e officina una fascia stretta da nord a sud (forse l'impianto di lavaggio); lungo il lato nord un
+    edificio lungo e stretto in diagonale e un binario che corre lungo il confine fino all'angolo nord-est.
+  - **Lato est**: i binari curvano verso sud e tornano a ovest lungo il lato sud, chiudendo il giro; al centro della
+    parte est un'aiuola ovale grande.
+  - Lungo il lato ovest tre piccoli edifici (guardiola, uffici, cabina elettrica?) e uno nell'angolo sud-ovest; strade
+    interne asfaltate attorno alle rimesse.
+
+  Nell'export OSM del 9 novembre a Rubano ci sono solo due binari tronchi (`service=spur`) vicino a 45,4335 N,
+  11,7802 E: il deposito va disegnato dalla tavola (e dalle foto aeree quando ci saranno), con le misure dei tram a 4
+  casse (33 m).
+* **Sezione tipo** (incrocio canalizzato, 24 m da sud a nord): marciapiede 1,50, pista ciclabile 2,50, banchina 0,50,
+  corsia per le auto 3,50, **due corridoi del tram da 3,50** (veicolo largo 2,20, 1,30 tra i due tram), due corsie per
+  le auto da 3,50 (una di svolta), banchina 0,50, marciapiede 1,50. I **pali della linea aerea stanno ai bordi della
+  strada**, dietro i marciapiedi, con un tirante su tutta la carreggiata che regge i fili sopra i binari al centro.
+* **Fermata con pensilina** (lunga 33 m): rampa 3,50, 2,00, **pensilina di 17 m** in 10 moduli da 1,70 (biglietteria
+  automatica nel primo), 14 m di banchina scoperta; banchina larga 2,05, alta 25 cm sulla strada, con il parapetto
+  verso le auto. È la fermata per i tram a 3 casse (Translohr di allora); per quelli a 4 casse la banchina si allunga.
 
 ### Stazione e rete SMART
 
