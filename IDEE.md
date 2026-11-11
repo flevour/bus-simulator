@@ -98,11 +98,12 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [ ] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`;
      - [ ] capolinea della Guizza come in OSM (comunicazione prima delle banchine, anello di ritorno, deposito con
        8-9 binari e anello esterno), corsia `tram-turni`;
-     - [ ] binari di Voltabarozzo come in OSM (comunicazioni, anello di ritorno, rimessa) e segnale dello scambio che
-       mostra la posizione (all'arrivo è un pannello nero), corsia `tram-turni`;
-     - [ ] manovra al capolinea come nella realtà: scarico, avanti fino in fondo, B (cambio cabina e visuale), lo scambio
-       si mette da solo sull'altro binario, fermata di partenza (Pontevigodarzere e Voltabarozzo dall'alto), corsia
-       `tram-turni`;
+     - [~] binari di Voltabarozzo come in OSM (comunicazioni, anello di ritorno, rimessa) e segnale dello scambio che
+       mostra la posizione (all'arrivo è un pannello nero), corsia `tram-turni`: fatti la comunicazione dopo le
+       banchine e il segnale con la posizione (il pannello nero è il retro di una lanterna del tram, segnalato a
+       `traffico`); restano l'anello di ritorno e la rimessa;
+     - [x] manovra al capolinea come nella realtà: scarico, avanti fino in fondo, B (cambio cabina e visuale), lo scambio
+       si mette da solo sull'altro binario, fermata di partenza (vedi "Fatto");
      - [~] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
        manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`):
        fatta la manovra al capolinea come nella realtà con le comunicazioni di OSM (B, segnale con la posizione, N in
@@ -324,6 +325,13 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   ancora aperte B le chiude e poi cambia cabina. Dove le banchine dei due versi sono sfalsate (Voltabarozzo, i
   capolinea del SIR2) il tram si porta a fine banchina. Il tram automatico gemello della corsa dopo non parte; nel
   menu la nota "Corsa n di m del turno del tram". Prova in `tests/turni-tram.spec.js`.
+- [x] **Manovra al capolinea del tram come nella realtà** (corsia `tram-turni`, 11 novembre): discesa alla fermata
+  d'arrivo, avanti fino in fondo al binario, B cambia solo la cabina (il tram resta dov'è), ripartenza passando dallo
+  scambio fino alla fermata di partenza sull'altro binario. Gli scambi sono le comunicazioni di OSM: si passa
+  sull'altro binario dopo il cambio cabina a Voltabarozzo e Rubano, prima a Pontevigodarzere e alla Guizza; a Busa di
+  Vigonza, senza comunicazione in OSM, c'è quella del gioco. Segnale dello scambio con la posizione, N per girarlo in
+  Esplorazione e Giro libero; il SIR1 ha di nuovo i tronchi in fondo. Prove con il pilota per ogni capolinea in
+  `tests/turni-tram.spec.js`.
 
 - [x] **Gamepad e volante con pedaliera** (corsia `guida`, 11 novembre, `src/game/gamepad.js`): il gamepad con la
   mappatura standard va subito (levetta sinistra volante, RT gas, LT freno e retromarcia da fermo, pulsanti come i
