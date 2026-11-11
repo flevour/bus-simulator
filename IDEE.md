@@ -263,6 +263,11 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Bus automatici in anticipo che andavano a passo d'uomo** (segnalazione di chi gioca, corsia `traffico`, 11
+  novembre: "in Prato della Valle a 20 all'ora"): rallentavano fino a 18 km/h per arrivare in orario ed erano quasi
+  sempre in anticipo. Ora vanno al più il 15% sotto il limite e l'anticipo lo recuperano aspettando in fermata (in
+  Prato della Valle da 19 a 24 km/h di media in marcia). Resta lo stesso per i tram automatici (corsia `tram-turni`).
+
 - [x] **Incroci tra tram e traffico** (chiesto da chi gioca, corsia `traffico`, 11 novembre): chi ha il passaggio
   passa, gli altri si fermano prima dei binari, per tram automatici e di chi gioca, bus automatici e auto. Ai semafori
   il tram prende la sua fase dopo che la via tagliata ha avuto il suo verde, e auto e bus si fermano per il tram solo

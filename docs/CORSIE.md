@@ -486,18 +486,39 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
     sono nodi `railway=tram_crossing` né cartelli che la diano alla strada. Se servirà (binari dei depositi di
     `tram-scambi` che tagliano una strada col tram che dà precedenza), su quell'incrocio `x.call` resta falso fino al
     via libera e `ready` aspetta che `busy` non veda nessuno in arrivo per 5 s;
-  - il tram aspetta anche il bus di chi gioca sui binari (`busy` lo guarda dalla coda al muso più 1,5 s di strada;
-    prima vedeva solo auto e bus automatici). Il bus di chi gioca che entra nei binari di un incrocio senza semaforo
-    con un tram a meno di 12 m più 4 s (`x.close`) perde 60 punti: "🚋 Non hai dato la precedenza al tram!"
-    (`tramSignals.giveWay` in `main.js`);
+  - il tram aspetta anche il bus di chi gioca sui binari (`busy` ne guarda il corpo e, in marcia, 1,5 s di strada
+    davanti al muso; prima vedeva solo auto e bus automatici). Il bus di chi gioca che entra coi binari di un incrocio
+    senza semaforo (muso a 1,2 m dalla sagoma del tram) con un tram a meno di 12 m più 4 s (`x.close`) perde 60 punti:
+    "🚋 Non hai dato la precedenza al tram!" (`tramSignals.giveWay` in `main.js`);
+  - `busy` guarda anche il muso delle auto: in coda a passo d'uomo il muso entrava sui binari col centro ancora fuori
+    e il tram aveva il via libera (Via San Francesco);
+  - `tramCall`: col tutto rosso (due tram che vogliono fasi diverse) appena i tram rimasti passano tutti con una fase si
+    va su quella; prima si restava al tutto rosso fino a `TRAM_HOLD` (a Largo Europa, passato il SIR2 che taglia la
+    strada, il SIR1 alla lanterna di Riviera dei Ponti Romani aspettava 27 s col rosso e la strada con lui; è la causa
+    probabile dei 68 s di fermo del pilota nella prova di Ponti Romani, comparsi dopo i turni nuovi dei tram).
+    `TRAM_HOLD` si conta dall'inizio della fase tram (`tramAge`), non dal cambio;
   - `calledAhead`: con due binari vicini ci si ferma prima del primo (si restava fermi tra i due), e chi svolta verso
     binari subito dopo l'incrocio non entra se appena oltre c'è chi è fermo (la regola di `carGap` guarda solo l'arco
     su cui si è: si entrava svoltando e ci si fermava sui binari in coda, Viale della Pace).
+  - bus automatici in anticipo (segnalazione di chi gioca dell'11 novembre, "in Prato della Valle a 20 all'ora"): prima
+    rallentavano fino a 18 km/h per arrivare in orario e, col traffico leggero, erano quasi sempre in anticipo (in
+    Prato della Valle in media 19 km/h in marcia su un limite di 32, l'83% del tempo rallentati). Ora vanno al più il
+    15% sotto il limite e recuperano l'anticipo in fermata: oltre 40 s avanti si fermano anche senza prenotazioni,
+    fino all'orario (al più un minuto). Dopo: 24 km/h di media in marcia, il 71% del tempo vicino al limite. Per
+    `tram-turni`: i tram automatici fanno lo stesso (in anticipo fino a 3 m/s, `move` in `TramSim`); a 3,6 m/s il SIR1
+    tiene la fase tram di Largo Europa 26 s invece di 10, e chi aspetta col rosso lo vede passare a passo d'uomo;
   Prova in `tests/traffico.spec.js`: 20 minuti sul SIR3 tra Via San Mattia e Via Rosmini (14 incroci senza semaforo),
   tram e auto mai dentro insieme; in Via De Leva il bus di chi gioca passando davanti al tram perde 60 punti, senza
   tram no; fermo sui binari, il tram aspetta alla barra orizzontale e ha il via libera appena il bus se ne va. Resta
   un caso raro nella rotonda Rosetta Gagliardi davanti alla stazione (una volta in 40 minuti): sui pezzi corti e curvi
   della rotonda `calledAhead` guarda 20 m in linea retta oltre la svolta e non vede i binari due archi più avanti.
+  **Per `mappa`** (11 novembre): su Riviera dei Ponti Romani verso Largo Europa (arco 17836 da (53, -333) a (71, -306)
+  e il successivo fino a (77, -283)) il binario del SIR1 verso nord corre a 2,2 m dall'asse, dentro la corsia di chi
+  scende verso Largo Europa (il SIR1 verso sud sta dall'altra parte, a 1,8-4 m). Chi scende e si ferma al rosso della
+  linea d'arresto (72, -301) è sul binario del tram che arriva di fronte, e in 10,3 m non c'è posto per stargli di
+  fianco: il tram si ferma davanti al bus di chi gioca e nessuno dei due passa. Nella prova di Ponti Romani succede al
+  pilota una volta su tre dai turni nuovi dei tram (anche su `main` a `7ed830c`: fermo 128 s). Serve la corsia di chi
+  scende accanto al binario, o il binario dove sta davvero.
 - Poi, in quest'ordine: auto che rispettano STOP, precedenze e rotonde; pedoni sulle strisce con precedenza e penalità
   per chi non la dà; svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta (passate da
   `mappa`); corsie preferenziali vere, con le auto che non le usano; traffico più lento con pioggia e nebbia.
@@ -505,8 +526,9 @@ Aperta l'11 novembre 2026. Bus automatici, auto, pedoni e semafori (IDEE, "Traff
   mezzi automatici che accumulano ritardo (IDEE, "Traffico e regole"). Non è il prossimo lavoro, ma ciò che si fa ora
   (densità delle auto, semafori, bus automatici) non deve dare per scontato un traffico costante né mezzi sempre in
   orario. Le corse dei tram le gestisce `tram-turni`: quando si arriva lì, ci si accorda scrivendolo qui.
-  Cosa nel codice di oggi dà per scontato un traffico leggero (11 novembre): il numero di auto è fisso
-  (`Traffic.target`, `opts.count`); le uscite dagli stalli contano il tempo e non chi aspetta chi, e con code vere
+  Cosa nel codice di oggi dà per scontato un traffico leggero (11 novembre): il numero di auto dipende dall'ora di
+  partenza e dal giorno ma resta quello per tutta la corsa, al più 72 entro 1,5 km dal giocatore (`count` in `main.js`,
+  `Traffic.target`); le uscite dagli stalli contano il tempo e non chi aspetta chi, e con code vere
   scatterebbero anche dove la coda si muove: auto ferme lontane che spariscono dopo 20 s su un incrocio col tram
   (`unstick`) o davanti a un tram (`carT`), tram che passa attraverso un bus fermo dopo 90 s (`busT`; dopo 4 s solo se
   il bus aspetta lui, `mutual`). Prima degli ingorghi vanno legate a un'attesa reciproca, come `mutual`. Regge già le

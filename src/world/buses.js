@@ -532,17 +532,21 @@ export class BusSim {
       let wantLat = 0;
       if (b.k < st.length) {
         const s0 = st[b.k], d = s0.fs - front;
-        // in anticipo sull'orario si va più piano (mai sotto i 18 km/h), così non si aspetta a ogni fermata
+        // in anticipo sull'orario si va appena più piano (al più il 15% sotto il limite) e l'anticipo si recupera in
+        // fermata: più di 40 s avanti ci si ferma anche senza prenotazioni, fino all'orario. Prima si scendeva fino a
+        // 18 km/h e, col traffico leggero, i bus erano quasi sempre in anticipo: in Prato della Valle andavano in media a
+        // 19 km/h dove il limite era 32
         const left = b.run.times[b.k] - clock;
-        if (b.phase === 'line' && b.k > 0 && left > 4 && d > 15) vt = Math.min(vt, Math.max(5, (d / left) * 1.1));
+        if (b.phase === 'line' && b.k > 0 && left > 4 && d > 15) vt = Math.min(vt, Math.max(vt * 0.85, (d / left) * 1.1));
+        if (b.phase === 'line' && b.k > 0 && b.k < st.length - 1 && !b.serve[b.k] && left > 40 && d < 80) b.serve[b.k] = true;
         if (b.serve[b.k]) {
           vt = Math.min(vt, Math.sqrt(2 * 1.2 * Math.max(0, d)) + (d > 0.6 ? 0.25 : 0));
           if (d < 30) wantLat = s0.extra;
           if (d < 0.6) {
             b.s = s0.fs - FRONT; b.v = 0; b.atStop = true; b.doorTarget = 1;
-            // salita e discesa; in anticipo si aspetta l'orario (al massimo un paio di minuti); al capolinea l'orario
+            // salita e discesa; in anticipo si aspetta l'orario (al massimo un minuto); al capolinea l'orario
             const T = b.run.times[b.k];
-            b.wait = b.k === 0 ? Math.max(5, b.run.t - clock) : b.k === st.length - 1 ? 18 : Math.max(8 + this.rnd() * 12, Math.min(40, T - clock));
+            b.wait = b.k === 0 ? Math.max(5, b.run.t - clock) : b.k === st.length - 1 ? 18 : Math.max(8 + this.rnd() * 12, Math.min(60, T - clock));
             this.doorsStep(b, dt);
             continue;
           }

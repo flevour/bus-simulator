@@ -384,14 +384,17 @@ export class TrafficLights {
     const shown = [this.stateOf(sig, 0), this.stateOf(sig, 1)];
     const has = (p) => sig.appr.some((a) => a.phase === p);
     if (sig.tramT > 0) {
-      if (sig.tramT > TRAM_HOLD) sig.tramOpen = false;
+      sig.tramAge += dt;
+      if (sig.tramAge > TRAM_HOLD) sig.tramOpen = false;
       // serviti: chi ha il via libera, il tram che ce l'ha già su un altro incrocio dell'impianto e, a fase aperta,
       // tutti gli altri. Se uno di loro non passa con la fase scelta, si va verso una più stretta (al limite tutto
-      // rosso) ripartendo da quello che si vede
+      // rosso) ripartendo da quello che si vede; col tutto rosso, appena i serviti passano tutti con una fase si va su
+      // quella (prima si restava al tutto rosso fino a TRAM_HOLD: a Largo Europa, passato il SIR2 che taglia la strada,
+      // il SIR1 alla lanterna di Riviera dei Ponti Romani aspettava 27 s col rosso e la strada con lui)
       const served = calls.filter((x) => sig.tramOpen || x.state === 'V' || x.who.some((t) => sig.vTrams.has(t)));
       if (served.length) {
-        if (sig.tramPh !== -1 && !served.every((x) => x.free.includes(sig.tramPh))) {
-          const free = [0, 1].filter((p) => has(p) && served.every((x) => x.free.includes(p)));
+        const free = [0, 1].filter((p) => has(p) && served.every((x) => x.free.includes(p)));
+        if (sig.tramPh === -1 ? free.length : !served.every((x) => x.free.includes(sig.tramPh))) {
           sig.tramFrom = shown;
           sig.tramPh = free.find((p) => shown[p] === 'G') ?? free[0] ?? -1;
           sig.tramT = 0;
@@ -422,6 +425,7 @@ export class TrafficLights {
     sig.tramFrom = shown;
     sig.tramPh = ph;
     sig.tramT = dt;
+    sig.tramAge = dt;
     sig.tramOpen = true;
     sig.postT = 0;
   }
@@ -1602,12 +1606,12 @@ export class TramSignals {
       }
     }
     for (const sg of this.sigs) this.lights.tramCall(sg, sg._calls, dt);
-    // chi guida il bus entra nella fascia dei binari di un incrocio senza semaforo con il tram vicino: non gli ha dato
-    // la precedenza (col semaforo vale il rosso)
+    // chi guida il bus entra coi binari di un incrocio senza semaforo (il muso a 1,2 m dalla sagoma del tram, non nel
+    // margine della fascia) con il tram vicino: non gli ha dato la precedenza (col semaforo vale il rosso)
     const b = this.player;
     if (b) {
       const fx = Math.sin(b.h), fz = Math.cos(b.h), px = b.x + fx * 6, pz = b.z + fz * 6, inside = new Set();
-      for (const x of this.nearXY(px, pz)) if (this.cuts(x, px, pz, fx, fz)) inside.add(x);
+      for (const x of this.nearXY(px, pz)) if (this.cuts(x, px, pz, fx, fz, TRAM.lane + 0.6)) inside.add(x);
       for (const x of inside) if (!this.pIn.has(x) && !x.sig && x.close && b.v > 1) this.giveWay.push(x);
       this.pIn = inside;
     }
@@ -1616,46 +1620,43 @@ export class TramSignals {
   // incrocio occupato: qualcuno che taglia il binario (anche fermo) è nella fascia dei binari o ci arriva entro 1,5 s;
   // delle auto in svolta conta il resto della curva. Chi va lungo il binario (col verde del tram) non conta
   busy(x, traffic) {
-    for (const c of traffic.near(x.px, x.pz, x.halfT + 25)) {
-      if (c.isTram) continue;
-      const fx = Math.sin(c.h), fz = Math.cos(c.h);
-      if (c.turn) {
-        const { p0, p1, p2 } = c.turn;
-        for (let t = c.turn.t; t <= 1.001; t += 0.1) {
-          const u = 1 - t;
-          if (this.cuts(x, u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z, u * (p1.x - p0.x) + t * (p2.x - p1.x), u * (p1.z - p0.z) + t * (p2.z - p1.z))) return true;
-        }
-      } else if (this.cuts(x, c.x, c.z, fx, fz) || (c.v > 0.5 && this.cuts(x, c.x + fx * c.v * 1.5, c.z + fz * c.v * 1.5, fx, fz))) return true;
-    }
-    // il bus di chi gioca: dalla coda al muso, più 1,5 s di strada
+    for (const c of traffic.near(x.px, x.pz, x.halfT + 25)) if (!c.isTram && this.covers(x, c, 1.5)) return true;
+    // il bus di chi gioca, come quelli automatici: il corpo (non il muso, che alla linea d'arresto può sporgere nel
+    // margine della fascia: si teneva la barra orizzontale al tram e la fase tram del semaforo restava aperta) e, in
+    // marcia, 1,5 s di strada davanti al muso
     const b = this.player;
     if (b && Math.hypot(b.x - x.px, b.z - x.pz) < x.halfT + 40) {
       const fx = Math.sin(b.h), fz = Math.cos(b.h);
-      for (const l of [-6, -3, 0, 3, 6, 6 + Math.max(0, b.v) * 1.5]) if (this.cuts(x, b.x + fx * l, b.z + fz * l, fx, fz)) return true;
+      for (const l of b.v > 0.5 ? [-4, 0, 4, 6 + b.v * 1.5] : [-4, 0, 4]) if (this.cuts(x, b.x + fx * l, b.z + fz * l, fx, fz)) return true;
     }
     return false;
   }
-  unstick(x, traffic) {
-    for (const c of traffic.near(x.px, x.pz, x.halfT + 25)) {
-      if (!c.car || !c.far || c.v > 0.3) continue;
-      const fx = Math.sin(c.h), fz = Math.cos(c.h);
-      let on = this.cuts(x, c.x, c.z, fx, fz);
-      if (!on && c.turn) {
-        const { p0, p1, p2 } = c.turn;
-        for (let t = c.turn.t; t <= 1.001 && !on; t += 0.1) {
-          const u = 1 - t;
-          on = this.cuts(x, u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z, u * (p1.x - p0.x) + t * (p2.x - p1.x), u * (p1.z - p0.z) + t * (p2.z - p1.z));
-        }
+  // l'auto o il pezzo di bus c taglia i binari dell'incrocio x: in svolta col resto della curva, se no col centro e, per
+  // le auto, col muso (2,1 m avanti: in coda a passo d'uomo il muso entrava sui binari col centro ancora fuori, e il tram
+  // aveva il via libera), più ahead secondi di strada in marcia. Lo stesso per busy e unstick: chi tiene occupato
+  // l'incrocio deve poter sparire (prima unstick guardava solo il centro e un SIR2 aspettava 11 minuti a Porta Savonarola)
+  covers(x, c, ahead) {
+    const fx = Math.sin(c.h), fz = Math.cos(c.h);
+    if (c.turn) {
+      const { p0, p1, p2 } = c.turn;
+      for (let t = c.turn.t; t <= 1.001; t += 0.1) {
+        const u = 1 - t;
+        if (this.cuts(x, u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z, u * (p1.x - p0.x) + t * (p2.x - p1.x), u * (p1.z - p0.z) + t * (p2.z - p1.z))) return true;
       }
-      if (on) c.overlapT = 3;
+      return false;
     }
+    const m = c.car ? 2.1 : 0;
+    return this.cuts(x, c.x, c.z, fx, fz) || (m > 0 && this.cuts(x, c.x + fx * m, c.z + fz * m, fx, fz)) || (ahead > 0 && c.v > 0.5 && this.cuts(x, c.x + fx * (m + c.v * ahead), c.z + fz * (m + c.v * ahead), fx, fz));
+  }
+  unstick(x, traffic) {
+    for (const c of traffic.near(x.px, x.pz, x.halfT + 25)) if (c.car && c.far && c.v <= 0.3 && this.covers(x, c, 0)) c.overlapT = 3;
   }
   // il punto (px, pz), andando verso (dx, dz), è nella fascia dei binari dell'incrocio x e li taglia (non ci corre lungo;
   // gli incroci di sbieco sono quasi tutti strade lungo il binario, come Via Piovese col SIR3, che lo incrociano solo
-  // perché la linea OSM e il tracciato del tram non combaciano: chi le percorre gli corre accanto)
-  cuts(x, px, pz, dx, dz) {
+  // perché la linea OSM e il tracciato del tram non combaciano: chi le percorre gli corre accanto); band: metri dall'asse
+  cuts(x, px, pz, dx, dz, band = BAND) {
     const rx = px - x.px, rz = pz - x.pz;
-    if (Math.abs(rx * x.tdx + rz * x.tdz) > x.halfT || Math.abs(rx * x.tdz - rz * x.tdx) > BAND) return false;
+    if (Math.abs(rx * x.tdx + rz * x.tdz) > x.halfT || Math.abs(rx * x.tdz - rz * x.tdx) > band) return false;
     return Math.abs(dx * x.tdx + dz * x.tdz) < 0.8 * (Math.hypot(dx, dz) || 1);
   }
   // incroci col tram nella cella da 40 m del punto e in quelle accanto
