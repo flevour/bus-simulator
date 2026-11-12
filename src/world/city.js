@@ -16,6 +16,9 @@ const Y_GREEN = 0.05; // prati e aiuole del DBGT, sopra il prato generico e sott
 const SIDEWALK = 4;
 // aree a richiesta (src/data/aree.js): si scaricano entro AREA_NEAR metri dal bus, si liberano oltre AREA_FAR
 const AREA_NEAR = 1500, AREA_FAR = 2600;
+// edifici accanto ai binari dei depositi del tram (City.depotRole): niente case a meno di DEPOT_CLEAR m dall'asse, edifici
+// di servizio fino a DEPOT_NEAR m; nella rimessa le pareti si aprono a meno di DEPOT_DOOR m
+const DEPOT_CLEAR = 2, DEPOT_NEAR = 6, DEPOT_DOOR = 2.8;
 
 // strati coplanari: spinge in avanti nel depth buffer (evita z-fighting)
 // segno della strada (righe, strisce, frecce, scritte, dossi): il rapporto della mappa conta quelli sopra la sede del
@@ -99,6 +102,15 @@ function pointInPoly(x, z, pts) {
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const [xi, zi] = pts[i], [xj, zj] = pts[j];
     if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// lo stesso con i punti { x, z } (piante degli edifici)
+function inRing(x, z, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j];
+    if ((a.z > z) !== (b.z > z) && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) inside = !inside;
   }
   return inside;
 }
@@ -1441,6 +1453,16 @@ export class City {
     // depositi (TramYard, binari OSM di data/tram-depositi.json): rami con corsia rossa e rotaia, senza cordoli (dove i
     // binari si avvicinano agli scambi si sovrapporrebbero)
     this.tramYards = TRAM_DEPOTS.filter((d) => this.tramTracks[d.line]).map((d) => new TramYard(d, this.tramTracks[d.line]));
+    // binari dei depositi in una griglia, per gli edifici che arrivano con le aree (depotRole); i capi dei binari tronchi
+    // (un ramo solo, non una porta) sono il fondo dei binari della rimessa
+    this.yardSegs = new Grid(20);
+    for (const Y of this.tramYards) {
+      for (const e of Y.edges) for (let i = 0; i < e.pts.length - 1; i++) {
+        const a = e.pts[i], b = e.pts[i + 1];
+        this.yardSegs.insertAABB({ ax: a.x, az: a.z, bx: b.x, bz: b.z, pass: e.tunnel === 'building_passage' }, Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z));
+      }
+      Y.deadEnds = Y.nodes.filter((N) => N.ends.length === 1 && !N.ends[0].port);
+    }
     const bed = new GeoBuilder();
     for (const Y of this.tramYards) for (const e of Y.edges) for (let i = 0; i < e.pts.length - 1; i++) {
       const a = e.pts[i], b = e.pts[i + 1];
@@ -1476,7 +1498,6 @@ export class City {
     if (poles.length) { const pm = new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x6f767c })); pm.castShadow = true; this.group.add(pm); }
     if (wires.length) this.group.add(new THREE.Mesh(mergeGeometries(wires), new THREE.MeshBasicMaterial({ color: 0x2a2d30 })));
     if (bed.pos.length) { const bm = new THREE.Mesh(bed.build(), layer(new THREE.MeshLambertMaterial({ color: 0x8a8781 }), 4.2)); bm.receiveShadow = true; this.group.add(bm); }
-    for (const Y of this.tramYards) this.buildDepotShed(Y);
     // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per ogni verso
     const pan = [], panTex = TX.pantographSignTexture();
     for (const track of tracks) for (const dir of [1, -1]) {
@@ -1545,30 +1566,68 @@ export class City {
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
   }
 
-  // Rimessa del deposito sopra i binari che in OSM passano nell'edificio (tunnel=building_passage; la mappa alla Guizza
-  // non ha il capannone): tetto e pareti lunghe orientati come i binari, 3 m oltre quelli esterni; le testate aperte, con
-  // solo l'architrave sopra il pantografo alzato
-  buildDepotShed(Y) {
-    const inside = Y.edges.filter((e) => e.tunnel === 'building_passage');
-    if (!inside.length) return;
-    let dx = 0, dz = 0;
-    for (const e of inside) { const a = e.pts[0], b = e.pts[e.pts.length - 1], l = Math.hypot(b.x - a.x, b.z - a.z) || 1, k = dx * (b.x - a.x) + dz * (b.z - a.z) < 0 ? -1 : 1; dx += (k * (b.x - a.x)) / l; dz += (k * (b.z - a.z)) / l; }
-    const l = Math.hypot(dx, dz) || 1;
-    dx /= l; dz /= l;
-    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
-    for (const e of inside) for (const p of e.pts) { const u = p.x * dx + p.z * dz, v = -p.x * dz + p.z * dx; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
-    v0 -= 3; v1 += 3;
-    const H = 6.6, len = u1 - u0, wid = v1 - v0, cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, ang = Math.atan2(dx, dz);
-    const at = (u, v) => ({ x: u * dx - v * dz, z: u * dz + v * dx });
-    const geo = [];
-    const box = (w, h, d, u, v, y) => { const c = at(u, v); geo.push(new THREE.BoxGeometry(w, h, d).rotateY(ang).translate(c.x, Y_ROAD + y, c.z)); };
-    box(wid + 0.6, 0.35, len, cu, cv, H); // tetto
-    for (const v of [v0, v1]) box(0.3, H, len, cu, v, H / 2); // pareti lunghe
-    for (const u of [u0, u1]) box(wid, 0.9, 0.3, u, cv, H - 0.45); // architravi delle testate
-    for (let u = u0; u <= u1 + 0.1; u += len / Math.max(1, Math.round(len / 8))) for (const v of [v0, v1]) box(0.45, H, 0.45, u, v, H / 2); // pilastri
-    const m = new THREE.Mesh(mergeGeometries(geo), new THREE.MeshLambertMaterial({ color: 0xb9b4aa }));
-    m.castShadow = m.receiveShadow = true;
-    this.group.add(m);
+  // Edificio della mappa accanto ai binari dei depositi (#66), deciso quando arriva con la sua area (addBuildings):
+  // - 'rimessa': i binari ci finiscono dentro (capi dei binari tronchi) o ci passano con tunnel=building_passage in OSM
+  //   (alla Guizza; a Voltabarozzo OSM non lo dice): è la rimessa vera e si disegna come capannone (buildDepotShed);
+  // - 'binari': i binari ci passano sopra o a meno di DEPOT_CLEAR metri dall'asse, e non è la rimessa: non si disegna
+  //   (alla Guizza una pianta di Microsoft ML sull'anello sud, che OSM non ha, era una casa in mezzo ai binari);
+  // - 'servizio': entro DEPOT_NEAR metri, edificio del deposito: tetto piano e colore da capannone, non da casa.
+  depotRole(b) {
+    if (!this.yardSegs) return null;
+    const P = b.pts;
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (const p of P) { x0 = Math.min(x0, p.x); z0 = Math.min(z0, p.z); x1 = Math.max(x1, p.x); z1 = Math.max(z1, p.z); }
+    const segs = this.yardSegs.query((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + DEPOT_NEAR, this._yq || (this._yq = []));
+    if (!segs.length) return null;
+    let d = Infinity, pass = false;
+    for (const s of segs) {
+      const a = { x: s.ax, z: s.az }, c = { x: s.bx, z: s.bz };
+      let ds = inRing(a.x, a.z, P) || inRing(c.x, c.z, P) ? 0 : Infinity;
+      for (let i = 0; i < P.length && ds > 0; i++) {
+        const p = P[i], q = P[(i + 1) % P.length];
+        ds = segIntersect(a, c, p, q) !== null ? 0 : Math.min(ds, distToSeg(p.x, p.z, a.x, a.z, c.x, c.z).d, distToSeg(a.x, a.z, p.x, p.z, q.x, q.z).d, distToSeg(c.x, c.z, p.x, p.z, q.x, q.z).d);
+      }
+      if (ds === 0 && s.pass) pass = true;
+      d = Math.min(d, ds);
+    }
+    if (d >= DEPOT_NEAR) return null;
+    if (d >= DEPOT_CLEAR) return 'servizio';
+    return pass || this.tramYards.some((Y) => Y.deadEnds.some((N) => inRing(N.x, N.z, P))) ? 'rimessa' : 'binari';
+  }
+
+  // Rimessa del deposito sulla pianta vera dell'edificio (depotRole): capannone senza finestre, tetto piano, alto tra 7 e
+  // 9 m. Le pareti si aprono dove passa un binario (a meno di DEPOT_DOOR metri dall'asse) e lì resta solo l'architrave,
+  // sopra il pantografo alzato. I muri chiusi sono ostacoli e restano in b.muri (per tests/mappa.spec.js)
+  buildDepotShed(b, tile) {
+    const H = Math.max(7, Math.min(b.h || 8, 9)), door = CATENARY_HEIGHT + 0.4, q = this._yq || (this._yq = []);
+    if (!this.shedMat) {
+      this.shedMat = new THREE.MeshLambertMaterial({ color: 0xb9b4aa });
+      this.shedRoofMat = new THREE.MeshLambertMaterial({ color: 0x8d8a84, side: THREE.DoubleSide });
+    }
+    const open = (x, z) => this.yardSegs.query(x, z, DEPOT_DOOR, q).some((s) => distToSeg(x, z, s.ax, s.az, s.bx, s.bz).d < DEPOT_DOOR);
+    const walls = [];
+    b.muri = [];
+    for (const ring of [b.pts, ...(b.holes || [])]) for (let i = 0; i < ring.length; i++) {
+      const p = ring[i], r = ring[(i + 1) % ring.length], n = Math.max(1, Math.ceil(Math.hypot(r.x - p.x, r.z - p.z) / 0.5));
+      const at = (k) => ({ x: p.x + ((r.x - p.x) * k) / n, z: p.z + ((r.z - p.z) * k) / n });
+      // il lato a pezzi da mezzo metro, aperti o chiusi; ogni tratto uguale è un muro (o un architrave)
+      const flags = [];
+      for (let k = 0; k < n; k++) { const m = at(k + 0.5); flags.push(open(m.x, m.z)); }
+      for (let k0 = 0; k0 < n;) {
+        let k1 = k0 + 1;
+        while (k1 < n && flags[k1] === flags[k0]) k1++;
+        const a = at(k0), c = at(k1), l = Math.hypot(c.x - a.x, c.z - a.z), ang = Math.atan2(-(c.z - a.z), c.x - a.x), y0 = flags[k0] ? door : 0;
+        if (l > 0.05) {
+          walls.push(new THREE.BoxGeometry(l + 0.3, H - y0, 0.3).rotateY(ang).translate((a.x + c.x) / 2, (y0 + H) / 2, (a.z + c.z) / 2));
+          if (!flags[k0]) { b.muri.push([a.x, a.z, c.x, c.z]); tile.obs.push(this.addObstacle((a.x + c.x) / 2, (a.z + c.z) / 2, l / 2, 0.3, ang, 'building')); }
+        }
+        k0 = k1;
+      }
+    }
+    const shape = new THREE.Shape(b.pts.map((p) => new THREE.Vector2(p.x, -p.z)));
+    for (const h of b.holes || []) shape.holes.push(new THREE.Path(h.map((p) => new THREE.Vector2(p.x, -p.z))));
+    const wm = new THREE.Mesh(mergeGeometries(walls), this.shedMat), rm = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).translate(0, H, 0), this.shedRoofMat);
+    for (const m of [wm, rm]) { m.castShadow = m.receiveShadow = true; this.group.add(m); tile.meshes.push(m); }
   }
 
   // Segnale dello scambio (bivi e scambi dei capolinea di TramNet, scambi dei depositi), dal suo panel: palo in sig,
@@ -2237,6 +2296,10 @@ export class City {
   addBuildings(list, area) {
     const T = this.tileSize;
     for (const b of list) {
+      // accanto ai binari dei depositi: rimessa, edificio di servizio o, sopra i binari, niente
+      b.deposito = this.depotRole(b);
+      if (b.deposito === 'binari') { (this.depotDropped || (this.depotDropped = new Map())).set(b.pts[0].x + ',' + b.pts[0].z, b); continue; }
+      if (b.deposito === 'servizio') b.kind = 'industrial';
       let cx = 0, cz = 0;
       for (const p of b.pts) { cx += p.x; cz += p.z; }
       b.cx = cx / b.pts.length; b.cz = cz / b.pts.length;
@@ -2317,7 +2380,7 @@ export class City {
     o.traverse((m) => {
       if (m.isInstancedMesh) { m.dispose(); return; } // geometrie e materiali degli alberi sono condivisi
       if (m.geometry) m.geometry.dispose();
-      for (const mt of [].concat(m.material || [])) if (![this.bMat, this.rMat, this.walkMat, this.greenMat].includes(mt)) mt.dispose();
+      for (const mt of [].concat(m.material || [])) if (![this.bMat, this.rMat, this.walkMat, this.greenMat, this.shedMat, this.shedRoofMat].includes(mt)) mt.dispose();
     });
   }
 
@@ -2414,6 +2477,7 @@ export class City {
       const area2 = ringArea2(pts);
       const area = Math.abs(area2) / 2 - holes.reduce((s, h) => s + Math.abs(ringArea2(h)) / 2, 0);
       if (area < 4) continue;
+      if (b.deposito === 'rimessa') { this.buildDepotShed(b, tile); continue; }
       const cx = b.cx, cz = b.cz;
       const r = hash(cx, cz);
       // seme per lo shader: negativo = portici misurati alti -seme; sopra 0,42 = niente portici (misurato senza); se non

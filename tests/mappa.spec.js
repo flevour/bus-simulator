@@ -20,7 +20,7 @@ import { test, expect } from './gioco.js';
 // 22, 24 e 88 intere): paline in carreggiata 3, Park Bembo e Capolinea Park Bembo della 3 sotto il nastro di Corso
 // Primo Maggio, come Piovese fr. Park; ostacoli 10, la pensilina di Bembo Rotonda via Ponchia (3 verso Lion) all'uscita
 // della rotonda, da sistemare; fuori strada 7, Capolinea Caselle della 10 snodata nel piazzale della rotonda (5,1 m);
-// spostate 3
+// spostate 3. 12 novembre (#66): nessun edificio sui binari dei depositi del tram, né a meno di 2 m dal loro asse
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 3,
@@ -32,6 +32,7 @@ const SOGLIE = {
   fermate_spostate: 3,
   segni_sulla_sede: 0,
   asfalto_sopra_sede: 0,
+  edifici_sui_binari_dei_depositi: 0,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',
@@ -44,6 +45,7 @@ const NOMI = {
   fermate_spostate: 'fermate agganciate a più di 40 m dalla fermata vera',
   segni_sulla_sede: 'quadrati di 10 m con segni della strada sopra la sede del tram',
   asfalto_sopra_sede: 'quadrati di 10 m con asfalto sopra la sede del tram',
+  edifici_sui_binari_dei_depositi: 'edifici sopra i binari dei depositi del tram o a meno di 2 m dal loro asse',
 };
 
 test('rapporto di verifica sulla mappa', async ({ pagina, gioco }, info) => {
@@ -138,6 +140,35 @@ function misura() {
   }
   casi.segni_sulla_sede = [...segni.values()];
   casi.asfalto_sopra_sede = [...asfalto.values()];
+
+  // edifici sui binari dei depositi del tram (#66): piante disegnate come edifici sopra un binario di un deposito o a meno
+  // di 2 m dal suo asse, e muri chiusi delle rimesse (disegnate come capannone sulla pianta vera, City.buildDepotShed) a
+  // meno di 2 m. Si costruiscono i riquadri degli edifici attorno ai depositi
+  casi.edifici_sui_binari_dei_depositi = [];
+  const ruoli = {};
+  for (const Y of city.tramYards || []) {
+    const assi = Y.edges.flatMap((e) => e.pts.slice(1).map((p, i) => [e.pts[i].x, e.pts[i].z, p.x, p.z]));
+    const xs = assi.flatMap((a) => [a[0], a[2]]), zs = assi.flatMap((a) => [a[1], a[3]]);
+    const x0 = Math.min(...xs) - 10, x1 = Math.max(...xs) + 10, z0 = Math.min(...zs) - 10, z1 = Math.max(...zs) + 10;
+    city.ensureTiles((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2);
+    const dp = (px, pz, [ax, az, bx, bz]) => { const ex = bx - ax, ez = bz - az, t = Math.max(0, Math.min(1, ((px - ax) * ex + (pz - az) * ez) / (ex * ex + ez * ez || 1))); return Math.hypot(px - ax - ex * t, pz - az - ez * t); };
+    const taglia = (a, b) => { const o = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]); const A = [a[0], a[1]], B = [a[2], a[3]], C = [b[0], b[1]], D = [b[2], b[3]]; return o(A, B, C) * o(A, B, D) < 0 && o(C, D, A) * o(C, D, B) < 0; };
+    const dseg = (a, b) => (taglia(a, b) ? 0 : Math.min(dp(a[0], a[1], b), dp(a[2], a[3], b), dp(b[0], b[1], a), dp(b[2], b[3], a)));
+    const dentro = (x, z, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i].z > z) !== (P[j].z > z) && x < ((P[j].x - P[i].x) * (z - P[i].z)) / (P[j].z - P[i].z) + P[i].x) c = !c; return c; };
+    for (const t of city.tiles.values()) for (const b of t.list) {
+      if (!b.pts.some((p) => p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1)) continue;
+      const rimessa = b.deposito === 'rimessa';
+      if (b.deposito) ruoli[b.deposito] = (ruoli[b.deposito] || 0) + 1;
+      const lati = rimessa ? b.muri || [] : b.pts.map((p, i) => { const q = b.pts[(i + 1) % b.pts.length]; return [p.x, p.z, q.x, q.z]; });
+      let d = Infinity;
+      for (const a of assi) {
+        if (!rimessa && (dentro(a[0], a[1], b.pts) || dentro(a[2], a[3], b.pts))) d = 0;
+        for (const l of lati) d = Math.min(d, dseg(a, l));
+      }
+      if (d < 2) casi.edifici_sui_binari_dei_depositi.push({ deposito: Y.name, cosa: rimessa ? 'muro della rimessa' : 'edificio', x: Math.round(b.cx), z: Math.round(b.cz), h: b.h, metri: tondo(d) });
+    }
+  }
+  distribuzioni['edifici accanto ai binari dei depositi'] = { rimesse: ruoli.rimessa || 0, 'di servizio': ruoli.servizio || 0, tolti: city.depotDropped ? city.depotDropped.size : 0 };
 
   // fermate di tutte le varianti: si avvia la corsa (le fermate si allineano alle paline come in gioco) e si mette il
   // bus nella posizione di fermata (stopPose di src/game/routes.js)

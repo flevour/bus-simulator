@@ -557,7 +557,7 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   manovra con B in fondo resta quella di prima. Prova in `tests/bivi-tram.spec.js`.
 - Depositi della Guizza e di Voltabarozzo (11 novembre). Dati: `scripts/tram_depositi.py` → `data/tram-depositi.json`
   (way OSM attorno al deposito), `TRAM_DEPOTS` in `padova.js`; la mappa non cambia. Grafo: `TramYard` in `tram.js`
-  (`city.tramYards`, disegnato in `buildTramway`, rimessa in `buildDepotShed`); porte 6 m prima della fine dei binari
+  (`city.tramYards`, disegnato in `buildTramway`; rimessa ed edifici accanto ai binari sotto, #66); porte 6 m prima della fine dei binari
   della linea, sulla way OSM che prosegue; scambi con `options` (il più dritto prima), `home` verso l'uscita più
   vicina, `reset()` a ogni corsa. Il tram di chi gioca (`bus.yards`, solo fuori servizio): `Tram.yardEnter`,
   `yardStep`, `yardRebuild`, `yardAhead` (per N), `reseat`. Fuori servizio, ai capolinea con lo scambio, tutto il tram
@@ -572,6 +572,18 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   (`a8e086f`) è una porta a metà del binario di partenza (`pt.mid`, `state` 'linea'/'deposito', N);
   `tram_depositi.py` tiene le comunicazioni, e quelle dei capolinea cadono da sole (i pezzi di way sopra i binari del
   gioco si tolgono).
+- Edifici accanto ai binari dei depositi (#66, 12 novembre). I binari dei depositi non entrano nella pianta delle
+  strade, quindi la mappa non sa che lì ci sono: lo decide il gioco quando l'edificio arriva con la sua area
+  (`City.depotRole` in `addBuildings`, binari in `city.yardSegs`, capi dei binari tronchi in `Y.deadEnds`). Rimessa:
+  i binari ci finiscono dentro o ci passano con `tunnel=building_passage` (alla Guizza la way OSM 1430642570, a
+  Voltabarozzo la 1453989052 con `depot=tram`, dove OSM non mette `building_passage`); `buildDepotShed(b, tile)` la
+  disegna sulla pianta vera, capannone senza finestre alto da 7 a 9 m, pareti aperte a meno di 2,8 m dall'asse di un
+  binario con l'architrave sopra 6 m, muri chiusi come ostacoli e in `b.muri`. La vecchia rimessa a scatola sui soli
+  binari `building_passage` non c'è più. Sopra i binari o a meno di 2 m dall'asse, e non rimessa: l'edificio non si
+  disegna (`city.depotDropped`; alla Guizza una pianta di Microsoft ML sull'anello sud che OSM non ha, la casa della
+  segnalazione). Entro 6 m: edificio di servizio (`kind` 'industrial', tetto piano). Conteggio in
+  `tests/mappa.spec.js` (`edifici_sui_binari_dei_depositi`, soglia 0). Un deposito nuovo con la rimessa in OSM la
+  prende da solo, se i binari ci finiscono dentro; senza l'edificio nella mappa non c'è rimessa.
 - Deposito di Rubano: fermo dall'11 novembre, da decidere (#8, con i dati OSM e le strade possibili).
 
 Verifiche: regola 3, guida con il pilota a ogni capolinea dei tram e nei depositi, foto dalla cabina agli scambi, tram
