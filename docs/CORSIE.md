@@ -1,8 +1,11 @@
 # Corsie di lavoro in parallelo
 
-I lavori di [`IDEE.md`](../IDEE.md) procedono in parallelo, ognuno in un worktree herdr con il suo ramo locale
-(lo space `bus-simulator` raccoglie il checkout principale e i worktree). Ogni corsia pubblica su `main` con commit
-piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief delle corsie aperte sono in fondo.
+Il lavoro da fare sta nelle [issue di GitHub](https://github.com/flevour/bus-simulator/issues), come spiega
+[`docs/agents/issue-tracker.md`](agents/issue-tracker.md). Ogni area del gioco ha la sua corsia: un worktree herdr con
+il suo ramo locale (lo space `bus-simulator` raccoglie il checkout principale e i worktree). La corsia prende i ticket
+della sua area uno alla volta, con una sessione nuova per ticket, e pubblica su `main` con commit piccoli, come il resto
+del progetto. Questo file dice chi tocca cosa. In fondo ci sono le note delle corsie: file e funzioni di ognuna, e cosa
+hanno cambiato nel lavoro delle altre.
 
 ## Regole per tutte le corsie
 
@@ -37,8 +40,12 @@ piccoli, come il resto del progetto. Questo file dice chi tocca cosa; i brief de
    VITE_POSTHOG_KEY= VITE_POSTHOG_HOST= npm run build && npx vite preview --port <preview>
    ```
 7. Dopo modifiche a strade, fermate o edifici: percorsi dei bus liberi e fermate raggiungibili (vedi `CLAUDE.md`).
-8. A lavoro finito si sposta la voce in "Fatto" in `IDEE.md` e si aggiorna questo file (corsia chiusa o prossimo
-   lavoro).
+8. Ticket: prima gli `urgente` dell'area, poi il primo `pronto` libero e senza bloccanti aperti. Si prende
+   assegnandolo e scrivendo il nome della corsia in un commento, prima di lavorarci. Il commit che lo finisce ha in
+   fondo `Closes #<n>`. Le cose trovate per strada diventano issue nuove. Dettagli in
+   [`docs/agents/issue-tracker.md`](agents/issue-tracker.md). La sezione "Fatto" di `IDEE.md` non si aggiorna più.
+9. Quando si cambia una funzione di un'altra corsia (tabella sotto), lo si scrive nella nota della propria corsia qui
+   in fondo e nel commento di chiusura del ticket.
 
 ## File condivisi
 

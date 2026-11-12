@@ -19,8 +19,12 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
 
 ## Idee e specifiche
 
-* `IDEE.md`: elenco delle idee e dei prossimi passi. Aggiungi lì le nuove idee e spostale in "Fatto" quando sono
-  realizzate.
+* Il lavoro da fare sta nelle **issue di GitHub** (label `area:*`, `pronto`, `da-decidere`, `urgente`; issue madri con
+  sotto-issue). Come si scrive, si prende e si chiude un ticket è in
+  [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). Il commit che chiude un ticket ha in fondo
+  `Closes #<n>`. Il repository è pubblico: niente dati personali nelle issue, immagini citate per percorso locale.
+* `IDEE.md`: idee non ancora pronte per diventare un ticket. La sezione "Fatto" non si aggiorna più: la storia sta
+  nelle issue chiuse e nei commit.
 * `src/data/novita.js`: novità per chi gioca, mostrate nel menu a chi torna. Per ogni modifica che si vede in gioco
   aggiungi in cima una riga in italiano semplice (cosa cambia per chi guida, non come è fatto), con `n` successivo e la
   data del giorno, nello stesso commit della modifica.
