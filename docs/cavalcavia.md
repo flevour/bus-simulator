@@ -115,7 +115,7 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
   `data/dtm-padova.json` i rilevati delle rampe ci sono e le campate no: Chiesanuova 8,5 e 8,8 m alle testate, 2,2 m a
   metà impalcato; Borgomagno 1,6 e 3,2 m, −0,6 m; San Marco 3,2 e 5,1 m, 0,2 m. **Inferenza** (misura sulla griglia a
   10 m). Quindi `docs/OPEN_DATA.md`, dove dice che dal DTM i cavalcavia «verrebbero alla quota vera», vale per le rampe
-  e non per gli impalcati.
+  e non per gli impalcati (da correggere in #86, con il posto del 6% del SIR3 in `binari-tram.md`).
 * Scarto massimo dal DTM fuori dai ponti: 0,5 m. **Inferenza** (scelta della regola): tre volte i 15 cm del capitolato,
   più la media dei punti a 2,5 m dal centro delle celle da 10 m (`scripts/dtm_grid.py`) sui fianchi dei rilevati.
 * Il DBGT ha gli assi stradali in 3D (`EL_STR`, «GU_CPCurve3D»), ma il catalogo nazionale non fissa l'accuratezza
