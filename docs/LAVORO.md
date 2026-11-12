@@ -214,6 +214,21 @@ rimette visibili i riquadri o come si raggruppano gli edifici lo tenga presente.
   l'edificio con il muso 0,4 m fuori dalla corsia e resta bloccata prima della prima fermata. Non è una fermata (la
   palina è 185 m più avanti): è la guida del pilota (#77).
 
+#81, frustum culling col terreno (12 novembre), in `src/world/terrain.js`. `renderer.render` di `main.js` alza la
+telecamera della quota nel suo punto e il vertex shader alza la geometria, ma three.js scartava gli oggetti guardando le
+bounding sphere senza quota: dalla cabina del tram alla Guizza (-1,1 m) lo schermo LCD non si disegnava, dal posto di
+guida del bus, dove la quota è alta, quadro strumenti e volante. Ora `THREE.Frustum.prototype.intersectsObject`, col
+terreno acceso (`K.value.z`, solo per la scena del mondo), alza la sfera della quota nel suo centro (variante "fondo"
+per i materiali con `userData.terrainGround`) e la allarga di `min(span, raggio × slope)` più un gradino della quota
+(`scale`): `slope` (pendenza massima tra celle vicine) e `span` (dislivello totale) li calcola il costruttore di
+`Terrain`. Vale anche per le ombre e gli specchietti. Costa poco: alla Guizza circa 970 sfere per la vista e 720 per le
+ombre, a 13 ns l'una per `at`. Da sapere:
+
+- un oggetto della scena che il vertex shader non alza (uno `ShaderMaterial` senza `#include <project_vertex>`, come il
+  cielo) viene provato come se fosse alzato: se è piccolo e vicino conviene `frustumCulled = false`;
+- chi cambia lo spostamento nello shader (`PROJECT` e `terrainH`) cambia anche questa funzione;
+- prova in `tests/schermo-cabina.spec.js` (con `onBeforeRender`, che three.js chiama solo per chi passa il culling).
+
 ### Linee (corsia `capolinea`)
 
 Issue: `area:linee` (madre: #15 linee dei bus intere fino ai capolinea del GTFS).
@@ -819,10 +834,11 @@ Backspace o clic sul fungo rosso della cabina. Da sapere prima di toccare la cab
 - il fungo (`fungo` del modulo di `buildModule`, con `userData.cap` che si abbassa quando è premuto) sta sulla plancia
   blu a sinistra dell'LCD, dove HUD e specchietto destro non lo coprono a 1280×720. Al posto di prima, a destra, era
   sotto lo specchietto;
-- trappola: `renderer.render` in `main.js` sposta la telecamera della quota del terreno, il frustum culling di three.js
-  guarda le posizioni senza, quindi gli oggetti piccoli a un metro dagli occhi spariscono dove la quota non è zero (alla
-  Guizza è -1,1 m). Il fungo ha `frustumCulled = false`; lo schermo LCD della cabina (`dash`) oggi non si vede per lo
-  stesso motivo (#81);
+- `renderer.render` in `main.js` sposta la telecamera della quota del terreno: il frustum culling di three.js guardava
+  le posizioni senza, e gli oggetti piccoli a un metro dagli occhi sparivano dove la quota non è zero (alla Guizza è
+  -1,1 m). Dal #81 il culling tiene conto della quota (`terrain.js`, nota in "Mappa"): fungo e schermo LCD (`dash`) non
+  hanno più bisogno di `frustumCulled = false`. Nelle prove, col ciclo del gioco fermo, `frame` non avanza e `step` non
+  ridisegna l'LCD (`drawDash` ogni 10 fotogrammi): per una foto dello schermo si chiama prima `bus.drawDash({})`;
 - fuori dall'area: in `hud.js` e `index.html` l'icona 🛑 (`icon-emerg`, solo col tram) e la riga dell'aiuto. Prove in
   `tests/freno-emergenza.spec.js`.
 

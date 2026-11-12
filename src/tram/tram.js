@@ -1069,9 +1069,6 @@ function buildModule(kind, len, opts) {
     cap.scale.y = 0.55; cap.position.y = 0.05;
     fungo.add(cap);
     fungo.userData.cap = cap;
-    // la telecamera si disegna spostata della quota del terreno (renderer.render in main.js) e il frustum culling guarda
-    // le posizioni senza: un oggetto così piccolo a un metro dagli occhi verrebbe scartato
-    fungo.traverse((o) => { o.frustumCulled = false; });
     inner.add(fungo);
     dash = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), new THREE.MeshBasicMaterial({ map: opts.dashTex }));
     dash.position.set(-0.7, 1.58, f - 1.07); dash.rotation.y = Math.PI; dash.rotation.x = 0.45; inner.add(dash);

@@ -57,6 +57,26 @@ export function suspendTerrain() { const was = K.value.z; K.value.z = 0; return 
 export function resumeTerrain(was) { K.value.z = was; }
 THREE.Material.prototype.onBeforeCompile = function (sh) { applyTerrain(sh, !!(this.userData && this.userData.terrainGround)); };
 
+// frustum culling col terreno: la telecamera si alza della quota nel suo punto (renderer.render in main.js), ma three.js
+// confronta il suo frustum con le bounding sphere senza quota, e gli oggetti piccoli a un metro dagli occhi (lo schermo
+// della cabina del tram) sparivano dove la quota non è zero. Col terreno acceso la sfera si alza della quota nel suo
+// centro e si allarga di quanto il terreno può cambiare dentro di lei (più un gradino della quota in un byte, per il
+// filtro della texture). Vale anche per le ombre, che si disegnano con le quote.
+let active = null;
+const SPH = new THREE.Sphere();
+const intersectsObject = THREE.Frustum.prototype.intersectsObject;
+THREE.Frustum.prototype.intersectsObject = function (o) {
+  if (K.value.z < 0.5 || !active) return intersectsObject.call(this, o);
+  // InstancedMesh e BatchedMesh hanno la sfera loro, le altre quella della geometria
+  const b = o.boundingSphere !== undefined ? o : o.geometry;
+  if (b.boundingSphere === null) b.computeBoundingSphere();
+  SPH.copy(b.boundingSphere).applyMatrix4(o.matrixWorld);
+  const ground = !!(o.material && o.material.userData && o.material.userData.terrainGround);
+  SPH.center.y += active.at(SPH.center.x, SPH.center.z, ground);
+  SPH.radius += Math.min(active.span, SPH.radius * active.slope) + active.scale;
+  return this.intersectsSphere(SPH);
+};
+
 // chiusura morfologica su una finestra quadrata di lato 2r+1: massimo e poi minimo, a passate separate per righe e
 // colonne (riempie fossi e alvei più stretti della finestra, lascia argini e rilievi)
 function closing(src, nx, nz, r) {
@@ -109,6 +129,19 @@ export class Terrain {
     }
     this.d = d;
     this.dg = dg;
+    // per il culling: di quanto il terreno sale al più per metro (tra celle vicine; nella cella l'interpolazione
+    // bilineare non va oltre) e di quanto cambia in tutto, nelle due varianti
+    let lo = 255, hi = 0, dmax = 0;
+    for (const a of [d, dg]) for (let j = 0; j < g.nz; j++) for (let i = 0; i < g.nx; i++) {
+      const c = j * g.nx + i, v = a[c];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+      if (i + 1 < g.nx && Math.abs(a[c + 1] - v) > dmax) dmax = Math.abs(a[c + 1] - v);
+      if (j + 1 < g.nz && Math.abs(a[c + g.nx] - v) > dmax) dmax = Math.abs(a[c + g.nx] - v);
+    }
+    this.slope = (Math.SQRT2 * dmax * g.scale) / g.step;
+    this.span = (hi - lo) * g.scale;
+    active = this;
     const tex = (arr) => {
       const t = new THREE.DataTexture(arr, g.nx, g.nz, THREE.RedFormat, THREE.UnsignedByteType);
       t.magFilter = t.minFilter = THREE.LinearFilter;
