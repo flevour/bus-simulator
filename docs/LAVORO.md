@@ -308,15 +308,15 @@ Incroci tra traffico e tram ai semafori (11 novembre):
   intero (si sposta il ciclo). Col tutto rosso (due tram che vogliono fasi diverse) appena i tram rimasti passano tutti
   con una fase si va su quella; `TRAM_HOLD` si conta dall'inizio della fase tram (`tramAge`), non dal cambio;
 - `TramSignals`: via libera solo con l'incrocio libero da chi taglia i binari, anche fermo, e da chi ci arriva entro
-  1,5 s o con la curva (`busy`, `cuts`); `busy` guarda anche il muso delle auto e il bus di chi gioca (il corpo e, in
-  marcia, 1,5 s di strada davanti al muso). Dopo 20 s di incrocio occupato da auto ferme, quelle lontane dal giocatore
-  spariscono (`unstick`, in Via Dante la fine della corsia delle auto cade sulla sede);
+  1,5 s, le auto lungo il loro percorso (`busy`, `covers`, `cuts`); `busy` guarda anche il muso delle auto e il bus di
+  chi gioca (il corpo e, in marcia, 1,5 s di strada davanti al muso). Dopo 20 s di incrocio occupato da auto ferme,
+  quelle lontane dal giocatore spariscono (`unstick`, in Via Dante la fine della corsia delle auto cade sulla sede);
 - lanterne stradali sul binario (`TramSignals.lanterns`, 49 sulla mappa: Pace, Riviera dei Ponti Romani, Via Guido
   Reni, Corso del Popolo...): sono il segnale del tram. Il tram che arriva chiama il verde del suo braccio (con i turni
   di `tramCall`), i tram automatici col rosso si fermano 1 m prima della linea (`stopAhead`), chi gioca passando col
   rosso perde 60 punti. Dove lo stesso tram taglia anche una strada del semaforo decidono le barre. Lanterna disegnata,
   stato usato dalla logica e penalità (`tramSignals.violations` in `main.js`) devono coincidere;
-- auto: prima della curva in fondo all'arco guardano se il percorso (resto della corsia, curva, 20 m dopo) taglia i
+- auto: guardano se i prossimi 50 m del loro percorso, lungo gli archi e anche in svolta (`Traffic.along`), tagliano i
   binari di un incrocio chiamato e si fermano 3 m prima (`calledAhead`); con due binari vicini si fermano prima del
   primo, e chi svolta verso binari subito dopo l'incrocio non entra se appena oltre c'è chi è fermo. Non entrano sui
   binari se oltre c'è coda (`carGap`, che guarda solo l'arco su cui si è); si fermano davanti a un tram che passa;
@@ -339,6 +339,38 @@ Incroci col tram senza semaforo (11 novembre, `a991c4d`):
   tram a meno di 12 m più 4 s (`x.close`) perde 60 punti: "🚋 Non hai dato la precedenza al tram!"
   (`tramSignals.giveWay` in `main.js`).
 
+Incroci col tram nelle rotonde (#46, 12 novembre). Nei controlli su tutta la mappa i casi di auto e tram dentro insieme
+erano auto ferme a metà di una svolta sui binari all'uscita di una rotonda: Rosetta Gagliardi verso Viale della Pace
+(SIR2 e SIR3, davanti alla stazione) e Graziana Campanato verso Via Tommaseo (SIR2). I pezzi delle rotonde sono lunghi
+4-8 m e sono quasi tutti curva (tra i raggi dei due nodi la corsia è vuota): `calledAhead` guardava solo negli ultimi
+45 m dell'arco, con 20 m in linea retta oltre la prossima svolta, e in svolta non guardava affatto; l'auto passava da
+una curva all'altra fino ai binari. Come funziona ora:
+
+- `Traffic.along(car, d0, d1, ts, fn)`: i punti del percorso dell'auto da d0 a d1 m davanti al centro, lungo gli
+  archi: il resto della corsia o della curva in cui si trova, poi curva e corsia di ogni arco dopo. Gli archi si
+  scelgono in anticipo (`car.route`, `routeAt`; `startTurn` prende il primo, `chooseNext(edge, fwd)`); i punti si
+  guardano solo dove ci sono incroci col tram a meno di 30 m dall'arco (`tramXs`, in memoria sull'arco, al posto di
+  `TramSignals.nearNode`);
+- `calledAhead(car, ts)`: 50 m di percorso davanti al muso (`AHEAD`), a ogni passo e anche in svolta. La coda oltre i
+  binari conta solo chi va nello stesso verso: in Via Gozzi, svoltando stretto verso Via Tommaseo, un'auto si fermava
+  a metà curva per le auto ferme dall'altra parte, che aspettavano proprio lei;
+- `TramSignals.covers` (coordinamento col traffico): un'auto tiene occupato l'incrocio col percorso dal centro al muso
+  più 1,5 s di strada, lungo `along`. Prima, in svolta, contava tutto il resto della curva: un'auto ferma a metà prima
+  dei binari avrebbe tenuto la barra orizzontale al tram che lei stessa aspettava;
+- auto davanti (`Traffic.update`): tra due auto che svoltano verso lo stesso arco passa chi ha meno curva da fare. A
+  Lion (Via Mascagni) due auto entravano nello stesso arco da due strade, ognuna aveva l'altra davanti e restavano ferme
+  per sempre; ci finiva la prova di Tito Livio, che guida la 3 dal Capolinea Lion (il percorso scelto prima cambia la
+  sequenza casuale delle auto). Gli altri intrecci tra auto in svolta sono in #79.
+
+Controllo: 20 minuti col giocatore in dieci punti (alle 8:30 stazione, centro, Prato, Nievo, Corso del Popolo; alle
+17:30 stazione, ovest verso Rubano, sud-est, est, sud): su `main` 3 casi in 8 giri, ora nessuno. A Corso del Popolo,
+in Prato della Valle e in Piazzetta Nievo (binario in curva, corsia delle auto a 2 m) nessun caso, nemmeno su `main`.
+Era la stessa causa delle due prove rosse di #78: in Via San Francesco (23, 148) l'auto che svolta da Riviera Tito
+Livio trova i binari 1,6 m dopo l'inizio dell'arco, dentro la curva; a (794, 367), in CI, un pezzo di rotonda senza
+nome lungo 8,7 m, tutto curva. Nei controlli dei fermi (40 minuti alle 8:15 e alle 17:30) restano blocchi che c'erano
+già su `main`: auto in svolta che si aspettano a vicenda lontano dai binari (#79) e Corso Milano, SIR2 e auto muso a
+muso con le auto in coda sovrapposte (#80).
+
 Bus automatici in anticipo (segnalazione dell'11 novembre, "in Prato della Valle a 20 all'ora"): vanno al più il 15%
 sotto il limite e recuperano l'anticipo in fermata: oltre 40 s avanti si fermano anche senza prenotazioni, fino
 all'orario (al più un minuto). Per `tram-turni` (#64): i tram automatici rallentano ancora quando sono in
@@ -349,7 +381,9 @@ Prove in `tests/traffico.spec.js`: la 3 guidata nel traffico dal pilota (`guidaF
 Garibaldi giardini, nessuno fermo oltre 60 s da Tito Livio a Piazza Garibaldi; 20 minuti attorno ai semafori di Tito
 Livio, Ponti Romani-Battisti, Largo Europa e Piazza Garibaldi, tram e auto mai dentro insieme; 20 minuti con tutti i
 tram automatici, nessun tram fermo a un segnale (barre o lanterna) oltre 60 s e lanterne disegnate uguali allo stato;
-20 minuti sul SIR3 tra Via San Mattia e Via Rosmini (14 incroci senza semaforo); penalità in Via De Leva.
+20 minuti sul SIR3 tra Via San Mattia e Via Rosmini (14 incroci senza semaforo); penalità in Via De Leva; nella
+rotonda Rosetta Gagliardi `calledAhead` vede i binari di Viale della Pace dall'ingresso e a metà curva, poi 20 minuti
+attorno alle rotonde Rosetta Gagliardi e Graziana Campanato, a Corso del Popolo e al Piazzale della Stazione.
 
 Per `mappa` (11 novembre, #65): su Riviera dei Ponti Romani verso Largo Europa (arco 17836 da (53, -333) a
 (71, -306) e il successivo fino a (77, -283)) il binario del SIR1 verso nord corre a 2,2 m dall'asse, dentro la

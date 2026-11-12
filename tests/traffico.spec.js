@@ -48,11 +48,11 @@ test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo s
 });
 
 // Incroci sulla sede del tram: tram e auto che tagliano i binari non sono mai dentro insieme. Ogni 0,2 s, per ogni
-// incrocio col tram vicino ai punti scelti (col semaforo se sem, senza altrimenti): il tram copre il binario all'altezza
-// dell'auto (dal muso alla coda, 1 m di margine) e un'auto che taglia i binari ha il muso entro mezzo tram dall'asse
-// (3,2 m dal centro).
+// incrocio col tram vicino ai punti scelti (col semaforo se sem, senza se è false, tutti se è null): il tram copre il
+// binario all'altezza dell'auto (dal muso alla coda, 1 m di margine) e un'auto che taglia i binari ha il muso entro mezzo
+// tram dall'asse (3,2 m dal centro).
 function contaIncroci({ punti, sec, sem = true, r = 40 }) {
-  const g = window.__game, xs = g.tramSignals.list.filter((x) => !!x.sig === sem && punti.some(([px, pz]) => Math.hypot(x.px - px, x.pz - pz) < r));
+  const g = window.__game, xs = g.tramSignals.list.filter((x) => (sem == null || !!x.sig === sem) && punti.some(([px, pz]) => Math.hypot(x.px - px, x.pz - pz) < r));
   const insieme = [];
   let passaggi = 0, auto = 0;
   for (let t = 0; t < sec * 5; t++) {
@@ -155,6 +155,58 @@ test('incroci senza semaforo: precedenza al tram, rispettata dai due lati', asyn
   expect(p.muso, 'muso del tram oltre la linea d\'arresto').toBeLessThan(-p.halfT);
   expect(p.dopo, 'secondi per il via libera dopo che il bus se ne va').not.toBeNull();
   expect(p.dopo).toBeLessThanOrEqual(3);
+  expect(gioco.errori()).toEqual([]);
+});
+
+// Un'auto in Viale della Pace a 15 m dalla rotonda Rosetta Gagliardi, davanti alla stazione, che ne esce subito in Viale
+// della Pace sui binari del SIR3 vicino a (px, pz): il pezzo di rotonda in mezzo è lungo 6 m ed è tutto curva. Con i
+// binari chiamati da un tram, i metri dal muso al punto dove fermarsi (calledAhead), da lì e a metà della curva che
+// entra nella rotonda
+function rotonda({ px, pz }) {
+  const g = window.__game, ts = g.tramSignals, T = g.traffic, N = g.net.nodes;
+  const x = ts.list.find((x) => !x.sig && Math.hypot(x.px - px, x.pz - pz) < 3);
+  if (!x) return { incrocio: false };
+  const uscita = x.e, giro = N[uscita.a].edges.find((e) => e.b === uscita.a && /^Rotonda/.test(e.name));
+  const entrata = N[giro.a].edges.find((e) => e.b === giro.a && e !== giro && !/^Rotonda/.test(e.name));
+  const passo = (e) => ({ edge: e, fwd: true, node: N[e.a] });
+  const c = { car: true, edge: entrata, fwd: true, v: 6, vmax: 9, turn: null, route: [passo(giro), passo(uscita)], tramOff: 0, latOff: 0 };
+  const g0 = T.laneGeom(c);
+  c.s = g0.s1 - 15; c.x = g0.sx + g0.dx * c.s; c.z = g0.sz + g0.dz * c.s; c.h = Math.atan2(g0.dx, g0.dz);
+  const chiamata = x.call;
+  x.call = true;
+  const prima = T.calledAhead(c, ts);
+  c.s = g0.s1;
+  T.startTurn(c, g0);
+  const { p0, p1, p2 } = c.turn;
+  c.turn.t = 0.5;
+  c.x = (p0.x + 2 * p1.x + p2.x) / 4; c.z = (p0.z + 2 * p1.z + p2.z) / 4;
+  const curva = T.calledAhead(c, ts);
+  x.call = chiamata;
+  return { incrocio: `${uscita.name} (${Math.round(x.px)}, ${Math.round(x.pz)})`, giro: giro.name, prima: String(prima), curva: String(curva) };
+}
+
+// Incroci col tram nelle rotonde e dove il binario curva, davanti alla stazione. Nella rotonda Rosetta Gagliardi i pezzi
+// sono corti e curvi: calledAhead guardava 20 m in linea retta oltre la prossima svolta, finiva fuori dalla rotonda e
+// non vedeva i binari di Viale della Pace due archi più avanti; in svolta non guardava affatto, e l'auto passava da una
+// curva all'altra fino a fermarsi sui binari davanti al tram (così anche nella rotonda Graziana Campanato col SIR2). Ora
+// segue il percorso lungo gli archi, anche in svolta. Poi 20 minuti attorno alle due rotonde, a Corso del Popolo e al
+// Piazzale della Stazione: tram e auto mai dentro insieme.
+test('incroci col tram nelle rotonde e in curva: tram e auto mai dentro insieme', async ({ pagina, gioco }) => {
+  test.setTimeout(300_000);
+  await avviaCorsa(pagina, { linea: '3' });
+  const r0 = await pagina.evaluate(rotonda, { px: 368, pz: -945 });
+  expect(r0.incrocio).toMatch(/^Viale della Pace/);
+  expect(r0.giro).toBe('Rotonda Rosetta Gagliardi');
+  expect(Number(r0.prima), 'metri ai binari chiamati, 15 m prima della rotonda').toBeGreaterThan(15);
+  expect(Number(r0.prima)).toBeLessThan(35);
+  expect(Number(r0.curva), 'metri ai binari chiamati, in svolta nella rotonda').toBeGreaterThan(0.5);
+  expect(Number(r0.curva)).toBeLessThan(15);
+  await pagina.evaluate(() => { window.__game.teleport(450, -850); window.__game.sim(1, 1 / 30, false); });
+  const r = await pagina.evaluate(contaIncroci, { punti: [[368, -945], [777, -734], [158, -1026], [298, -1014]], sec: 1200, sem: null, r: 60 });
+  expect(r.incroci).toBeGreaterThan(8);
+  expect(r.passaggi, 'nessun tram è passato dagli incroci').toBeGreaterThan(200);
+  expect(r.auto, 'nessuna auto vicino agli incroci').toBeGreaterThan(200);
+  expect(r.insieme).toEqual([]);
   expect(gioco.errori()).toEqual([]);
 });
 
