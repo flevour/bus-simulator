@@ -649,6 +649,18 @@ Backspace o clic sul fungo rosso della cabina. Da sapere prima di toccare la cab
 - fuori dall'area: in `hud.js` e `index.html` l'icona 🛑 (`icon-emerg`, solo col tram) e la riga dell'aiuto. Prove in
   `tests/freno-emergenza.spec.js`.
 
+### Tram: gong e clacson (#63, 12 novembre)
+
+H suona il gong, Shift+H il clacson. Da sapere prima di toccare i comandi o i suoni del tram:
+
+- sul `Tram` `gong` è il gong e `horn` il clacson; sul `Bus` `horn` resta il clacson. Li scrive `readInput` in `main.js`:
+  Shift conta se è già premuto quando si preme H (`hornShift`), così chi sta suonando il gong e preme Shift per il gas a
+  fondo non passa al clacson. Gamepad (clic della levetta sinistra) e touch danno solo H: sul tram il gong;
+- in `audio.js` il clacson del tram ha la sua catena (`tramHornG`: due seghe a 554 e 659 Hz con un vibrato, passa banda
+  a 1300 Hz), con lo stesso volume di quello del bus (RMS 0,14 contro 0,15 resi offline); il gong resta `tramBell`;
+- `__game.audio` serve alle prove: nel browser delle prove il gioco è muto, e `tests/clacson-tram.spec.js` legge il
+  volume chiesto alle catene (`setTargetAtTime`) e conta i rintocchi del gong.
+
 ### Tram: regola dei binari (#68, 12 novembre)
 
 La regola per la stesura dei binari, con i numeri e le fonti (soprattutto il progetto del SIR3 di Italferr, 2020), è in

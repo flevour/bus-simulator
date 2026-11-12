@@ -86,7 +86,7 @@ Stessa interfaccia del `Bus`, così missione, HUD, telecamere, audio e salvatagg
   * W/S comandano il manipolatore di trazione e frenatura, a tacche: tenere premuto per salire di tacca, Shift per
     andare più veloce;
   * F apre le porte sul lato della banchina, solo da fermo e allineati;
-  * H suona il gong o campanello;
+  * H suona il gong o campanello, Shift+H il clacson (il Translohr li ha tutti e due, `docs/cabina-translohr.md`);
   * L accende i fari;
   * C cambia visuale;
   * B cambia cabina (solo al capolinea, da fermo).
@@ -155,7 +155,7 @@ Regole aggiunte nel frattempo:
 
 * **Pantografo**: a Prato della Valle non c'è la linea aerea. Va abbassato prima di arrivarci, in entrambi i sensi, e
   rialzato subito dopo. Il tratto è definito in `catenaryGaps()`: ±130 m dalla fermata.
-* **Campanello** al posto del clacson.
+* **Gong e clacson** (#63): H il gong a rintocchi, Shift+H il clacson del tram, diverso da quello del bus.
 
 ## Per le linee future (SIR2, SIR3, SIR4, SIR5)
 

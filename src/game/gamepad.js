@@ -22,7 +22,7 @@ const STD_PRESS = [
   [13, 'KeyK', 'KeyB'], // croce giù: inginocchiamento; tram: cambio cabina
 ];
 // pulsanti tenuti premuti: [indice, tasto]
-const STD_HOLD = [[10, 'KeyH'], [14, 'KeyZ'], [15, 'KeyX']]; // clic levetta sinistra: clacson; croce ◀ ▶: guarda ai lati
+const STD_HOLD = [[10, 'KeyH'], [14, 'KeyZ'], [15, 'KeyX']]; // clic levetta sinistra: clacson (sul tram il gong); croce ◀ ▶: guarda ai lati
 // volanti e pedaliere: solo i pulsanti che hanno lo stesso posto quasi su tutti (le palette cambiano da modello a modello)
 const WHEEL_PRESS = STD_PRESS.filter(([i]) => i <= 3 || i === 8 || i === 9);
 

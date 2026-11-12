@@ -105,6 +105,29 @@ export class Audio {
       o.connect(hf);
       o.start();
     }
+    // clacson del tram (Shift+H): due note più acute di quelle del bus, a terza minore, con un timbro più nasale (passa
+    // banda) e un vibrato leggero
+    this.tramHornG = ctx.createGain();
+    this.tramHornG.gain.value = 0;
+    const tf = ctx.createBiquadFilter();
+    tf.type = 'bandpass';
+    tf.frequency.value = 1300;
+    tf.Q.value = 1.2;
+    tf.connect(this.tramHornG).connect(this.master);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 6;
+    const vibG = ctx.createGain();
+    vibG.gain.value = 4;
+    vib.connect(vibG);
+    vib.start();
+    for (const f of [554, 659]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      vibG.connect(o.frequency);
+      o.connect(tf);
+      o.start();
+    }
     // cicalino retromarcia
     this.revG = ctx.createGain();
     this.revG.gain.value = 0;
@@ -159,9 +182,11 @@ export class Audio {
     this.roadF.frequency.setTargetAtTime(200 + sp * 40, t, 0.1);
     this.roadG.gain.setTargetAtTime(Math.min(0.35, sp * 0.02) * (interior ? 0.7 : 1), t, 0.1);
     this.rainG.gain.setTargetAtTime((+rain || 0) * (interior ? 0.05 : 0.09), t, 0.3);
-    // il tram non ha il clacson: campanello a rintocchi finché si tiene premuto H
+    // clacson: H sul bus, Shift+H sul tram, ognuno col suo suono; il tram ha anche il gong (H), a rintocchi finché si
+    // tiene premuto
     this.hornG.gain.setTargetAtTime(bus.horn && !bus.isTram ? 0.22 : 0, t, 0.015);
-    if (bus.isTram && bus.horn) { this.bellT = (this.bellT || 0) - dt; if (this.bellT <= 0) { this.tramBell(); this.bellT = 0.3; } }
+    this.tramHornG.gain.setTargetAtTime(bus.horn && bus.isTram ? 0.36 : 0, t, 0.015);
+    if (bus.isTram && bus.gong) { this.bellT = (this.bellT || 0) - dt; if (this.bellT <= 0) { this.tramBell(); this.bellT = 0.3; } }
     else this.bellT = 0;
     // retromarcia
     if (bus.dir < 0) {

@@ -295,7 +295,8 @@ future potranno averne 4.
 |-------|--------|
 | **W / S** | manipolatore: trazione / frenatura (Shift per la tacca piena) |
 | **F** | porte (da fermo; si sale e si scende da tutte le porte) |
-| **H** | campanello |
+| **H** | gong (campanello), a rintocchi finché è premuto |
+| **Shift+H** | clacson del tram (Shift premuto prima di H) |
 | **O** | abbassa / alza il pantografo |
 | **B** | cambio cabina: al capolinea, in fondo al binario dopo la discesa, il tram resta dov'è e riparte con la corsa successiva del turno passando dallo scambio |
 | **N** | gira lo scambio del capolinea (Esplorazione e Giro libero) |

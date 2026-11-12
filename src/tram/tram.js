@@ -1084,7 +1084,8 @@ export class Tram {
     this.vmaxService = 70; this.vmax = this.vmaxService;
     this.aLong = 0; this.aLat = 0; this.yawRate = 0; this.odometer = 0;
     this.indicator = 0; this.blink = 0; this.steerIn = 0; this.kneelTarget = 0;
-    this.lights = false; this.horn = false; this.passengers = 0;
+    // gong (H) e clacson (Shift+H), letti da audio.js
+    this.lights = false; this.horn = false; this.gong = false; this.passengers = 0;
     this.doorTarget = 0;
     this.elev = 0;
     // texture del cruscotto (schermo LCD con il tachimetro)

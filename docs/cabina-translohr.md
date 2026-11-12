@@ -377,7 +377,7 @@ aiuto in `index.html`, specifica in `docs/prompt-tram.md` (sezione "Cabina").
 | --- | --- | --- |
 | Pedali di trazione e freno | W/S "manipolatore", progressivi, Shift a fondo | Tenere W/S e i grilletti del gamepad, che sono già pedali. Chiamarli "pedali" in aiuto, toast e `docs/prompt-tram.md` |
 | Gong | H, rintocchi finché è premuto | Va bene così |
-| Clacson | Manca (`audio.js`: "il tram non ha il clacson") | Aggiungerlo, per esempio Shift+H |
+| Clacson | Shift+H (#63), con un suono suo, più acuto di quello del bus; Shift conta se è premuto prima di H | Fatto |
 | Veglia | Manca | Opzione "guida realistica", spenta di base: tenere premuto o battere un tasto (K, libero sul tram); 12 s, allarme, 2 s, freno d'emergenza con penalità |
 | Fungo rosso | Backspace o clic sul fungo, sulla plancia blu a sinistra dello schermo LCD (#62): toglie la trazione e frena a 2,6 m/s² fino all'arresto, si riarma solo da fermo ripremendolo; in servizio, in marcia senza un ostacolo davanti, −50 punti | Fatto |
 | Porte | F apre e chiude | Tenere F per il lato della banchina. Il lato sinistro è un comando a parte: sul tram Q/E potrebbero aprire a sinistra e a destra |
