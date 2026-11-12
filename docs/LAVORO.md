@@ -72,6 +72,7 @@ divise per area.
 | `src/bus/bus.js` | `area:veicoli`, le altre aree nelle loro funzioni | |
 | `src/main.js` | tutte le aree, ognuna nelle sue funzioni | |
 | `src/tram/tram.js` | `area:tram` | scambi, binari, depositi, cambio cabina e turni: le funzioni sono nelle note del tram qui sotto |
+| `scripts/binari_tram.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
 
 ## Note per area
 
@@ -573,6 +574,25 @@ Fatto, con quello che serve sapere prima di toccare questi file:
 
 Verifiche: regola 3, guida con il pilota a ogni capolinea dei tram e nei depositi, foto dalla cabina agli scambi, tram
 automatici per 40 minuti senza blocchi.
+
+### Tram: regola dei binari (#68, 12 novembre)
+
+La regola per la stesura dei binari, con i numeri e le fonti (soprattutto il progetto del SIR3 di Italferr, 2020), è in
+[`binari-tram.md`](binari-tram.md): raggio minimo 10,5 m ovunque, clotoidi di circa 10 m, interasse 3,00 m (SIR2
+3,50 m) e mai sotto le fasce d'ingombro, scambi a cerniera di 4 m con R 10,5 m in rettilineo, pendenza fino al 6%. Da
+sapere prima di toccare i binari:
+
+- il controllo è uno solo, `scripts/binari_tram.py` (Python senza shapely): `verifica_mappa.py` lo usa sui dati degli
+  script, `tests/binari-tram.spec.js` sui binari del gioco (li scrive in `test-results/<prova>/binari-gioco.json` e
+  chiama lo script con `--gioco`). Le soglie dei dati sono `SOGLIE_BINARI` in `verifica_mappa.py`, quelle del gioco in
+  testa alla prova; i punti peggiori con `--elenco`;
+- i casi nelle zone di `ECCEZIONI` (oggi il piazzale della stazione, per gli scarti da OSM) si elencano a parte: una
+  zona nuova va lì con il suo perché e nella sezione 1 di `binari-tram.md`;
+- dati e gioco danno numeri diversi perché il gioco ritocca i binari (`smoothTrack` e `clearOfBuildings` in
+  `padova.js`, `smoothLane` in `TramTrack`): toglie quasi tutti gli spigoli e porta il binario fino a 3,4 m fuori da
+  OSM. Con i dati secondo la regola i ritocchi vanno spenti, come già nel piazzale;
+- la prova del gioco legge `TramTrack.paths`, `terminalCurve`, `TramTrack.h`, `stopsDir` e i nodi, i rami e le porte
+  di `TramYard`: chi li cambia aggiorna `binari()` nella prova e `rete_gioco` nello script.
 
 ### Tram: SIR2 e SIR3 (corsia `tram-reti`, chiusa il 9 novembre)
 

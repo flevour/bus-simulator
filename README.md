@@ -26,10 +26,14 @@ di `tests/` in Chromium headless (WebGL in software):
   mezzo urta un ostacolo fisso;
 * `mappa.spec.js`: rapporto di verifica sulla mappa nel gioco: pali dei semafori, paline, lampioni, alberi e
   pensiline rispetto al bordo dell'asfalto, e il bus fermo in ogni fermata di tutte le varianti (ostacoli, ruote
-  oltre il cordolo, fermate agganciate lontano dalla fermata vera).
+  oltre il cordolo, fermate agganciate lontano dalla fermata vera);
+* `binari-tram.spec.js`: i binari del tram come li disegna il gioco, misurati con la regola di
+  [`docs/binari-tram.md`](docs/binari-tram.md) (spigoli, raggi sotto il minimo, interassi, scarti da OSM, pendenze)
+  da `scripts/binari_tram.py`, che la prova chiama con Python.
 
 `python3 scripts/verifica_mappa.py` (serve `shapely`) controlla il JSON della mappa: edifici in carreggiata e nella
-corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m.
+corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m, e i
+binari del tram scritti dagli script secondo la stessa regola.
 Script e rapporto nel gioco escono con errore quando un numero supera la sua soglia, fissata sui valori del 9
 novembre 2026 (in testa ai due file). Il workflow `.github/workflows/verifiche.yml` lancia build, `npm test` e lo
 script a ogni push su `main`.

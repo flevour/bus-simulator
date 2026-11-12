@@ -9,7 +9,10 @@ Controlla quello che il JSON dice già, senza aprire il gioco (sezione 6.1 di do
     sbagliato perché stanno oltre 2,5 km di percorso dalla precedente (buildRoute in src/game/routes.js);
   * marciapiedi più stretti di 1,5 m;
   * dove sta nei dati la fermata (palina OSM o fermata GTFS): solo per informazione, perché il gioco porta comunque
-    la palina al cordolo.
+    la palina al cordolo;
+  * binari del tram secondo la regola di docs/binari-tram.md (scripts/binari_tram.py): spigoli, raggi sotto il minimo,
+    interassi fuori misura e scarti da OSM, per linea e per deposito, sui binari che scrivono gli script. Quelli che
+    disegna il gioco li misura tests/binari-tram.spec.js.
 Pali dei semafori, lampioni, alberi, pensiline e paline al posto finale li mette il gioco al caricamento: li controlla
 la prova tests/mappa.spec.js nel browser.
 
@@ -32,6 +35,7 @@ from shapely.ops import substring, unary_union
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import aree_mappa  # noqa: E402
+import binari_tram  # noqa: E402
 
 BUS_NEAR = 6.0  # m: oltre metà carreggiata, un edificio è "lungo il percorso" fin qui dall'asse
 BUS_HW = 1.3  # m: metà larghezza del bus (2,55 m) e un poco di margine
@@ -70,6 +74,17 @@ SOGLIE = {
     'fermate_lontane': 0,
     'fermate_spostate': 7,
     'marciapiedi_stretti_m2': 200000,
+}
+# binari del tram (scripts/binari_tram.py) sui dati: valori del 12 novembre 2026, prima che le linee (#69) e i depositi
+# (#70) seguano la regola di docs/binari-tram.md. Gli spigoli sono quasi tutti vertici delle polilinee (OSM ha un punto
+# ogni 5-20 m sulle curve); i due scarti da OSM del SIR1 sono salti di 7 e 9 m dello shape GTFS agganciato ai binari OSM
+# (Corso Garibaldi, Riviera del Businello)
+SOGLIE_BINARI = {
+    'SIR1': {'spigoli': 166, 'raggi': 2, 'interassi': 72, 'scarti_osm': 2},
+    'SIR3': {'spigoli': 93, 'raggi': 6, 'interassi': 31, 'scarti_osm': 0},
+    'SIR2': {'spigoli': 238, 'raggi': 7, 'interassi': 67, 'scarti_osm': 0},
+    'Guizza': {'spigoli': 6, 'raggi': 7, 'interassi': 0, 'scarti_osm': 0},
+    'Voltabarozzo': {'spigoli': 12, 'raggi': 4, 'interassi': 0, 'scarti_osm': 0},
 }
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',
@@ -290,10 +305,13 @@ def main():
         if args.elenco and k in casi and casi[k]:
             for c in sorted(casi[k], key=lambda c: -c.get('metri', 0))[:40]:
                 print('      ' + ', '.join(f'{a}={b}' for a, b in c.items()))
+    valori_b, casi_b, sopra_b = binari_tram.rapporto(binari_tram.rete_dati(mappa.M), SOGLIE_BINARI, args.elenco)
+    sopra += [f'binari del tram: {k}' for k in sopra_b]
     if args.json:
-        json.dump({'valori': valori, 'soglie': SOGLIE, 'fermate': dove, 'casi': casi}, open(args.json, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        json.dump({'valori': valori, 'soglie': SOGLIE, 'fermate': dove, 'casi': casi,
+                   'binari': {'valori': valori_b, 'soglie': SOGLIE_BINARI, 'casi': casi_b}}, open(args.json, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     if sopra:
-        print(f'Sopra la soglia: {", ".join(NOMI[k] for k in sopra)}. Con --elenco i casi, con le coordinate del gioco.')
+        print(f'Sopra la soglia: {", ".join(NOMI.get(k, k) for k in sopra)}. Con --elenco i casi, con le coordinate del gioco.')
         sys.exit(1)
 
 
