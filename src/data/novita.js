@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 116, d: '2026-11-12', t: 'Tram: i semafori del tram visti da dietro non sono più un pannello nero che sembra un segnale spento. Hanno la cassa grigia con le tre calotte tonde, come il retro di un semaforo, e il palo accanto. Arrivando al capolinea di Voltabarozzo, prima dell\'attraversamento, il semaforo davanti a te è quello dei tram in partenza visto da dietro; il segnale dello scambio, nero con la freccia bianca, è più avanti, dopo la banchina.' },
   { n: 115, d: '2026-11-12', t: 'Nel menu ci sono i crediti: il gioco è di Francesco Levorato, che trovi su Instagram come @flevour, e di Giovanni Levorato.' },
   { n: 114, d: '2026-11-12', t: 'Auto negli incroci senza semaforo: due auto che svoltavano insieme e finivano muso contro muso restavano ferme per sempre, con la coda dietro (a Porta Trento, in Via Pilade Bronzetti, in Piazzale Mazzini). Ora una passa e l\'altra la segue.' },
   { n: 113, d: '2026-11-12', t: 'Tram: dal deposito di Voltabarozzo puoi uscire anche sul binario d\'arrivo, come sui binari veri. In Esplorazione e Giro libero, uscendo dalla rimessa, premi N per mandare il tram sulla curva esterna in fondo al deposito, poi ancora N, già dal deposito, per mettere diritto lo scambio del capolinea: il tram resta sul binario d\'arrivo invece di passare su quello di partenza.' },

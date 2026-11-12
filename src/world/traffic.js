@@ -1723,11 +1723,14 @@ export class TramSignals {
   }
   // un segnale per incrocio, a destra del binario, prima della strada: lanterna a tre luci in colonna (dall'alto barra
   // orizzontale bianca = via impedita, triangolo arancione = attenzione, barra verticale bianca = via libera); ne è
-  // accesa una sola, le altre si vedono spente (lente scura, simbolo appena visibile, visiera)
+  // accesa una sola, le altre si vedono spente (lente scura, simbolo appena visibile, visiera). Cassa grigia con il
+  // pannello nero davanti; dietro una calotta per luce, e il palo accanto con due staffe: chi arriva sull'altro binario
+  // vede il retro di una lanterna. Prima la cassa era tutta nera sopra il palo e da dietro sembrava un segnale spento
+  // (a Voltabarozzo chi arriva al capolinea l'ha davanti, sopra i binari, da 70 m fino all'attraversamento)
   buildHeads(scene) {
     const n = this.list.length;
     if (!n) return;
-    const statics = [], lenses = [];
+    const statics = [], body = [], lenses = [];
     const mk = (geo) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), n); m.count = n; m.frustumCulled = false; scene.add(m); return m; };
     this.hBar = mk(new THREE.PlaneGeometry(0.24, 0.065));
     this.vBar = mk(new THREE.PlaneGeometry(0.065, 0.24));
@@ -1735,16 +1738,21 @@ export class TramSignals {
     tri.moveTo(-0.12, -0.09); tri.lineTo(0.12, -0.09); tri.lineTo(0, 0.11); tri.closePath();
     this.tri = mk(new THREE.ShapeGeometry(tri));
     this.heads = [];
-    const Y0 = 3.25, DY = 0.36;
+    const Y0 = 3.25, DY = 0.36, HH = DY * 3 + 0.1;
     for (const x of this.list) {
       const T = x.track, s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s);
       const px = p.x - p.dz * (TRAM.lane + 0.35), pz = p.z + p.dx * (TRAM.lane + 0.35), ang = Math.atan2(-p.dx, -p.dz);
-      const fx = Math.sin(ang), fz = Math.cos(ang), y = Y_ROAD + h + Y0;
-      statics.push(new THREE.CylinderGeometry(0.05, 0.06, y - DY * 1.5 - Y_ROAD - h, 6).translate(px, (y - DY * 1.5 + Y_ROAD + h) / 2, pz));
-      statics.push(new THREE.BoxGeometry(0.42, DY * 3 + 0.1, 0.18).rotateY(ang).translate(px, y, pz));
+      const fx = Math.sin(ang), fz = Math.cos(ang), y = Y_ROAD + h + Y0, y0 = Y_ROAD + h;
+      // ox, oz: verso l'esterno, lontano dal binario (l'asse x della cassa ruotata di ang)
+      const ox = -p.dz, oz = p.dx, top = y + HH / 2 + 0.12;
+      body.push(new THREE.CylinderGeometry(0.05, 0.06, top - y0, 6).translate(px + ox * 0.33, (top + y0) / 2, pz + oz * 0.33));
+      for (const k of [1, -1]) body.push(new THREE.BoxGeometry(0.16, 0.06, 0.08).rotateY(ang).translate(px + ox * 0.26, y + k * DY * 1.2, pz + oz * 0.26));
+      body.push(new THREE.BoxGeometry(0.42, HH, 0.16).rotateY(ang).translate(px - fx * 0.01, y, pz - fz * 0.01));
+      statics.push(new THREE.BoxGeometry(0.42, HH, 0.02).rotateY(ang).translate(px + fx * 0.08, y, pz + fz * 0.08));
       const pos = [];
       for (const k of [1, 0, -1]) {
         const ly = y + k * DY;
+        body.push(new THREE.CylinderGeometry(0.1, 0.14, 0.07, 8).rotateX(-Math.PI / 2).translate(0, 0, -0.125).rotateY(ang).translate(px, ly, pz));
         lenses.push(new THREE.CircleGeometry(0.155, 20).rotateY(ang).translate(px + fx * 0.092, ly, pz + fz * 0.092));
         // visiera sopra ogni luce
         statics.push(new THREE.BoxGeometry(0.36, 0.025, 0.16).rotateY(ang).translate(px + fx * 0.16, ly + 0.17, pz + fz * 0.16));
@@ -1754,7 +1762,8 @@ export class TramSignals {
     }
     const box = new THREE.Mesh(mergeGeometries(statics), new THREE.MeshLambertMaterial({ color: 0x1b1d1f }));
     const lens = new THREE.Mesh(mergeGeometries(lenses), new THREE.MeshBasicMaterial({ color: 0x0b0c0d }));
-    scene.add(box, lens);
+    // grigio neutro, come il retro dei cartelli stradali: si legge anche in ombra
+    scene.add(box, lens, new THREE.Mesh(mergeGeometries(body), new THREE.MeshLambertMaterial({ color: 0x9aa0a6 })));
     this.box = box;
     this.M = new THREE.Matrix4(); this.Q = new THREE.Quaternion(); this.O = new THREE.Vector3(1, 1, 1); this.C = new THREE.Color();
     this.drawHeads(true);

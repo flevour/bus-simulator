@@ -481,6 +481,13 @@ Verifiche: regola 3, le foto dal posto di guida nei punti cambiati, la guida del
 controllo su tutta la mappa: 40 minuti alle 8:15 e alle 17:30, giocatore lontano e in centro, nessun bus o tram fermo
 oltre 90 s.
 
+Retro delle lanterne del tram (#12, `area:tram`, 12 novembre): in `TramSignals.buildHeads` la cassa è grigia (0x9aa0a6,
+un'unica mesh con palo, staffe e calotte) con il pannello nero davanti, una calotta dietro ogni luce e il palo accanto
+alla cassa, dalla parte lontana dal binario. Logica, stati e `drawHeads` non cambiano: le luci (`hd.pos`) sono dove
+erano. Dietro prima c'era un rettangolo nero vuoto: a Voltabarozzo chi arriva al capolinea ha davanti, sopra i binari,
+la lanterna dei tram in partenza vista da dietro (2385, 3519) da 70 m fino all'attraversamento. Le 468 lanterne
+passano da 64.116 a 125.892 triangoli (132 in più per lanterna) e `buildHeads` da circa 27 a 49 ms con SwiftShader.
+
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
 Aperta e chiusa l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
