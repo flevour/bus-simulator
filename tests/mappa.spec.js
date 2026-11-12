@@ -28,13 +28,16 @@ import { test, expect } from './gioco.js';
 // percorso (Sorio fr. 96 al bordo della mappa per la 2, la 6 e la 12, Rotonda Pontevigodarzere F.T., Venezia
 // Cavalcavia e Capolinea Ponte Brenta della 10 all'arrivo, Capolinea Mandria via Carnia), e la partenza della 10 snodata
 // dal Capolinea Ponte Brenta, nel piazzale, dove il rimorchio girato dal cordolo tocca le strisce di Via San Marco
+// 12 novembre (#29): ostacoli 0. I muri degli edifici vanno dalla facciata verso l'interno (City.buildTile): centrati
+// sporgevano 0,3 m in strada, e il bus accostato toccava le facciate sul bordo dell'asfalto (Milano 61 sotto i portici,
+// Tommaseo 114). A Buonarroti 46 la linea del cordolo non segue più la laterale dietro la palina (busLine)
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 3,
   lampioni_in_carreggiata: 0,
   alberi_in_carreggiata: 0,
   pensiline_in_carreggiata: 0,
-  fermate_con_ostacoli: 9,
+  fermate_con_ostacoli: 0,
   fermate_fuori_strada: 4,
   fermate_spostate: 3,
   fermate_sulle_strisce: 8,

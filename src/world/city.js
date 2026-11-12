@@ -2520,7 +2520,9 @@ export class City {
           const cr = (v[1][2] - v[0][2]) * 0 + ((v[1][0] - v[0][0]) * nz - (v[1][2] - v[0][2]) * nx);
           const order = cr > 0 ? [0, 1, 2, 3, 4, 5] : [0, 2, 1, 3, 5, 4];
           for (const k of order) { W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(seed); W.h.push(h); }
-          if (!b.sorpresa) tile.obs.push(this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building'));
+          // muro da 0,6 m dalla facciata verso l'interno: centrato sulla facciata sporgeva 0,3 m in strada, e il bus
+          // accostato al cordolo urtava dove la facciata sta sul bordo dell'asfalto (Milano 61, sotto i portici)
+          if (!b.sorpresa) tile.obs.push(this.addObstacle((p.x + q.x) / 2 - nx * 0.3, (p.z + q.z) / 2 - nz * 0.3, l / 2, 0.3, Math.atan2(-ez, ex), 'building'));
         }
       }
       // tetto a padiglione sugli edifici quasi rettangolari senza cortile

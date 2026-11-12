@@ -366,7 +366,8 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
   // Linea del bus lungo la fermata: il cordolo vero misurato ogni 3 m per la lunghezza del bus (palina a o = 0, il bus
   // dietro), retta che lo segue (pendenza ks, scartati i punti fuori riga: passi carrai, incroci, golfi) spostata sul
   // punto più vicino all'asse, così il bus non sale sul marciapiede in nessun punto. kl: dove passa la retta alla palina.
-  function busLine(cx, cz, k, dx, dz, hw) {
+  // cross: dietro la palina, sotto il bus, c'è un incrocio
+  function busLine(cx, cz, k, dx, dz, hw, cross) {
     const rx = -dz, rz = dx;
     let pts = [[0, k]];
     for (const o of [-3, -6, -9, -12]) {
@@ -380,6 +381,11 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       const m = sxx > 1 ? sxy / sxx : 0;
       return { m, c: mk - m * mo };
     };
+    // con un incrocio sotto il bus, fuori i punti dove il cordolo si allontana dalla palina più di quanto fa un cordolo
+    // dritto (ks fino a 0,2), con un metro di margine: sono la laterale. A Buonarroti 46 dava metà dei punti, la mediana
+    // stava tra quelli e il bus, girato verso la laterale, finiva con il fondo nell'edificio d'angolo. Senza incrocio
+    // restano: dietro la palina c'è un golfo di fermata (Saetta 1, Bramante Chiesa)
+    if (cross) pts = pts.filter(([o, q]) => q <= k + 1 + 0.2 * Math.abs(o));
     // fuori i punti dove il cordolo è più di 1 m oltre la mediana (un passo carraio, la palina appena prima della
     // banchina); quelli più vicini restano, il bus non deve salirci
     const med = pts.map((p) => p[1]).sort((a, b) => a - b)[pts.length >> 1];
@@ -392,6 +398,16 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       ks = Math.max(-0.2, Math.min(0.2, f.m));
     }
     return { ks, kl: Math.min(...pts.map(([o, q]) => q - ks * o)) };
+  }
+
+  // la variante passa da un incrocio (nodo con tre archi o più) sotto il bus fermo alla palina in (cx, cz)
+  function crossBehind(v, cx, cz, dx, dz, back) {
+    return v.nodes.some((n) => {
+      const N = net.nodes[n];
+      if (N.edges.length < 3) return false;
+      const o = (N.x - cx) * dx + (N.z - cz) * dz;
+      return o < 0 && o > -back && Math.abs((N.x - cx) * dz - (N.z - cz) * dx) < 6;
+    });
   }
 
   // lunghezza del tratto j della variante (dal nodo j al nodo j + 1)
@@ -511,7 +527,7 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
         for (const off of atKerb ? [k + 0.7, k + 0.5] : [hw + 1.6]) {
           const px = cx + rx * off, pz = cz + rz * off;
           if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || (roof && clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6))) continue;
-          spot = { cx, cz, px, pz, dx, dz, rx, rz, hw, kerb: atKerb ? k : hw, roof, ...(atKerb ? busLine(cx, cz, k, dx, dz, hw) : {}) };
+          spot = { cx, cz, px, pz, dx, dz, rx, rz, hw, kerb: atKerb ? k : hw, roof, ...(atKerb ? busLine(cx, cz, k, dx, dz, hw, crossBehind(v, cx, cz, dx, dz, back)) : {}) };
           break;
         }
         if (spot) break;

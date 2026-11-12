@@ -195,6 +195,24 @@ punto della foto (o il più vicino entro 15 m, `edificioSorpresa`) va in un riqu
 `streamTiles`, nasconde le mesh di quel riquadro quando il posto di guida è dentro: chi cambia come `streamTiles`
 rimette visibili i riquadri o come si raggruppano gli edifici lo tenga presente. Prova in `tests/sorpresa.spec.js`.
 
+#29, fermate dove il bus fermo tocca una facciata (12 novembre). Da sapere:
+
+- i muri degli edifici della mappa (`City.buildTile`) sono riquadri di collisione spessi 0,6 m dalla facciata verso
+  l'interno. Prima erano centrati sulla facciata e sporgevano 0,3 m in strada: dove la carreggiata del DBGT arriva fino
+  all'edificio (i portici di Corso Milano a Milano 61, Tommaseo 114) la facciata sta sul cordolo, e il bus accostato a
+  0,3 m urtava un muro che non si vede. Lo stesso riquadro lo usano l'urto del bus (`Bus.collide`), `clearBusRoads`, le
+  case procedurali (`buildBuildings`) e `free` in `TrafficLights.placeApproach` (lanterne a muro): dove la facciata sta
+  sul bordo dell'asfalto il palo del semaforo finiva dentro l'edificio e ora la lanterna va a muro (pali sul marciapiede
+  da 552 a 550). I muri delle rimesse dei tram (`buildDepotShed`) restano centrati;
+- `busLine` in `allStopPlacements`: se sotto il bus fermo la variante passa da un incrocio (`crossBehind`, un nodo con
+  tre archi o più fino a 12,7 m dietro la palina, 18,5 con lo snodato), i punti del cordolo più lontani di
+  `k + 1 + 0,2·|o|` sono la laterale e non entrano nella retta. A Buonarroti 46 erano metà dei punti, la mediana stava
+  tra loro e il bus, girato di 11 gradi, finiva con il fondo nell'edificio d'angolo. Senza incrocio restano come prima:
+  dietro la palina c'è un golfo di fermata (Saetta 1). Cambiano 6 paline su 689, tutte con la retta parallela all'asse;
+- i giri guidati del 9 novembre: oggi nessuna linea passa da Via Curtatone e Montanara; in Via Gattamelata, all'incrocio
+  con Via Sberti (13 da Boccaccio), il bus urta perché all'uscita della svolta a sinistra da Via Mafalda di Savoia ha il
+  muso fuori dalla corsia (#77).
+
 ### Linee (corsia `capolinea`)
 
 Issue: `area:linee` (madre: #15 linee dei bus intere fino ai capolinea del GTFS).
