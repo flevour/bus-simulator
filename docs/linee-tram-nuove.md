@@ -250,9 +250,10 @@ python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-ferma
   meno di 8 m si prendevano scambiate, a Voltabarozzo); dove OSM ha la banchina (`railway=platform`) la fermata va a
   metà banchina, perché nel gioco il punto della fermata è il centro della banchina.
 * **Depositi**: `scripts/tram_depositi.py` scrive [`data/tram-depositi.json`](../data/tram-depositi.json), le way OSM
-  attorno ai depositi della Guizza (export del SIR1) e di Voltabarozzo (cantiere), comunicazioni comprese; il gioco ne
-  fa il grafo del deposito (`TramYard` in `src/tram/tram.js`) e toglie i pezzi che corrono sopra i suoi binari, e con
-  loro le comunicazioni dei capolinea.
+  attorno ai depositi della Guizza (export del SIR1) e di Voltabarozzo (cantiere), comunicazioni comprese, con la
+  geometria rifatta secondo la regola di [`binari-tram.md`](binari-tram.md) (`scripts/tram_stesura.py`: rettilinei,
+  clotoidi e archi; sezione 3 di quel documento); il gioco ne fa il grafo del deposito (`TramYard` in
+  `src/tram/tram.js`) e toglie i pezzi che corrono sopra i suoi binari, e con loro le comunicazioni dei capolinea.
 
   ```bash
   python3 scripts/tram_depositi.py data/osm-padova-tram.json data/osm-padova-tram-cantiere.json data/tram-depositi.json

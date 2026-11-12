@@ -10,14 +10,14 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
-// Prima che le linee (#69) e i depositi (#70) seguano la regola. Pendenze: le rampe dei cavalcavia Chiesanuova (fino al
-// 18,5%) e San Marco (11%) del SIR2 e del Borgomagno (7,4%) del SIR1 (#74)
+// Linee prima che seguano la regola (#69); i depositi la seguono (#70). Pendenze: le rampe dei cavalcavia Chiesanuova
+// (fino al 18,5%) e San Marco (11%) del SIR2 e del Borgomagno (7,4%) del SIR1 (#74)
 const SOGLIE = {
   SIR1: { spigoli: 7, raggi: 0, interassi: 38, scarti_osm: 25, pendenze: 4 },
   SIR3: { spigoli: 4, raggi: 2, interassi: 16, scarti_osm: 12, pendenze: 0 },
   SIR2: { spigoli: 7, raggi: 0, interassi: 23, scarti_osm: 30, pendenze: 14 },
-  Guizza: { spigoli: 10, raggi: 2, interassi: 0, scarti_osm: 0, pendenze: 0 },
-  Voltabarozzo: { spigoli: 12, raggi: 4, interassi: 0, scarti_osm: 0, pendenze: 0 },
+  Guizza: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
+  Voltabarozzo: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
 };
 
 test('binari del tram secondo la regola', async ({ pagina, gioco }, info) => {

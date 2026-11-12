@@ -79,16 +79,16 @@ SOGLIE = {
     'fermate_spostate': 7,
     'marciapiedi_stretti_m2': 200000,
 }
-# binari del tram (scripts/binari_tram.py) sui dati: valori del 12 novembre 2026, prima che le linee (#69) e i depositi
-# (#70) seguano la regola di docs/binari-tram.md. Gli spigoli sono quasi tutti vertici delle polilinee (OSM ha un punto
-# ogni 5-20 m sulle curve); i due scarti da OSM del SIR1 sono salti di 7 e 9 m dello shape GTFS agganciato ai binari OSM
-# (Corso Garibaldi, Riviera del Businello)
+# binari del tram (scripts/binari_tram.py) sui dati: per le linee valori del 12 novembre 2026, prima che seguano la regola
+# di docs/binari-tram.md (#69). Gli spigoli sono quasi tutti vertici delle polilinee (OSM ha un punto ogni 5-20 m sulle
+# curve); i due scarti da OSM del SIR1 sono salti di 7 e 9 m dello shape GTFS agganciato ai binari OSM (Corso Garibaldi,
+# Riviera del Businello). I depositi seguono la regola (#70, scripts/tram_depositi.py)
 SOGLIE_BINARI = {
     'SIR1': {'spigoli': 166, 'raggi': 2, 'interassi': 72, 'scarti_osm': 2},
     'SIR3': {'spigoli': 93, 'raggi': 6, 'interassi': 31, 'scarti_osm': 0},
     'SIR2': {'spigoli': 238, 'raggi': 7, 'interassi': 67, 'scarti_osm': 0},
-    'Guizza': {'spigoli': 6, 'raggi': 7, 'interassi': 0, 'scarti_osm': 0},
-    'Voltabarozzo': {'spigoli': 12, 'raggi': 4, 'interassi': 0, 'scarti_osm': 0},
+    'Guizza': {'spigoli': 0, 'raggi': 0, 'interassi': 0, 'scarti_osm': 0},
+    'Voltabarozzo': {'spigoli': 0, 'raggi': 0, 'interassi': 0, 'scarti_osm': 0},
 }
 # profilo dei cavalcavia (scripts/cavalcavia.py) sui dati: valori del 12 novembre 2026, prima che i cavalcavia seguano
 # la regola di docs/cavalcavia.md (#84). Impalcati a 7 m sopra il terreno spianato a gradini, rampe che scendono fino a

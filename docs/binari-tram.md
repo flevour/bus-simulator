@@ -37,8 +37,9 @@ vale quello del SIR3 (inferenza).
 6. **Pendenza** al massimo **6%** in linea, **4%** in fermata, nelle rotaie di manovra e ai capolinea (in fermata
    meglio il 2%). Il veicolo arriva al 13% solo come limite. Raccordi verticali di almeno **350 m** nelle conche e
    **120 m** sui dossi (200 m nelle conche dei binari di servizio e del deposito).
-7. **Eccezioni scritte.** Dove un vincolo vero obbliga a uscire dalla regola (il piazzale della stazione), l'eccezione
-   ha una zona e il suo perché in `ECCEZIONI` di `scripts/binari_tram.py` e qui sotto. Il controllo la elenca a parte.
+7. **Eccezioni scritte.** Dove un vincolo vero obbliga a uscire dalla regola (il piazzale della stazione, la curva
+   sud-ovest del deposito di Voltabarozzo), l'eccezione ha una zona e il suo perché in `ECCEZIONI` di
+   `scripts/binari_tram.py` e nella sezione 4. Il controllo la elenca a parte.
 
 ## 2. I numeri e le fonti
 
@@ -164,6 +165,32 @@ vale quello del SIR3 (inferenza).
    uno dopo l'altro;
 5. i punti scritti ogni metro o meno (come il piazzale), così il gioco li prende come sono.
 
+### Nei depositi (#70)
+
+I depositi della Guizza e di Voltabarozzo sono rifatti così da `scripts/tram_depositi.py`, con la geometria di
+`scripts/tram_stesura.py` (solo libreria standard, da riusare per le linee):
+
+* **un binario** (`stendi`): la traccia OSM semplificata (Douglas-Peucker a 0,2 m) dà le tangenti; le svolte dello
+  stesso verso troppo vicine per avere ognuna la sua curva diventano una sola all'incrocio delle tangenti esterne, se la
+  curva unita resta entro 0,9 m dalla traccia (una curva che OSM disegna con tanti punti diventa un arco solo); dove no,
+  e oltre 150°, restano due curve che si toccano senza clotoide in mezzo. Due svolte opposte troppo vicine si
+  allontanano lungo le tangenti esterne. A ogni svolta clotoide, arco, clotoide (6 m sotto R 12, 8 m sotto R 16, poi
+  10 m; niente sopra R 400): il raggio è il più grande che resta entro 0,3 m dalla traccia e ci sta tra le curve vicine,
+  mai sotto 10,7 m (10,5 m più un margine perché i punti arrotondati al centimetro non lo portino sotto il minimo) e con
+  la curva lunga almeno 5,5 m. Rettilinei coi soli capi, curve un punto al metro;
+* **i binari continui**: a ogni nodo i rami che proseguono dritti (prima la coppia più dritta) fanno un binario, steso
+  da solo; si stendono prima quelli su cui si attaccano gli altri, in due passate (nella prima, dove c'è un giro, il
+  binario che porta lo scambio è quello di OSM);
+* **gli scambi**: il ramo deviato parte tangente al binario che lo porta. OSM mette lo scambio nel vertice dove la way
+  deviata parte già girata di 5-17°: la punta arretra lungo il binario quanto serve perché la curva resti centrata sulla
+  svolta di OSM, non oltre il nodo prima (a metà strada se anche quello è uno scambio) né fuori dal rettilineo. Se
+  la curva con la clotoide non ci sta, parte dalla punta senza, con l'arco, come il ramo deviato dello scambio a cerniera;
+* **due binari che si toccano** in un nodo con quattro capi (alla Guizza gli anelli in alto e in basso) restano
+  tangenti lì;
+* **nel gioco** `TramYard` prende i punti come sono; alle porte, dove il binario della linea del gioco non sta
+  esattamente sulla way, un raccordo di Hermite di 15 m dal binario della linea (posizione e direzione) al ramo del
+  deposito.
+
 Nel gioco oggi i binari passano da tre ritocchi che con dati già secondo la regola non servono più e che spostano la
 geometria (gli scarti da OSM del gioco vengono soprattutto da lì: dove i dati hanno uno spigolo il raccordo taglia
 l'angolo, come in Via Guizza e in Via Carlo Zeno): i raccordi fino a 28 m di raggio a ogni vertice
@@ -207,20 +234,31 @@ Cosa conta (i binari ricampionati ogni metro; un caso è un tratto, con il punto
   binario OSM e il tratto è disegnato dal gioco, come le S dei capolinea);
 * **pendenze** (solo nel gioco, l'unico con le quote): sopra il 6% su 10 m.
 
-Ai nodi del deposito il controllo prova ogni coppia di rami che prosegue dritta (entro 45°, come `TramYard`), con 10 m
-di ramo da una parte e dall'altra: sono i giunti e gli scambi dell'elenco. Ogni caso ha il posto (coordinate del gioco,
-via e fermata più vicine) e un peso: gradi diviso 2 per gli spigoli, 10,5 diviso il raggio, 1 più i metri sotto il
+Nei depositi il controllo misura ogni ramo del grafo (tra due nodi, come `TramYard`) insieme ai 10 m di binario che lo
+continuano oltre ogni capo: ogni uscita al primo nodo (entro 45°), poi sempre la più dritta; alle porte il binario della
+linea. Contano i casi sul ramo; quelli a meno di 3 m da un nodo sono gli scambi dell'elenco. Così una curva che comincia
+a un nodo (lo scambio a cerniera parte con l'arco) o una way spezzata a metà curva non si misurano su una finestra
+tagliata, dove sembrerebbero spigoli. E nei depositi la svolta tra le corde di 10 m è la più grande tra le finestre
+spostate fino a 5 m: in una S (il ramo deviato che gira al contrario del binario da cui parte, due scambi a punta contro
+punta) le due curve si annullano tra le corde lunghe e la svolta in 4 m sembrerebbe concentrata; una delle finestre
+vicine vede una curva intera, mentre uno spigolo o uno zig-zag restano spigoli. Sulle linee la misura resta quella di
+prima. Ogni caso ha il posto (coordinate del gioco, via e fermata più vicine) e un peso: gradi diviso 2 per gli spigoli, 10,5 diviso il raggio, 1 più i metri sotto il
 minimo diviso 0,3 per gli interassi stretti, l'oscillazione diviso 0,3 m, metri da OSM, pendenza diviso 6%. L'elenco
 dei punti peggiori va per peso.
 
-Eccezioni (`ECCEZIONI`): il **piazzale della stazione**, per gli scarti da OSM. I binari lì vengono dal rendering del
-progetto del piazzale: anelli regolari e raccordi morbidi al posto dei binari OSM, che fanno S e si incrociano.
+Eccezioni (`ECCEZIONI`), per gli scarti da OSM:
 
-Non si contano ancora: le clotoidi (oggi non ci sono da nessuna parte; servirà quando #69 e #70 le disegneranno), gli
-scambi in curva o vicini agli incroci, la lunghezza delle comunicazioni, le pendenze in fermata e i raccordi verticali.
+* il **piazzale della stazione**. I binari lì vengono dal rendering del progetto del piazzale: anelli regolari e
+  raccordi morbidi al posto dei binari OSM, che fanno S e si incrociano;
+* la **curva sud-ovest del deposito di Voltabarozzo** (2334, 3690). OSM (il cantiere, way 1453989055) disegna la curva
+  del binario interno dell'anello con un raggio di 6,4 m, sotto il minimo del Translohr: col raggio minimo il binario
+  passa fino a 1,2 m più all'interno dell'anello. Nella foto aerea la curva della massicciata è ancora più larga.
 
-Le soglie sono i valori del 12 novembre: se un numero scende, si abbassa la soglia nello stesso commit, come per il
-resto del rapporto della mappa.
+Non si contano ancora: le clotoidi (le hanno i depositi, non ancora le linee), gli scambi in curva o vicini agli
+incroci, la lunghezza delle comunicazioni, le pendenze in fermata e i raccordi verticali.
+
+Le soglie delle linee sono i valori del 12 novembre, quelle dei depositi 0: se un numero scende, si abbassa la soglia
+nello stesso commit, come per il resto del rapporto della mappa.
 
 ## 5. La rete del 12 novembre 2026
 
@@ -262,13 +300,19 @@ fermata Piovese (2216, 3403), raggio di 10,3 m, 3,4 m fuori da OSM, e nei dati u
 verso l'anello della stazione (160, -1055), raggio di 10 m per 31 m. Interassi che vanno e vengono di oltre 1 m:
 SIR1 in Riviera del Businello (79, 797) e in Via Pontevigodarzere (1128, -3255), SIR2 in Corso Garibaldi (59, -357).
 
-### Punti peggiori dei depositi (per #70)
+### Depositi (#70)
+
+Erano questi i punti peggiori, sulle way OSM com'erano:
 
 * **Voltabarozzo**: spigolo di 27° e curve da 6,4-6,6 m nel binario a nord-ovest (2334, 3695), (2355, 3697) e
   (2330, 3690); scambi con spigoli di 17,5° (2356, 3674) e 13,6° (2358, 3688); spigolo di 16,6° sul binario che entra
   da sud (2378, 3659).
 * **Guizza**: spigolo di 17,5° all'ingresso del ventaglio est (-125, 4444); il ventaglio tra (-151, 4436) e (-194,
   4485), quello della foto di #67, con spigoli di 14-14,6° a ogni scambio e un raggio di 9,6 m (-153, 4448).
+
+Con la misura dei depositi della sezione 4 le way OSM davano, dati / gioco: Guizza 5 / 5 spigoli e 5 / 5 raggi,
+Voltabarozzo 4 / 5 spigoli e 4 / 4 raggi. Rifatti come nella sezione 3 sono a 0 in tutto, dati e gioco; resta nelle
+eccezioni la curva sud-ovest di Voltabarozzo (1,2 m da OSM).
 
 ## Fonti
 

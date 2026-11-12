@@ -471,13 +471,34 @@ export class TramNet {
 }
 
 // ---------- depositi: il grafo dei binari ----------
-// I binari di un deposito (TRAM_DEPOTS di padova.js: way OSM in x, z) diventano un grafo: nodi ai capi delle way e dove
-// si toccano, rami tra i nodi. Al capo di un binario della linea che entra nel deposito c'è una porta: il binario
-// prosegue sul ramo che corre sulla sua way OSM, da 6 m prima della fine (i pezzi di way accanto ai binari del gioco si
-// tolgono, e con loro quello che resta staccato). A un nodo si prosegue sui capi che continuano dritto (entro 45°): se
-// sono due o più è uno scambio preso di punta, e decide la sua posizione (state: indice in options, 0 il più dritto).
+// I binari di un deposito (TRAM_DEPOTS di padova.js: way OSM in x, z, già stese secondo la regola da
+// scripts/tram_depositi.py) diventano un grafo: nodi ai capi delle way e dove si toccano, rami tra i nodi. Al capo di un
+// binario della linea che entra nel deposito c'è una porta: il binario prosegue sul ramo che corre sulla sua way OSM, da
+// 6 m prima della fine, con un raccordo (i pezzi di way accanto ai binari del gioco si tolgono, e con loro quello che
+// resta staccato). A un nodo si prosegue sui capi che continuano dritto (entro 45°): se sono due o più è uno scambio
+// preso di punta, e decide la sua posizione (state: indice in options, 0 il più dritto).
 // route() dà i rami da un nodo seguendo gli scambi; il tram di chi gioca ci corre sopra (Tram.yardEnter e yardStep).
-const YARD_THROUGH = -0.7, PORT_BACK = 6;
+const YARD_THROUGH = -0.7, PORT_BACK = 6, RACC = 15;
+// Raccordo dal punto q di un binario della linea (dir: il verso verso il deposito) al ramo P del deposito (P[0] il suo
+// punto più vicino a q): nei primi RACC metri il ramo si sposta di quanto q ne sta fuori e gira alla direzione del
+// binario, con una curva di Hermite che a RACC metri torna sul ramo (prima, se c'è, di un vertice che il ramo ha in comune
+// con un'altra way, che non si sposta). I binari della linea nel gioco non stanno esattamente sulle way di OSM: senza
+// raccordo alla porta ci sarebbe uno spigolo. Un punto ogni metro.
+function raccordo(q, dir, P, fisso) {
+  const T = new TrackPath(P);
+  let L = Math.min(RACC, T.len);
+  for (let i = 1; i < P.length; i++) if (fisso(P[i])) { L = Math.min(L, T.cum[i]); break; }
+  if (L < 2) return [{ x: q.x, z: q.z }, ...P.slice(1)];
+  const w0 = T.at(0), Dx = q.x - w0.x, Dz = q.z - w0.z, mx = (dir.x - w0.dx) * L, mz = (dir.z - w0.dz) * L;
+  const out = [];
+  const n = Math.ceil(L);
+  for (let k = 0; k <= n; k++) {
+    const u = (L * k) / n, t = u / L, w = T.at(u), h00 = 2 * t * t * t - 3 * t * t + 1, h10 = t * t * t - 2 * t * t + t;
+    out.push({ x: w.x + Dx * h00 + mx * h10, z: w.z + Dz * h00 + mz * h10 });
+  }
+  for (let i = 1; i < P.length; i++) if (T.cum[i] > L + 0.05) out.push(P[i]);
+  return out;
+}
 export class TramYard {
   constructor(depot, track) {
     this.name = depot.name;
@@ -508,9 +529,10 @@ export class TramYard {
         }
       });
       if (!best) continue;
-      // il ramo dalla porta in avanti (verso il deposito), senza i punti OSM nei primi 6 m (raccordo dolce); dietro si toglie
-      const r = raw[best.ri], ahead = best.fwd ? r.pts.slice(best.i + 1) : r.pts.slice(0, best.i + 1).reverse();
-      const pts = [{ x: q.x, z: q.z }, ...ahead.filter((p, k) => k === ahead.length - 1 || count.get(key(p)) >= 2 || Math.hypot(p.x - q.x, p.z - q.z) > 6)];
+      // il ramo dalla porta in avanti (verso il deposito), col raccordo dal binario della linea; dietro si toglie
+      const r = raw[best.ri], a = r.pts[best.i], b = r.pts[best.i + 1], q0 = { x: a.x + (b.x - a.x) * best.t, z: a.z + (b.z - a.z) * best.t };
+      const ahead = [q0, ...(best.fwd ? r.pts.slice(best.i + 1) : r.pts.slice(0, best.i + 1).reverse())];
+      const pts = raccordo(q, { x: fx, z: fz }, ahead, (p) => count.get(key(p)) >= 2);
       raw[best.ri] = { pts: best.fwd ? pts : pts.slice().reverse(), way: r.way, port: true };
       this.ports.push({ T: track, dir: d, kind, s, x: q.x, z: q.z, out: { x: kind === 'end' ? -q.dx : q.dx, z: kind === 'end' ? -q.dz : q.dz } });
     }
@@ -546,7 +568,9 @@ export class TramYard {
           if (Math.abs(al) < 0.85) continue;
           // il ramo arriva nel verso del binario: dal deposito si va avanti ('start', come all'inizio del binario)
           const kind = al > 0 ? 'start' : 'end', pt = { T: track, dir: d, kind, mid: true, s: pr.s, x: q.x, z: q.z, out: { x: al > 0 ? q.dx : -q.dx, z: al > 0 ? q.dz : -q.dz }, state: 'linea' };
-          if (atEnd) r.pts[r.pts.length - 1] = { x: q.x, z: q.z }; else r.pts[0] = { x: q.x, z: q.z };
+          // il ramo finisce sul binario, col raccordo
+          const R = raccordo(q, { x: -pt.out.x, z: -pt.out.z }, atEnd ? r.pts.slice().reverse() : r.pts, (p) => count.get(key(p)) >= 2);
+          r.pts = atEnd ? R.reverse() : R;
           // segnale per chi arriva sul binario nel verso in cui lo scambio si prende di punta, 4 m prima
           const ax = -pt.out.x, az = -pt.out.z;
           pt.panel = {

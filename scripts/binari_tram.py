@@ -56,7 +56,8 @@ DOPPIO = 6.0      # m: i binari dei due versi più vicini di così sono nella st
 UNICO = 1.0       # m: più vicini ancora sono lo stesso binario, percorso nei due versi (un tronco al capolinea)
 OSCILLA = 30.0    # m: finestra in cui l'interasse non deve andare e venire
 OSM_VICINO = 15.0  # m: oltre, il binario non ha un binario OSM accanto (tratti disegnati dal gioco)
-GIUNTO = 10.0     # m di ramo da una parte e dall'altra di un nodo del deposito
+GIUNTO = 10.0     # m: un ramo del deposito si misura con tanti metri dei binari che lo continuano
+SPOSTA = 5.0      # m: nei depositi la svolta tra le corde lunghe è la più grande tra le finestre spostate fino a tanto
 UNITO = 3         # m: casi più vicini di così lungo il binario sono lo stesso caso
 CURVA = 10        # m: per i raggi, tratti sotto il minimo più vicini di così sono la stessa curva
 TIPI = ['spigoli', 'raggi', 'interassi', 'scarti_osm', 'pendenze']
@@ -181,8 +182,9 @@ def tagli_inversioni(pts):
 # ---------- la rete da misurare ----------
 class Rete:
     """Binari da misurare. linee: id -> {binari: {1: pts, -1: pts}, comunicazioni: [pts], quote: {1: [quota ogni 5 m],
-    -1: [...]} o None}. depositi: nome -> {rami: [pts], giunti: [(pts, centro, scambio)]}: i giunti sono i passaggi da
-    un ramo all'altro a un nodo, dritti o di uno scambio."""
+    -1: [...]} o None}. depositi: nome -> {rami: [{pts, a, b, proprio}], nodi: [{p, capi: [{r, at, out} o {linea, out}]}]}:
+    il grafo dei binari, con i rami tra i nodi e a ogni nodo i capi (il ramo r che parte da lì, o il binario della linea
+    alle porte). Si misurano i rami propri del deposito, ognuno con i binari che lo continuano."""
 
     def __init__(self, nome):
         self.nome = nome
@@ -251,38 +253,38 @@ def rete_dati(M=None):
         g = Griglia(segmenti(R.linee[D['linea']]['binari'].values()), 20.0)
         ww = [{'servizio': b['servizio'], 'pts': [xz(*p) for p in b['punti']]} for b in D['binari']]
         # i binari della linea e le comunicazioni dei capolinea si misurano con la linea
-        propri = lambda w: w['servizio'] not in ('linea', 'crossover') or not all(g.piu_vicino(p, 30) is not None for p in w['pts'])
-        R.depositi[D['nome']] = {'rami': [w['pts'] for w in ww if propri(w)], 'giunti': giunti_osm(ww, propri)}
+        for w in ww:
+            w['proprio'] = w['servizio'] not in ('linea', 'crossover') or not all(g.piu_vicino(p, 30) is not None for p in w['pts'])
+        R.depositi[D['nome']] = grafo_way(ww)
     return R
 
 
-def giunti_osm(ways, propri):
-    """Giunti tra le way del deposito: ai vertici dove si toccano due way, ogni coppia di bracci di way diverse che
-    prosegue dritta (entro 45°, come TramYard), con almeno un braccio del deposito. Dentro una way il giunto è la way
-    stessa, che si misura come ramo."""
-    nodi = {}
-    for wi, w in enumerate(ways):
-        P = w['pts']
-        for i, p in enumerate(P):
-            N = nodi.setdefault((round(p[0] * 20), round(p[1] * 20)), {'p': p, 'bracci': []})
-            if i > 0:
-                N['bracci'].append((wi, braccio(P[i::-1])))
-            if i < len(P) - 1:
-                N['bracci'].append((wi, braccio(P[i:])))
-    out = []
-    for N in nodi.values():
-        B = N['bracci']
-        if len({wi for wi, _ in B}) < 2:
-            continue
-        for i in range(len(B)):
-            for k in range(i + 1, len(B)):
-                (wa, a), (wb, b) = B[i], B[k]
-                if wa == wb or not (propri(ways[wa]) or propri(ways[wb])):
-                    continue
-                da, db = dir_uscita(a), dir_uscita(b)
-                if da[0] * db[0] + da[1] * db[1] < -0.7:
-                    out.append((a[::-1] + b[1:], N['p'], len(B) >= 3))
-    return out
+def grafo_way(ways):
+    """Il grafo di un deposito dalle way (punti x, z), come lo fa TramYard: nodi ai vertici in comune tra le way e ai
+    loro capi, rami tra i nodi."""
+    chiave = lambda p: (round(p[0] * 20), round(p[1] * 20))
+    cnt = {}
+    for w in ways:
+        for i, p in enumerate(w['pts']):
+            cnt[chiave(p)] = cnt.get(chiave(p), 0) + (2 if i in (0, len(w['pts']) - 1) else 1)
+    nodi, ids, rami = [], {}, []
+
+    def nodo(p):
+        if chiave(p) not in ids:
+            ids[chiave(p)] = len(nodi)
+            nodi.append({'p': p, 'capi': []})
+        return ids[chiave(p)]
+
+    for w in ways:
+        P, i0 = w['pts'], 0
+        for i in range(1, len(P)):
+            if i == len(P) - 1 or cnt[chiave(P[i])] >= 2:
+                rami.append({'pts': P[i0:i + 1], 'a': nodo(P[i0]), 'b': nodo(P[i]), 'proprio': w['proprio']})
+                i0 = i
+    for k, r in enumerate(rami):
+        nodi[r['a']]['capi'].append({'r': k, 'at': 'a', 'out': dir_uscita(braccio(r['pts']))})
+        nodi[r['b']]['capi'].append({'r': k, 'at': 'b', 'out': dir_uscita(braccio(r['pts'][::-1]))})
+    return {'rami': rami, 'nodi': nodi}
 
 
 def braccio(P, lung=GIUNTO):
@@ -296,6 +298,35 @@ def braccio(P, lung=GIUNTO):
             return out
         out.append(b)
         acc += l
+    return out
+
+
+def dritti(N, i):
+    """Capi del nodo N che continuano il capo i (entro 45°, come TramYard)."""
+    a = N['capi'][i]['out']
+    return [k for k, c in enumerate(N['capi']) if k != i and a[0] * c['out'][0] + a[1] * c['out'][1] < -0.7]
+
+
+def oltre(D, n, k, lung=GIUNTO):
+    """I primi `lung` metri di binario dal nodo n lungo il suo capo k, e ai nodi dopo sempre il capo più dritto (alle
+    porte il binario della linea)."""
+    out, acc = [D['nodi'][n]['p']], 0.0
+    for _ in range(50):
+        c = D['nodi'][n]['capi'][k]
+        P = c['linea'] if 'linea' in c else (D['rami'][c['r']]['pts'] if c['at'] == 'a' else D['rami'][c['r']]['pts'][::-1])
+        Q = braccio(P, lung - acc)
+        out += Q[1:]
+        acc += lunghezza(Q)
+        if acc >= lung - 1e-6 or 'linea' in c:
+            break
+        r = D['rami'][c['r']]
+        n = r['b'] if c['at'] == 'a' else r['a']
+        i = next(j for j, x in enumerate(D['nodi'][n]['capi']) if x.get('r') == c['r'] and x['at'] == ('b' if c['at'] == 'a' else 'a'))
+        cont = dritti(D['nodi'][n], i)
+        if not cont:
+            break
+        a = D['nodi'][n]['capi'][i]['out']
+        k = min(cont, key=lambda j: a[0] * D['nodi'][n]['capi'][j]['out'][0] + a[1] * D['nodi'][n]['capi'][j]['out'][1])
     return out
 
 
@@ -323,33 +354,24 @@ def rete_gioco(G, M=None):
             'quote': {d: T['quote'][str(d)] for d in (1, -1)} if T.get('quote') else None,
         }
         R.fermate += [tuple(f) for f in T.get('fermate', [])]
+    tracks = {T['id']: T for T in G['tracks']}
     for Y in G['yards']:
-        R.depositi[Y['name']] = {'rami': [[tuple(p) for p in e['pts']] for e in Y['edges'] if len(e['pts']) > 1],
-                                 'giunti': giunti_yard(Y, {T['id']: T for T in G['tracks']})}
+        rami = [{'pts': [tuple(p) for p in e['pts']], 'proprio': True} for e in Y['edges']]
+        nodi = []
+        for n, N in enumerate(Y['nodes']):
+            capi = []
+            for E in N['ends']:
+                if 'port' in E:
+                    # alla porta il binario della linea, dalla porta verso fuori
+                    pt = Y['ports'][E['port']]
+                    P = [tuple(p) for p in tracks[pt['T']]['paths'][str(pt['dir'])]]
+                    capi.append({'linea': braccio_lungo(P, pt['s'], E['out']), 'out': tuple(E['out'])})
+                else:
+                    capi.append({'r': E['e'], 'at': E['at'], 'out': tuple(E['out'])})
+                    rami[E['e']][E['at']] = n
+            nodi.append({'p': (N['x'], N['z']), 'capi': capi})
+        R.depositi[Y['name']] = {'rami': rami, 'nodi': nodi}
     return R
-
-
-def giunti_yard(Y, tracks):
-    """Giunti ai nodi di TramYard: ogni coppia di capi che prosegue dritta (through), con i bracci lungo i rami o, per le
-    porte, lungo il binario della linea."""
-    edges = {e['id']: [tuple(p) for p in e['pts']] for e in Y['edges']}
-    out = []
-    for N in Y['nodes']:
-        bracci = []
-        for E in N['ends']:
-            if 'port' in E:
-                pt = Y['ports'][E['port']]
-                P = [tuple(p) for p in tracks[pt['T']]['paths'][str(pt['dir'])]]
-                bracci.append(braccio_lungo(P, pt['s'], E['out']))
-            else:
-                P = edges[E['e']]
-                bracci.append(braccio(P if E['at'] == 'a' else P[::-1]))
-        for i in range(len(bracci)):
-            for k in range(i + 1, len(bracci)):
-                a, b = N['ends'][i]['out'], N['ends'][k]['out']
-                if a[0] * b[0] + a[1] * b[1] < -0.7 and len(bracci[i]) > 1 and len(bracci[k]) > 1:
-                    out.append((bracci[i][::-1] + bracci[k][1:], (N['x'], N['z']), len(bracci) >= 3))
-    return out
 
 
 def braccio_lungo(P, s, verso, lung=GIUNTO):
@@ -381,10 +403,14 @@ def raggruppa(flags, unito=UNITO):
     return out
 
 
-def curve(S, centro=None):
-    """Spigoli e raggi sotto R_MIN lungo i punti S (ogni PASSO metri). Con centro (un giunto) solo i casi a meno di
-    UNITO metri da lì."""
+def curve(S, esse=False):
+    """Spigoli e raggi sotto R_MIN lungo i punti S (ogni PASSO metri); 'i' è l'indice del punto in S. Con esse (nei
+    depositi) la svolta tra le corde lunghe è la più grande tra quelle a meno di SPOSTA metri: in una S due curve opposte
+    si annullano tra le corde lunghe, ma una delle finestre vicine ne vede una intera; uno spigolo o uno zig-zag no."""
     t2, t10, t3 = svolte(S, CORTO), svolte(S, LUNGO), svolte(S, CORDA)
+    if esse:
+        k = round(SPOSTA / PASSO)
+        t10 = [max(abs(v) for v in t10[max(0, i - k):i + k + 1]) for i in range(len(S))]
     sp = [abs(t2[i]) >= math.radians(SPIGOLO) and abs(t2[i]) >= CONCENTRATA * abs(t10[i]) for i in range(len(S))]
     vicino_sp = [any(sp[max(0, i - UNITO):i + UNITO + 1]) for i in range(len(S))]
     rg = [not vicino_sp[i] and abs(t3[i]) > 1e-9 and CORDA / abs(t3[i]) < R_MIN - R_TOLL for i in range(len(S))]
@@ -392,14 +418,12 @@ def curve(S, centro=None):
     for i, j in raggruppa(sp):
         k = max(range(i, j + 1), key=lambda q: abs(t2[q]))
         g = math.degrees(abs(t2[k]))
-        casi.append({'tipo': 'spigoli', 'p': S[k], 'gradi': round(g, 1), 'peso': round(g / SPIGOLO, 2)})
+        casi.append({'tipo': 'spigoli', 'p': S[k], 'i': k, 'gradi': round(g, 1), 'peso': round(g / SPIGOLO, 2)})
     # una curva troppo stretta è un caso solo, anche se il raggio torna sopra il minimo per qualche metro
     for i, j in raggruppa(rg, CURVA):
         k = max(range(i, j + 1), key=lambda q: abs(t3[q]))
         r = CORDA / abs(t3[k])
-        casi.append({'tipo': 'raggi', 'p': S[k], 'raggio': round(r, 1), 'metri': round((j - i + 1) * PASSO), 'peso': round(R_MIN / r, 2)})
-    if centro is not None:
-        casi = [c for c in casi if math.dist(c['p'], centro) <= UNITO + 0.5]
+        casi.append({'tipo': 'raggi', 'p': S[k], 'i': k, 'raggio': round(r, 1), 'metri': round((j - i + 1) * PASSO), 'peso': round(R_MIN / r, 2)})
     return casi
 
 
@@ -453,7 +477,7 @@ def interassi(A, B):
     return casi
 
 
-def interassi_deposito(rami, giunti):
+def interassi_deposito(rami, nodi):
     """Binari paralleli del deposito più vicini del minimo (INGOMBRO), lontano dai nodi, dove si avvicinano per forza
     (lo scambio e il tratto fino a dove ci stanno due tram affiancati)."""
     segs, chi = [], []
@@ -462,7 +486,7 @@ def interassi_deposito(rami, giunti):
             segs.append((a, b))
             chi.append(r)
     g = Griglia(segs)
-    nodi = [c for _, c, _ in giunti] + [P[0] for P in rami] + [P[-1] for P in rami]
+    nodi = list(nodi) + [P[0] for P in rami] + [P[-1] for P in rami]
     casi = []
     for r, P in enumerate(rami):
         S = ricampiona(P)
@@ -524,10 +548,16 @@ def in_stazione(Z, p):
 
 
 # Zone dove la regola cede a un vincolo scritto: i casi dentro si elencano a parte e non contano.
+VOLTABAROZZO_SO = (2334, 3690)   # x, z del gioco
 ECCEZIONI = [
     {'nome': 'piazzale della stazione', 'tipi': {'scarti_osm'}, 'dentro': lambda R, p: in_stazione(R.stazione, p),
      'perche': 'binari disegnati dal rendering del progetto del piazzale (docs/linee-tram-nuove.md, "Binari della '
                'stazione"): anelli regolari e raccordi morbidi al posto dei binari di OSM, che lì fanno S e si incrociano'},
+    {'nome': 'curva sud-ovest del deposito di Voltabarozzo', 'tipi': {'scarti_osm'},
+     'dentro': lambda R, p: math.dist(p, VOLTABAROZZO_SO) < 12,
+     'perche': "OSM (il cantiere, way 1453989055) disegna la curva del binario interno dell'anello con un raggio di "
+               "6,4 m, sotto il minimo del Translohr: col raggio minimo il binario passa fino a 1,2 m più all'interno "
+               "dell'anello (nella foto aerea la curva della massicciata è ancora più larga)"},
 ]
 
 
@@ -553,15 +583,37 @@ def misura(R):
         out[nome] = casi
     for nome, D in R.depositi.items():
         casi = []
-        for P in D['rami']:
-            S = ricampiona(P)
-            casi += [{**c, 'binario': 'ramo'} for c in curve(S) + scarti(S, osm)]
-        for P, centro, scambio in D['giunti']:
-            casi += [{**c, 'binario': 'scambio' if scambio else 'giunto'} for c in curve(ricampiona(P), centro)]
-        casi += [{**c, 'binario': 'ramo'} for c in interassi_deposito(D['rami'], D['giunti'])]
+        for ri, r in enumerate(D['rami']):
+            if not r['proprio'] or len(r['pts']) < 2:
+                continue
+            P = r['pts']
+            casi += [{**c, 'binario': 'ramo'} for c in scarti(ricampiona(P), osm)]
+            # il ramo con i binari che lo continuano oltre i due capi (ogni uscita al primo nodo, poi dritto): una curva
+            # che comincia o finisce al nodo (gli scambi, le way spezzate a metà curva) si misura con quello che c'è prima
+            # e dopo, non su una finestra tagliata. Contano i casi sul ramo; ai nodi sono 'scambio'
+            lati = []
+            for n, at in ((r.get('a'), 'a'), (r.get('b'), 'b')):
+                if n is None:
+                    lati.append([[]])
+                    continue
+                N = D['nodi'][n]
+                i = next(j for j, c in enumerate(N['capi']) if c.get('r') == ri and c['at'] == at)
+                lati.append([oltre(D, n, k)[1:] for k in dritti(N, i)] or [[]])
+            L = lunghezza(P)
+            for pre in lati[0]:
+                for post in lati[1]:
+                    S = ricampiona(pre[::-1] + P + post)
+                    s0 = lunghezza(pre[::-1] + [P[0]]) if pre else 0.0
+                    for c in curve(S, esse=True):
+                        s = c.pop('i') * PASSO
+                        if s0 - 0.5 <= s <= s0 + L + 0.5:
+                            nodo = s < s0 + UNITO or s > s0 + L - UNITO
+                            casi.append({**c, 'binario': 'scambio' if nodo else 'ramo'})
+        rami = [r['pts'] for r in D['rami'] if r['proprio'] and len(r['pts']) > 1]
+        casi += [{**c, 'binario': 'ramo'} for c in interassi_deposito(rami, [N['p'] for N in D['nodi'] if len(N['capi']) > 1])]
         out[nome] = casi
     for dove, casi in out.items():
-        # lo stesso posto trovato più volte (da un ramo e dai suoi giunti, da più coppie di bracci): il caso più pesante
+        # lo stesso posto trovato più volte (da due rami ai lati di un nodo, con più binari dopo): il caso più pesante
         casi.sort(key=lambda c: -c['peso'])
         tenuti = []
         for c in casi:
@@ -574,6 +626,7 @@ def misura(R):
             c['x'], c['z'] = round(c['p'][0]), round(c['p'][1])
             c['luogo'] = luogo(R, c['p'])
             del c['p']
+            c.pop('i', None)
     return out
 
 

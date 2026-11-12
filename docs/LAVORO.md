@@ -77,7 +77,7 @@ divise per area.
 | `src/bus/bus.js` | `area:veicoli`, le altre aree nelle loro funzioni | |
 | `src/main.js` | tutte le aree, ognuna nelle sue funzioni | |
 | `src/tram/tram.js` | `area:tram` | scambi, binari, depositi, cambio cabina e turni: le funzioni sono nelle note del tram qui sotto |
-| `scripts/binari_tram.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
+| `scripts/binari_tram.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `SOGLIE_CAVALCAVIA` in `scripts/verifica_mappa.py` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari abbassa le soglie; usa `binari_tram.Griglia` e `raggruppa` |
 
 ## Note per area
@@ -703,6 +703,27 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   segnalazione). Entro 6 m: edificio di servizio (`kind` 'industrial', tetto piano). Conteggio in
   `tests/mappa.spec.js` (`edifici_sui_binari_dei_depositi`, soglia 0). Un deposito nuovo con la rimessa in OSM la
   prende da solo, se i binari ci finiscono dentro; senza l'edificio nella mappa non c'è rimessa.
+- Binari dei depositi secondo la regola (#70, 12 novembre). `scripts/tram_depositi.py` non copia più le way OSM: le
+  stende con `scripts/tram_stesura.py` (rettilinei, clotoidi e archi, raggio di almeno 10,7 m, entro 1 m da OSM;
+  metodo nella sezione 3 di [`binari-tram.md`](binari-tram.md)) e scrive i punti al millimetro. Le way restano quelle
+  di OSM (id, servizio, galleria), quindi `TramYard` fa lo stesso grafo di prima (stessi nodi e rami); cambiano i punti,
+  e i nodi degli scambi si spostano nella punta, che arretra sul binario che la porta (fino a 4 m). Da sapere:
+  - i binari si stendono come catene di rami che continuano dritti; un ramo deviato si attacca alla catena che porta
+    lo scambio (`ospite` in `stendi_deposito`), e dove due anelli si toccano in un nodo con quattro capi la seconda
+    catena si stende in due pezzi tangenti lì. Due passate, perché alla Guizza c'è un giro (la catena lunga si attacca
+    alla scala, la scala all'anello interno, l'anello tocca la catena lunga);
+  - in `TramYard` alle porte (anche a quella a metà del binario di partenza di Voltabarozzo) il ramo parte dal binario
+    della linea con un raccordo di Hermite di 15 m (`raccordo`, `RACC`) invece di saltare i punti OSM dei primi 6 m:
+    i binari della linea nel gioco non stanno esattamente sulle way. Quando #69 porterà le linee sui dati secondo la
+    regola, il raccordo diventa quasi dritto da solo;
+  - nel controllo (`scripts/binari_tram.py`) i depositi si misurano sul grafo (`grafo_way` per i dati, i nodi di
+    `TramYard` per il gioco): ogni ramo con 10 m dei binari che lo continuano (`oltre`), e la svolta tra le corde lunghe
+    presa sulle finestre spostate fino a 5 m (`curve(S, esse=True)`), perché le S tra scambi vicini non contino come
+    spigoli. I giunti di prima non ci sono più. Le linee si misurano come prima;
+  - una sola eccezione, per gli scarti da OSM: la curva sud-ovest di Voltabarozzo, dove OSM ha un raggio di 6,4 m;
+  - dopo una rigenerazione dei binari OSM (`data/osm-padova-tram*.json`) basta rilanciare `tram_depositi.py` e il
+    controllo: `python3 scripts/binari_tram.py --elenco`, e nel gioco `tests/binari-tram.spec.js` e
+    `tests/depositi-tram.spec.js`.
 - Deposito di Rubano: fermo dall'11 novembre, da decidere (#8, con i dati OSM e le strade possibili).
 
 Verifiche: regola 3, guida con il pilota a ogni capolinea dei tram e nei depositi, foto dalla cabina agli scambi, tram
@@ -757,7 +778,10 @@ sapere prima di toccare i binari:
   `padova.js`, `smoothLane` in `TramTrack`): toglie quasi tutti gli spigoli e porta il binario fino a 3,4 m fuori da
   OSM. Con i dati secondo la regola i ritocchi vanno spenti, come già nel piazzale;
 - la prova del gioco legge `TramTrack.paths`, `terminalCurve`, `TramTrack.h`, `stopsDir` e i nodi, i rami e le porte
-  di `TramYard`: chi li cambia aggiorna `binari()` nella prova e `rete_gioco` nello script.
+  di `TramYard`: chi li cambia aggiorna `binari()` nella prova e `rete_gioco` nello script;
+- la stesura secondo la regola è in `scripts/tram_stesura.py` (`stendi`: una traccia OSM, con i capi liberi o tangenti
+  a un altro binario): la usano i depositi (#70, nota in "Tram: scambi e depositi"), è pensata per servire anche alle
+  linee (#69).
 
 ### Tram: SIR2 e SIR3 (corsia `tram-reti`, chiusa il 9 novembre)
 
