@@ -102,8 +102,10 @@ fermata di destinazione.
   (SHP/DXF, Gauss-Boaga). Licenza IODL 2.0, citare "Regione del Veneto – L.R. n. 28/76". La CTR ha quote di
   gronda e di colmo: altezze **misurate**, migliori della stima ML di Microsoft. Le altezze nel WFS sono
   *da verificare*.
-- **DTM LiDAR regionale** a 5 m (ricavato da rilievi a 1 m): Padova è piatta, ma rampe, cavalcavia e
-  argini (Bastioni, Piovego) verrebbero alla quota vera.
+- **DTM LiDAR regionale** a 5 m (ricavato da rilievi a 1 m): Padova è piatta, ma argini (Bastioni, Piovego) e
+  rilevati delle rampe vengono alla quota vera. Gli impalcati dei cavalcavia no: dal rilievo si tolgono i manufatti,
+  e a metà campata il DTM scende al terreno sotto il ponte. La quota di un ponte viene dalle spalle e dal franco
+  sopra quello che passa sotto: vedi [`cavalcavia.md`](cavalcavia.md), sezione "Quote: DTM, DBGT e franchi".
 - **Comune di Padova – cartografia** su `cartografia.comune.padova.it` (servizi ArcGIS REST, citati su
   talk-it di OSM). Può contenere ZTL, piste ciclabili, aree pedonali e varchi *(da verificare la licenza)*.
   Le ordinanze ZTL 2023/62/0437 e aree pedonali 2023/62/0464 descrivono i perimetri.

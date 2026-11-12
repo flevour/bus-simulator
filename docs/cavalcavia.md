@@ -63,9 +63,10 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
 * Rampe di svincolo: 7% in salita e 8% in discesa a 40 e 50 km/h, 10% a 30 km/h, 5-6% da 60 km/h in su; «al raggio
   planimetrico minimo è sempre associata la pendenza massima del 7,0%». La regola prende il 7% nei due versi.
   **Confermato** [N2] tab. 8, § 4.7.2.
-* Tram: 6% in linea, 4% in fermata e ai capolinea. **Confermato** in [`binari-tram.md`](binari-tram.md). Nel SIR2 il
-  cavalcavia San Marco ha rampe del 2,85% e del 4,26% e la pendenza più forte della linea è il 4,8%. **Confermato**
-  [F14] pp. 15 e 26.
+* Tram: 6% in linea, 4% in fermata e ai capolinea. **Confermato** in [`binari-tram.md`](binari-tram.md). Nel SIR3 il
+  6% sta su un dosso all'incrocio di via Mocenigo, a Voltabarozzo; le rampe del ponte sullo Scaricatore sono del 5,13%
+  e del 4,89% (stesso documento, con le fonti). Nel SIR2 il cavalcavia San Marco ha rampe del 2,85% e del 4,26% e la
+  pendenza più forte della linea è il 4,8%. **Confermato** [F14] pp. 15 e 26.
 
 ### Raccordi verticali
 
@@ -114,8 +115,7 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
 * Dal DTM si tolgono edifici e «manufatti», le infrastrutture viarie comprese. **Confermato** [R2] slide 23 e 35. In
   `data/dtm-padova.json` i rilevati delle rampe ci sono e le campate no: Chiesanuova 8,5 e 8,8 m alle testate, 2,2 m a
   metà impalcato; Borgomagno 1,6 e 3,2 m, −0,6 m; San Marco 3,2 e 5,1 m, 0,2 m. **Inferenza** (misura sulla griglia a
-  10 m). Quindi `docs/OPEN_DATA.md`, dove dice che dal DTM i cavalcavia «verrebbero alla quota vera», vale per le rampe
-  e non per gli impalcati (da correggere in #86, con il posto del 6% del SIR3 in `binari-tram.md`).
+  10 m). Quindi dal DTM vengono le rampe, gli impalcati no (lo dice anche [`OPEN_DATA.md`](OPEN_DATA.md)).
 * Scarto massimo dal DTM fuori dai ponti: 0,5 m. **Inferenza** (scelta della regola): tre volte i 15 cm del capitolato,
   più la media dei punti a 2,5 m dal centro delle celle da 10 m (`scripts/dtm_grid.py`) sui fianchi dei rilevati.
 * Il DBGT ha gli assi stradali in 3D (`EL_STR`, «GU_CPCurve3D»), ma il catalogo nazionale non fissa l'accuratezza

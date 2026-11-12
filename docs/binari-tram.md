@@ -84,13 +84,26 @@ vale quello del SIR3 (inferenza).
 
 ### Pendenze
 
-* Pendenza massima in linea usata nel SIR3: **6%** (rampe del ponte sullo Scaricatore). **Confermato** [F1] fogli 5 e
-  40-41. Nel SIR2 la più forte è il 4,8% (4,26% sul cavalcavia San Marco). **Confermato** [F14] pp. 15-16.
+* Pendenza massima in linea usata nel SIR3: **6%**, su un dosso a Voltabarozzo, all'incrocio tra via Michiel e via
+  Mocenigo, poco prima della fermata Nani (pk 4+702). Sul binario A (stazione-Voltabarozzo, il «pari» della relazione)
+  sale al 5% dalla pk 4+577 alla 4+604 e scende al 6% fino alla 4+634; sul binario B (il «dispari») fa lo stesso tra
+  le pk 4+584, 4+610 e 4+641. La strada di oggi ha già il dosso: terreno a 11,65 m alla pk 4+600, a 10,59 m alla 4+550 e
+  a 10,15 m alla 4+650. **Confermato** [F1] fogli 5 e 40-41, [F20] tavole 11 e 24, [F6] tavola 19 (via Mocenigo alla
+  pk 4+604-4+611). Nel gioco il dosso sta circa in (1980, 2980). **Inferenza**: dalle coordinate UTM dello scambio
+  della pk 4+649, in [F6] tavola 19, che nel gioco sta in (2011, 3023).
+* Il ponte nuovo sullo Scaricatore sta in piano a 16,9 m (±0,07%) tra le pk 4+129 e 4+217, tra Lungargine Terranegra e
+  Lungargine Sabbionari. Le rampe salgono al 5,13% venendo dalla stazione (5,14% sul binario B) e scendono al 4,89%
+  verso Voltabarozzo, con raccordi di 1500 m. **Confermato** [F20] tavole 10-11 e 23-24, [F21].
+* Nel SIR2 la pendenza più forte è il 4,8%; sul cavalcavia San Marco le rampe sono del 2,85% e del 4,26%.
+  **Confermato** [F14] p. 15 (4,8%) e p. 26 (San Marco).
 * In fermata, nelle rotaie di manovra e ai capolinea al massimo **4%**, in fermata preferibilmente il 2%.
   **Confermato** [F1] foglio 39.
 * Raccordi verticali: la stessa relazione dà 350 m (tabella), «non minore di 500 m … vincolante» (testo) e come minimi
   350 m nelle conche sui binari in uso, 200 m su quelli non in uso (deposito, rotaia deviata), 120 m sui dossi.
   **Confermato** [F1] fogli 6, 39, 40. La regola prende i minimi: 350, 200 e 120 m.
+* Il progetto scende sotto i 350 m in un punto solo, il dosso del 6% di via Mocenigo: 200 m in cima e 250 m nelle due
+  conche ai piedi. È l'eccezione «escluso incrocio via Michiel / via Mocenigo» della tabella dei dati. **Confermato**
+  [F1] foglio 6, [F20] (sulle altre tavole i raccordi hanno almeno 350 m).
 
 ### Interasse
 
@@ -277,12 +290,16 @@ https://www.comune.padova.it/urbanistica/Varianti_Pi_2021/44_progetto_variante_S
 * [F11]: NTL, "Transport systems comparison trams on tires / trams on rails", 2013.
 * [F13]: Alstom, comunicato del 23 settembre 2022 sui 26 Translohr per Padova, note 3-5.
 * [F14]: Comune di Padova, MobilityInChain, Erregi, Viappiani, "Progetto di Fattibilità Tecnico-Economica della Linea
-  SIR 2 - Relazione tecnica", 28 dicembre 2020.
+  SIR 2 - Relazione tecnica", 28 dicembre 2020. Le pagine sono quelle stampate: nel PDF due in più.
 * [F15]: Sinergo per PMV, "Relazione tecnico-illustrativa" della tramvia Ponte della Libertà - San Basilio (Venezia),
   2014.
 * [F16]: J. Bueno Estévez, "Tranvía de Medellín", Revista de Obras Públicas n. 3572, gennaio 2016.
 * [F19]: S.D.A. Progetti, sistema tranviario fiorentino, linea 3.2, "Relazione tecnica sistemazioni urbanistiche",
   luglio 2024.
+* [F20]: progetto del SIR3 come [F1], "Profilo longitudinale" 1:1000/1:100, 26 tavole (binario A tavole 1-13,
+  binario B 14-26), rev. B, settembre 2020, file 209-234.
+* [F21]: progetto del SIR3 come [F1], "Inserimento urbano - Ponte sul canale Scaricatore - Sezione longitudinale",
+  NP00 00 D Z1 QC IF0000 004, novembre 2020, file 378.
 
 Non lette: il testo delle norme UNI 7156 (citata da [F1]) e UNI 7836 (a pagamento); documenti di progetto del SIR1 e
 del deposito della Guizza originale; guide di tracciato tedesche (BOStrab) e francesi (STRMTG); progetti con raggi e
@@ -302,3 +319,5 @@ interassi per Clermont-Ferrand, Parigi T5/T6, Shanghai e Tianjin.
 [F15]: https://politicheambientali.cittametropolitana.ve.it/sites/default/files/relazione_tenico_illustrativa.pdf
 [F16]: https://quickclick.es/rop/pdf/publico/2016/2016_enero_3572_09.pdf
 [F19]: https://mobilita.comune.fi.it/export/sites/mobilita/materiali/15_08_02_00_01_3217IX10058PE_0B.pdf
+[F20]: https://www.comune.padova.it/urbanistica/Varianti_Pi_2021/44_progetto_variante_SIR3/
+[F21]: https://www.comune.padova.it/urbanistica/Varianti_Pi_2021/44_progetto_variante_SIR3/378_NP00_00_D_Z1_QC_IF0000_004_A.pdf
