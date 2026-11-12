@@ -486,12 +486,25 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   fino in fondo). Uscendo serve anche il binario di partenza libero dalla porta alla banchina (`depotFree`); nel
   deposito non si muove nessuno mentre lo usa il tram di chi gioca (`trams.yardBusy` in `main.js`). Gli scambi del
   deposito si mettono per loro (`sw.state`, `sw.sign`); quello del capolinea va diritto per chi lo prende di punta
-  (entrando alla Guizza, uscendo a Voltabarozzo) e poi torna com'era. Senza un binario libero in rimessa (le corse
-  doppie del GTFS della Guizza, #71) si riprova ogni 15 s e la corsa parte in ritardo; dopo 10 minuti (`DEPOT_LATE`)
-  comincia lungo la linea. Nelle funzioni di `tram-scambi`: `tramToDepot` in `main.js` sceglie un binario senza tram
-  automatici (`trams.edgeFree`). Prove in `tests/depositi-tram.spec.js` ("tram automatici: all'inizio del servizio…" e
-  "…alla fine del servizio…"): 40 minuti dalle 5:10 e dalle 23:00, senza tram fermi oltre 90 s, al più due in sosta
-  per capolinea, senza salti delle casse (passo per passo entrando e uscendo dal deposito) e con gli scambi messi.
+  (entrando alla Guizza, uscendo a Voltabarozzo) e poi torna com'era. Senza un binario libero in rimessa si riprova
+  ogni 15 s e la corsa parte in ritardo; dopo 10 minuti (`DEPOT_LATE`) comincia lungo la linea. Nelle funzioni di
+  `tram-scambi`: `tramToDepot` in `main.js` sceglie un binario senza tram automatici (`trams.edgeFree`). Prove in
+  `tests/depositi-tram.spec.js` ("tram automatici: all'inizio del servizio…" e "…alla fine del servizio…"): 40 minuti
+  dalle 5:10 e dalle 23:00, senza tram fermi oltre 90 s, al più due in sosta per capolinea, senza salti delle casse
+  (passo per passo entrando e uscendo dal deposito) e con gli scambi messi; dalle 5:10 tutte le uscite in orario.
+- Corse doppie del GTFS (12 novembre, #71). Alcuni viaggi del SIR1 ci sono due o tre volte, ognuno nel suo blocco di
+  BusOne e a volte con tempi diversi: nei feriali dalla Guizza alle 5:35-6:30 (alle 6:16 uno di 39 minuti e uno di 46),
+  da Pontevigodarzere alle 20:48-21:58 (anche su due varianti, con 24 e 25 fermate) e alle 0:20. In `senzaTratti`,
+  dopo i tratti: una corsa con le stesse fermate di un'altra (ogni fermata entro 150 m da una dell'altra), che parte
+  entro un minuto e arriva entro 10 minuti da lei, è una copia. Resta quella che arriva prima: con la più lenta la sera
+  un tram arriverebbe alla Guizza prima di quello partito 7 minuti prima di lui. Le copie stanno con i tratti
+  (`copia`, `per` la corsa che resta) e i tratti di una copia passano alla corsa che resta con la catena di `per`:
+  togliere le copie dall'orario prima di `senzaTratti` lascerebbe senza corsa intera i tratti della copia lenta (Cavalletto
+  → Guizza alle 21:28 diventava un tram in più). Una copia ha nel turno di chi guida lo stesso `prev` e `next` della
+  corsa che resta, anche se arriva più tardi. Il menu elenca ancora le copie (#75). Prova in
+  `tests/turni-tram.spec.js` ("corse doppie del GTFS del SIR1…"): un tram per orario dalla Guizza alle 5:35-6:16,
+  nessuna corsa intera che arriva prima di quella partita prima sullo stesso percorso, le copie al posto della corsa che
+  resta.
 
 Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
 

@@ -18,7 +18,8 @@ let sostaTram = null;
 export function impostaSostaTram(f) { sostaTram = f; cache.clear(); }
 
 // tutte le corse della linea in quel giorno, con prev e next del turno. Per il tram i turni sono quelli dei viaggi veri
-// (senzaTratti), gli stessi dei tram automatici; ogni tratto sta nel turno della corsa intera che lo contiene
+// (senzaTratti), gli stessi dei tram automatici; ogni tratto sta nel turno della corsa intera che lo contiene, ogni copia
+// di una corsa nel turno della corsa che resta
 export function turni(L, day) {
   const key = L.id + ':' + day;
   if (cache.has(key)) return cache.get(key);
@@ -29,11 +30,12 @@ export function turni(L, day) {
     ({ viaggi: runs, tratti } = senzaTratti(runs));
     concatena(runs, { posti: POSTI_TRAM, sostaMin: (r) => (sostaTram ? sostaTram(L, r.v) : SOSTA_MIN) });
     // il tratto sta nel turno della corsa intera: dopo la corsa prima di lei, e prosegue con la sua corsa dopo se finisce
-    // insieme a lei (altrimenti finisce a metà linea ed è l'ultima del turno di chi lo guida)
+    // insieme a lei (altrimenti finisce a metà linea ed è l'ultima del turno di chi lo guida); la copia di una corsa è lo
+    // stesso viaggio e ha il suo stesso posto
     for (const k of tratti) {
       const c = k.per, a = k.v.stops[k.v.stops.length - 1], b = c.v.stops[c.v.stops.length - 1];
       k.prev = c.prev;
-      if (Math.hypot(a.x - b.x, a.z - b.z) < 150 && Math.abs(k.times[k.times.length - 1] - c.times[c.times.length - 1]) <= 180) k.next = c.next;
+      if (k.copia || (Math.hypot(a.x - b.x, a.z - b.z) < 150 && Math.abs(k.times[k.times.length - 1] - c.times[c.times.length - 1]) <= 180)) k.next = c.next;
     }
   } else concatena(runs);
   const at = (r, v, t) => r.v === v && Math.abs(r.t - t) < 60;
@@ -44,8 +46,13 @@ export function turni(L, day) {
 
 // Il GTFS dei tram pubblica ogni viaggio anche spezzato in tratti (Guizza → Cavalletto, Santo → Pontevigodarzere…) che
 // si sovrappongono alla corsa intera: un tratto la cui prima e ultima fermata sono servite, in quest'ordine ed entro 3
-// minuti, da una corsa più lunga della stessa linea è lo stesso tram. Le corse hanno v, t, d e times (l'ora a ogni
-// fermata). Restano i viaggi veri; ogni tratto ha in per la corsa intera
+// minuti, da una corsa più lunga della stessa linea è lo stesso tram. Alcuni viaggi del SIR1 ci sono anche due o tre
+// volte, ognuno nel suo blocco di BusOne, a volte con tempi diversi (nei feriali dalla Guizza alle 5:35-6:30, alle 6:16
+// uno di 39 minuti e uno di 46; da Pontevigodarzere la sera): una corsa con le stesse fermate di un'altra, che parte entro
+// un minuto e arriva entro 10 minuti da lei, è lo stesso tram. Resta quella che arriva prima (con la più lenta la corsa
+// delle 21:23 arriverebbe a Guizza dopo quella delle 21:30); le copie stanno con i tratti, con copia, e i loro tratti
+// vanno con la corsa che resta. Le corse hanno v, t, d e times (l'ora a ogni fermata). Restano i viaggi veri; ogni tratto
+// ha in per la corsa intera
 export function senzaTratti(runs) {
   // la prima fermata di c, da i in poi, entro 150 m da st e 3 minuti da t: al capolinea del SIR1 ci sono due fermate
   // Pontevigodarzere a 3 minuti l'una dall'altra, conta quella giusta e non la più vicina
@@ -66,8 +73,21 @@ export function senzaTratti(runs) {
     for (let i = lo; i < byDep.length && byDep[i].t <= k.t + 180; i++) if (covers(byDep[i], k) && (!per || byDep[i].v.stops.length > per.v.stops.length)) per = byDep[i];
     if (per) { k.per = per; tratti.push(k); } else viaggi.push(k);
   }
+  // copie: stesse fermate (ogni fermata dell'una vicina a una dell'altra: una variante per la Guizza ha in fondo anche la
+  // banchina di partenza, a 3 m da quella d'arrivo), stessa partenza e arrivo vicino
+  const vicine = (a, b) => Math.hypot(a.x - b.x, a.z - b.z) < 150;
+  const stesse = (a, b) => a === b || (vicine(a.stops[0], b.stops[0]) && vicine(a.stops[a.stops.length - 1], b.stops[b.stops.length - 1])
+    && a.stops.every((s) => b.stops.some((u) => vicine(s, u))) && b.stops.every((s) => a.stops.some((u) => vicine(s, u))));
+  const tenuti = [];
+  for (const c of viaggi) {
+    const i = tenuti.findIndex((k) => c.t - k.t <= 60 && Math.abs(k.t + k.d - c.t - c.d) <= 600 && stesse(k.v, c.v));
+    if (i < 0) { tenuti.push(c); continue; }
+    const [via, resta] = c.t + c.d < tenuti[i].t + tenuti[i].d ? [tenuti[i], c] : [c, tenuti[i]];
+    via.per = resta; via.copia = true; tenuti[i] = resta;
+  }
+  for (const k of viaggi) if (k.copia) tratti.push(k);
   for (const k of tratti) while (k.per.per) k.per = k.per.per;
-  return { viaggi, tratti };
+  return { viaggi: viaggi.filter((k) => !k.copia), tratti };
 }
 
 // Le corse (con v, t ed end) in turni: in ordine d'arrivo ogni corsa prosegue con la prima che parte vicino al suo

@@ -390,3 +390,42 @@ test('turni del tram di chi guida: corse intere, come i tram automatici, e i tra
   }
   expect(gioco.errori()).toEqual([]);
 });
+
+// Corse doppie del GTFS (#71): alcuni viaggi del SIR1 ci sono due o tre volte, a volte con tempi diversi (nei feriali
+// dalla Guizza alle 5:35-6:30, da Pontevigodarzere la sera). Ne resta uno, quello che arriva prima: dalla Guizza parte un
+// tram per orario, nessuna corsa intera arriva prima di quella partita prima di lei sullo stesso percorso, e una copia
+// scelta dal menu ha nel turno di chi guida il posto della corsa che resta
+test('corse doppie del GTFS del SIR1: un tram per orario, nei turni di chi guida e nei tram automatici', async ({ pagina, gioco }) => {
+  await avviaCorsa(pagina, { linea: 'SIR1', tram: true });
+  const r = await pagina.evaluate(() => {
+    const g = window.__game, L = g.settings.line, sim = g.trams.runs.filter((x) => x.line === L);
+    const nome = (v) => `${v.stops[0].name} → ${v.stops[v.stops.length - 1].name}`;
+    const out = { guizza: {}, sorpassi: [], copie: 0, fuoriPosto: [] };
+    for (const x of sim) if (nome(x.v) === 'Guizza Capolinea → Pontevigodarzere' && x.t >= 5.5 * 3600 && x.t <= 6.3 * 3600) out.guizza[x.t] = (out.guizza[x.t] || 0) + 1;
+    for (const day of ['feriale', 'festivo']) {
+      // i viaggi dei turni di chi guida, dalle corse del menu
+      const viaggi = new Set();
+      for (const v of L.variants) for (const { t } of v[day]) {
+        const tn = g.turnoOf(L, day, v, t), c = tn.run.per || tn.run;
+        viaggi.add(c);
+        if (!tn.run.copia) continue;
+        out.copie++;
+        const k = g.turnoOf(L, day, c.v, c.t);
+        if (tn.n !== k.n || tn.of !== k.of) out.fuoriPosto.push(`${day} ${nome(v)} ${t}`);
+      }
+      const per = new Map();
+      for (const c of viaggi) if (c.v.stops.length >= 24) { const k = nome(c.v); per.set(k, [...(per.get(k) || []), c]); }
+      for (const cs of per.values()) {
+        cs.sort((a, b) => a.t - b.t);
+        for (let i = 1; i < cs.length; i++) if (cs[i].t + cs[i].d < cs[i - 1].t + cs[i - 1].d) out.sorpassi.push(`${day} ${nome(cs[i].v)} ${cs[i - 1].t} ${cs[i].t}`);
+      }
+    }
+    return out;
+  });
+  const testo = JSON.stringify(r);
+  // 5:35, 5:41, 5:48, 5:55, 6:02, 6:09 e 6:16
+  expect(Object.values(r.guizza), testo).toEqual([1, 1, 1, 1, 1, 1, 1]);
+  expect([r.sorpassi, r.fuoriPosto], testo).toEqual([[], []]);
+  expect(r.copie, testo).toBeGreaterThan(0);
+  expect(gioco.errori()).toEqual([]);
+});

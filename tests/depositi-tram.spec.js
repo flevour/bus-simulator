@@ -345,9 +345,11 @@ test('tram automatici: all\'inizio del servizio escono dalla rimessa della Guizz
   const r = await giroRimessa(pagina, { da: 5 * 3600 + 10 * 60, min: 40 });
   const testo = JSON.stringify(r);
   console.log('rimessa, inizio del servizio:', testo);
-  // SIR3 alle 5:21, 5:36 e 5:51; SIR1 dalle 5:35 (tre corse doppie del GTFS ogni 7 minuti: escono una alla volta)
-  for (const line of ['SIR1', 'SIR3']) expect(r.uscite.filter((u) => u.line === line && u.ritardo <= 0).length, testo).toBeGreaterThan(0);
-  expect(r.uscite.length, testo).toBeGreaterThanOrEqual(8);
+  // SIR3 alle 5:21, 5:36 e 5:51; SIR1 alle 5:35, 5:41 e 5:48, un tram per orario (le corse doppie del GTFS sono una
+  // sola, #71): tutti in orario
+  for (const line of ['SIR1', 'SIR3']) expect(r.uscite.filter((u) => u.line === line).length, testo).toBeGreaterThan(0);
+  expect(r.uscite.filter((u) => u.ritardo > 0), testo).toEqual([]);
+  expect(r.uscite.length, testo).toBeGreaterThanOrEqual(6);
   expect([r.fermi, r.salti, r.passi, r.scambi, r.perse], testo).toEqual([[], [], [], [], []]);
   expect(Math.max(...Object.values(r.attesa)), testo).toBeLessThanOrEqual(2);
   expect(gioco.errori()).toEqual([]);
