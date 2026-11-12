@@ -54,6 +54,10 @@ divise per area.
 10. I ticket in parallelo li sceglie il checkout principale: non partono insieme due ticket che rigenerano la mappa o
     che cambiano le stesse funzioni (tabella sotto e "Riferimenti" del ticket). Chi cambia una funzione di un'altra
     area lo scrive nella nota di quell'area, qui in fondo, e nel commento di chiusura del ticket.
+11. **Browser senza suoni e senza finestre.** Prove e script aprono il gioco headless, con `--mute-audio`; il server
+    di Playwright MCP e i browser visibili non si usano per il gioco. Il gioco tace da solo nei browser guidati da un
+    programma (`navigator.webdriver`) e con `?muto` nell'indirizzo: suoni e annunci a voce, che su macOS passano dalla
+    sintesi vocale del sistema anche con `--mute-audio`, darebbero fastidio a chi lavora al computer.
 
 ## File condivisi
 

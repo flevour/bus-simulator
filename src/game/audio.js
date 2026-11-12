@@ -4,6 +4,10 @@ export class Audio {
     this.ctx = null;
     this.enabled = true;
     this.voice = true;
+    // nei browser guidati da un programma (prove, script e browser degli agenti: navigator.webdriver) o con ?muto
+    // nell'indirizzo il gioco tace: niente suoni né annunci a voce, che su macOS passano dal sistema anche con
+    // --mute-audio
+    this.silenzio = navigator.webdriver === true || new URLSearchParams(location.search).has('muto');
   }
   init() {
     if (this.ctx) return;
@@ -11,7 +15,7 @@ export class Audio {
     if (!AC) return;
     const ctx = (this.ctx = new AC());
     this.master = ctx.createGain();
-    this.master.gain.value = 0.7;
+    this.master.gain.value = this.silenzio ? 0 : 0.7;
     const comp = ctx.createDynamicsCompressor();
     this.master.connect(comp).connect(ctx.destination);
     // buffer di rumore
@@ -119,7 +123,7 @@ export class Audio {
     return s;
   }
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); }
-  setMuted(m) { if (this.master) this.master.gain.value = m ? 0 : 0.7; }
+  setMuted(m) { if (this.master) this.master.gain.value = m || this.silenzio ? 0 : 0.7; }
 
   update(dt, bus, { interior, rain }) {
     if (!this.ctx) return;
@@ -251,7 +255,7 @@ export class Audio {
   camera() { this.noiseBurst({ dur: 0.12, type: 'highpass', freq: 5000, gain: 0.3 }); this.tone(2000, 0.08, { gain: 0.06 }); }
 
   say(text) {
-    if (!this.voice || !('speechSynthesis' in window)) return;
+    if (this.silenzio || !this.voice || !('speechSynthesis' in window)) return;
     try {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'it-IT';
