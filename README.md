@@ -200,13 +200,15 @@ uniscono non si incrociano.
 * **Area di gioco** allargata a sud lungo il tram, fino al capolinea della Guizza, e con sei piccoli riquadri ai bordi
   dove i percorsi escono e rientrano (Via Madonna della Salute per la 22, verso l'Ippodromo per la 9 e la 42, a nord per
   la 4, la 13 e la 17, a ovest per la 21, a sud per la 11). Le linee che escono dalla mappa tengono il tratto più lungo
-  di fermate consecutive, e il percorso comincia e finisce attorno a quelle.
+  di fermate consecutive, la prima e l'ultima a meno di 40 m dal percorso, e il percorso comincia e finisce attorno a
+  quelle.
 * **Corridoi fino ai capolinea** (`CORRIDOI_TRAM` e `CORRIDOI_BUS` in `scripts/build_map.py`): celle da 250 m attorno
   ai binari completi delle linee del tram nuove, più una di margine, e le celle toccate dai tracciati GTFS di tutte le
   varianti delle linee del bus scelte, con strade ed edifici. Oggi il SIR3 fino a Voltabarozzo e al deposito, il SIR2 da
-  Rubano (via Pria Fosca) al capolinea di Vigonza prima della rotonda della SR11, la linea 25. Strade e segnaletica OSM
-  che mancano agli export di oggi in `data/osm-corridoio.json` (`scripts/filter_osm_corridoio.py`, che scrive anche la
-  query Overpass); edifici e paline da Overture, terreno dal DTM regionale (`dtm_grid.py --riquadro --come`). Una linea
+  Rubano (via Pria Fosca) al capolinea di Vigonza prima della rotonda della SR11, le linee 3, 10, 11, 22, 24, 25 e 88 con
+  tutte le varianti fino ai capolinea. Strade e segnaletica OSM che mancano agli export di oggi in
+  `data/osm-corridoio.json` (`scripts/filter_osm_corridoio.py`, che scrive anche le query Overpass, una per riquadro);
+  edifici e paline da Overture, terreno dal DTM regionale (`dtm_grid.py --riquadro --come`). Una linea
   che esce dall'area e ci rientra si aggancia per pezzi. Le vie fuori dall'area che collegano due vie dell'area dove
   passa un bus entrano anche loro (`gtfs_links`). Capolinea
   e fermate ancora fuori dalla mappa: `python3 scripts/inventario_capolinea.py <cartella_gtfs>` (tabelle in

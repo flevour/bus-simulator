@@ -162,29 +162,30 @@ sotto: ogni variante urbana del GTFS (fermate e corse di un mercoledì e di una 
 `padova-map.json` (intera, tagliata, assente), il SIR1 dal GTFS, SIR2 e SIR3 con la regola del gioco (fermate con una
 strada entro 120 m) e le fermate agganciate male di `verifica_mappa.py`. Si rilancia dopo ogni gruppo.
 
-### Stato dopo il gruppo 1b (SIR2 e la 25, 11 novembre)
+### Stato dopo il gruppo 2 (autobus 3, 10, 11, 22, 24 e 88, 11 novembre)
 
-157 varianti urbane con corse nei due giorni: 26 intere nella mappa, 107 tagliate, 24 assenti (13 oltre le 10
-varianti per linea che tiene `build_gtfs.load`, 8 con il tracciato oltre i 9 km di `RADIUS`, 3 non agganciate). Le
-assenti non dipendono dall'area: per le linee di `CORRIDOI_BUS` (`build_map.py`) quei due limiti non valgono.
+157 varianti urbane con corse nei due giorni: 66 intere nella mappa, 71 tagliate, 20 assenti (9 oltre le 10 varianti
+per linea che tiene `build_gtfs.load`, 8 con il tracciato oltre i 9 km di `RADIUS`, 3 non agganciate). Le assenti non
+dipendono dall'area: per le linee di `CORRIDOI_BUS` (`build_map.py`) quei due limiti non valgono. Dopo il gruppo 1b
+erano 26 intere, 107 tagliate e 24 assenti.
 
 **Varianti per linea.** Richiesta di chi gioca dell'11 novembre: quando la città si estende la linea si allunga, cioè
 la variante nel gioco ha la prima e l'ultima fermata del GTFS, con tracciato e orario interi, senza "(tratto in
 città)". Intere: così. Tagliate: c'è solo il tratto in città (parte dopo il capolinea, finisce prima, o tutte e due).
-Assenti: la variante non c'è. Si aggiorna a ogni gruppo.
+Assenti: la variante non c'è. Si aggiorna a ogni gruppo. Intere in tutte le varianti: 3, 10, 11, 13, 22, 24, 25 e 88.
 
 | Linea | Varianti | Intere | Tagliate | Assenti | Perché | Corse fer. toccate | Fermate fuori |
 |---|---|---|---|---|---|---|---|
 | 2 | 1 | 0 | 1 | 0 | parte dopo il capolinea e finisce prima 1 | 7 | 2 |
-| 3 | 7 | 0 | 7 | 0 | parte dopo il capolinea 4; finisce prima del capolinea 3 | 104 | 24 |
-| 4 | 12 | 2 | 8 | 2 | parte dopo il capolinea 4; finisce prima del capolinea 3; oltre le 10 varianti 2; parte dopo il capolinea e finisce prima 1 | 110 | 37 |
-| 5 | 2 | 0 | 2 | 0 | parte dopo il capolinea 1; finisce prima del capolinea 1 | 71 | 8 |
+| 3 | 7 | 7 | 0 | 0 | – | 0 | 0 |
+| 4 | 12 | 2 | 8 | 2 | parte dopo il capolinea 4; finisce prima del capolinea 3; oltre le 10 varianti 2; parte dopo il capolinea e finisce prima 1 | 110 | 35 |
+| 5 | 2 | 0 | 2 | 0 | parte dopo il capolinea 1; finisce prima del capolinea 1 | 71 | 9 |
 | 6 | 17 | 0 | 10 | 7 | oltre le 10 varianti 7; parte dopo il capolinea e finisce prima 4; parte dopo il capolinea 4; finisce prima del capolinea 2 | 129 | 131 |
 | 7 | 8 | 0 | 5 | 3 | oltre 9 km 3; finisce prima del capolinea 3; parte dopo il capolinea 2 | 89 | 70 |
 | 9 | 10 | 3 | 4 | 3 | non agganciata 3; parte dopo il capolinea 2; finisce prima del capolinea 2 | 94 | 5 |
-| 10 | 10 | 6 | 4 | 0 | finisce prima del capolinea 2; parte dopo il capolinea 2 | 57 | 10 |
-| 11 | 4 | 2 | 2 | 0 | finisce prima del capolinea 1; parte dopo il capolinea 1 | 25 | 14 |
-| 11B | 7 | 0 | 7 | 0 | parte dopo il capolinea 4; finisce prima del capolinea 3 | 64 | 17 |
+| 10 | 10 | 10 | 0 | 0 | – | 0 | 0 |
+| 11 | 4 | 4 | 0 | 0 | – | 0 | 0 |
+| 11B | 7 | 0 | 7 | 0 | parte dopo il capolinea 4; finisce prima del capolinea 3 | 64 | 7 |
 | 12 | 9 | 0 | 9 | 0 | parte dopo il capolinea 6; finisce prima del capolinea 3 | 110 | 56 |
 | 13 | 7 | 7 | 0 | 0 | – | 0 | 0 |
 | 14 | 9 | 0 | 9 | 0 | parte dopo il capolinea 5; finisce prima del capolinea 4 | 94 | 24 |
@@ -192,12 +193,12 @@ Assenti: la variante non c'è. Si aggiorna a ogni gruppo.
 | 16 | 8 | 3 | 5 | 0 | finisce prima del capolinea 3; parte dopo il capolinea 2 | 79 | 37 |
 | 17 | 2 | 0 | 0 | 2 | oltre 9 km 2 | 32 | 32 |
 | 19 | 6 | 0 | 3 | 3 | oltre 9 km 3; parte dopo il capolinea 2; finisce prima del capolinea 1 | 76 | 42 |
-| 21 | 2 | 0 | 2 | 0 | parte dopo il capolinea 1; finisce prima del capolinea 1 | 20 | 4 |
-| 22 | 14 | 0 | 10 | 4 | parte dopo il capolinea e finisce prima 6; oltre le 10 varianti 4; parte dopo il capolinea 3; finisce prima del capolinea 1 | 118 | 60 |
-| 24 | 7 | 2 | 5 | 0 | finisce prima del capolinea 3; parte dopo il capolinea 2 | 65 | 4 |
+| 21 | 2 | 1 | 1 | 0 | finisce prima del capolinea 1 | 10 | 3 |
+| 22 | 14 | 14 | 0 | 0 | – | 0 | 0 |
+| 24 | 7 | 7 | 0 | 0 | – | 0 | 0 |
 | 25 | 1 | 1 | 0 | 0 | – | 0 | 0 |
-| 42 | 2 | 0 | 2 | 0 | parte dopo il capolinea e finisce prima 2 | 0 | 9 |
-| 88 | 7 | 0 | 7 | 0 | finisce prima del capolinea 3; parte dopo il capolinea 3; parte dopo il capolinea e finisce prima 1 | 104 | 19 |
+| 42 | 2 | 0 | 2 | 0 | parte dopo il capolinea e finisce prima 2 | 0 | 10 |
+| 88 | 7 | 7 | 0 | 0 | – | 0 | 0 |
 
 **Tram**
 
@@ -218,47 +219,36 @@ tagliate o assenti che ci partono o ci arrivano.
 | Capolinea | Linee | Corse fer. | Corse fest. | Dalla mappa | Dal centro | lat, lon |
 |---|---|---|---|---|---|---|
 | Capolinea Granze Sud | 6, 7, 14, 15B | 121 | 50 | 1.880 m | 5,8 km | 45.3791, 11.9399 |
-| Capolinea Lion | 3 | 97 | 30 | 2.250 m | 7,7 km | 45.3385, 11.8830 |
 | Capolinea Ippodromo Mortise | 9, 42 | 86 | 34 | 130 m | 4,0 km | 45.4252, 11.9218 |
-| Capolinea Carpanedo | 88 | 65 | 48 | 2.860 m | 8,3 km | 45.3330, 11.8657 |
-| Capolinea Lagrange | 6 | 112 | 0 | 630 m | 3,8 km | 45.4002, 11.8296 |
+| Capolinea Lagrange | 6 | 112 | 0 | 360 m | 3,8 km | 45.4002, 11.8296 |
 | Capolinea Voltabrusegana | 5, 42 | 71 | 34 | 660 m | 3,9 km | 45.3892, 11.8351 |
-| Capolinea Selvazzano | 12 | 67 | 32 | 2.430 m | 7,6 km | 45.3962, 11.7816 |
-| Capolinea Mandriola | 24 | 65 | 32 | 440 m | 5,4 km | 45.3648, 11.8459 |
-| Capolinea Taggi' | 11B | 64 | 30 | 1.830 m | 7,3 km | 45.4599, 11.8218 |
-| Capolinea Cadoneghe | 4 | 59 | 34 | 540 m | 5,2 km | 45.4399, 11.9249 |
-| Capolinea Rio | 14, 16 | 76 | 0 | 970 m | 5,7 km | 45.3612, 11.9086 |
+| Capolinea Selvazzano | 12 | 67 | 32 | 2.190 m | 7,6 km | 45.3962, 11.7816 |
+| Capolinea Taggi' | 11B | 64 | 30 | 1.480 m | 7,3 km | 45.4599, 11.8218 |
+| Capolinea Cadoneghe | 4 | 59 | 34 | 160 m | 5,2 km | 45.4399, 11.9249 |
+| Capolinea Rio | 14, 16 | 76 | 0 | 510 m | 5,7 km | 45.3612, 11.9086 |
 | Capolinea Bragni | 4 | 51 | 25 | 1.610 m | 7,0 km | 45.4666, 11.9075 |
 | Capolinea Saonara | 7 | 74 | 0 | 5.250 m | 9,4 km | 45.3694, 11.9843 |
 | Capolinea Villatora | 6, 15B | 62 | 10 | 3.150 m | 7,3 km | 45.3859, 11.9660 |
-| Capolinea Mandria via Carnia | 22 | 51 | 19 | 2.000 m | 5,4 km | 45.3760, 11.8244 |
-| Capolinea Mandria via Monselice | 22 | 40 | 20 | 1.530 m | 5,4 km | 45.3707, 11.8318 |
 | Capolinea Saletto | 19 | 50 | 0 | 2.660 m | 7,7 km | 45.4756, 11.8578 |
-| Capolinea Albignasego (Momumento) | 3, 88 | 47 | 0 | 1.360 m | 6,8 km | 45.3464, 11.8677 |
-| Capolinea Tencarola | 12 | 31 | 16 | 1.650 m | 5,6 km | 45.3980, 11.8069 |
+| Capolinea Tencarola | 12 | 31 | 16 | 710 m | 5,6 km | 45.3980, 11.8069 |
 | Capolinea Ponte S. Nicolò | 14 | 30 | 6 | 1.910 m | 6,9 km | 45.3627, 11.9379 |
 | Capolinea Limena | 17 | 32 | 0 | 3.700 m | 8,9 km | 45.4826, 11.8366 |
 | Capolinea Tavo (Chiesa) | 19 | 26 | 0 | 5.270 m | 10,3 km | 45.4991, 11.8559 |
-| Padova, Via Montà 429 | 21 | 20 | 0 | 60 m | 5,6 km | 45.4452, 11.8306 |
 | Sorio Park Colli | 2 | 14 | 0 | 70 m | 3,2 km | 45.3980, 11.8389 |
-| Capolinea Giarre | 22 | 12 | 0 | 3.010 m | 8,1 km | 45.3472, 11.8200 |
 | Stati Uniti Ex capolinea | 7 | 9 | 0 | 1.710 m | 5,6 km | 45.3913, 11.9458 |
-| Capolinea Roncajette Don Rossi PSN | 4, 16 | 7 | 0 | 3.370 m | 8,4 km | 45.3449, 11.9365 |
+| Capolinea Roncajette Don Rossi PSN | 4, 16 | 7 | 0 | 2.260 m | 8,4 km | 45.3449, 11.9365 |
 | Capolinea Duca Abruzzi | 6 | 5 | 0 | 470 m | 3,7 km | 45.3941, 11.8348 |
 | Spagna fr mtcc | 7 | 4 | 0 | 800 m | 4,4 km | 45.3886, 11.9267 |
-| San Giacomo Chiesa | 3 | 3 | 0 | 2.340 m | 7,6 km | 45.3411, 11.9024 |
 
 Capolinea che sono già nella mappa (entro 60 m dalla rete) ma fuori dalle corse del gioco:
 
 | Capolinea | Linee | Corse fer. | Corse fest. | Perché |
 |---|---|---|---|---|
-| Capolinea Torre | 22 | 109 | 40 | la linea esce prima dalla mappa |
-| Ferrovia Corsia 2 | 6, 7, 9, 19, 22 | 106 | 0 | non agganciata; oltre 9 km; oltre le 10 varianti |
-| Capolinea Caselle | 10, 12 | 69 | 28 | la linea esce prima dalla mappa |
+| Ferrovia Corsia 2 | 6, 7, 9, 19 | 102 | 0 | non agganciata; oltre 9 km; oltre le 10 varianti |
 | Capolinea Nord Tram | 4, 17, 19 | 59 | 0 | oltre 9 km; oltre le 10 varianti |
-| Capolinea Due Palazzi | 11 | 25 | 0 | la linea esce prima dalla mappa |
+| Capolinea Caselle | 12 | 12 | 0 | la linea esce prima dalla mappa |
+| Padova, Via Montà 429 | 21 | 10 | 0 | la linea esce prima dalla mappa |
 | Capolinea scuola Severi | 9 | 8 | 0 | non agganciata |
-| Codalunga Liceo | 22 | 3 | 1 | oltre le 10 varianti |
 | Capolinea Plebiscito | 16 | 2 | 0 | la linea esce prima dalla mappa |
 | Capolinea Terranegra | 6 | 2 | 0 | oltre le 10 varianti |
 
@@ -268,7 +258,8 @@ Capolinea che sono già nella mappa (entro 60 m dalla rete) ma fuori dalle corse
 |---|---|---|
 | 1a | SIR3 fino a Voltabarozzo, con i due rami e il deposito | fatto il 9 novembre |
 | 1b | SIR2 da Rubano (via Pria Fosca) a Vigonza, prima della rotonda della SR11; con la 25 intera | fatto l'11 novembre; rami di Romagnoli e Ospedale San Lazzaro quando OSM avrà i binari |
-| 2 | autobus, dai capolinea più usati e da quelli segnalati (Volta fr. 24 e Mandriola sulla 24, salti ad Altichiero e Saletto) | da fare |
+| 2 | autobus: la 24 (Mandriola), la 3 (Lion, Albignasego, San Giacomo), la 22 (Torre, Mandria, Giarre), la 10 (Caselle), la 11 (Due Palazzi) e la 88 (Carpanedo), tutte le varianti intere | fatto l'11 novembre |
+| 3 | le altre linee, dai capolinea più usati della tabella sopra (Granze Sud, Ippodromo Mortise, Lagrange, Voltabrusegana) e dal salto della 19 a Saletto | da fare |
 
 **Gruppo 1a.** In `build_map.py` l'area comprende i corridoi di celle da 250 m attorno ai binari completi delle linee di
 `CORRIDOI_TRAM` (oggi il SIR3), più una cella di margine: 96 celle, 37 fuori dai riquadri di oggi (2,3 km²), da Cornaro
@@ -309,3 +300,55 @@ Peso: rete da 5,9 a 8,7 MB (nel bundle, con il terreno da 0,8 a 2,2 MB), aree da
 della mappa: edifici in carreggiata da 174 a 189 (lungo i bus da 117 a 129), tutti nei corridoi nuovi, fino a 1,8 m e
 nessuno nella corsia; marciapiede stretto da 175.993 a 189.949 m² (senza DBGT valgono le larghezze per tipo di strada);
 nel gioco due fermate in più con le ruote oltre il cordolo, sulla 10 intera (Provvidenza 14, Capolinea Ponte Brenta).
+
+**Gruppo 2.** Il corridoio di 3, 10, 11, 22, 24 e 88 aggiunge 283 celle, 154 fuori dai riquadri di prima (9,6 km²): da
+Mandriola, Mandria e Giarre a sud-ovest a Lion, Albignasego, San Giacomo e Carpanedo a sud, più i tratti verso Torre,
+Caselle e i Due Palazzi, capolinea che erano già nella mappa ma fuori dal tratto in città. La 88 non era tra le linee
+chieste: con le vie del corridoio della 3 il tracciato da Carpanedo alla Guizza si agganciava con un giro di 13 km su
+4,4 e la variante veniva scartata; con la 88 nei corridoi è intera con le altre sei. Dati per le aree nuove: strade e
+segnaletica OSM in `data/osm-corridoio.json` (da 952 a 2.003 vie, da 1.064 a 1.974 nodi), con
+`filter_osm_corridoio.py query <gtfs> <cartella> <linee>`, che scrive una query per riquadro di celle contigue e solo
+per le celle delle linee nuove (10 riquadri; il server pubblico ha risposto 502 e 504 per ore e le query sono passate da
+overpass-turbo nel browser, export "dati OSM grezzi"); 10.304 edifici Overture in più (solo quelli a meno di 0,0015
+gradi dalle celle nuove), 49 paline Overture in più (906), il terreno fino a z 8.650 con il DTM regionale (le celle di
+prima uguali). Il DBGT resta quello di prima.
+
+Con l'area nuova sono servite tre correzioni in `build_map.py`, utili anche altrove:
+
+- dove la linea esce dalla mappa il tratto comincia e finisce con una fermata a meno di 40 m dal percorso (`STOP_FAR` di
+  `verifica_mappa.py`): le paline tra 40 e 60 m stanno su una via fuori dall'area (la 4 a Rigotti con le celle nuove; la
+  5 e la 42 perdono Decorati 57 e partono da Decorati 1); fermate lontane da 2 a 0;
+- `gtfs_links` prende anche catene di vie fuori dall'area, coperte dal tracciato, fino a 300 m in tutto: a Cadoneghe
+  la 4 arriva più avanti su Via Matteotti, entrata con il corridoio della 22, ma i due pezzi in mezzo (15 e 125 m)
+  restavano fuori e il bus saltava 142 m senza strada;
+- nel grafo dell'aggancio le strade di servizio dove passa un tracciato GTFS (anelli e piazzali dei capolinea), nei
+  corridoi fuori dai riquadri, costano come le altre e non 2,5 volte la lunghezza: a Carpanedo l'aggancio tornava
+  indietro sulla strada principale invece di fare l'anello del piazzale, e la 88 partiva con un'inversione a U 30 m
+  dopo il capolinea (il bus saliva sul marciapiede). Cambiano di pochi metri anche la 3 a Lion e nel golfo di Park
+  Bembo e la 16 a Piovese Park; andate e ritorno A-B-A da 13 a 10, come prima del gruppo. Nei riquadri la regola
+  cambiava anche il Capolinea Nord e il parcheggio del Plebiscito, dove la 24 finiva contro un edificio: lì i percorsi
+  restano quelli di prima.
+
+Varianti intere da 26 a 66 su 157: tutte quelle di 3, 10, 11, 22, 24 e 88, con le 4 della 22 oltre le prime 10
+(Ferrovia - Mandria, Ferrovia - Mandria via Carnia, Codalunga - Giarre, Codalunga - Mandria). Con le aree nuove anche
+la 21 da Ponterotto è intera (l'altra variante arriva una fermata più avanti), la 11B arriva 5 fermate più avanti verso
+Taggì (Montà 410a) e la 4 una verso Cadoneghe (Matteotti 80). Varianti con "(tratto in città)" nel gioco da 107 a 71.
+
+Peso: rete da 8,7 a 10,4 MB (nel bundle, 3,7 MB compressa; il terreno da 2,2 a 2,8 MB), aree da 10,1 a 11,8 MB in 224
+file (prima 188). Rapporto della mappa: edifici in carreggiata da 189 a 200 e lungo i bus da 129 a 140, tutti nei
+corridoi nuovi (fino a 1,5 m, nessuno nella corsia); marciapiede stretto da 189.651 a 199.867 m² (+10.200 su 737.000 m²
+di marciapiede nuovo); salti senza strada 3 come prima (la 19 a Saletto).
+
+Dal posto di guida (pilota di `tests/guida.js`: tre o quattro fermate da ogni capolinea nuovo, la 88 fino ad
+Albignasego e a Carpanedo, la 3 da Ferrovia fino a dopo Park Bembo) partenze e arrivi ai capolinea nuovi vanno.
+Restano da sistemare tre punti:
+
+- la 22 da Giarre: dopo 110 m gira a 90 gradi da Via degli Olmi in Via dei Ciliegi e il pilota finisce contro la casa
+  di fronte (Overture, 1,6 m oltre il bordo della carreggiata);
+- la 3 verso Lion: la fermata Bembo Rotonda via Ponchia è all'uscita della rotonda e il bus fermo tocca la pensilina;
+- al Capolinea Caselle la 10 snodata parte nel piazzale della rotonda con le ruote 5,1 m oltre il cordolo.
+
+Nel gioco (`tests/mappa.spec.js`): paline in carreggiata da 1 a 3 (Park Bembo e Capolinea Park Bembo sotto il nastro di
+Corso Primo Maggio, come Piovese fr. Park), fermate con ostacoli da 9 a 10 e con le ruote oltre il cordolo da 6 a 7
+(Ponchia e Caselle), agganciate lontano dalla fermata vera da 6 a 3. C'erano già su `main`, con gli stessi percorsi: la
+16 da Ferrovia si pianta contro un edificio al Borgomagno, la 24 nel parcheggio del Capolinea Plebiscito.

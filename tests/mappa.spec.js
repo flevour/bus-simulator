@@ -16,16 +16,20 @@ import { test, expect } from './gioco.js';
 // roadInfo conta); con Via Bembo e Via Volta nella rete (gtfs_links di build_map.py) fuori strada 4, spostate 7.
 // 11 novembre, SIR2 da Rubano a Vigonza: la 10 arriva intera a Sarmeola e a Ponte di Brenta, con due fermate dove le
 // ruote del bus fermo escono dall'asfalto (Provvidenza 14, nel golfo accanto alla sede del tram a Chiesanuova, 4,9 m;
-// Capolinea Ponte Brenta, nel piazzale, 1,7 m): fuori strada 6; spostate 6
+// Capolinea Ponte Brenta, nel piazzale, 1,7 m): fuori strada 6; spostate 6. Gruppo 2 della corsia capolinea (3, 10, 11,
+// 22, 24 e 88 intere): paline in carreggiata 3, Park Bembo e Capolinea Park Bembo della 3 sotto il nastro di Corso
+// Primo Maggio, come Piovese fr. Park; ostacoli 10, la pensilina di Bembo Rotonda via Ponchia (3 verso Lion) all'uscita
+// della rotonda, da sistemare; fuori strada 7, Capolinea Caselle della 10 snodata nel piazzale della rotonda (5,1 m);
+// spostate 3
 const SOGLIE = {
   semafori_in_carreggiata: 2,
-  paline_in_carreggiata: 1,
+  paline_in_carreggiata: 3,
   lampioni_in_carreggiata: 0,
   alberi_in_carreggiata: 0,
   pensiline_in_carreggiata: 0,
-  fermate_con_ostacoli: 9,
-  fermate_fuori_strada: 6,
-  fermate_spostate: 6,
+  fermate_con_ostacoli: 10,
+  fermate_fuori_strada: 7,
+  fermate_spostate: 3,
   segni_sulla_sede: 0,
   asfalto_sopra_sede: 0,
 };

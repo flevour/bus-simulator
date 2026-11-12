@@ -63,7 +63,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
    - [x] rotonde attraversate dal tram: l'isola verde copre binari e sede (9 novembre, vedi "Fatto");
    - [x] bus automatici contromano sul binario del tram in Via Tommaseo (Pace) e in Piazza Garibaldi, con il muso dentro
      il tram (9 novembre, vedi "Fatto");
-   - [~] mappa più grande (corsia `capolinea`): fatto il corridoio del SIR3 fino a Voltabarozzo;
+   - [~] mappa più grande (corsia `capolinea`): fatti i corridoi del SIR3 fino a Voltabarozzo, del SIR2 e delle linee 3,
+     10, 11, 22, 24, 25 e 88 fino ai capolinea;
    - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
      - [x] passeggeri anche sugli altri autobus (vedi "Fatto");
      - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
@@ -82,8 +83,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        `mappa`);
      - [x] sterzo troppo sensibile, "era meglio la guida vecchia" (stesso giocatore nuovo): regolazione
        "Sensibilità dello sterzo" nel menu e nella pausa, che parte più dolce di prima (vedi "Fatto");
-     - [~] mappa più grande fino ai capolinea della 3 e della 22 e alle fermate della 10 e della 11 (linea 3 in Via
-       Fondà; corsia `capolinea`, dopo il tram).
+     - [x] mappa più grande fino ai capolinea della 3 e della 22 e alle fermate della 10 e della 11 (linea 3 in Via
+       Fondà; vedi "Fatto").
    - dall'11 novembre (foto nel pannello del checkout principale):
      - [x] sul tram niente ritardatario né fermate prenotate: il tram ferma a tutte le fermate (vedi "Fatto");
      - [ ] incroci tra traffico e tram: se il tram ha il passaggio gli altri si fermano, e viceversa (corsia
@@ -94,8 +95,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
      - [x] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
        stanno alla quota degli argini (vedi "Fatto");
      - [x] SIR2 intero fino a Rubano e al capolinea prima della rotonda per Venezia / SR11 (vedi "Fatto");
-     - [ ] linee del bus allungate fino ai capolinea del GTFS, con tracciato e orario interi (la 24 da Mandriola oggi
-       parte da Volta fr. 24), corsia `capolinea`;
+     - [~] linee del bus allungate fino ai capolinea del GTFS, con tracciato e orario interi: fatte 3, 10, 11, 22, 24,
+       25 e 88 (la 24 parte da Mandriola, vedi "Fatto"); le altre nel gruppo 3 della corsia `capolinea`;
      - [x] tram incastrato al capolinea di Voltabarozzo (SIR3, 13/13 a 0 m), corsia `tram-turni`;
      - [x] a Voltabarozzo la fermata d'arrivo è sulla curva: spostata 33 m più avanti sul dritto (`SPOSTA` in
        `tram_linee.py`, tolto l'11 novembre: le fermate di OSM erano scambiate tra i due versi, vedi "Fatto"); in
@@ -124,8 +125,8 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
        dell'anello interno più regolare; niente intrecci a S all'uscita della banchina (vedi "Fatto");
      - [x] al capolinea del tram B fa partire la corsa successiva, come per il bus, senza tornare al menu (vedi
        "Fatto");
-     - [ ] linee del bus complete fino al capolinea, senza la scritta "tratto in città" (corsia `capolinea`, prima del
-       SIR2);
+     - [~] linee del bus complete fino al capolinea, senza la scritta "tratto in città": fatte 3, 10, 11, 13, 22, 24,
+       25 e 88 (vedi "Fatto"); le altre nel gruppo 3 della corsia `capolinea`;
      - [x] urgente, manovra al capolinea del tram bloccata a Voltabarozzo: il riquadro di fine corsa non si chiude e
        copre il gioco, manca il percorso giusto sull'altro binario, B deve cambiare cabina quando si vuole e non solo
        dopo la discesa di tutti (corsia `tram-scambi`, punto 1; vedi "Fatto").
@@ -167,12 +168,14 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   ne hanno una sola, a 1,8 m in OSM): Garibaldi Eremitani, Borgomagno, Largo Europa, T. Aspetti 141 e fr. 240, Bronzetti
   4, Crescini 6, Facciolati CTO, Capolinea Pontecorvo e altre ai bordi della mappa. Capire caso per caso.
 - [~] Capolinea: tratti del percorso GTFS senza strada. Le corsie di servizio dove passa un bus entrano nella rete
-  (vedi "Fatto"); restano 11 salti, tutti ai bordi della mappa (13 ad Altichiero, 19 a Saletto, 24 a Mandriola).
+  (vedi "Fatto"); resta il salto della 19 a Saletto, al bordo della mappa (440 m, tre varianti tagliate): quelli della
+  13 ad Altichiero e della 24 a Mandriola non ci sono più.
 - [~] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
   bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
   capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa). Corsia `capolinea`: inventario dei
-  capolinea e gruppi in [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md), sezione 6; fatti il SIR3 e il SIR2 con
-  la 25 (vedi "Fatto"), poi gli autobus. Varianti ancora tagliate, linea per linea e con il perché, nella sezione 6.
+  capolinea e gruppi in [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md), sezione 6; fatti il SIR3, il SIR2 con
+  la 25 e il gruppo 2 degli autobus (3, 10, 11, 22, 24 e 88, vedi "Fatto"), poi le altre linee. Varianti ancora
+  tagliate, linea per linea e con il perché, nella sezione 6.
 - [~] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificato linea per linea in
   [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md); i dati sono sistemati (banchine vere, sensi unici, Ex
   Catasto sulla strada sud, partenze dalla fermata). Restano i due passaggi che mancano in OSM (dalla strada sud alla
@@ -259,6 +262,14 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Fatto
 
+- [x] **Linee 3, 10, 11, 22, 24 e 88 fino ai capolinea veri** (richiesta dell'11 novembre, corsia `capolinea`, gruppo 2):
+  tutte le varianti hanno la prima e l'ultima fermata del GTFS, con tracciato e orario interi, senza "(tratto in
+  città)": la 24 da Mandriola, la 3 da Lion, Albignasego e San Giacomo, la 22 da Torre, Mandria e Giarre (con le 4
+  varianti oltre le prime 10), la 10 da Caselle, la 11 dai Due Palazzi, la 88 da Carpanedo e Albignasego. Corridoi di
+  celle attorno ai tracciati GTFS (9,6 km² nuovi), con strade e segnaletica OSM (query Overpass per riquadro, dal
+  browser con il server pubblico saturo), edifici e paline Overture e terreno dal DTM regionale. Varianti intere da 26
+  a 66 su 157; anche la 21 da Ponterotto, la 11B e la 4 arrivano più avanti. Dettagli e numeri in
+  [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md), sezione 6.
 - [x] **Manovra al capolinea sbloccata e B quando si vuole** (segnalazione dell'11 novembre alle 16:30 su Voltabarozzo,
   corsia `tram-scambi`): il riepilogo di fine corsa del tram si chiude con Esc o con "Fai la manovra al capolinea" e il
   tram resta guidabile; B col riepilogo aperto, prima del punto della manovra, lo chiude. Il navigatore del tram dice

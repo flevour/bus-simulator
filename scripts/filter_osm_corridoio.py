@@ -4,15 +4,21 @@ build_map.py) che mancano agli export di oggi, data/osm-padova.json e data/osm-p
 docs/ESTENSIONE_LINEE.md).
 
 Uso:
-    python3 scripts/filter_osm_corridoio.py query <cartella_gtfs> > /tmp/corridoio.ql
-    curl -X POST -A "padova-bus-simulator" --data-urlencode data@/tmp/corridoio.ql -o /tmp/osm-corridoio.json \\
-        https://overpass-api.de/api/interpreter
-    python3 scripts/filter_osm_corridoio.py filtra <cartella_gtfs> /tmp/osm-corridoio.json data/osm-padova.json \\
-        data/osm-padova-nodes.json data/osm-corridoio.json
+    python3 scripts/filter_osm_corridoio.py query <cartella_gtfs> /tmp/corridoio [linee]
+    for q in /tmp/corridoio/riquadro-*.ql; do
+      curl -X POST -A "padova-bus-simulator" --data-urlencode data@$q -o ${q%.ql}.json https://overpass-api.de/api/interpreter
+    done
+    python3 scripts/filter_osm_corridoio.py filtra <cartella_gtfs> data/osm-padova.json data/osm-padova-nodes.json \\
+        data/osm-corridoio.json /tmp/corridoio/riquadro-*.json
 
 La query chiede, in un riquadro per ogni gruppo di celle contigue dei corridoi fuori dai riquadri FOCUS (allargato del
 margine con cui build_map.py tiene le vie), le stesse vie dell'export delle strade (highway carrabili e pedonali,
-railway rail e razed, waterway canal e river) e gli stessi nodi di scripts/overpass-nodes.ql. Il filtro tiene:
+railway rail e razed, waterway canal e river) e gli stessi nodi di scripts/overpass-nodes.ql: una query per riquadro,
+perché tutte insieme il server pubblico le rifiuta. Quando rifiuta anche quelle (502 e 504 per ore), passano da
+overpass-turbo.eu nel browser: query nell'editor, Esegui, Esporta → "dati OSM grezzi" (non GeoJSON, che non ha gli id
+dei nodi), salvata come riquadro-<n>.json. Con linee (linee del bus appena aggiunte a CORRIDOI_BUS, separate da
+virgole: "24,3,22") chiede solo le celle che aggiungono quelle linee; il resto è già in data/osm-corridoio.json. Il
+filtro tiene quello che data/osm-corridoio.json ha già e aggiunge:
 * le vie che toccano una cella dei corridoi fuori dai riquadri FOCUS, che non sono già in data/osm-padova.json e che
   non sono pezzi di vie che ci sono (una via spezzata in OSM dopo l'export cambia id: se metà dei suoi nodi sono già
   su una via dell'export, si salta);
@@ -44,12 +50,13 @@ def new_area(lat, lon, m=0.0):
     return not in_box(lat, lon, m) and build_map.in_focus(lat, lon, m)
 
 
-def corridor_cells(gtfs_dir):
-    """Celle dei corridoi (tram e autobus), come le calcola build_map.main; anche in build_map.FOCUS_CELLE."""
+def corridor_cells(gtfs_dir, nuove=()):
+    """Celle dei corridoi (tram e autobus), come le calcola build_map.main; anche in build_map.FOCUS_CELLE. Con nuove
+    (linee di CORRIDOI_BUS), solo le celle che aggiungono quelle linee."""
     gt = build_gtfs.load(gtfs_dir, full=build_map.CORRIDOI_BUS)
-    build_map.FOCUS_CELLE.update(build_map.tram_corridors())
-    build_map.FOCUS_CELLE.update(build_map.bus_corridors(gt))
-    return build_map.FOCUS_CELLE
+    prima = build_map.tram_corridors() | build_map.bus_corridors(gt, [l for l in build_map.CORRIDOI_BUS if l not in nuove])
+    build_map.FOCUS_CELLE.update(prima | build_map.bus_corridors(gt))
+    return build_map.FOCUS_CELLE - prima if nuove else build_map.FOCUS_CELLE
 
 
 def boxes(cells):
@@ -78,50 +85,62 @@ def boxes(cells):
     return sorted(res)
 
 
-def query(gtfs_dir):
-    bb = [f'({s:.4f},{w:.4f},{n:.4f},{e:.4f})' for s, w, n, e in boxes(corridor_cells(gtfs_dir))]
-    vie = [f'  way["highway"~"^({HIGHWAY})$"]{b};\n  way["railway"~"^(rail|razed)$"]{b};\n  way["waterway"~"^(canal|river)$"]{b};' for b in bb]
-    nodi = [f'  node["highway"~"^(traffic_signals|stop|give_way|crossing)$"]{b};\n  node["crossing"]{b};\n  node["traffic_signals:direction"]{b};\n  node["direction"]{b};\n  node["traffic_calming"]{b};' for b in bb]
-    return ('// generata da scripts/filter_osm_corridoio.py query: ' + str(len(bb)) + ' riquadri\n[out:json][timeout:600][maxsize:1073741824];\n(\n'
-            + '\n'.join(vie) + '\n);\nout geom;\n(\n' + '\n'.join(nodi) + '\n);\nout body;\n')
+def query(gtfs_dir, out_dir, nuove=()):
+    """Una query Overpass per riquadro, <out_dir>/riquadro-<n>.ql."""
+    bb = boxes(corridor_cells(gtfs_dir, nuove))
+    os.makedirs(out_dir, exist_ok=True)
+    for n, (s, w, nn, e) in enumerate(bb, 1):
+        b = f'({s:.4f},{w:.4f},{nn:.4f},{e:.4f})'
+        with open(f'{out_dir}/riquadro-{n}.ql', 'w', encoding='utf-8') as f:
+            f.write(f'// generata da scripts/filter_osm_corridoio.py query: riquadro {n} di {len(bb)}\n'
+                    '[out:json][timeout:600][maxsize:1073741824];\n(\n'
+                    f'  way["highway"~"^({HIGHWAY})$"]{b};\n  way["railway"~"^(rail|razed)$"]{b};\n'
+                    f'  way["waterway"~"^(canal|river)$"]{b};\n);\nout geom;\n(\n'
+                    f'  node["highway"~"^(traffic_signals|stop|give_way|crossing)$"]{b};\n  node["crossing"]{b};\n'
+                    f'  node["traffic_signals:direction"]{b};\n  node["direction"]{b};\n  node["traffic_calming"]{b};\n);\nout body;\n')
+    print(f'{len(bb)} riquadri in {out_dir}')
 
 
-def filtra(gtfs_dir, src, osm_path, nodes_path, out):
+def filtra(gtfs_dir, osm_path, nodes_path, out, srcs):
     corridor_cells(gtfs_dir)
-    d = json.load(open(src, encoding='utf-8'))
     old = json.load(open(osm_path, encoding='utf-8'))['elements']
-    old_ways = {e['id'] for e in old if e['type'] == 'way'}
-    old_nodes = {n for e in old if e['type'] == 'way' for n in e.get('nodes', ())}
-    old_signs = {e['id'] for e in json.load(open(nodes_path, encoding='utf-8'))['elements']}
+    kept = json.load(open(out, encoding='utf-8'))['elements'] if os.path.exists(out) else []
+    old_ways = {e['id'] for e in old + kept if e['type'] == 'way'}
+    old_nodes = {n for e in old + kept if e['type'] == 'way' for n in e.get('nodes', ())}
+    old_signs = {e['id'] for e in json.load(open(nodes_path, encoding='utf-8'))['elements'] + kept if e['type'] == 'node'}
     ways, signs, split, seen = [], [], 0, set()
-    for e in d['elements']:
-        if (e['type'], e['id']) in seen:
-            continue
-        seen.add((e['type'], e['id']))
-        if e['type'] == 'way':
-            if e['id'] in old_ways or not any(new_area(g['lat'], g['lon'], MARGINE) for g in e['geometry']):
+    for src in srcs:
+        d = json.load(open(src, encoding='utf-8'))
+        for e in d['elements']:
+            if (e['type'], e['id']) in seen:
                 continue
-            if sum(n in old_nodes for n in e['nodes']) * 2 >= len(e['nodes']):
-                split += 1
-                continue
-            ways.append({k: e[k] for k in ('type', 'id', 'bounds', 'nodes', 'geometry', 'tags') if k in e})
-        elif e['type'] == 'node':
-            t = e.get('tags', {})
-            if e['id'] in old_signs or not filter_osm_nodes.useful(t) or not new_area(e['lat'], e['lon']):
-                continue
-            signs.append({'type': 'node', 'id': e['id'], 'lat': e['lat'], 'lon': e['lon'],
-                          'tags': {k: t[k] for k in filter_osm_nodes.TAGS if k in t}})
-    els = sorted(ways, key=lambda e: e['id']) + sorted(signs, key=lambda e: e['id'])
+            seen.add((e['type'], e['id']))
+            if e['type'] == 'way':
+                if e['id'] in old_ways or not any(new_area(g['lat'], g['lon'], MARGINE) for g in e['geometry']):
+                    continue
+                if sum(n in old_nodes for n in e['nodes']) * 2 >= len(e['nodes']):
+                    split += 1
+                    continue
+                ways.append({k: e[k] for k in ('type', 'id', 'bounds', 'nodes', 'geometry', 'tags') if k in e})
+            elif e['type'] == 'node':
+                t = e.get('tags', {})
+                if e['id'] in old_signs or not filter_osm_nodes.useful(t) or not new_area(e['lat'], e['lon']):
+                    continue
+                signs.append({'type': 'node', 'id': e['id'], 'lat': e['lat'], 'lon': e['lon'],
+                              'tags': {k: t[k] for k in filter_osm_nodes.TAGS if k in t}})
+    els = (sorted([e for e in kept if e['type'] == 'way'] + ways, key=lambda e: e['id'])
+           + sorted([e for e in kept if e['type'] == 'node'] + signs, key=lambda e: e['id']))
     # un elemento per riga, come data/osm-padova-nodes.json
     with open(out, 'w', encoding='utf-8') as f:
         f.write('{"osm3s":' + json.dumps(d.get('osm3s', {}), ensure_ascii=False) + ',"elements":[\n')
         f.write(',\n'.join(json.dumps(e, ensure_ascii=False, separators=(',', ':')) for e in els))
         f.write('\n]}\n')
-    print(f'vie tenute {len(ways)} (saltate perché pezzi di vie dell\'export: {split}), nodi della segnaletica {len(signs)}')
+    print(f'vie nuove {len(ways)} (saltate perché pezzi di vie che ci sono: {split}), nodi della segnaletica nuovi '
+          f'{len(signs)}; in tutto {len(els)} elementi')
 
 
 if __name__ == '__main__':
     if sys.argv[1] == 'query':
-        sys.stdout.write(query(sys.argv[2]))
+        query(sys.argv[2], sys.argv[3], tuple(sys.argv[4].split(',')) if len(sys.argv) > 4 else ())
     else:
-        filtra(*sys.argv[2:7])
+        filtra(*sys.argv[2:6], sys.argv[6:])

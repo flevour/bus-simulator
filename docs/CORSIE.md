@@ -323,15 +323,46 @@ della 88 a Guizza 441 F.T.); `avviaCorsa` di `tests/gioco.js` aspetta le aree at
 carica tutte le aree e ha le soglie del SIR2 (ruote oltre il cordolo 6: Provvidenza 14 e Capolinea Ponte Brenta sulla
 10 intera).
 
+Fatto l'11 novembre, gruppo 2 (dettagli in [`ESTENSIONE_LINEE.md`](ESTENSIONE_LINEE.md), sezione 6):
+
+- **3, 10, 11, 22, 24 e 88 intere** in tutte le varianti, dal capolinea vero del GTFS, senza "(tratto in città)": la 24
+  da Mandriola, la 3 da Lion, Albignasego e San Giacomo, la 22 da Torre, Mandria (via Carnia e via Monselice) e Giarre,
+  la 10 da Caselle, la 11 dai Due Palazzi, la 88 da Carpanedo e Albignasego. La 88 non era nell'elenco: con le vie del
+  corridoio della 3 il tracciato da Carpanedo si agganciava con un giro di 13 km e la variante veniva scartata. Varianti
+  intere da 26 a 66 su 157 (tabella "Varianti per linea"); anche la 21 da Ponterotto è intera, la 11B e la 4 arrivano
+  più avanti;
+- dati: `filter_osm_corridoio.py query <gtfs> <cartella> [linee]` scrive una query Overpass per riquadro di celle
+  contigue (tutte insieme il server le rifiuta) e solo per le celle delle linee nuove; con il server pubblico saturo per
+  ore le query sono passate da overpass-turbo nel browser ("dati OSM grezzi"); `filtra` prende più file e tiene quello
+  che `data/osm-corridoio.json` ha già. Edifici e paline Overture e terreno come per il SIR2;
+- in `build_map.py`: dove la linea esce dalla mappa il tratto comincia e finisce con una fermata a meno di 40 m dal
+  percorso (la 5 e la 42 perdono Decorati 57, su una via fuori dall'area); `gtfs_links` prende anche catene di vie fuori
+  dall'area fino a 300 m (Via Matteotti a Cadoneghe per la 4: due pezzi tra due vie dell'area, il bus saltava 142 m);
+  nel grafo dell'aggancio le strade di servizio dove passa un tracciato GTFS, nei corridoi fuori dai riquadri, costano
+  come le altre (a Carpanedo la 88 faceva un'inversione a U invece dell'anello del capolinea; cambiano di pochi metri
+  anche la 3 a Lion e a Park Bembo e la 16 a Piovese Park).
+  La rigenerazione si compone con la mappa di `main` come per il SIR2 (regola 4), con i tasselli anche delle vie nuove
+  attaccate alla rete di prima.
+
+Funzioni di altre corsie cambiate da `capolinea` l'11 novembre, gruppo 2: in `tests/traffico.spec.js` la prova di Tito
+Livio e Ponti Romani guida la stessa corsa della 3, che ora parte alle 8:27 dal Capolinea Lion (27 fermate fino a
+Garibaldi giardini, prima 17 da Bembo 149), con 8 minuti di tempo invece di 5; in `build_map.py` (corsia `mappa`) il
+costo degli archi nel grafo dell'aggancio (`adj`): le strade di servizio coperte da un tracciato GTFS a 6 m, fuori dai
+riquadri `FOCUS_BOXES`, costano come le altre (`on_ring`, con `gtfs_cover(...).near`). Nei riquadri cambiava anche il
+parcheggio del Capolinea Plebiscito, con la 24 contro un edificio: se `mappa` la vuole estendere, va guardato lì.
+
 Prossimo lavoro, in quest'ordine:
 
-- **gruppo 2, autobus**: tutte le linee fino ai capolinea, prima la 24 (Mandriola), la 3 e la 22 (capolinea chiesti da
-  chi gioca), la 10 (Caselle) e la 11; poi le altre. Regola di chi gioca dell'11 novembre: quando la città si estende,
-  la linea si allunga, cioè ogni variante ha nel gioco la prima e l'ultima fermata del GTFS con tracciato e orario
-  interi, senza "(tratto in città)" (oggi la 24 da Mandriola parte da Volta fr. 24). Nella sezione 6 di
-  `ESTENSIONE_LINEE.md` la tabella "Varianti per linea" tiene il conto delle varianti ancora tagliate e del perché
-  (`scripts/inventario_capolinea.py`). Per le prime cinque linee il corridoio aggiunge 200 celle (12,5 km²); query
-  Overpass in 9 riquadri, edifici Overture e DTM già scaricati nello scratchpad della corsia (da rifare se serve);
+- i tre punti del gruppo 2 trovati dal posto di guida (`ESTENSIONE_LINEE.md`, sezione 6): la 22 da Giarre contro la
+  casa all'angolo tra Via degli Olmi e Via dei Ciliegi, la pensilina di Bembo Rotonda via Ponchia all'uscita della
+  rotonda (3 verso Lion), la 10 snodata al Capolinea Caselle con le ruote oltre il cordolo. Per `mappa`, già su `main`
+  con gli stessi percorsi: la 16 da Ferrovia contro un edificio al Borgomagno e la 24 nel parcheggio del Capolinea
+  Plebiscito, dove il pilota si pianta;
+- **gruppo 3, le altre linee**: dai capolinea più usati fuori mappa (Granze Sud per 6, 7, 14 e 15B, Ippodromo Mortise
+  per 9 e 42, Lagrange e Voltabrusegana) e dal salto senza strada della 19 a Saletto (440 m); tabella in
+  `ESTENSIONE_LINEE.md`, sezione 6, aggiornata a ogni gruppo con `scripts/inventario_capolinea.py`. Regola di chi gioca
+  dell'11 novembre: quando la città si estende la linea si allunga, ogni variante con la prima e l'ultima fermata del
+  GTFS;
 - a seguire: le aree scaricate anche lungo il percorso della linea, prima di arrivarci; il terreno per aree (oggi una
   griglia unica che cresce con i corridoi); il DBGT dei lotti di Rubano e Vigonza;
 - binari dei depositi di Voltabarozzo e di Rubano: della corsia `tram-turni`.

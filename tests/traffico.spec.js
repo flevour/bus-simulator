@@ -31,13 +31,14 @@ function osservaFermi({ cx, cz, r }) {
 // binario davanti a lui; il tram dietro di loro teneva viva la chiamata e il rosso non finiva. Si guida con il traffico
 // la corsa della 3 delle 8:36 fino a Garibaldi giardini: nel tratto da Riviera Tito Livio a Piazza Garibaldi nessuno
 // resta fermo più di un ciclo semaforico (60 s) fuori dalle fermate. Col codice del 9 novembre i bus restavano fermi
-// fino a 81 s al rosso dell'incrocio (dove il rosso dura al massimo 29 s), dopo la correzione al massimo 29 s.
+// fino a 81 s al rosso dell'incrocio (dove il rosso dura al massimo 29 s), dopo la correzione al massimo 29 s. Con la 3
+// intera (11 novembre) la stessa corsa parte alle 8:27 dal Capolinea Lion, 10 fermate prima di Bembo 149.
 test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo semaforico', async ({ pagina, gioco }) => {
-  test.setTimeout(300_000);
-  const corsa = await avviaCorsa(pagina, { linea: '3', verso: 1, partenza: '08:36' });
-  expect(corsa.prima).toMatch(/^Bembo 149/);
+  test.setTimeout(480_000);
+  const corsa = await avviaCorsa(pagina, { linea: '3', verso: 1, partenza: '08:27' });
+  expect(corsa.prima).toMatch(/^Capolinea Lion/);
   await pagina.evaluate(osservaFermi, { cx: 30, cz: -20, r: 380 });
-  const esiti = await guidaFermate(pagina, { fermate: 17, traffico: true });
+  const esiti = await guidaFermate(pagina, { fermate: 27, traffico: true });
   const fermi = await pagina.evaluate(() => window.__fermi());
   const ultima = esiti[esiti.length - 1];
   expect(fermi.filter((f) => f.s > 60), `fermi più lunghi: ${JSON.stringify(fermi.slice(0, 6))}`).toEqual([]);

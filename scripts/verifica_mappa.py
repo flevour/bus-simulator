@@ -60,12 +60,16 @@ SOGLIE = {
     # carreggiata da 174 a 189 e lungo i bus da 117 a 129, tutti nei corridoi nuovi (fino a 1,8 m, lungo i bus fino a
     # 0,7 m; nessuno nella corsia); marciapiede stretto da 175.993 a 189.949: a Rubano e Vigonza non c'è il DBGT e
     # valgono le larghezze per tipo di strada
-    'edifici_in_carreggiata': 189,
-    'edifici_in_carreggiata_bus': 129,
+    # 11 novembre, corsia capolinea, gruppo 2 (3, 10, 11, 22, 24 e 88 intere, 9,6 km² di corridoi nuovi): edifici in
+    # carreggiata da 189 a 200 e lungo i bus da 129 a 140, tutti nei corridoi nuovi (a meno di 120 m dalle celle nuove,
+    # fino a 1,5 m; nessuno nella corsia); marciapiede stretto da 189.651 a 199.867 (+10.200 m² su 737.000 nuovi). Dove
+    # la linea esce dalla mappa il tratto finisce con una fermata a meno di 40 m dal percorso: fermate lontane da 2 a 0
+    'edifici_in_carreggiata': 200,
+    'edifici_in_carreggiata_bus': 140,
     'edifici_sui_percorsi': 0,
-    'fermate_lontane': 2,
+    'fermate_lontane': 0,
     'fermate_spostate': 7,
-    'marciapiedi_stretti_m2': 190000,
+    'marciapiedi_stretti_m2': 200000,
 }
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',

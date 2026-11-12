@@ -60,11 +60,12 @@ FOCUS_BOXES = [FOCUS, FOCUS_SUD] + FOCUS_BORDI
 # toccate dai tracciati GTFS di tutte le varianti delle linee di CORRIDOI_BUS, senza margine (le vie e gli edifici a
 # meno di 0,0015 gradi da una cella entrano lo stesso, in_focus); quelle linee hanno tutte le varianti
 # (build_gtfs.load). La 25 dal SIR2 (il corridoio la taglia nella zona industriale: intera, parte dalla stazione come
-# prima); poi la 24, la 3, la 22, la 10 e la 11 (gruppo 2). Strade e segnaletica fuori dagli export di oggi in
-# data/osm-corridoio.json (scripts/filter_osm_corridoio.py)
+# prima); dal gruppo 2 la 24, la 3, la 22, la 10 e la 11 (capolinea chiesti da chi gioca) e la 88 (con le vie del
+# corridoio della 3 il tracciato da Carpanedo si agganciava con un giro di 13 km e la variante veniva scartata), poi le
+# altre. Strade e segnaletica fuori dagli export di oggi in data/osm-corridoio.json (scripts/filter_osm_corridoio.py)
 CELLA = 250.0
 CORRIDOI_TRAM = ('SIR3', 'SIR2')
-CORRIDOI_BUS = ('25',)
+CORRIDOI_BUS = ('25', '24', '3', '22', '10', '11', '88')
 TRAM_NUOVE = __file__.rsplit('/', 2)[0] + '/data/tram-linee-nuove.json'
 FOCUS_CELLE = set()  # (ix, iz) delle celle, riempito da main()
 WATER_W ={'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
@@ -470,26 +471,57 @@ def gtfs_cover(gt, step=4.0, reach=6.0, share=0.7):
                 runs.append((i, j))
             i = j
         return runs
+    covered.near = near
     return covered
 
 
-def gtfs_links(els, ways, covered, share=0.7):
+def gtfs_links(els, ways, covered, share=0.7, chain=300.0):
     """Vie fuori dall'area che collegano due vie dell'area (tra due loro nodi in comune) dove passa un tracciato GTFS dei
     bus: al bordo dell'area il map matching altrimenti salta il pezzo o fa un giro (la 3 in Via Bembo verso Lion girava
-    per 2,7 km di vie residenziali; con Via del Cristo nel corridoio del SIR3 saltava 282 m)."""
+    per 2,7 km di vie residenziali; con Via del Cristo nel corridoio del SIR3 saltava 282 m). Anche più vie di fila,
+    coperte dal tracciato, fino a chain metri in tutto (Via Matteotti a Cadoneghe, due pezzi da 15 e 125 m tra due vie
+    dell'area: la 4 saltava 142 m)."""
     have = {w['id'] for w in ways}
     on = {n for w in ways if w.get('tags', {}).get('highway') in DRIVE for n in w['nodes']}
-    out = []
+
+    def on_gtfs(e, i, j):
+        pts = [xz(g['lat'], g['lon']) for g in e['geometry'][i:j + 1]]
+        L = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
+        return L, L >= 5 and sum(math.dist(pts[q], pts[q + 1]) for a, b in covered(pts) for q in range(a, b)) > share * L
+    out, part = [], []
     for e in els:
         if e['type'] != 'way' or 'geometry' not in e or e['id'] in have or e.get('tags', {}).get('highway') not in DRIVE:
             continue
         k = [i for i, n in enumerate(e['nodes']) if n in on]
-        if len(k) < 2:
+        if len(k) >= 2:
+            if on_gtfs(e, k[0], k[-1])[1]:
+                out.append(e)
             continue
-        pts = [xz(g['lat'], g['lon']) for g in e['geometry'][k[0]:k[-1] + 1]]
-        L = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
-        if L >= 5 and sum(math.dist(pts[q], pts[q + 1]) for i, j in covered(pts) for q in range(i, j)) > share * L:
-            out.append(e)
+        L, ok = on_gtfs(e, 0, len(e['nodes']) - 1)
+        if ok and L <= chain:
+            part.append((e, L))
+    # catene: vie coperte che si toccano in un nodo fuori dall'area e insieme arrivano a due nodi dell'area
+    by_node = defaultdict(list)
+    for i, (e, _L) in enumerate(part):
+        for n in set(e['nodes']) - on:
+            by_node[n].append(i)
+    seen = set()
+    for i in range(len(part)):
+        if i in seen:
+            continue
+        comp, stack = [], [i]
+        seen.add(i)
+        while stack:
+            j = stack.pop()
+            comp.append(j)
+            for n in set(part[j][0]['nodes']) - on:
+                for q in by_node[n]:
+                    if q not in seen:
+                        seen.add(q)
+                        stack.append(q)
+        ends = {n for j in comp for n in part[j][0]['nodes'] if n in on}
+        if len(comp) > 1 and len(ends) >= 2 and sum(part[j][1] for j in comp) <= chain:
+            out += [part[j][0] for j in comp]
     return out
 
 
@@ -644,11 +676,20 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         print(f'vie rialzate: {len(table_ways)}')
 
     # adiacenza per il map matching
+    # strade di servizio dove passa un tracciato GTFS (anelli e piazzali dei capolinea) nei corridoi fuori dai riquadri:
+    # costano come le altre. Con 2,5 volte la lunghezza l'aggancio tornava indietro sulla strada principale invece di
+    # fare l'anello (la 88 a Carpanedo, inversione a U 30 m dopo il capolinea). Nei riquadri i percorsi restano quelli di
+    # prima: al Capolinea Plebiscito l'aggancio cambiava corsia nel parcheggio e il bus finiva contro un edificio
+    def on_ring(a, b):
+        la, lo = latlon((nodes[a][0] + nodes[b][0]) / 2, (nodes[a][1] + nodes[b][1]) / 2)
+        if any(w <= lo <= e and s <= la <= n for w, s, e, n in FOCUS_BOXES):
+            return False
+        return all(on_gtfs.near(nodes[a][0] + (nodes[b][0] - nodes[a][0]) * t, nodes[a][1] + (nodes[b][1] - nodes[a][1]) * t) for t in (0.25, 0.5, 0.75))
     adj = defaultdict(list)
     for k, (a, b, cls, _w, _n, flags, *_r) in enumerate(edges):
         L = math.hypot(nodes[b][0] - nodes[a][0], nodes[b][1] - nodes[a][1])
         # le corsie riservate costano come una strada normale: sono fatte per i bus
-        cost = L * (1.0 if cls <= 5 or flags & 32 else 1.6 if cls == 6 else 2.5 if cls == 7 else 3.5)
+        cost = L * (1.0 if cls <= 5 or flags & 32 or cls == 7 and on_ring(a, b) else 1.6 if cls == 6 else 2.5 if cls == 7 else 3.5)
         # sensi unici: contromano molto penalizzato (il tracciato GTFS può tagliare un piazzale: alla stazione si girava
         # contromano); le corsie bus in controsenso (flag 256) non costano di più
         fwd_pen = 6.0 if flags & 2 and not flags & 256 else 1.0
@@ -1135,7 +1176,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 return best
             # si tiene il tratto più lungo di fermate consecutive: una fermata isolata oltre un pezzo fuori dall'area
             # lasciava in mezzo chilometri di giro
-            ok = [dist_to_path(gt['stops'][si][0], gt['stops'][si][1]) < 60 for si in v['stops']]
+            dists = [dist_to_path(gt['stops'][si][0], gt['stops'][si][1]) for si in v['stops']]
+            ok = [d < 60 for d in dists]
             keep, run = [], []
             for i, o in enumerate(ok + [False]):
                 if o:
@@ -1143,6 +1185,13 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 elif run:
                     keep = run if len(run) > len(keep) else keep
                     run = []
+            # dove la linea esce dalla mappa il tratto comincia e finisce con una fermata a meno di 40 m dal percorso
+            # (STOP_FAR di verifica_mappa.py): una palina a 40-60 m è su una via fuori dall'area (la 4 a Rigotti, la 5
+            # e la 42 a Decorati 57)
+            while len(keep) > 1 and keep[0] > 0 and dists[keep[0]] > 40:
+                keep = keep[1:]
+            while len(keep) > 1 and keep[-1] < len(v['stops']) - 1 and dists[keep[-1]] > 40:
+                keep = keep[:-1]
             if len(keep) < 3:
                 failed += 1
                 continue
