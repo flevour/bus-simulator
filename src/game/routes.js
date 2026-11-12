@@ -97,9 +97,15 @@ export function alignStops(route, placements) {
 
 // Bus fermo alla fermata con il centro "back" metri prima della palina: accostato al cordolo vero e parallelo a lui
 // (kl, ks: la linea del cordolo lungo la fermata, vedi allStopPlacements; dove non è parallelo all'asse, come a
-// Largo Debussy, il bus lo segue)
+// Largo Debussy, il bus lo segue). La linea del cordolo è misurata in linea retta all'indietro dalla palina, nella
+// direzione del suo tratto (cx, cz, dx, dz, come la segnaletica gialla di City.buildStops): il bus si mette lì anche
+// dove il percorso piega poco prima (all'uscita della rotonda di via Ponchia il tratto prima è girato di 13 gradi e il
+// bus finiva sulla pensilina). Senza una palina allineata (alignStops), lungo il percorso. Il centro non va prima
+// dell'inizio del percorso: alla prima fermata con la palina lì (Capolinea Giarre) il bus sporge avanti.
 export function stopPose(route, st, back = 6.5) {
-  const p = pointAt(route, st.s - back), rx = -p.dz, rz = p.dx, ks = st.ks || 0;
+  back = Math.min(back, Math.max(0, st.s));
+  const p = st.kl != null ? { x: st.cx - st.dx * back, z: st.cz - st.dz * back, dx: st.dx, dz: st.dz } : pointAt(route, st.s - back);
+  const rx = -p.dz, rz = p.dx, ks = st.ks || 0;
   const lat = (st.kl ?? st.kerb ?? st.hw) - ks * back - 1.6;
   return { x: p.x + rx * lat, z: p.z + rz * lat, h: Math.atan2(p.dx + rx * ks, p.dz + rz * ks) };
 }

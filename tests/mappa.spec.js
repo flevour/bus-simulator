@@ -21,14 +21,16 @@ import { test, expect } from './gioco.js';
 // Primo Maggio, come Piovese fr. Park; ostacoli 10, la pensilina di Bembo Rotonda via Ponchia (3 verso Lion) all'uscita
 // della rotonda, da sistemare; fuori strada 7, Capolinea Caselle della 10 snodata nel piazzale della rotonda (5,1 m);
 // spostate 3. 12 novembre (#66): nessun edificio sui binari dei depositi del tram, né a meno di 2 m dal loro asse
+// 12 novembre (#16): il bus fermo sulla linea del cordolo nel sistema della palina (stopPose) e lo stallo del
+// capolinea a Caselle: ostacoli 9 (via Ponchia), fuori strada 4 (Caselle e Maroncelli fr.121 della 9 e della 42)
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 3,
   lampioni_in_carreggiata: 0,
   alberi_in_carreggiata: 0,
   pensiline_in_carreggiata: 0,
-  fermate_con_ostacoli: 10,
-  fermate_fuori_strada: 7,
+  fermate_con_ostacoli: 9,
+  fermate_fuori_strada: 4,
   fermate_spostate: 3,
   segni_sulla_sede: 0,
   asfalto_sopra_sede: 0,
@@ -180,7 +182,9 @@ function misura() {
     return { x: R.pts[i].x + q.dx * t, z: R.pts[i].z + q.dz * t, dx: q.dx, dz: q.dz };
   };
   const posa = (R, st, back = 6.5) => {
-    const p = punto(R, st.s - back), rx = -p.dz, rz = p.dx, ks = st.ks || 0;
+    back = Math.min(back, Math.max(0, st.s));
+    const p = st.kl != null ? { x: st.cx - st.dx * back, z: st.cz - st.dz * back, dx: st.dx, dz: st.dz } : punto(R, st.s - back);
+    const rx = -p.dz, rz = p.dx, ks = st.ks || 0;
     const lat = (st.kl ?? st.kerb ?? st.hw) - ks * back - 1.6;
     return { x: p.x + rx * lat, z: p.z + rz * lat, h: Math.atan2(p.dx + rx * ks, p.dz + rz * ks) };
   };

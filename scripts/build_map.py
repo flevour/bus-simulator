@@ -66,6 +66,8 @@ FOCUS_BOXES = [FOCUS, FOCUS_SUD] + FOCUS_BORDI
 CELLA = 250.0
 CORRIDOI_TRAM = ('SIR3', 'SIR2')
 CORRIDOI_BUS = ('25', '24', '3', '22', '10', '11', '88')
+SNODATI = ('10',)  # linee con lo snodato da 18 m (ARTICULATED_LINES in src/main.js)
+SVOLTA_STRETTA = 60.0  # gradi: da qui una svolta a sinistra dei bus è stretta (street_surfaces.BUS_TURN_KERB)
 TRAM_NUOVE = __file__.rsplit('/', 2)[0] + '/data/tram-linee-nuove.json'
 FOCUS_CELLE = set()  # (ix, iz) delle celle, riempito da main()
 WATER_W ={'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
@@ -1433,7 +1435,32 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     lt[0], lt[1] = min(lt[0], 1), min(lt[1], 1)
                     edge_lanes[k] = tuple(lt)
         print('corsie ristrette tra le banchine:', narrowed)
-    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms)
+    # svolte strette a sinistra dei bus (via d'uscita: nodo della svolta, nodo dopo) e stalli dei capolinea: alla prima
+    # fermata il bus fermo ha il centro 6,5 m prima della palina (stopPose di src/game/routes.js, la fermata almeno 6 m
+    # dopo l'inizio del percorso come in buildRoute) e dietro sporge di 6 m, lo snodato di 12. Le linee tagliate al bordo
+    # della mappa (inizio su un nodo con un arco solo) partono 28 m dopo. Le usa street_surfaces.surfaces
+    deg = Counter(n for e in edges if math.dist(nodes[e[0]], nodes[e[1]]) >= 0.3 for n in e[:2])
+    bus_left, stalli = set(), []
+    from shapely.geometry import LineString as _LS, Point as _Pt
+    from shapely.ops import substring as _sub
+    for l in lines_out:
+        for v in l['variants']:
+            ns = v['nodes']
+            for a, b, c in zip(ns, ns[1:], ns[2:]):
+                (ax, az), (bx, bz), (cx, cz) = nodes[a], nodes[b], nodes[c]
+                ux, uz, wx, wz = bx - ax, bz - az, cx - bx, cz - bz
+                # z verso sud: a sinistra il prodotto vettoriale è negativo
+                if math.degrees(math.atan2(ux * wz - uz * wx, ux * wx + uz * wz)) < -SVOLTA_STRETTA:
+                    bus_left.add((b, c))
+            if deg[ns[0]] < 2:
+                continue
+            path = _LS([nodes[n] for n in ns])
+            s = max(_sub(path, 0, 2500).project(_Pt(gt['stops'][v['stops'][0]][:2])), min(6.0, 0.1 * path.length))
+            back = (12.0 if l['id'] in SNODATI else 6.0) - (s - 6.5)
+            if back > 0:
+                stalli.append((ns[0], ns[1], back + 1.0))
+    surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
+                                                   sorted(bus_left), stalli)
     print('pianta delle strade:', st)
 
     nodes_flat = []

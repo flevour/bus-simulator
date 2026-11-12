@@ -82,13 +82,16 @@ function installaPilota({ fermaAlPrimoUrto, traffico }) {
   const curva = (s) => Math.abs(svolta(s, 6)) / 12;
   // scostamento a destra dell'asse: metà della mezza carreggiata a doppio senso, a 2 m dal bordo sui sensi unici.
   // Nelle svolte strette a destra ci si allarga fino a un metro oltre l'asse, come fa chi guida un bus da 12 m; nei
-  // 40 m prima della fermata si passa al cordolo, come stopPose di routes.js
+  // 40 m prima della fermata si passa al cordolo, come stopPose di routes.js: con la palina allineata la linea del
+  // cordolo è nella direzione del suo tratto, e se il percorso piega poco prima (uscita di una rotonda) si riporta di
+  // traverso al percorso
   const scosta = (s, st) => {
-    const q = punto(s).q, dx = svolta(s, 10);
+    const p = punto(s), q = p.q, dx = svolta(s, 10);
     let base = q.edge && q.edge.oneway ? clamp(q.hw - 2, 0, q.hw / 2) : Math.max(0, Math.min(q.hw / 2, q.hw - 1.5));
     if (dx > 0.8) base -= Math.min(1, (dx - 0.8) / 0.6) * (base + 1);
     if (!st) return base;
-    const kl = st.kl ?? st.kerb ?? st.hw, cordolo = kl - (st.ks || 0) * (st.s - s) - 1.6;
+    const o = s - st.s, k = (st.kl ?? st.kerb ?? st.hw) + (st.ks || 0) * o - 1.6;
+    const cordolo = st.kl == null ? k : (st.cx + st.dx * o + st.rx * k - p.x) * -p.dz + (st.cz + st.dz * o + st.rz * k - p.z) * p.dx;
     const w = clamp(1 - (st.s - 6.5 - s) / 40, 0, 1);
     return base + (cordolo - base) * w;
   };

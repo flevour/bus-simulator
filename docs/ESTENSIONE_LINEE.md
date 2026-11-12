@@ -352,3 +352,15 @@ Nel gioco (`tests/mappa.spec.js`): paline in carreggiata da 1 a 3 (Park Bembo e 
 Corso Primo Maggio, come Piovese fr. Park), fermate con ostacoli da 9 a 10 e con le ruote oltre il cordolo da 6 a 7
 (Ponchia e Caselle), agganciate lontano dalla fermata vera da 6 a 3. C'erano già su `main`, con gli stessi percorsi: la
 16 da Ferrovia si pianta contro un edificio al Borgomagno, la 24 nel parcheggio del Capolinea Plebiscito.
+
+I tre punti sistemati il 12 novembre (#16), fuori dal DBGT dove carreggiate e piazzali sono stimati:
+
+- Giarre: all'esterno delle svolte strette a sinistra dei bus, nei primi 20 m della via d'uscita, le facciate stanno
+  a 3 m dal bordo (`BUS_TURN_KERB` in `street_surfaces.py`); la casa di fronte è OSM (non Overture) ed è al suo posto
+  sull'ortofoto, ma la via vera è larga 9 m con la sosta, quella stimata 7,5. Il pilota passa, ma sale 4 volte sul
+  marciapiede all'uscita delle svolte strette dell'anello (#77);
+- Ponchia: era la posa del bus fermo (`stopPose` di `routes.js`), che metteva la linea del cordolo nel sistema del
+  percorso 6,5 m prima, girato di 13 gradi all'uscita della rotonda; ora è nel sistema della palina, come la segnaletica
+  gialla. La palina sta 1,7 m dopo le strisce pedonali (#73);
+- Caselle: stallo del capolinea, cioè la carreggiata che continua dritta dietro l'inizio del percorso per la lunghezza
+  del bus fermo, dove manca asfalto. Dietro la rotonda c'è il piazzale vero, che OSM non disegna.

@@ -24,6 +24,9 @@ BRIDGE_WALK = 2.0  # m: marciapiede sui ponti sopra l'acqua
 FILLET_BUS, FILLET = 7.0, 3.5  # m: raggio dei raccordi agli incroci (percorsi dei bus, altre strade)
 ISLAND_MAX = 2500.0  # m²: un buco della carreggiata più piccolo di così (e senza edifici) è un'isola
 BUS_KERB = 1.5  # m: marciapiede minimo tra carreggiata dei bus e facciate
+# fuori dal DBGT, all'esterno delle svolte strette a sinistra dei bus: nei primi 20 m della via d'uscita le facciate stanno
+# almeno 3 m oltre il bordo (il muso di un bus da 12 m che gira esce fino a 2,3 m oltre il cordolo della sua corsia)
+BUS_TURN_KERB, BUS_TURN_LEN = 3.0, 20.0
 TRAM_CLEAR = 3.2  # m: dal binario alle facciate
 TRAM_LANE = 2.1  # m: metà della corsia rossa di un binario, con il cordolo
 TILE = 200  # m: riquadri dell'export
@@ -295,6 +298,12 @@ def _polys(geom):
     return out
 
 
+def _ring_pts(rings):
+    """Anelli piatti (esterno, poi i buchi) come argomenti di Polygon."""
+    pts = lambda r: [(r[i], r[i + 1]) for i in range(0, len(r), 2)]
+    return pts(rings[0]), [pts(h) for h in rings[1:] if len(h) >= 6]
+
+
 def _rings(geom):
     """Poligoni di una geometria come liste di anelli piatti [x0, z0, x1, z1, ...] (esterno, poi i buchi)."""
     polys = [geom] if isinstance(geom, Polygon) else list(geom.geoms) if hasattr(geom, 'geoms') else []
@@ -389,7 +398,11 @@ def dbgt_polys(lst):
     return out
 
 
-def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None, platforms=None):
+def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None, platforms=None,
+             bus_left=(), stalli=()):
+    """bus_left: (nodo della svolta, nodo dopo) delle svolte strette a sinistra dei bus; stalli: (nodo d'inizio, nodo
+    dopo, metri) dei capolinea dove il bus fermo alla prima fermata sporge dietro l'inizio del percorso (build_map).
+    Valgono solo fuori dal DBGT, dove carreggiate e piazzali sono stimati: dentro ci sono quelli misurati."""
     elev = lambda e: heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
     drive = [k for k, e in enumerate(edges) if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3]
@@ -397,6 +410,9 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     # carreggiata: ogni tratto allargato (estremi tondi: i giunti delle curve restano pieni)
     pieces = {k: seg(edges[k]).buffer(edges[k][3] / 2, quad_segs=4) for k in drive}
     U = unary_union([pieces[k] for k in ground])
+    width = {(min(e[0], e[1]), max(e[0], e[1])): e[3] for e in edges}
+    comune = unary_union([Polygon(*_ring_pts(r)).buffer(0) for r in green['comune']]) if green and green.get('comune') else Polygon()
+    stimato = lambda n: not comune.contains(Point(nodes[n]))
     # isole delle rotatorie: anelli chiusi di archi junction=roundabout, la mezzeria rientrata di metà carreggiata
     ring_at = defaultdict(list)
     for k in ground:
@@ -573,9 +589,35 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             islands = islands.difference(unary_union(gone)).buffer(0)
             U = unary_union([U, *gone])
         U = U.difference(P).buffer(0)
+    # stalli dei capolinea: la carreggiata continua dritta dietro l'inizio del percorso per la lunghezza del bus fermo
+    # (il piazzale vero, che OSM non disegna: a Caselle il rimorchio dello snodato finiva 5 m oltre il cordolo). Solo
+    # dove manca davvero asfalto, raccordi compresi (più di 5 m²: lungo la via restano schegge)
+    stub = []
+    for a, b, lung in stalli:
+        (ax, az), (bx, bz) = nodes[a], nodes[b]
+        L = math.hypot(bx - ax, bz - az)
+        if L < 0.3 or not stimato(a):
+            continue
+        g = LineString([(ax, az), (ax - (bx - ax) / L * lung, az - (bz - az) / L * lung)]).buffer(width[(min(a, b), max(a, b))] / 2, cap_style='flat')
+        if g.difference(U).area > 5:
+            stub.append(g)
+    if stub:
+        U = unary_union([U, *stub])
+        islands = islands.difference(unary_union(stub))
     # edifici fuori da carreggiate (anche quelle in quota), marciapiede minimo e sede del tram
     clear = [unary_union([pieces[k] for k in drive]).buffer(0.8, quad_segs=2)]
     clear += [pieces[k].buffer(BUS_KERB, quad_segs=2) for k in drive if (min(edges[k][0], edges[k][1]), max(edges[k][0], edges[k][1])) in bus_edges]
+    clear += [g.buffer(0.8, quad_segs=2) for g in stub]
+    # svolte strette a sinistra: a destra della via d'uscita, dalla parte delle case (z verso sud: per Shapely la sua
+    # sinistra è la nostra destra). A Giarre la 22 gira da Via degli Olmi in Via dei Ciliegi e la casa di fronte stava
+    # 1,6 m oltre il bordo; la via vera è larga 9 m con la sosta, quella stimata 7,5
+    for b, c in bus_left:
+        (bx, bz), (cx, cz) = nodes[b], nodes[c]
+        L = math.hypot(cx - bx, cz - bz)
+        if L < 0.3 or not stimato(b):
+            continue
+        t = min(1.0, BUS_TURN_LEN / L)
+        clear.append(LineString([(bx, bz), (bx + (cx - bx) * t, bz + (cz - bz) * t)]).buffer(width[(min(b, c), max(b, c))] / 2 + BUS_TURN_KERB, single_sided=True))
     for t in tram:
         if len(t) >= 4:
             clear.append(LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_CLEAR, quad_segs=2))
@@ -677,7 +719,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     stats = {'carreggiata_m2': round(U.area), 'marciapiede_m2': round(walk.area), 'isole': len(getattr(islands, 'geoms', [islands])),
              'isole_dbgt': n_isl, 'verde_m2': round(verde.area), 'alberi': len(alberi) // 2,
              'carreggiata_dbgt_m2': round(dbgt_c.area), 'marciapiede_dbgt_m2': round(dbgt_m.area),
-             'impalcati_m2': round(D.area), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
+             'impalcati_m2': round(D.area), 'stalli': len(stub), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
     # carreggiate in quota (cavalcavia e rampe): un'area sola anche loro, la quota la mette il gioco vertice per vertice
     up_area = up.simplify(0.1).segmentize(4.0)
     out = {'tile': TILE, 'cells': cells, 'decks': [r for p in _polys(D.simplify(0.1)) for r in _rings(p)],

@@ -247,6 +247,33 @@ costo degli archi nel grafo dell'aggancio (`adj`): le strade di servizio coperte
 riquadri `FOCUS_BOXES`, costano come le altre (`on_ring`, con `gtfs_cover(...).near`). Nei riquadri cambiava anche il
 parcheggio del Capolinea Plebiscito, con la 24 contro un edificio (#25).
 
+#16, tre punti del gruppo 2 (12 novembre). Da sapere:
+
+- `stopPose` (`src/game/routes.js`) mette il bus fermo sulla linea del cordolo (`kl`, `ks`) nel sistema della palina
+  (`st.cx`, `st.dz`...), come la segnaletica gialla di `City.buildStops` e come la misura `busLine` di
+  `allStopPlacements`; senza palina allineata resta lungo il percorso. Prima usava il percorso 6,5 m prima della palina:
+  dove piega (Bembo Rotonda via Ponchia, all'uscita della rotonda, 13 gradi) il bus finiva 0,9 m più in fuori, sulla
+  pensilina. Le copie della stessa posa: `posa` in `tests/mappa.spec.js` e la linea del cordolo del pilota (`scosta` in
+  `tests/guida.js`). Chi le cambia, le cambia tutte e tre;
+- in `build_map.py` e `street_surfaces.surfaces`, solo fuori dal DBGT (`comune` di `data/dbgt-verde.json`, dove
+  carreggiate e piazzali sono stimati): all'esterno delle svolte a sinistra dei bus oltre 60 gradi (`SVOLTA_STRETTA`),
+  nei primi 20 m della via d'uscita, le facciate stanno a 3 m dal bordo invece di 1,5 (`BUS_TURN_KERB`: il muso di un
+  12 m che gira esce fino a 2,3 m oltre il cordolo). Tocca 4 edifici: la casa di fronte a Giarre (22, Via degli Olmi in
+  Via dei Ciliegi; la via vera è larga 9 m con la sosta, quella stimata 7,5), due capannoni sulla 10 e uno sulla 24. In
+  centro, dove la regola ritaglierebbe anche il Monte di Pietà e la Cassa di Risparmio, non vale;
+- stalli dei capolinea: dove il bus fermo alla prima fermata sporge dietro l'inizio del percorso (6 m, lo snodato 12:
+  `SNODATI`, come `ARTICULATED_LINES` in `src/main.js`) e lì manca asfalto, la carreggiata continua dritta per quei
+  metri (più di 5 m² che mancano alla carreggiata finale, raccordi compresi). Fuori dal DBGT c'è solo Caselle (la 10,
+  piazzale vero dietro la rotonda, che OSM non disegna);
+- il pilota non anticipa le svolte strette (insegue un punto a 9 m dall'asse posteriore, cioè al muso) e all'uscita si
+  allarga: a Giarre sale 4 volte sul marciapiede tra il capolinea e Via Roveri (#77). Provato a tagliare la curva,
+  rallentare o guardare più avanti: con la casa dov'era restava a pochi centimetri e avrebbe cambiato la guida di
+  tutte le prove;
+- la palina di Bembo Rotonda via Ponchia sta 1,7 m dopo le strisce pedonali: il bus fermo le copre (#73).
+
+Funzioni di altre aree cambiate da #16: `stopPose` (vedi sopra, `area:mappa` per le fermate) e la `scosta` del
+pilota (`area:verifiche`).
+
 ### Traffico (corsia `traffico`)
 
 Issue: `area:traffico` (madri: #48 regole della strada, #58 traffico e corse dinamici).
