@@ -12,7 +12,10 @@ Controlla quello che il JSON dice già, senza aprire il gioco (sezione 6.1 di do
     la palina al cordolo;
   * binari del tram secondo la regola di docs/binari-tram.md (scripts/binari_tram.py): spigoli, raggi sotto il minimo,
     interassi fuori misura e scarti da OSM, per linea e per deposito, sui binari che scrivono gli script. Quelli che
-    disegna il gioco li misura tests/binari-tram.spec.js.
+    disegna il gioco li misura tests/binari-tram.spec.js;
+  * profilo dei cavalcavia secondo la regola di docs/cavalcavia.md (scripts/cavalcavia.py): onde, pendenze oltre il
+    massimo, raccordi verticali sotto il raggio minimo e scarti dal DTM delle strade, le stesse misure e i binari fuori
+    quota per i binari che ci salgono. Le quote dei binari come le mette il gioco le misura tests/cavalcavia.spec.js.
 Pali dei semafori, lampioni, alberi, pensiline e paline al posto finale li mette il gioco al caricamento: li controlla
 la prova tests/mappa.spec.js nel browser.
 
@@ -36,6 +39,7 @@ from shapely.ops import substring, unary_union
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import aree_mappa  # noqa: E402
 import binari_tram  # noqa: E402
+import cavalcavia  # noqa: E402
 
 BUS_NEAR = 6.0  # m: oltre metà carreggiata, un edificio è "lungo il percorso" fin qui dall'asse
 BUS_HW = 1.3  # m: metà larghezza del bus (2,55 m) e un poco di margine
@@ -85,6 +89,13 @@ SOGLIE_BINARI = {
     'SIR2': {'spigoli': 238, 'raggi': 7, 'interassi': 67, 'scarti_osm': 0},
     'Guizza': {'spigoli': 6, 'raggi': 7, 'interassi': 0, 'scarti_osm': 0},
     'Voltabarozzo': {'spigoli': 12, 'raggi': 4, 'interassi': 0, 'scarti_osm': 0},
+}
+# profilo dei cavalcavia (scripts/cavalcavia.py) sui dati: valori del 12 novembre 2026, prima che i cavalcavia seguano
+# la regola di docs/cavalcavia.md (#84). Impalcati a 7 m sopra il terreno spianato a gradini, rampe che scendono fino a
+# 130 m sopra il terreno e lo spianamento che finisce in un fosso ai piedi (elenco dei peggiori in docs/cavalcavia.md)
+SOGLIE_CAVALCAVIA = {
+    'strade': {'onde': 113, 'pendenze': 228, 'raccordi': 484, 'scarti_dtm': 221},
+    'binari': {'onde': 20, 'pendenze': 34, 'raccordi': 18, 'fuori_quota': 0},
 }
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',
@@ -307,9 +318,13 @@ def main():
                 print('      ' + ', '.join(f'{a}={b}' for a, b in c.items()))
     valori_b, casi_b, sopra_b = binari_tram.rapporto(binari_tram.rete_dati(mappa.M), SOGLIE_BINARI, args.elenco)
     sopra += [f'binari del tram: {k}' for k in sopra_b]
+    valori_c, casi_c, sopra_c = cavalcavia.rapporto(cavalcavia.rete_dati(mappa.M), SOGLIE_CAVALCAVIA, args.elenco)
+    sopra += [f'cavalcavia: {k}' for k in sopra_c]
     if args.json:
         json.dump({'valori': valori, 'soglie': SOGLIE, 'fermate': dove, 'casi': casi,
-                   'binari': {'valori': valori_b, 'soglie': SOGLIE_BINARI, 'casi': casi_b}}, open(args.json, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+                   'binari': {'valori': valori_b, 'soglie': SOGLIE_BINARI, 'casi': casi_b},
+                   'cavalcavia': {'valori': valori_c, 'soglie': SOGLIE_CAVALCAVIA, 'casi': casi_c}},
+                  open(args.json, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     if sopra:
         print(f'Sopra la soglia: {", ".join(NOMI.get(k, k) for k in sopra)}. Con --elenco i casi, con le coordinate del gioco.')
         sys.exit(1)

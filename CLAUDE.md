@@ -35,6 +35,9 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
 * `docs/linee-tram-nuove.md`: ricerca sui tracciati delle linee in costruzione SIR2 e SIR3.
 * `docs/binari-tram.md`: regola per la stesura dei binari del tram (raggi, interassi, scambi, pendenze, con le fonti del
   progetto del SIR3) e il controllo di quanto la rete se ne allontana (`scripts/binari_tram.py`).
+* `docs/cavalcavia.md`: regola del profilo dei cavalcavia (pendenze, raccordi verticali, niente onde, strada e binari
+  alla stessa quota, scarto dal DTM, con le fonti del DM 5 novembre 2001) e il controllo di quanto la mappa se ne
+  allontana (`scripts/cavalcavia.py`), con i cavalcavia peggiori.
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,

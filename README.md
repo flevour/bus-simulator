@@ -29,11 +29,14 @@ di `tests/` in Chromium headless (WebGL in software):
   oltre il cordolo, fermate agganciate lontano dalla fermata vera);
 * `binari-tram.spec.js`: i binari del tram come li disegna il gioco, misurati con la regola di
   [`docs/binari-tram.md`](docs/binari-tram.md) (spigoli, raggi sotto il minimo, interassi, scarti da OSM, pendenze)
-  da `scripts/binari_tram.py`, che la prova chiama con Python.
+  da `scripts/binari_tram.py`, che la prova chiama con Python;
+* `cavalcavia.spec.js`: il profilo dei cavalcavia con il terreno e le quote dei binari del gioco, misurato con la
+  regola di [`docs/cavalcavia.md`](docs/cavalcavia.md) (onde, pendenze, raccordi verticali, binari fuori quota,
+  scarti dal DTM) da `scripts/cavalcavia.py`.
 
 `python3 scripts/verifica_mappa.py` (serve `shapely`) controlla il JSON della mappa: edifici in carreggiata e nella
-corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m, e i
-binari del tram scritti dagli script secondo la stessa regola.
+corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m, i
+binari del tram scritti dagli script secondo la stessa regola e il profilo dei cavalcavia nei dati.
 Script e rapporto nel gioco escono con errore quando un numero supera la sua soglia, fissata sui valori del 9
 novembre 2026 (in testa ai due file). Il workflow `.github/workflows/verifiche.yml` lancia build, `npm test` e lo
 script a ogni push su `main`.

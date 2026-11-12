@@ -75,6 +75,7 @@ divise per area.
 | `src/main.js` | tutte le aree, ognuna nelle sue funzioni | |
 | `src/tram/tram.js` | `area:tram` | scambi, binari, depositi, cambio cabina e turni: le funzioni sono nelle note del tram qui sotto |
 | `scripts/binari_tram.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
+| `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `SOGLIE_CAVALCAVIA` in `scripts/verifica_mappa.py` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari abbassa le soglie; usa `binari_tram.Griglia` e `raggruppa` |
 
 ## Note per area
 
@@ -137,7 +138,14 @@ Da sapere prima di toccare questi file:
   Nei cavalcavia il terrapieno non si conta due volte (`adjust_heights` in `terrain_for_game`) e il binario non va mai
   sotto la strada che segue (`TramTrack.setHeights` in `tram.js`); l'asfalto in quota è suddiviso ogni 20 m in
   `buildRoads`. In `tests/mappa.spec.js` `segni_sulla_sede` e `asfalto_sopra_sede` sono a 0;
-- `buildDecks` costruisce gli impalcati in 0,1 s (erano 17 s all'avvio, segnalati da `capolinea`).
+- `buildDecks` costruisce gli impalcati in 0,1 s (erano 17 s all'avvio, segnalati da `capolinea`);
+- profilo dei cavalcavia (#83, 12 novembre): regola, fonti e cavalcavia peggiori in [`cavalcavia.md`](cavalcavia.md).
+  Il controllo è `scripts/cavalcavia.py` (Python senza shapely né numpy), sui dati in `verifica_mappa.py`
+  (`SOGLIE_CAVALCAVIA`) e sul gioco in `tests/cavalcavia.spec.js`. Ricostruisce il terreno "via" come
+  `src/world/terrain.js` (chiusura e ponti) solo nelle celle dei profili: chi cambia la variante "via" nel gioco la
+  cambia anche in `Via` dello script (la prova del gioco gli passa `Terrain.d`, e strade uguali tra dati e gioco dicono
+  che coincidono). La quota dei binari nei dati è quella della strada che affiancano, nel gioco `TramTrack.h`: la prova
+  legge `paths`, `h` e `stopsDir` di `TramTrack`. `--profilo X Z` stampa i profili che passano da un punto.
 
 Fatto il 9 e l'11 novembre: corsie e segnaletica dai tag OSM, fermate del tram sui nodi `tram_stop`, dossi e
 attraversamenti rialzati, area ai bordi e linee tagliate, inversioni a U, corsie di servizio dei capolinea, lampioni
