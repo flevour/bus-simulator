@@ -23,6 +23,11 @@ import { test, expect } from './gioco.js';
 // spostate 3. 12 novembre (#66): nessun edificio sui binari dei depositi del tram, né a meno di 2 m dal loro asse
 // 12 novembre (#16): il bus fermo sulla linea del cordolo nel sistema della palina (stopPose) e lo stallo del
 // capolinea a Caselle: ostacoli 9 (via Ponchia), fuori strada 4 (Caselle e Maroncelli fr.121 della 9 e della 42)
+// 12 novembre (#73): il bus fermo non copre le strisce pedonali, la palina va oltre o prima (allStopPlacements). Sulle
+// strisce erano 205 (linea e palina), 101 paline; restano 8: 7 fermate senza palina allineata, dove il bus sta lungo il
+// percorso (Sorio fr. 96 al bordo della mappa per la 2, la 6 e la 12, Rotonda Pontevigodarzere F.T., Venezia
+// Cavalcavia e Capolinea Ponte Brenta della 10 all'arrivo, Capolinea Mandria via Carnia), e la partenza della 10 snodata
+// dal Capolinea Ponte Brenta, nel piazzale, dove il rimorchio girato dal cordolo tocca le strisce di Via San Marco
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 3,
@@ -32,7 +37,7 @@ const SOGLIE = {
   fermate_con_ostacoli: 9,
   fermate_fuori_strada: 4,
   fermate_spostate: 3,
-  fermate_sulle_strisce: 205,
+  fermate_sulle_strisce: 8,
   segni_sulla_sede: 0,
   asfalto_sopra_sede: 0,
   edifici_sui_binari_dei_depositi: 0,

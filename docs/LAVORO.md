@@ -163,6 +163,29 @@ media delle quote del binario non lo porta sotto la strada (`setHeights`); in `c
 sparsi fuori dall'asfalto vero (`buildTreesAndLamps`); in `main.js` il terreno passato a `City` (`{ terrain }`, per
 l'asfalto vicino alla sede del tram).
 
+#73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
+
+- il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e
+  `BUS_FRONT`) non copre le strisce disegnate (`e.cross`, che `City.buildRoads` mette prima di `buildStops`, in celle da
+  20 m nella griglia `strisce`). `crossingsAt` dà, per una posa della palina, dove cominciano e finiscono le strisce
+  lungo il bus, con il rettangolo vero delle strisce (anche quelle di un tratto girato prima della palina) e mezzo
+  metro di margine;
+- in `placeFor` lo spostamento minimo che libera le strisce viene prima dei vecchi passi di 4 m: in avanti se le
+  strisce sono dietro la palina (Bembo Rotonda via Ponchia, 14,9 m), indietro se sono davanti (il bus si ferma prima),
+  fino a 18 m perché `alignStops` la cerca entro 20 m. Questi spostamenti possono passare sul tratto vicino della
+  variante (`pointOn` con `far`), ma solo attraverso i nodi con due archi, non gli incroci; i passi di 4 m restano nel
+  tratto. Tra i passi di 4 m vengono prima quelli liberi, e da quelli che coprono le strisce si prova lo spostamento
+  minimo (Roma 5 della 88: 10,2 m indietro invece di 12). I controlli si fanno solo per i candidati provati
+  (`shifts` è un generatore): il piazzamento costa 207 ms invece di 175;
+- la palina ha `zb` e `za`, dove finisce la segnaletica gialla dietro e davanti (`City.buildStops`), fino alle strisce
+  vicine e non sopra;
+- `ARTICULATED_LINES` sta in `routes.js` (lo importa `main.js`): la palina di una fermata servita dallo snodato tiene
+  conto dei suoi 18 m;
+- rapporto: `fermate_sulle_strisce` in `tests/mappa.spec.js` (stesso rettangolo del bus della posa, contro le strisce);
+  da 205 (linea e palina) a 8, le fermate senza palina allineata (il bus sta lungo il percorso) e la partenza della 10
+  dal Capolinea Ponte Brenta, dove il rimorchio, girato col cordolo, tocca le strisce di Via San Marco e `crossingsAt`,
+  che non conosce ancora la pendenza del cordolo, non le vede.
+
 ### Linee (corsia `capolinea`)
 
 Issue: `area:linee` (madre: #15 linee dei bus intere fino ai capolinea del GTFS).
@@ -270,14 +293,15 @@ parcheggio del Capolinea Plebiscito, con la 24 contro un edificio (#25).
   Via dei Ciliegi; la via vera è larga 9 m con la sosta, quella stimata 7,5), due capannoni sulla 10 e uno sulla 24. In
   centro, dove la regola ritaglierebbe anche il Monte di Pietà e la Cassa di Risparmio, non vale;
 - stalli dei capolinea: dove il bus fermo alla prima fermata sporge dietro l'inizio del percorso (6 m, lo snodato 12:
-  `SNODATI`, come `ARTICULATED_LINES` in `src/main.js`) e lì manca asfalto, la carreggiata continua dritta per quei
+  `SNODATI`, come `ARTICULATED_LINES` in `src/game/routes.js`) e lì manca asfalto, la carreggiata continua dritta per quei
   metri (più di 5 m² che mancano alla carreggiata finale, raccordi compresi). Fuori dal DBGT c'è solo Caselle (la 10,
   piazzale vero dietro la rotonda, che OSM non disegna);
 - il pilota non anticipa le svolte strette (insegue un punto a 9 m dall'asse posteriore, cioè al muso) e all'uscita si
   allarga: a Giarre sale 4 volte sul marciapiede tra il capolinea e Via Roveri (#77). Provato a tagliare la curva,
   rallentare o guardare più avanti: con la casa dov'era restava a pochi centimetri e avrebbe cambiato la guida di
   tutte le prove;
-- la palina di Bembo Rotonda via Ponchia sta 1,7 m dopo le strisce pedonali: il bus fermo le copre (#73).
+- la palina di Bembo Rotonda via Ponchia stava 1,7 m dopo le strisce pedonali e il bus fermo le copriva: sistemata in
+  #73 (nota nella sezione Mappa).
 
 Funzioni di altre aree cambiate da #16: `stopPose` (vedi sopra, `area:mappa` per le fermate) e la `scosta` del
 pilota (`area:verifiche`).
