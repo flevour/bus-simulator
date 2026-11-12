@@ -19,12 +19,12 @@ export function impostaSostaTram(f) { sostaTram = f; cache.clear(); }
 
 // tutte le corse della linea in quel giorno, con prev e next del turno. Per il tram i turni sono quelli dei viaggi veri
 // (senzaTratti), gli stessi dei tram automatici; ogni tratto sta nel turno della corsa intera che lo contiene, ogni copia
-// di una corsa nel turno della corsa che resta
+// di una corsa nel turno della corsa che resta. dp è la partenza dell'orario (v[day]) da cui viene la corsa
 export function turni(L, day) {
   const key = L.id + ':' + day;
   if (cache.has(key)) return cache.get(key);
   let runs = [], tratti = [];
-  for (const v of L.variants) for (const { t, d } of v[day] || []) runs.push({ L, v, t, d, end: t + tripDuration(v, d), prev: null, next: null });
+  for (const v of L.variants) for (const dp of v[day] || []) runs.push({ L, v, t: dp.t, d: dp.d, dp, end: dp.t + tripDuration(v, dp.d), prev: null, next: null });
   if (L.tram) {
     for (const r of runs) r.times = r.v.offsets.map((o) => r.t + (o * r.d) / r.v.duration);
     ({ viaggi: runs, tratti } = senzaTratti(runs));
@@ -39,9 +39,19 @@ export function turni(L, day) {
     }
   } else concatena(runs);
   const at = (r, v, t) => r.v === v && Math.abs(r.t - t) < 60;
-  const res = { runs, tratti, find: (v, t) => runs.find((r) => at(r, v, t)) || tratti.find((r) => at(r, v, t)) || null };
+  const copie = new Set(tratti.filter((k) => k.copia).map((k) => k.dp));
+  const res = { runs, tratti, copie, find: (v, t) => runs.find((r) => at(r, v, t)) || tratti.find((r) => at(r, v, t)) || null };
   cache.set(key, res);
   return res;
+}
+
+// le partenze della variante v da elencare nel menu: quelle dell'orario senza le copie dei viaggi del tram, così ogni
+// viaggio compare una volta, con la corsa che resta nei turni (che può stare in un'altra variante)
+export function partenze(L, day, v) {
+  const deps = v[day] || [];
+  if (!L.tram) return deps;
+  const { copie } = turni(L, day);
+  return deps.filter((dp) => !copie.has(dp));
 }
 
 // Il GTFS dei tram pubblica ogni viaggio anche spezzato in tratti (Guizza → Cavalletto, Santo → Pontevigodarzere…) che

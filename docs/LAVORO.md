@@ -594,10 +594,20 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   (`copia`, `per` la corsa che resta) e i tratti di una copia passano alla corsa che resta con la catena di `per`:
   togliere le copie dall'orario prima di `senzaTratti` lascerebbe senza corsa intera i tratti della copia lenta (Cavalletto
   → Guizza alle 21:28 diventava un tram in più). Una copia ha nel turno di chi guida lo stesso `prev` e `next` della
-  corsa che resta, anche se arriva più tardi. Il menu elenca ancora le copie (#75). Prova in
+  corsa che resta, anche se arriva più tardi. Dal menu le copie le toglie #75 (sotto). Prova in
   `tests/turni-tram.spec.js` ("corse doppie del GTFS del SIR1…"): un tram per orario dalla Guizza alle 5:35-6:16,
   nessuna corsa intera che arriva prima di quella partita prima sullo stesso percorso, le copie al posto della corsa che
   resta.
+- Corse doppie nel menu (12 novembre, #75). Le partenze del menu vengono da `partenze(L, day, v)` di `turni.js`: per il
+  tram sono quelle dell'orario (`v[day]`) senza le copie, che `turni` raccoglie in `copie` come oggetti dell'orario (ogni
+  corsa ha in `dp` la partenza da cui viene). Si confrontano gli oggetti e non gli orari perché lo stesso viaggio ci può
+  essere due volte identico nella stessa variante (dalla Guizza 5:35 → 6:14 due volte). Le usano in `main.js` l'elenco
+  `#departure` e la sua scelta (il valore è l'indice in `partenze`), i conteggi "fer. / fest." di `#route-variant`,
+  quello di `#variant-note` e la scheda della linea (`renderLines`). Una copia che sta in un'altra variante sparisce dal
+  suo elenco: la sera da Pontevigodarzere la corsa delle 21:23 resta solo tra quelle da 24 fermate. Nel SIR1 il menu ha
+  22 partenze feriali e 13 festive in meno; i tratti restano. Prova in `tests/turni-tram.spec.js` ("menu del SIR1…"):
+  dalla Guizza alle 5:35-6:30 un'opzione per orario, in nessun elenco la stessa ora due volte, conteggi uguali agli
+  elenchi e ogni opzione con i tempi della corsa che resta nel turno.
 
 Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
 

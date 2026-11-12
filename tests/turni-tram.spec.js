@@ -429,3 +429,61 @@ test('corse doppie del GTFS del SIR1: un tram per orario, nei turni di chi guida
   expect(r.copie, testo).toBeGreaterThan(0);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Corse doppie nel menu (#75): ogni viaggio compare una volta tra le partenze, con i tempi della corsa che resta nei
+// turni, e i conteggi del menu (scheda della linea, "fer. / fest." dei percorsi, corse su questo percorso) non contano
+// le copie. Dalla Guizza alle 5:35-6:30 un'opzione per orario; le 5:35 arrivano alle 6:14 (c'è anche una copia alle
+// 6:17) e le 6:16 alle 6:55 (la copia alle 7:02)
+test('menu del SIR1: le corse doppie del GTFS compaiono una volta tra le partenze', async ({ pagina, gioco }) => {
+  const r = await pagina.evaluate(() => {
+    const g = window.__game, $ = (q) => document.querySelector(q), L0 = g.settings.line;
+    const out = { guizza: [], doppie: [], durate: [], conteggi: [], scheda: {} };
+    g.settings.departure = 0;
+    $('#vehicle button[data-k="tram"]').click();
+    $('.line-card[data-id="SIR1"]').click();
+    const L = g.settings.line, ora = (o) => o.textContent.slice(0, 5);
+    for (const day of ['feriale', 'festivo']) {
+      $(`#variant button[data-v="${day}"]`).click();
+      let tot = 0, grezze = 0;
+      L.variants.forEach((v, i) => {
+        const rv = $('#route-variant');
+        rv.value = String(i);
+        rv.dispatchEvent(new Event('change'));
+        const opts = [...$('#departure').options], nome = $('#dir-note').textContent.split(' · ')[0];
+        tot += opts.length;
+        grezze += v[day].length;
+        // la stessa ora due volte nello stesso elenco
+        const ore = opts.map(ora);
+        for (const h of new Set(ore)) if (ore.filter((x) => x === h).length > 1) out.doppie.push(`${day} ${nome} ${h}`);
+        // i conteggi del percorso sono quelli dell'elenco
+        const n = Number($('#variant-note').textContent.match(/(\d+) corse su questo percorso/)[1]);
+        const fer = rv.options[i].textContent.match(/(\d+) fer\. \/ (\d+) fest\./);
+        if (n !== opts.length || Number(fer[day === 'feriale' ? 1 : 2]) !== opts.length) out.conteggi.push(`${day} ${nome}: ${n}, ${fer[0]}, ${opts.length} opzioni`);
+        // scelta un'opzione, si guida la corsa che resta nel turno, con i suoi tempi
+        opts.forEach((o, k) => {
+          const sel = $('#departure');
+          sel.value = String(k);
+          sel.dispatchEvent(new Event('change'));
+          const run = g.turnoOf(L, day, v, g.settings.departure).run;
+          if (run.copia || run.d !== g.settings.depDur) out.durate.push(`${day} ${nome} ${o.textContent}`);
+        });
+        if (day === 'feriale' && nome === 'Guizza Capolinea → Pontevigodarzere') out.guizza = opts.filter((o) => ora(o) >= '05:35' && ora(o) <= '06:30').map((o) => o.textContent.slice(0, 13));
+      });
+      out.scheda[day] = { tot, grezze };
+    }
+    const nt = $('.line-card[data-id="SIR1"] .nt').textContent.match(/(\d+) corse feriali · (\d+) festive/);
+    out.scheda.testo = [Number(nt[1]), Number(nt[2])];
+    // il menu torna al feriale e sulla linea di prima
+    $('#variant button[data-v="feriale"]').click();
+    $(`#vehicle button[data-k="${L0.tram ? 'tram' : 'bus'}"]`).click();
+    $(`.line-card[data-id="${L0.id}"]`).click();
+    return out;
+  });
+  const testo = JSON.stringify(r);
+  expect(r.guizza, testo).toEqual(['05:35 → 06:14', '05:41 → 06:20', '05:48 → 06:27', '05:55 → 06:34', '06:02 → 06:41', '06:09 → 06:48', '06:16 → 06:55', '06:23 → 07:02', '06:30 → 07:09']);
+  expect([r.doppie, r.conteggi, r.durate], testo).toEqual([[], [], []]);
+  // scheda della linea: le corse degli elenchi, meno di quelle del GTFS
+  expect(r.scheda.testo, testo).toEqual([r.scheda.feriale.tot, r.scheda.festivo.tot]);
+  expect(r.scheda.feriale.tot, testo).toBeLessThan(r.scheda.feriale.grezze);
+  expect(gioco.errori()).toEqual([]);
+});

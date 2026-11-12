@@ -8,7 +8,7 @@ import { BusSim } from './world/buses.js';
 import { Bus } from './bus/bus.js';
 import { Mission, Transfer, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
 import { pointAt, projectOnRoute, startGoal, planTransfer, findPath, stopPose, ARTICULATED_LINES } from './game/routes.js';
-import { turnoOf, impostaSostaTram } from './game/turni.js';
+import { turnoOf, impostaSostaTram, partenze } from './game/turni.js';
 import { DEPOT_NAME, depotGate, DepotGate } from './world/depot.js';
 import { HUD } from './game/hud.js';
 import { Audio } from './game/audio.js';
@@ -977,10 +977,11 @@ function refreshMenu() {
   dirBtns[1].disabled = ia === ib;
   dirBtns.forEach((b, k) => b.classList.toggle('sel', settings.vIdx === (k ? ib : ia)));
   const rv = $('route-variant');
-  rv.innerHTML = L.variants.map((v, i) => `<option value="${i}">${v.headsign} · ${v.feriale.length} fer. / ${v.festivo.length} fest.</option>`).join('');
+  rv.innerHTML = L.variants.map((v, i) => `<option value="${i}">${v.headsign} · ${partenze(L, 'feriale', v).length} fer. / ${partenze(L, 'festivo', v).length} fest.</option>`).join('');
   rv.value = String(settings.vIdx);
   const v = curVariant();
-  const deps = v[settings.variant];
+  // del tram senza le copie dei viaggi (turni.js)
+  const deps = partenze(L, settings.variant, v);
   const first = v.stops[0], last = v.stops[v.stops.length - 1];
   $('dir-note').textContent = `${first.name} → ${last.name} · ${v.stops.length} fermate`;
   $('variant-note').textContent = `${settings.variant === 'feriale' ? 'Orario feriale (mercoledì tipo)' : 'Orario festivo (domenica)'} · ${deps.length} corse su questo percorso`;
@@ -1039,7 +1040,7 @@ function refreshTurno() {
 function renderLines() {
   const tram = settings.vehicle === 'tram';
   // le linee del tram in costruzione (SIR2, SIR3) stanno nello stesso elenco, segnate a parte
-  $('line-list').innerHTML = ALL_LINES.filter((L) => !!L.tram === tram).map((L) => `<div class="line-card${L.tram ? ' tram' : ''}${L.building ? ' building' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.headsign}${L.building ? ' <span class="cantiere">🚧 in costruzione</span>' : ''}</div><div class="nt">${L.building ? `${L.name} · ` : ''}${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + v.feriale.length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + v.festivo.length, 0)} festive${ARTICULATED_LINES.has(L.id) && !L.tram ? ' · 🚌 snodato 18 m' : ''}</div></div></div>`).join('');
+  $('line-list').innerHTML = ALL_LINES.filter((L) => !!L.tram === tram).map((L) => `<div class="line-card${L.tram ? ' tram' : ''}${L.building ? ' building' : ''}" data-id="${L.id}" tabindex="0"><div class="badge${L.tram ? ' tram' : ''}" style="background:${L.color}">${L.tram ? '🚋 ' + L.id : L.id}</div><div><div class="nm">${L.headsign}${L.building ? ' <span class="cantiere">🚧 in costruzione</span>' : ''}</div><div class="nt">${L.building ? `${L.name} · ` : ''}${L.variants.length} percors${L.variants.length > 1 ? 'i' : 'o'} · ${L.variants.reduce((a, v) => a + partenze(L, 'feriale', v).length, 0)} corse feriali · ${L.variants.reduce((a, v) => a + partenze(L, 'festivo', v).length, 0)} festive${ARTICULATED_LINES.has(L.id) && !L.tram ? ' · 🚌 snodato 18 m' : ''}</div></div></div>`).join('');
   const pick = (el) => {
     settings.line = ALL_LINES.find((l) => l.id === el.dataset.id); settings.vIdx = settings.line.pair[0];
     // lo snodato della linea 10 parte con la livrea Busitalia Veneto (si può comunque cambiare)
@@ -1131,7 +1132,7 @@ function buildMenu() {
     saveGame();
   }));
   seg('vehicle', 'k', (k) => setVehicle(k));
-  $('departure').addEventListener('change', (e) => { const dp = curVariant()[settings.variant][Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
+  $('departure').addEventListener('change', (e) => { const dp = partenze(settings.line, settings.variant, curVariant())[Number(e.target.value)]; if (dp) { settings.departure = dp.t; settings.depDur = dp.d; refreshStops(); } });
   $('start').addEventListener('click', () => { if (touch.enabled) touch.goFullscreen(); startMission(); });
   $('help-close').addEventListener('click', () => onKeyPress('KeyI'));
   $('tp-close').addEventListener('click', () => openTeleport(false));
