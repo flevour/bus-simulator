@@ -24,7 +24,9 @@ divise per area.
    git push origin HEAD:main
    ```
    `npm test` compila il gioco senza PostHog in una cartella temporanea, lo serve su una porta libera e lancia le
-   prove di Playwright in `tests/`. La prima volta (o quando il rebase porta una versione nuova di Playwright):
+   prove di Playwright in `tests/`. Sulla stessa macchina girano al più due serie di prove alla volta, anche lanciate
+   con `-g` (`tests/setup.js`, posti in `/tmp/bus-simulator-prove`): le altre aspettano il loro turno, e una serie
+   interrotta libera il posto da sola. La prima volta (o quando il rebase porta una versione nuova di Playwright):
    `npx playwright install --only-shell chromium`. Chi rigenera la mappa lancia anche
    `python3 scripts/verifica_mappa.py --elenco` (venv con `shapely`). Il rapporto della mappa (`tests/mappa.spec.js` e
    lo script) ha delle soglie: se un numero scende si abbassa la soglia nello stesso commit, se sale per una buona
