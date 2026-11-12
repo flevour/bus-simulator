@@ -1473,13 +1473,37 @@ export class TramSim {
     for (const l of S.lanterns || []) if (l.track === tr.track && l.dir === tr.dir && l.sT - s > -8 && l.sT - s <= 0) return true;
     return false;
   }
+  // dietro al tram fermo, entro 20 m dalla coda, nella sua corsia e nel suo verso c'è un'auto, un bus o il mezzo di chi
+  // gioca: dove il binario corre nella carreggiata (Riviera Tito Livio) il tram che aspetta l'orario tiene fermo il traffico
+  queued(tr, others) {
+    const q = this.lanePoint(tr.s - tr.L, tr.dir, tr.track);
+    const at = (p) => { const rx = p.x - q.x, rz = p.z - q.z, a = rx * q.fx + rz * q.fz; return a <= 1 && a > -20 && Math.abs(rx * q.fz - rz * q.fx) < 2.2 ? a : null; };
+    for (const o of others) {
+      if (!o) continue;
+      if (o.isTram) {
+        // il tram di chi gioca: il muso dietro alla coda, e la cassa ancora più indietro
+        const pts = o.trackPoints ? o.trackPoints() : [], a0 = pts[0] && at(pts[0]), a1 = pts[1] && at(pts[1]);
+        if (a0 != null && (a1 == null || a1 < a0)) return true;
+      } else if (at(o) != null && Math.sin(o.h) * q.fx + Math.cos(o.h) * q.fz > 0.7) return true;
+    }
+    return false;
+  }
   move(dt, others, clock) {
     const ended = [], turned = [], gone = [];
     for (const tr of this.trams) {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
       let T = tr.track, P = T.path(tr.dir);
       let vt = 8.5;
-      if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
+      if (tr.wait > 0) {
+        tr.wait -= dt; vt = 0;
+        // in fermata ad aspettare l'orario (hold: i secondi oltre la sosta di 15 s): se dietro aspetta il traffico si
+        // riparte finita la sosta, l'anticipo si recupera dopo
+        if (tr.hold > 0 && (tr.holdT = (tr.holdT || 0) - dt) <= 0) {
+          tr.holdT = 0.5;
+          if (this.queued(tr, others)) { tr.wait = Math.max(0, tr.wait - tr.hold); tr.hold = 0; }
+        }
+        if (tr.wait <= 0) tr.hold = 0;
+      }
       else if (tr.rimessa) vt = this.depotStep(tr, others, clock, dt, gone);
       else if (tr.man) {
         // al capolinea: a scambio libero avanti fino in fondo al binario (a 15 km/h), poi il cambio cabina
@@ -1503,9 +1527,19 @@ export class TramSim {
         if (t && tr.s > lim - 150 && this.termBusy(t, tr, others)) vt = Math.min(vt, lim - tr.s > 0.8 ? Math.sqrt(2 * 0.9 * (lim - tr.s)) + 0.3 : 0);
         if (d < 0.8) {
           if (tr.k >= tr.run.ss.length - 1) ended.push(tr);
-          // in anticipo sull'orario si aspetta la partenza (al massimo 2 minuti, alla prima fermata fino all'ora); in
-          // fermata comunque almeno 15 s. Dove il tram fermo sta sopra un incrocio no: l'anticipo si recupera dopo
-          else { const early = tr.run.times[tr.k] - clock; tr.wait = Math.max(15, !tr.k ? early : this.onCrossing(tr, tr.run.ss[tr.k]) ? 0 : Math.min(120, early)); tr.k++; }
+          else {
+            // in anticipo sull'orario si aspetta la partenza (al massimo 2 minuti, alla prima fermata fino all'ora), in
+            // fermata comunque almeno 15 s. Alla penultima anche quanto serve per arrivare al capolinea 15 s prima
+            // dell'orario, come quando si rallentava: i turni ci fanno stare al più due tram, e arrivando prima il terzo
+            // restava davanti allo scambio. Dove il tram fermo sta sopra un incrocio l'orario non si aspetta, e l'attesa
+            // finisce se dietro aspetta il traffico (move, queued): l'anticipo si recupera dopo
+            const { ss, times } = tr.run, k = tr.k;
+            let early = times[k] - clock;
+            if (k === ss.length - 2) early = Math.max(early, times[k + 1] - 15 - clock - ((ss[k + 1] - ss[k]) / 8.5 + 7));
+            tr.wait = Math.max(15, !k ? early : this.onCrossing(tr, ss[k]) ? 0 : Math.min(120, early));
+            tr.hold = k ? tr.wait - 15 : 0;
+            tr.k++;
+          }
         }
       } else {
         const stopAt = (x) => x + 12;
