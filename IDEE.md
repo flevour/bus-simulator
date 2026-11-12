@@ -4,7 +4,7 @@ Qui stanno le idee non ancora pronte per un ticket. Quando un'idea è pronta div
 il titolo breve con il numero (metodo in [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)). La sezione
 **Fatto** in fondo non si aggiorna più: la storia sta nelle issue chiuse e nei commit.
 Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
-Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/CORSIE.md).
+Come si lavora in parallelo (un worktree per ticket): [`docs/LAVORO.md`](docs/LAVORO.md).
 
 ## Prossimi passi
 
@@ -318,7 +318,7 @@ di chi gioca, #58 traffico e corse dinamici.
   volante touch non cambiano. Con lo sterzo progressivo del 6 novembre un colpo di tasto in città faceva girare il
   bus quasi il doppio di prima, perché il volante torna al centro in 2-4 s invece che in meno di un secondo: con 0,7
   a 20 km/h un tasto tenuto 0,5 s gira il bus di 7° (prima del 6 novembre 6°, dal 6 novembre 10°). Numeri in
-  [`docs/CORSIE.md`](docs/CORSIE.md), sezione `guida`.
+  [`docs/LAVORO.md`](docs/LAVORO.md), note "Veicoli e guida".
 - [x] **Il tram ferma a tutte le fermate** (11 novembre): `needsStop` è sempre vero per il tram (tirare dritto è una
   fermata saltata), niente prenotazione, niente ritardatario, niente riquadro "fermata prenotata / si può passare" nel
   pannello della linea e niente "PRENOT." sul cruscotto del tram. Gli autobus restano come prima.

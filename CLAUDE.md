@@ -6,9 +6,9 @@ Istruzioni di progetto per Claude e per chi contribuisce.
 
 * Si lavora direttamente su **`main` con push continuo**: commit piccoli e frequenti, push su `main` dopo ogni
   modifica verificata. Niente rami remoti né pull request, salvo richiesta esplicita.
-* I lavori in parallelo girano in worktree herdr, uno per corsia, su rami locali `corsia/<nome>` che si
-  ribasano su `origin/main` e si pubblicano con `git push origin HEAD:main`. Regole, file condivisi e corsie
-  aperte in [`docs/CORSIE.md`](docs/CORSIE.md): leggilo prima di lavorare in un worktree.
+* Ogni ticket (issue di GitHub) ha il suo worktree herdr, su un ramo locale `ticket/<n>-<nome>` che si ribasa su
+  `origin/main` e si pubblica con `git push origin HEAD:main`; a ticket chiuso il worktree si toglie. Regole, porte e
+  file condivisi in [`docs/LAVORO.md`](docs/LAVORO.md): leggilo prima di lavorare in un worktree.
 * Ogni push su `main` pubblica il gioco su GitHub Pages (`.github/workflows/pages.yml`):
   https://flevour.github.io/bus-simulator/. Prima di pushare, `npm run build` deve passare.
 * Il vecchio ramo `claude/padova-bus-simulator` è stato unito in `main` e non si usa più.
