@@ -1,157 +1,34 @@
 # Idee e sviluppi
 
-Elenco a cui attingere per i prossimi lavori. Quando un'idea viene realizzata si sposta in fondo, in **Fatto**.
+Qui stanno le idee non ancora pronte per un ticket. Quando un'idea è pronta diventa un'issue su GitHub e qui ne resta
+il titolo breve con il numero (metodo in [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)). La sezione
+**Fatto** in fondo non si aggiorna più: la storia sta nelle issue chiuse e nei commit.
 Legenda: `[ ]` da fare · `[~]` parziale · `[x]` fatto.
 Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/CORSIE.md).
 
 ## Prossimi passi
 
-1. [~] **Tram SIR1 guidabile**: fatto (vedi "Fatto"). Restano:
-   - il binario tronco oltre il capolinea della Guizza, che entra in un edificio;
-   - [x] i semafori del tram coordinati con quelli stradali agli incroci semaforizzati: chi ha il passaggio passa, gli
-     altri si fermano, tram e traffico allo stesso modo; senza semaforo precedenza al tram (11 novembre, corsia
-     `traffico`, vedi "Fatto");
-   - interni più curati;
-   - pedoni che attraversano la sede e si fermano;
-   - [~] **turni del tram e deposito della Guizza**, come per il bus (vedi "Fatto"): al capolinea cambio cabina (B) e
-     corsa successiva senza tornare al menu fatto (vedi "Fatto"); tram automatici con i turni dall'orario e la manovra
-     ai capolinea fatti, e chi guida il tram ha gli stessi turni (vedi "Fatto"); restano la prima corsa del turno che
-     esce dal deposito e l'ultima che ci rientra. Il deposito è accanto al capolinea della Guizza: in OSM ci sono i binari di servizio (`railway=tram`,
-     `service=yard`, Busitalia Veneto, verso 45.3670, 11.8756), alcuni dentro la rimessa (`tunnel=building_passage`),
-     e sono già nell'export `data/osm-padova-tram.json` (35 binari di servizio), da vedere se il gioco li usa. Il
-     binario tronco "che entra in un edificio" è forse l'ingresso della rimessa: da verificare;
-   - [~] **girare nei depositi con gli scambi** (chiesto l'11 novembre): rete dei binari con i bivi, dove il tram di chi
-     gioca prosegue sul ramo su cui è messo lo scambio (in servizio da soli secondo la linea, in Esplorazione e Giro
-     libero con N, anche tra le linee): fatti i bivi tra le linee e i depositi della Guizza e di Voltabarozzo (vedi
-     "Fatto"), con l'uscita dalla rimessa e il rientro nei turni e la seconda comunicazione di Voltabarozzo; resta
-     Rubano. Corsia `tram-scambi`;
-   - specifica: [`docs/prompt-tram.md`](docs/prompt-tram.md).
-2. [~] **Nuovo piazzale della stazione e linee SIR2, SIR3**: grafo dei binari con i due anelli e le due linee nel
-   gioco per il tratto in città fatti (vedi "Fatto"; dettagli in [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md)).
-   Restano:
-   - la sede di SIR2 e SIR3 nella pianta delle strade (tappa 3, corsia `mappa`): oggi i binari sono disegnati sopra
-     l'asfalto e in diversi tratti la corsia dei bus ci passa sopra o accanto (richiesta in `docs/CORSIE.md`);
-   - [x] l'area di Voltabarozzo (tappa 4): il SIR3 intero fino al capolinea (vedi "Fatto");
-   - [x] il SIR2 fino ai capolinea veri, da Rubano (via Pria Fosca) a Vigonza prima della rotonda per Venezia / SR11
-     (vedi "Fatto"); tracciato, fermate e capolinea del progetto del 2022 in
-     [`docs/linee-tram-nuove.md`](docs/linee-tram-nuove.md);
-   - il deposito di Rubano (rimesse passanti, anelli, officina, dalla tavola del progetto del 2022), corsia
-     `tram-turni` quando il corridoio del SIR2 arriva a Rubano;
-   - i rami del SIR2 per Romagnoli e per l'Ospedale San Lazzaro, ancora in cantiere in OSM;
-   - SIR4 e SIR5, e le linee passanti della rete SMART (T1, T2 e le altre) sugli stessi binari;
-   - la linea 10 resta tra gli autobus (deciso il 9 novembre); quando il SIR2 sarà in servizio si potrà toglierla.
-3. [x] **Segnaletica reale da OpenStreetMap**: semafori, STOP, dare precedenza, strisce pedonali, fermate del tram,
-   dossi e corsie (vedi "Fatto"). `highway=busway`: nell'area ci sono 3 vie, due doppioni della corsia in controsenso
-   di Corso Garibaldi già nei dati, niente da fare. Istruzioni:
-   [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
-4. [~] **Segnaletica orizzontale dai tag OSM**: corsie, divisorie, mezzeria continua, frecce e corsie dei bus fatte
-   (vedi "Fatto"). Restano le svolte a sinistra protette ai semafori dove `turn:lanes` ha una corsia di svolta
-   (`TrafficLights` in `traffic.js`), le corsie nelle rotatorie a due corsie e le auto che non usano le corsie dei bus
-   (corsia del traffico, onda 2).
-5. [~] **Segnalazioni dal gioco** (modulo Richieste; il 6 novembre dalla linea 42 in Via Madonna della Salute):
-   - [x] fermate date per saltate prima di averle attraversate (vedi "Fatto");
-   - [x] semafori in mezzo alla strada e orientati male (vedi "Fatto");
-   - [x] profilo altimetrico delle strade (terreno dal DTM della Regione, vedi "Fatto");
-   - [x] zone pedonali (piazze e aree pedonali lastricate dal DBGT); resta la ZTL;
-   - [x] navigatore sulle linee 22, 13, 25 (vedi "Fatto"); la 22 verso Mandria ora ha Via Madonna della Salute;
-   - [~] zona Plebiscito: al Capolinea Plebiscito la 16 e la 24 saltavano in linea retta sul prato (vedi "Fatto");
-     la segnalazione non dice altro: se resta qualcosa servono i dettagli da chi gioca;
-   - [~] cavalcavia: al Borgomagno la rampa dei bus e del tram che sale dalla stazione restava a terra, con il tram
-     sospeso e una gobba dove passa la 24 (vedi "Fatto"); restano i sottopassi che nella realtà scendono sotto il
-     piano della strada (Corso Australia su Via Cignaroli, Corso Tredici Giugno su Via Rienza: il gioco non abbassa
-     le strade) e la posizione dei fiumi;
-   - [x] cavalcavia di Chiesanuova sul SIR2 (9 novembre): impalcato a pezzi, asfalto e sede del tram storti (vedi
-     "Fatto"; restano scaglie piccole nello svincolo ovest)
-   - [x] rotonde attraversate dal tram: l'isola verde copre binari e sede (9 novembre, vedi "Fatto");
-   - [x] bus automatici contromano sul binario del tram in Via Tommaseo (Pace) e in Piazza Garibaldi, con il muso dentro
-     il tram (9 novembre, vedi "Fatto");
-   - [~] mappa più grande (corsia `capolinea`): fatti i corridoi del SIR3 fino a Voltabarozzo, del SIR2 e delle linee 3,
-     10, 11, 22, 24, 25 e 88 fino ai capolinea;
-   - dal sondaggio del 7 novembre (linea 5, Corso del Popolo):
-     - [x] passeggeri anche sugli altri autobus (vedi "Fatto");
-     - [x] deposito per le prime corse del mattino e le ultime della sera (vedi "Fatto"); restano il piazzale del
-       deposito (oggi dietro la sbarra c'è prato), il tram (deposito della Guizza, punto 1) e i turni che cambiano
-       linea;
-     - [x] piazzale della stazione: le fermate non corrispondono alle corsie e gli autobus partono a caso.
-       Controllato linea per linea e corretto nei dati (vedi "Fatto" e
-       [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md)).
-   - dal sondaggio del 9 novembre (quattro richieste, tutte dopo la correzione del Borgomagno):
-     - [x] semafori in centro tra Riviera Tito Livio e Riviera dei Ponti Romani: gli autobus si bloccano e bloccano i
-       tram (linea 3 alle 8:54 di gioco, x 81, z -133; corsia `traffico`, vedi "Fatto");
-     - [~] cavalcavia da sistemare (linea 22 in Via Orlandini, x 1315, z -1022) e, da un giocatore nuovo, "i ponti o
-       cavalcavia come quello della stazione e il Camerini" (linea 13 in Viale Codalunga): al Camerini l'impalcato
-       spuntava sopra l'asfalto (sistemato, vedi "Fatto"); Borgomagno, Grassi e Ponte dell'Unità d'Italia guardati dal
-       posto di guida senza difetti nuovi; restano i fili del tram e il gradino di 20 cm al Borgomagno (corsia
-       `mappa`);
-     - [x] sterzo troppo sensibile, "era meglio la guida vecchia" (stesso giocatore nuovo): regolazione
-       "Sensibilità dello sterzo" nel menu e nella pausa, che parte più dolce di prima (vedi "Fatto");
-     - [x] mappa più grande fino ai capolinea della 3 e della 22 e alle fermate della 10 e della 11 (linea 3 in Via
-       Fondà; vedi "Fatto").
-   - dall'11 novembre (foto nel pannello del checkout principale):
-     - [x] sul tram niente ritardatario né fermate prenotate: il tram ferma a tutte le fermate (vedi "Fatto");
-     - [ ] incroci tra traffico e tram: se il tram ha il passaggio gli altri si fermano, e viceversa (corsia
-       `traffico`);
-     - [x] segni bianchi della carreggiata sulla sede rossa del tram, lungo un binario a fianco della strada (vedi
-       "Fatto");
-     - [x] macchie d'asfalto a triangoli che coprono la sede a un incrocio del SIR3 verso Cornaro (vedi "Fatto");
-     - [x] ponte tra Cornaro e Voltabarozzo sul canale Scaricatore: la discesa verso nord molto più dolce, i ponti
-       stanno alla quota degli argini (vedi "Fatto");
-     - [x] SIR2 intero fino a Rubano e al capolinea prima della rotonda per Venezia / SR11 (vedi "Fatto");
-     - [~] linee del bus allungate fino ai capolinea del GTFS, con tracciato e orario interi: fatte 3, 10, 11, 22, 24,
-       25 e 88 (la 24 parte da Mandriola, vedi "Fatto"); le altre nel gruppo 3 della corsia `capolinea`;
-     - [x] tram incastrato al capolinea di Voltabarozzo (SIR3, 13/13 a 0 m), corsia `tram-turni`;
-     - [x] a Voltabarozzo la fermata d'arrivo è sulla curva: spostata 33 m più avanti sul dritto (`SPOSTA` in
-       `tram_linee.py`, tolto l'11 novembre: le fermate di OSM erano scambiate tra i due versi, vedi "Fatto"); in
-       fondo al binario B fa ripartire nell'altro verso (correzione del tram incastrato, prova "in fondo al binario"),
-       corsia `tram-turni`;
-     - [x] semaforo del tram che non diventa mai verde prima di Pace (SIR3 dalla stazione), corsia `traffico`: erano le
-       lanterne stradali della corsia riservata di Via Tommaseo, che nessuna logica del tram guardava; ora sono il suo
-       segnale (chiamata del verde, stop dei tram automatici, penalità col rosso);
-     - [~] capolinea della Guizza come in OSM (comunicazione prima delle banchine, anello di ritorno, deposito con
-       8-9 binari e anello esterno), corsia `tram-scambi`: fatti il deposito, guidabile in Esplorazione e Giro libero,
-       e in servizio l'uscita dalla rimessa della prima corsa del turno e il rientro dopo l'ultima (vedi "Fatto");
-     - [~] binari di Voltabarozzo come in OSM (comunicazioni, anello di ritorno, rimessa) e segnale dello scambio che
-       mostra la posizione (all'arrivo è un pannello nero), corsia `tram-turni`: fatti la comunicazione dopo le
-       banchine e il segnale con la posizione (il pannello nero è il retro di una lanterna del tram, segnalato a
-       `traffico`); restano l'anello di ritorno e la rimessa;
-     - [x] manovra al capolinea come nella realtà: scarico, avanti fino in fondo, B (cambio cabina e visuale), lo scambio
-       si mette da solo sull'altro binario, fermata di partenza (vedi "Fatto");
-     - [~] al capolinea B cambia solo cabina: il tram resta dov'è e riparte dallo scambio; scambi visibili e
-       manovrabili (depositi, Esplorazione e Giro libero), automatici dove servono alle linee (corsia `tram-turni`):
-       fatta la manovra al capolinea come nella realtà con le comunicazioni di OSM (B, segnale con la posizione, N in
-       Esplorazione e Giro libero, prove con il pilota per ogni capolinea) e la manovra dei tram automatici; restano gli
-       scambi tra le linee e i depositi (corsia `tram-scambi`);
-     - [x] mappa grande (M) da trascinare per spostarsi (vedi "Fatto");
-     - [x] pali della linea aerea in mezzo alla strada dove i due binari corrono separati, con i tiranti che
-       attraversano tutte le corsie (vedi "Fatto");
-     - [x] in stazione il binario di destra parallelo alla banchina, senza la S verso sinistra; la curva a sinistra
-       dell'anello interno più regolare; niente intrecci a S all'uscita della banchina (vedi "Fatto");
-     - [x] al capolinea del tram B fa partire la corsa successiva, come per il bus, senza tornare al menu (vedi
-       "Fatto");
-     - [~] linee del bus complete fino al capolinea, senza la scritta "tratto in città": fatte 3, 10, 11, 13, 22, 24,
-       25 e 88 (vedi "Fatto"); le altre nel gruppo 3 della corsia `capolinea`;
-     - [x] urgente, manovra al capolinea del tram bloccata a Voltabarozzo: il riquadro di fine corsa non si chiude e
-       copre il gioco, manca il percorso giusto sull'altro binario, B deve cambiare cabina quando si vuole e non solo
-       dopo la discesa di tutti (corsia `tram-scambi`, punto 1; vedi "Fatto").
+Il lavoro da fare sta nelle [issue di GitHub](https://github.com/flevour/bus-simulator/issues), con il metodo in
+[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). Le issue madri: #3 rete dei binari con i bivi e
+depositi del tram, #15 linee dei bus intere fino ai capolinea del GTFS, #48 regole della strada per auto, pedoni e bus
+di chi gioca, #58 traffico e corse dinamici.
 
 ## Mappa e dati
 
 - [~] **Modello della città coerente con la realtà**: piano con fonti, misure dalle norme, pipeline a strati, semafori,
   fermate, verifiche e tappe in [`docs/PIANO_MODELLO_CITTA.md`](docs/PIANO_MODELLO_CITTA.md). Fatte M1–M4 e verde,
   isole e alberi del DBGT; i prossimi passi in ordine sono nel piano (sezione 7, "Prossimi passi"):
-  - [~] corsie e segnaletica orizzontale fatte (vedi "Fatto"); restano le svolte a sinistra protette ai semafori;
+  - [~] corsie e segnaletica orizzontale fatte (vedi "Fatto"); svolte a sinistra protette ai semafori: #56;
   - [x] portici veri dai volumi del DBGT (vedi "Fatto");
   - [x] paline e pensiline da OSM (vedi "Fatto");
-  - [x] zone pedonali e piazze lastricate (aree pedonali del DBGT); resta la ZTL;
-  - [ ] quote stradali del DBGT e sottopassi; tessere LiDAR da chiedere alla Regione;
+  - [x] zone pedonali e piazze lastricate (aree pedonali del DBGT); ZTL del centro: #55;
+  - [ ] sottopassi e quote stradali del DBGT: #33; tessere LiDAR da chiedere alla Regione;
   - [x] rapporto di verifica e test in CI (vedi "Fatto"); restano i casi che ha trovato:
     - [x] lampioni in carreggiata: da 1.121 a nessuno (stanno fuori dall'asfalto vero, vedi "Fatto");
-    - [ ] 9 fermate dove il bus fermo tocca un edificio (erano 19; i lampioni non più): Milano 61 (linee 6, 9, 10,
-      42), Tommaseo 114 (3, 7, 10, 25), Buonarroti 46 (24), facciate sul bordo dell'asfalto;
-    - [ ] 11 fermate agganciate a più di 40 m dalla fermata vera (erano 33): Bembo 95 (3, 317 m), le altre tra 43 e
-      71 m (Facciolati 160, Decorati 57, Falloppio 69, Garibaldi giardini, Armistizio 164, Volta fr. 24, Croce
-      Rossa 112);
-  - [ ] mappa più leggera (dati separati e compressi);
+    - [ ] fermate dove il bus fermo tocca una facciata: #29;
+    - [ ] fermate agganciate a più di 40 m dalla fermata vera: #30;
+  - [x] mappa più leggera: rete nel bundle, edifici, marciapiedi, verde e alberi in aree da 800 m scaricate vicino al
+    bus (c35636c, e76d0f3, 82985e7);
   - [ ] ortofoto AGEA 2024 in Esplorazione; catasto, Mapillary e richiesta al Comune.
 
 - [ ] **Modalità di esplorazione senza mezzo**, per controllare com'è fatta la mappa:
@@ -167,42 +44,27 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
   - licenza: Google e Bing non permettono di ricavarne dati; le ortofoto della Regione Veneto sono da verificare;
   - alberi, ombre e auto coprono le strisce;
   - dai container cloud i server della Regione sono bloccati.
-- [ ] 25 fermate servite su 484 non hanno palina (il posizionamento viene scartato; Corsia 1 e Corsia 2 della stazione
-  ne hanno una sola, a 1,8 m in OSM): Garibaldi Eremitani, Borgomagno, Largo Europa, T. Aspetti 141 e fr. 240, Bronzetti
-  4, Crescini 6, Facciolati CTO, Capolinea Pontecorvo e altre ai bordi della mappa. Capire caso per caso.
-- [~] Capolinea: tratti del percorso GTFS senza strada. Le corsie di servizio dove passa un bus entrano nella rete
-  (vedi "Fatto"); resta il salto della 19 a Saletto, al bordo della mappa (440 m, tre varianti tagliate): quelli della
-  13 ad Altichiero e della 24 a Mandriola non ci sono più.
-- [~] **Mappa fino a tutti i capolinea di tutte le linee**: oggi molte varianti sono "tratto in città" e partono al
-  bordo della mappa. Allargare rete, edifici, pianta delle strade, terreno e fermate lungo i percorsi GTFS fino a ogni
-  capolinea (corridoi attorno ai percorsi, per non far crescere troppo la mappa). Corsia `capolinea`: inventario dei
-  capolinea e gruppi in [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md), sezione 6; fatti il SIR3, il SIR2 con
-  la 25 e il gruppo 2 degli autobus (3, 10, 11, 22, 24 e 88, vedi "Fatto"), poi le altre linee. Varianti ancora
-  tagliate, linea per linea e con il perché, nella sezione 6.
-- [~] **Piazzale della stazione**: tante corsie e capolinea nello stesso piazzale. Verificato linea per linea in
-  [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md); i dati sono sistemati (banchine vere, sensi unici, Ex
-  Catasto sulla strada sud, partenze dalla fermata). Restano i due passaggi che mancano in OSM (dalla strada sud alla
-  corsia sud verso x = 231, dalla corsia nord alla corsia sud verso x = 190): oggi i bus ci arrivano con il giro
-  legale dall'entrata est. Corsia 1 e Corsia 2 hanno la stessa palina (OSM le mette a 1,8 m l'una dall'altra); la 4
-  per il Capolinea Nord parte dalla corsia sud e fa il giro del piazzale. La banchina sud è del tram.
-- [~] Percorsi con brevi deviazioni avanti e indietro in una via laterale (179 tratti A-B-A, errori di aggancio del
-  tracciato GTFS): quelli senza fermate li tolgono già i dati (`drop_spurs`); con i giri nelle rotatorie e le linee
-  tagliate senza andata e ritorno ai capi (vedi "Fatto") ne restano 11, tutti con una fermata: la 3 in Via Bembo
-  (749 m, tre varianti), la 4 in Via Gramsci (cinque varianti), la 16 e la 24 al Capolinea Plebiscito. Da capire caso
-  per caso (alcuni possono essere veri).
+- [ ] Fermate servite senza palina: controllo caso per caso: #31.
+- [~] Tratti del percorso GTFS senza strada ai capolinea: resta il salto della 19 a Saletto: #17.
+- [~] **Mappa fino a tutti i capolinea di tutte le linee**, oltre Centro e Arcella: #15 (fatti il SIR3, il SIR2 con la
+  25 e il gruppo 2: 3, 10, 11, 22, 24 e 88). Piano e varianti tagliate linea per linea in
+  [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md).
+- [~] **Piazzale della stazione**: i due passaggi tra le corsie che mancano in OSM: #35. Controllo linea per linea in
+  [`docs/piazzale-stazione.md`](docs/piazzale-stazione.md).
+- [~] Percorsi avanti e indietro in una via laterale (tratti A-B-A):
+  - [x] la 3 in Via Bembo (067a747);
+  - [ ] la 4 in Via Gramsci, la 16 e la 24 al Capolinea Plebiscito: #32.
 - [ ] Corsie bus in controsenso (flag 256): il gioco le conosce per i percorsi, ma i bus le percorrono al centro della
-  strada; servirebbe una corsia propria sul lato giusto, e le auto non dovrebbero usarla.
+  strada; servirebbe una corsia propria sul lato giusto. Le auto fuori dalle corsie dei bus: #54.
 - [ ] Aggiornamento automatico del GTFS: workflow programmato che scarica il feed BusOne e rigenera
   `src/data/padova-map.json`.
 - [~] Edifici: altezze misurate dal DBGT della Regione e portici veri (fatti, vedi "Fatto"); restano tetti più vari.
 - [ ] Piste ciclabili e ciclisti; sottopassi pedonali.
-- [ ] Ampliare l'area di gioco oltre Centro e Arcella (linee oggi tagliate "tratto in città"): linee complete fino ai
-  capolinea veri, con un corridoio di 130 km² attorno ai tracciati. Valutazione e piano in
-  [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md).
 
 ## Veicoli e guida
 
-- [x] Tram: SIR1 e SIR3 a 3 moduli, SIR2 a 4 moduli (vedi "Fatto").
+- [x] Tram: SIR1 e SIR3 a 3 moduli, SIR2 a 4 moduli (vedi "Fatto"); specifica in
+  [`docs/prompt-tram.md`](docs/prompt-tram.md).
 - [x] Sensibilità dello sterzo regolabile (vedi "Fatto").
 - [ ] Telefoni e tablet: comandi touch e HUD compatto spenti l'11 novembre (`MOBILE_SUPPORTED` in
   `src/game/touch.js`, invito a giocare da computer); da riattivare e rifinire più avanti.
@@ -217,20 +79,16 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 - [x] Bus automatici che non si bloccano ai semafori e non bloccano i tram (Tito Livio e Ponti Romani, segnalazione
   del 9 novembre, corsia `traffico`): fatti l'incrocio di Tito Livio e Ponti Romani e il controllo su tutta la mappa
-  alle 8:15 e alle 17:30 (vedi "Fatto").
-- [ ] Le auto rispettano STOP, precedenze e rotonde (oggi solo semafori).
-- [ ] Pedoni che attraversano sulle strisce con obbligo di precedenza (e punti).
-- [ ] Penalità per non dare precedenza a chi arriva (rotonde, dare precedenza).
-- [ ] Corsie preferenziali vere: bonus per il bus, auto che non le usano.
-- [ ] Traffico più lento con pioggia e nebbia.
-- [ ] **Traffico e corse dinamici** (obiettivo a lungo termine, chiesto l'11 novembre): quantità di auto che segue l'ora
-  del giorno e il giorno, con ingorghi veri nelle ore di punta; bus e tram automatici che accumulano ritardo nel
-  traffico invece di seguire l'orario alla lettera, con le conseguenze sulle corse dopo (turni, soste ai capolinea,
-  tram che si avvicinano). Oggi `tram-turni` distribuisce i tram sugli orari perché non si ammucchino ai capolinea:
-  le scelte di adesso (turni, soste, posti ai capolinea) devono reggere anche corse che arrivano in ritardo. Corsie
-  `traffico` e `tram-turni`, quando hanno finito il lavoro in corso. Per i tram automatici fatto l'11 novembre: un tram
-  in ritardo fa comunque la corsa dopo del suo turno, partendo in ritardo, e al capolinea chi arriva aspetta che lo
-  scambio sia libero (prova con un tram per linea fermo 4 minuti in `tests/turni-tram.spec.js`).
+  alle 8:15 e alle 17:30 (485c0aa, vedi "Fatto").
+- [x] Incroci tra tram e traffico: semafori del tram coordinati con quelli stradali (485c0aa, 02fa32a) e, senza
+  semaforo, precedenza al tram rispettata dai due lati (a991c4d).
+- [ ] Le auto rispettano STOP, precedenze e rotonde: #49, #50.
+- [ ] Pedoni che attraversano sulle strisce con obbligo di precedenza: #52.
+- [ ] Penalità per non dare precedenza a chi arriva: #51.
+- [ ] Corsie preferenziali vere: bonus per il bus, auto che non le usano: #54.
+- [ ] Traffico più lento con pioggia e nebbia: #57.
+- [ ] **Traffico e corse dinamici** (obiettivo a lungo termine): ingorghi nelle ore di punta e mezzi automatici in
+  ritardo: #58.
 
 ## Passeggeri e servizio
 
@@ -238,8 +96,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 - [ ] Controllore e validazione dei biglietti.
 - [ ] Annunci di fermata più naturali; display interno con le prossime fermate.
 - [ ] Affollamento per fascia oraria e per fermata più realistico.
-- [~] Turni di lavoro: più corse di fila con sosta al capolinea (fatto per il bus, vedi "Fatto"); restano il tram
-  (punto 1), la pausa dell'autista e il cambio turno.
+- [~] Turni di lavoro: più corse di fila con sosta al capolinea; restano la pausa dell'autista e il cambio turno.
+  - [x] per il bus (vedi "Fatto") e per il tram (b3a76c6, 7ed830c).
+- [ ] La linea 10 resta tra gli autobus (deciso il 9 novembre): quando il SIR2 sarà in servizio si potrà toglierla.
 
 ## Meteo e ambiente
 
@@ -256,8 +115,9 @@ Chi lavora su cosa (corsie in parallelo nei worktree): [`docs/CORSIE.md`](docs/C
 
 ## Tecnica
 
-- [ ] Bundle da 13,5 MB (12,4 MB di mappa): rete sempre caricata, strade ed edifici a riquadri scaricati vicino al bus.
-  Piano nella sezione 4 di [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md).
+- [x] Bundle da 13,5 MB (12,4 MB di mappa): rete nel bundle, edifici, marciapiedi, verde e alberi a riquadri scaricati
+  vicino al bus (c35636c, e76d0f3, 82985e7). Piano nella sezione 4 di
+  [`docs/ESTENSIONE_LINEE.md`](docs/ESTENSIONE_LINEE.md).
 - [ ] Prestazioni su mobile.
 - [ ] Pilota delle prove (`tests/guida.js`) più bravo nelle svolte a T e in quelle strette a destra (oggi sbaglia
   dopo il capolinea sulle linee 9 e 21), per allargare il giro guidato a tutte le linee; casi di prova dalle
