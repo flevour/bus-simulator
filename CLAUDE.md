@@ -29,6 +29,9 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   aggiungi in cima una riga in italiano semplice (cosa cambia per chi guida, non come è fatto), con `n` successivo e la
   data del giorno, nello stesso commit della modifica.
 * `docs/prompt-tram.md`: specifica del tram SIR1 guidabile.
+* `docs/cabina-translohr.md`: ricerca sulla cabina vera del Translohr (comandi uno per uno, procedure di guida, foto
+  del SIR3, cosa portare nel gioco), con le fonti; dove contraddice `prompt-tram.md` (pedali, posto di guida a
+  sinistra, clacson) vale la ricerca.
 * `docs/linee-tram-nuove.md`: ricerca sui tracciati delle linee in costruzione SIR2 e SIR3.
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
