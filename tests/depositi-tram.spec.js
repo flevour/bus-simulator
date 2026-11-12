@@ -273,3 +273,96 @@ test('Voltabarozzo: la seconda comunicazione, a metà del binario di partenza, c
   expect([si.salto < 0.05, no.salto < 0.05], testo).toEqual([true, true]);
   expect(gioco.errori()).toEqual([]);
 });
+
+// Tram automatici e rimessa (#61): la prima corsa di un turno dalla Guizza o da Voltabarozzo esce dalla rimessa (5 minuti
+// prima, su un binario della rimessa, con gli scambi del deposito messi) fino alla banchina di partenza; dopo l'ultima il
+// tram scende alla banchina d'arrivo e va in fondo a un binario della rimessa. Un tram alla volta per deposito, con lo
+// scambio del capolinea. In pagina: `min` minuti dall'ora `da` con chi gioca lontano dai binari; registra uscite, rientri,
+// tram fermi oltre 90 s (fuori da manovra, sosta e attesa in rimessa), i tram in sosta per capolinea, i salti delle casse
+// (al secondo per tutti, a ogni passo entrando e uscendo dal deposito) e le corse rimaste senza tram
+async function giroRimessa(page, { da, min }) {
+  return page.evaluate(({ da, min }) => {
+    const g = window.__game, T = g.trams, dt = 1 / 30;
+    g.teleport(-2500, 3000);
+    g.mission.clock = da;
+    g.sim(dt, dt, false);
+    const t0 = g.mission.clock;
+    const nome = (t) => { for (const [id, k] of Object.entries(g.city.tramTracks)) for (const d of [1, -1]) if (k.terminals[d] === t) return `${id} ${k.stopsDir[d].slice(-1)[0].name}`; return '?'; };
+    const casse = (tr) => tr.mods.map((m) => [m.group.position.x, m.group.position.z]);
+    const out = { uscite: [], rientri: [], fermi: [], attesa: {}, salti: [], passi: [], scambi: [] };
+    const sec = new Map(), passo = new Map(), fermo = new Map(), via = new Set(), dentro = new Map();
+    for (let n = 0; n < min * 60 * 30; n++) {
+      g.sim(dt, dt, false);
+      for (const tr of T.trams) {
+        const m = tr.rimessa;
+        // a ogni passo, dentro e fuori dal deposito: ogni cassa si sposta quanto il tram
+        if (m || dentro.get(tr)) {
+          const c = casse(tr), p = passo.get(tr);
+          const s = p ? Math.max(...c.map((a, i) => Math.hypot(a[0] - p[i][0], a[1] - p[i][1]))) - tr.v * dt : 0;
+          if (s > 0.05) out.passi.push({ id: tr.id, line: tr.line, s: Math.round(s * 100) / 100 });
+          passo.set(tr, c);
+        } else passo.delete(tr);
+        if (m && m.via && !via.has(tr)) {
+          via.add(tr);
+          if (m.ch.some(([sw, k]) => sw.state !== k)) out.scambi.push(tr.id);
+        }
+        // uscito: alla banchina di partenza, sul binario della linea
+        if (dentro.get(tr) && dentro.get(tr).esce && !m) out.uscite.push({ line: tr.line, ritardo: Math.round(g.mission.clock + tr.wait - tr.run.t) });
+        dentro.set(tr, m);
+      }
+      for (const [tr, m] of dentro) if (!T.trams.includes(tr)) { if (m && m.entra && m.parked) out.rientri.push({ line: tr.line, deposito: m.Y.name }); dentro.delete(tr); passo.delete(tr); sec.delete(tr); fermo.delete(tr); }
+      if (n % 30) continue;
+      const per = {};
+      for (const tr of T.trams) {
+        const c = casse(tr), p = sec.get(tr);
+        if (p && p.length === c.length && c.some((a) => Math.min(...p.map((b) => Math.hypot(a[0] - b[0], a[1] - b[1]))) > 12)) out.salti.push({ id: tr.id, line: tr.line });
+        sec.set(tr, c);
+        const m = tr.rimessa;
+        // in sosta al capolinea: in manovra, fuori dallo scambio, alla banchina di partenza (anche venendo dal deposito;
+        // non le corse che cominciano a metà linea, come Stazione FS → Pontevigodarzere la sera)
+        const t = tr.man ? tr.man.t : tr.esce || (!m && tr.run && tr.k <= 1 && tr.run.ss[0] < 400 && tr.s < tr.run.ss[0] + 1 && tr.track.terminals[tr.dir > 0 ? -1 : 1]);
+        if (t) per[nome(t)] = (per[nome(t)] || 0) + 1;
+        const f = tr.v < 0.1 && tr.wait <= 0 && !tr.man && !(m && !m.via) && !(m && m.parked) && !(tr.run && tr.k === 0 && !m) ? (fermo.get(tr) || 0) + 1 : 0;
+        fermo.set(tr, f);
+        if (f === 90) out.fermi.push({ id: tr.id, line: tr.line, rimessa: !!m, x: Math.round(tr.parts[0].x), z: Math.round(tr.parts[0].z) });
+      }
+      for (const [k, v] of Object.entries(per)) {
+        // chi c'era, la prima volta che un capolinea ne ha più di due
+        if (v > 2 && !(out.attesa[k] > 2)) out.pieno = { k, ora: Math.round(g.mission.clock), chi: T.trams.filter((tr) => tr.man || tr.esce || (!tr.rimessa && tr.run && tr.k <= 1 && tr.run.ss[0] < 400 && tr.s < tr.run.ss[0] + 1)).map((tr) => ({ id: tr.id, line: tr.line, man: tr.man && tr.man.fase, esce: !!tr.esce, dir: tr.dir, s: Math.round(tr.s), k: tr.k, parte: tr.run && Math.round(tr.run.t) })) };
+        out.attesa[k] = Math.max(out.attesa[k] || 0, v);
+      }
+    }
+    // corse partite senza tram (dalla rimessa si può partire fino a 10 minuti dopo)
+    out.perse = T.runs.filter((r) => !r.tram && r.t > t0 + 120 && (r.fromDepot ? r.t + 600 : r.t) < g.mission.clock - 60).map((r) => `${r.line.id} ${r.v.stops[0].name}`);
+    out.passi = out.passi.slice(0, 5);
+    return out;
+  }, { da, min });
+}
+
+test('tram automatici: all\'inizio del servizio escono dalla rimessa della Guizza e di Voltabarozzo', async ({ pagina, gioco }) => {
+  test.setTimeout(480_000);
+  await avviaCorsa(pagina, { linea: '24' });
+  const r = await giroRimessa(pagina, { da: 5 * 3600 + 10 * 60, min: 40 });
+  const testo = JSON.stringify(r);
+  console.log('rimessa, inizio del servizio:', testo);
+  // SIR3 alle 5:21, 5:36 e 5:51; SIR1 dalle 5:35 (tre corse doppie del GTFS ogni 7 minuti: escono una alla volta)
+  for (const line of ['SIR1', 'SIR3']) expect(r.uscite.filter((u) => u.line === line && u.ritardo <= 0).length, testo).toBeGreaterThan(0);
+  expect(r.uscite.length, testo).toBeGreaterThanOrEqual(8);
+  expect([r.fermi, r.salti, r.passi, r.scambi, r.perse], testo).toEqual([[], [], [], [], []]);
+  expect(Math.max(...Object.values(r.attesa)), testo).toBeLessThanOrEqual(2);
+  expect(gioco.errori()).toEqual([]);
+});
+
+test('tram automatici: alla fine del servizio rientrano nella rimessa della Guizza e di Voltabarozzo', async ({ pagina, gioco }) => {
+  test.setTimeout(480_000);
+  await avviaCorsa(pagina, { linea: '24' });
+  const r = await giroRimessa(pagina, { da: 23 * 3600, min: 40 });
+  const testo = JSON.stringify(r);
+  console.log('rimessa, fine del servizio:', testo);
+  // SIR3 a Voltabarozzo alle 23:09 e alle 23:24, SIR1 alla Guizza alle 23:13 e alle 23:28
+  expect(r.rientri.filter((x) => x.deposito === 'Guizza').length, testo).toBeGreaterThanOrEqual(2);
+  expect(r.rientri.filter((x) => x.deposito === 'Voltabarozzo').length, testo).toBeGreaterThanOrEqual(2);
+  expect([r.fermi, r.salti, r.passi, r.scambi, r.perse], testo).toEqual([[], [], [], [], []]);
+  expect(Math.max(...Object.values(r.attesa)), testo).toBeLessThanOrEqual(2);
+  expect(gioco.errori()).toEqual([]);
+});

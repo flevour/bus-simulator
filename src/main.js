@@ -130,12 +130,15 @@ function buildWorld() {
     const T = (city.tramTracks && city.tramTracks[L.id]) || city.tramTrack;
     return T && T.terminals && !T.terminals[T.dirOf(v) > 0 ? 1 : -1] ? 60 : 180;
   });
-  trams = new TramSim(scene, net, { track: city.tramTrack, tracks: city.tramTracks });
+  trams = new TramSim(scene, net, { track: city.tramTrack, tracks: city.tramTracks, yards: city.tramYards });
   // incroci con la sede: precedenza al tram e semafori a barre
   tramSignals = new TramSignals(scene, city, lights);
   trams.signals = tramSignals;
   // i tram automatici in manovra al capolinea girano lo scambio, se il tram di chi gioca non ci sta passando
   trams.onSwitch = (t, state) => { if (!bus || (bus.xover !== t && bus.xend !== t)) setSwitch(t, state); };
+  // e non escono dalla rimessa né ci entrano mentre il tram di chi gioca usa quel deposito (uscita della prima corsa del
+  // turno, rientro dopo l'ultima): gli scambi restano quelli messi per lui
+  trams.yardBusy = (Y) => !!bus && bus.isTram && ((bus.yard && bus.yard.yard === Y) || (tramRientro && tramRientro.Y === Y));
   // bus automatici delle linee urbane dall'orario
   buses = new BusSim(scene, net, city, { tramSignals });
   // deposito: da qui escono le prime corse del turno, qui rientrano le ultime
@@ -514,7 +517,8 @@ function tramToDepot() {
   if (!d) return;
   const { Y, pt } = d, need = bus.length + 2;
   const tunnel = Y.edges.some((e) => e.tunnel);
-  const ch = Y.plan(pt.node, Y.portEnd(pt), (E) => !!E.e && Y.deadEnd(E) && E.e.len >= need && (!tunnel || !!E.e.tunnel));
+  // un binario senza tram automatici (in rimessa aspettano l'uscita o ci sono appena entrati)
+  const ch = Y.plan(pt.node, Y.portEnd(pt), (E) => !!E.e && Y.deadEnd(E) && E.e.len >= need && (!tunnel || !!E.e.tunnel) && trams.edgeFree(E.e, null, []));
   if (!ch) { hud.toast('In rimessa non c\'è un binario libero', 'bad'); return; }
   for (const [sw, k] of ch) { sw.state = k; sw.sign.update(); }
   // il tram resta sul suo binario fino alla porta: lo scambio del capolinea diritto

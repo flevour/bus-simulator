@@ -469,6 +469,26 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   `tests/turni-tram.spec.js` deve restare verde: i punti da tenere sono quelli elencati qui.
 - Corse in ritardo (obiettivo di chi gioca, #58): turni, soste e posti ai capolinea vanno fatti in modo da reggere
   anche corse in ritardo, non solo l'orario esatto.
+- Tram automatici e rimessa (12 novembre, #61). La prima corsa di un turno dalla Guizza o da Voltabarozzo
+  (`r.fromDepot`, da `TramSim.depotOf` in `setService`) ha il tram in rimessa 5 minuti prima della partenza
+  (`EXIT_LEAD`): `spawnDepot` lo mette in fondo a un binario libero col fondo dietro (`TramYard.parking`, rango pari)
+  con il percorso del deposito fino alla banchina di partenza (`YardRun`, ora esportata da `tram.js`; `routeWith` mette
+  gli scambi del piano solo per calcolarlo). L'ultima corsa del turno verso uno di questi capolinea (`endRun` →
+  `toDepot`): discesa di 20 s, poi `depotIn` sceglie un binario tronco libero (prima quelli coperti) e il tram ci va;
+  fermo in fondo, sparisce dopo 8 s. Nel deposito il tram ha `tr.rimessa`, `tr.track` è lo `YardRun` (dir 1) e
+  `depotStep` dà la velocità (15 km/h, `YARD_V`); alla banchina `toLine` lo rimette sul binario della linea e lo
+  scambio del capolinea si libera con `tr.esce`. Un tram automatico alla volta per deposito (`locks`: uscendo fino alla
+  coda oltre la porta, entrando fino in fondo), e con lui lo scambio del capolinea (`t.occ`: entrando alla Guizza fino
+  alla coda oltre la comunicazione, a Voltabarozzo fino oltre la porta, perché lì la manovra usa il binario d'arrivo
+  fino in fondo). Uscendo serve anche il binario di partenza libero dalla porta alla banchina (`depotFree`); nel
+  deposito non si muove nessuno mentre lo usa il tram di chi gioca (`trams.yardBusy` in `main.js`). Gli scambi del
+  deposito si mettono per loro (`sw.state`, `sw.sign`); quello del capolinea va diritto per chi lo prende di punta
+  (entrando alla Guizza, uscendo a Voltabarozzo) e poi torna com'era. Senza un binario libero in rimessa (le corse
+  doppie del GTFS della Guizza, #71) si riprova ogni 15 s e la corsa parte in ritardo; dopo 10 minuti (`DEPOT_LATE`)
+  comincia lungo la linea. Nelle funzioni di `tram-scambi`: `tramToDepot` in `main.js` sceglie un binario senza tram
+  automatici (`trams.edgeFree`). Prove in `tests/depositi-tram.spec.js` ("tram automatici: all'inizio del servizio…" e
+  "…alla fine del servizio…"): 40 minuti dalle 5:10 e dalle 23:00, senza tram fermi oltre 90 s, al più due in sosta
+  per capolinea, senza salti delle casse (passo per passo entrando e uscendo dal deposito) e con gli scambi messi.
 
 Verifiche: regola 3, più le foto in stazione e la guida dei tram che ci passano.
 

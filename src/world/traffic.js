@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
 import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
 import { ledTexture } from './textures.js';
-import { TRAM, tramLength, buildTramConvoy, setPantograph } from '../tram/tram.js';
+import { TRAM, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
 import { driveOffset, laneSpan } from '../data/padova.js';
 import { turni } from '../game/turni.js';
@@ -1015,6 +1015,10 @@ export class Walkers {
 // progressiva sul binario di partenza oltre la quale la coda di un tram lascia libero lo scambio del capolinea t: fuori
 // dalla comunicazione ('dopo') o dal tronco ('avanti')
 function terminalClear(t) { return (t.field === 'dep' ? t.heel : t.link) + 1; }
+// rimessa dei tram automatici: velocità nel deposito (15 km/h) e anticipo dell'uscita sulla partenza della prima corsa del
+// turno, come per il tram di chi guida (main.js, tramDepotExit); oltre DEPOT_LATE dalla partenza senza un binario libero in
+// rimessa la corsa comincia lungo la linea
+const YARD_V = 4, EXIT_LEAD = 300, DEPOT_LATE = 600;
 
 // Viaggi dei tram dall'orario GTFS (giorno 'feriale' | 'festivo'), con i turni di turni.js: gli stessi di chi guida il
 // tram, senza i tratti in cui il GTFS spezza ogni viaggio (nei feriali 12-13 tram in servizio per quasi tutto il
@@ -1065,6 +1069,10 @@ export class TramSim {
     this.stopsDir = { 1: this.track.stopsDir[1].map((p) => p.s), '-1': this.track.stopsDir[-1].map((p) => p.s) };
     this.catenaryAt = opts.catenaryAt || (() => true);
     this.scene = scene;
+    // depositi (TramYard): la prima corsa di un turno da un capolinea col deposito esce dalla rimessa, l'ultima ci rientra.
+    // locks: per deposito il tram automatico che ci si muove (uno alla volta: nei binari unici non se ne incontrano due)
+    this.yards = opts.yards || [];
+    this.locks = new Map();
     this.reset(opts.starts);
   }
   // ricrea i tram automatici senza orario: girano tra i capolinea
@@ -1087,6 +1095,9 @@ export class TramSim {
     return tr;
   }
   remove(tr) {
+    // tolto mentre entrava in rimessa (salto d'orario): lo scambio del capolinea torna com'era per le manovre
+    const m = tr.rimessa;
+    if (m && m.entra && m.t && m.t.occ === tr) { m.t.occ = null; if (m.t.field === 'arr' && this.onSwitch) this.onSwitch(m.t, 'deviato'); }
     for (const m of tr.mods) this.scene.remove(m.group);
     for (const b of tr.bellows) this.scene.remove(b);
     this.trams.splice(this.trams.indexOf(tr), 1);
@@ -1097,8 +1108,22 @@ export class TramSim {
     while (this.trams.length) this.remove(this.trams[0]);
     this.lines = lines;
     this.runs = tramRuns(lines, (L) => this.tracks[L.id], day);
+    // prime corse dei turni che partono da un capolinea col deposito: il tram esce dalla rimessa (spawnDepot)
+    for (const r of this.runs) {
+      const d = !r.prev && this.depotOf(r.track, r.dir, 'start');
+      r.fromDepot = d && r.ss[0] - d.pt.s < 400 ? d : null;
+    }
     if (mine) this.exclude(mine);
+    this.locks.clear();
     this.lastClock = null;
+  }
+  // porta del deposito al capo del binario del verso dir ('start': da lì si esce sulla linea, 'end': da lì si entra)
+  depotOf(T, dir, kind) {
+    for (const Y of this.yards) {
+      const pt = Y.ports.find((p) => p.T === T && p.dir === (dir > 0 ? 1 : -1) && p.kind === kind && !p.mid);
+      if (pt) return { Y, pt };
+    }
+    return null;
   }
   // corsa del giocatore { v, t } (anche la successiva del suo turno, al capolinea): via dall'orario dei tram automatici,
   // e il tram che la stava facendo esce
@@ -1122,26 +1147,38 @@ export class TramSim {
     run.tram = tr;
     return tr;
   }
-  // tram in servizio a quell'ora: dopo un salto d'orario (avvio, teletrasporto) si ricompone tutto dall'orario
-  schedule(clock) {
+  // tram in servizio a quell'ora: dopo un salto d'orario (avvio, teletrasporto) si ricompone tutto dall'orario. Le prime
+  // corse dei turni dai capolinea col deposito hanno il tram in rimessa da 5 minuti prima della partenza
+  schedule(clock, others = []) {
     const jump = this.lastClock == null || clock < this.lastClock - 1 || clock - this.lastClock > 60;
     if (jump) {
       while (this.trams.length) this.remove(this.trams[0]);
+      this.locks.clear();
       for (const r of this.runs) r.tram = null;
       for (const r of this.runs) if (r.t <= clock && clock < r.t + r.d) this.spawnAt(r, clock);
+      for (const r of this.runs) if (r.fromDepot && r.t - EXIT_LEAD <= clock && clock < r.t) this.spawnDepot(r, others);
     } else {
+      // senza un binario libero in rimessa (le corse doppie del GTFS) si riprova ogni 15 s e la corsa parte in ritardo;
+      // dopo 10 minuti comincia lungo la linea, come le altre
+      for (const r of this.runs) {
+        if (!r.fromDepot || r.tram || clock < r.t - EXIT_LEAD || clock >= r.t + DEPOT_LATE || clock < (r.retry || 0)) continue;
+        if (!this.spawnDepot(r, others)) r.retry = clock + 15;
+      }
       // corse che partono ora senza un tram che le aspetti al capolinea: ne entra uno nuovo. Se il tram del turno è
       // ancora sulla corsa prima (in ritardo) la prende lui, appena arriva
       const late = (r) => r.prev && r.prev.tram && r.prev.tram.run === r.prev && this.trams.includes(r.prev.tram);
-      for (const r of this.runs) if (r.t > this.lastClock && r.t <= clock && !r.tram && !late(r)) this.spawnAt(r, clock);
+      for (const r of this.runs) {
+        const t = r.fromDepot ? r.t + DEPOT_LATE : r.t;
+        if (t > this.lastClock && t <= clock && !r.tram && !late(r)) this.spawnAt(r, clock);
+      }
     }
     this.lastClock = clock;
   }
   // fine corsa: al capolinea il tram prende la corsa dopo del suo turno (se nessun altro tram l'ha presa nel frattempo e
-  // non è quella di chi gioca), altrimenti rientra (esce)
+  // non è quella di chi gioca), altrimenti rientra: in rimessa dove c'è il deposito, altrimenti esce
   endRun(tr, clock) {
     const next = tr.run.next && !tr.run.next.tram && this.runs.includes(tr.run.next) ? tr.run.next : null;
-    if (!next) { this.remove(tr); return; }
+    if (!next) { if (!this.toDepot(tr)) this.remove(tr); return; }
     const T = tr.track, P = T.path(tr.dir), N = T.path(next.dir), head = P.at(tr.s), pr = N.projectNear(head.x, head.z, 1.5);
     const t = this.terminalOf(tr);
     if (t && next.dir === t.dep) {
@@ -1210,23 +1247,145 @@ export class TramSim {
     this.setDest(tr, this.destOf(next));
     if (t.field === 'dep' && this.onSwitch) this.onSwitch(t, 'deviato');
   }
+  // Rimessa (TramYard). Il tram che esce o rientra (tr.rimessa: { Y, pt la porta, t lo scambio del capolinea, esce o
+  // entra, via, ch gli scambi del deposito }) corre sul percorso del deposito (YardRun, come il tram di chi guida: track,
+  // dir 1, s lungo il percorso). Si muove un tram alla volta per deposito, e tiene anche lo scambio del capolinea finché
+  // la coda non ne è fuori; non si parte mentre il deposito lo usa il tram di chi gioca (yardBusy, main.js)
+
+  // prima corsa del turno da un capolinea col deposito: il tram in fondo a un binario libero della rimessa
+  // (TramYard.parking), col percorso fino alla banchina di partenza. null se non c'è posto
+  spawnDepot(r, others) {
+    const { Y, pt } = r.fromDepot, L = tramLength(r.line.modules || 3), P = r.track.path(r.dir);
+    for (const pk of Y.parking(L + 2)) {
+      // solo i binari col fondo dietro al tram: gli altri sono di passaggio
+      if (pk.rank % 2 || !this.edgeFree(pk.e, null, others)) continue;
+      const { n, i } = Y.endAt(pk.e, pk.fwd), ch = Y.plan(n, i, (E) => E.port === pt);
+      const rt = ch && this.routeWith(Y, ch, n, i), last = rt && rt.pieces[rt.pieces.length - 1];
+      if (!last || last.port !== pt) continue;
+      const pieces = [{ e: pk.e, fwd: pk.fwd }, ...rt.pieces.filter((pc) => !pc.port), { main: r.track, dir: r.dir, s0: pt.s, s1: Math.min(P.len, r.ss[0] + 30), portAt: 0 }];
+      const R = new YardRun(Y, pieces, []), port = R.bounds[pieces.length - 1];
+      const tr = this.add(L + 1, 1, this.destOf(r), r.line);
+      tr.track = R; tr.run = r; tr.k = 0;
+      tr.rimessa = { Y, pt, t: r.track.terminals && r.track.terminals[r.dir > 0 ? -1 : 1], esce: true, e: pk.e, ch, port, stop: port + r.ss[0] - pt.s, free: port + 1 };
+      r.tram = tr;
+      return tr;
+    }
+    return null;
+  }
+  // ultima corsa del turno a un capolinea col deposito: dopo la discesa il tram va in rimessa
+  toDepot(tr) {
+    const d = this.depotOf(tr.track, tr.dir, 'end');
+    if (!d || d.pt.s < tr.s || d.pt.s - tr.s > 400) return false;
+    tr.rimessa = { ...d, t: tr.track.terminals && tr.track.terminals[tr.dir > 0 ? 1 : -1], entra: true };
+    tr.v = 0; tr.wait = 20;
+    this.setDest(tr, 'Fuori servizio', '');
+    return true;
+  }
+  // percorso del deposito dal nodo n, arrivando dal capo i, con gli scambi messi come nel piano ch (senza girarli)
+  routeWith(Y, ch, n, i) {
+    const old = ch.map(([sw]) => sw.state);
+    for (const [sw, k] of ch) sw.state = k;
+    const r = Y.route(n, i);
+    ch.forEach(([sw], j) => { sw.state = old[j]; });
+    return r;
+  }
+  // nessun tram (tranne tr) sul ramo e del deposito, né preso da uno che ci sta andando
+  edgeFree(e, tr, others) {
+    const on = (p) => e.path.projectNear(p.x, p.z, 2.5);
+    for (const t2 of this.trams) if (t2 !== tr && ((t2.rimessa && t2.rimessa.e === e) || t2.parts.some(on))) return false;
+    for (const o of others) if (o && o.isTram && o.trackPoints && o.trackPoints().some(on)) return false;
+    return true;
+  }
+  // si può partire: il deposito libero, lo scambio del capolinea libero e, uscendo, nessun tram sul binario di partenza
+  // dalla porta alla banchina
+  depotFree(tr, others) {
+    const m = tr.rimessa, lock = this.locks.get(m.Y);
+    if ((lock && lock !== tr && this.trams.includes(lock)) || (this.yardBusy && this.yardBusy(m.Y))) return false;
+    if (m.t && this.termBusy(m.t, tr, others)) return false;
+    if (m.entra) return true;
+    const r = tr.run, P = r.track.path(r.dir), lo = m.pt.s - 3, hi = r.ss[0] + 3;
+    for (const t2 of this.trams) if (t2 !== tr && t2.track === r.track && t2.dir === r.dir && t2.s > lo && t2.s - t2.L < hi) return false;
+    for (const o of others) if (o && o.isTram && o.trackPoints) for (const p of o.trackPoints()) { const q = P.projectNear(p.x, p.z, 2.5); if (q && q.s > lo && q.s < hi) return false; }
+    return true;
+  }
+  // rientro: dal binario d'arrivo in fondo a un binario tronco libero della rimessa (prima quelli coperti). false se non ce
+  // n'è uno
+  depotIn(tr, others) {
+    const m = tr.rimessa, { Y, pt } = m, need = tr.L + 2, tunnel = Y.edges.some((e) => e.tunnel), n = pt.node, i = Y.portEnd(pt);
+    const ch = Y.plan(n, i, (E) => !!E.e && Y.deadEnd(E) && E.e.len >= need && (!tunnel || !!E.e.tunnel) && this.edgeFree(E.e, tr, others));
+    if (!ch) return false;
+    const rt = this.routeWith(Y, ch, n, i), last = rt.pieces[rt.pieces.length - 1], s0 = Math.max(0, tr.s - tr.L - 5);
+    const R = new YardRun(Y, [{ main: tr.track, dir: tr.dir, s0, s1: pt.s, portAt: 1 }, ...rt.pieces.filter((pc) => !pc.port)], []);
+    const f = tr.track.path(tr.dir).at(tr.s), pr = R.P.projectNear(f.x, f.z, 3);
+    // lo scambio del capolinea si libera con la coda oltre la porta; dove la manovra non usa il binario d'arrivo oltre la
+    // comunicazione ('avanti', la Guizza) già con la coda oltre la comunicazione
+    m.ch = ch; m.e = last.e; m.free = (m.t && m.t.field === 'arr' ? Math.min(m.t.heel + 2, pt.s) : pt.s) - s0 + 1;
+    tr.track = R; tr.dir = 1; tr.s = pr ? pr.s : tr.s - s0;
+    return true;
+  }
+  // a ogni passo, la velocità del tram che esce o rientra: fermo finché non può partire, poi a 15 km/h fino alla banchina
+  // di partenza (lì passa sul binario della linea) o in fondo al binario della rimessa (lì sparisce dopo qualche secondo)
+  depotStep(tr, others, clock, dt, gone) {
+    const m = tr.rimessa;
+    if (!m.via) {
+      if ((m.check = (m.check || 0) - dt) > 0) return 0;
+      m.check = 0.5;
+      if (!this.depotFree(tr, others)) return 0;
+      if (m.entra && !this.depotIn(tr, others)) { gone.push(tr); return 0; }
+      m.via = true;
+      this.locks.set(m.Y, tr);
+      for (const [sw, k] of m.ch) { sw.state = k; if (sw.sign) sw.sign.update(); }
+      if (m.t) {
+        m.t.occ = tr;
+        // lo scambio del capolinea diritto per chi lo prende di punta: entrando dove sta sul binario d'arrivo, uscendo
+        // dove sta su quello di partenza
+        if (this.onSwitch && m.t.field === (m.entra ? 'arr' : 'dep')) this.onSwitch(m.t, 'diritto');
+      }
+    }
+    const R = tr.track, tail = tr.s - tr.L;
+    if (tail > m.free) {
+      if (m.esce && this.locks.get(m.Y) === tr) this.locks.delete(m.Y);
+      if (m.entra && m.t && m.t.occ === tr) { m.t.occ = null; if (m.t.field === 'arr' && this.onSwitch) this.onSwitch(m.t, 'deviato'); }
+    }
+    const d = (m.esce ? m.stop : R.P.len - 1.5) - tr.s;
+    if (d > 0.8) return Math.min(YARD_V, Math.sqrt(2 * 0.9 * (d - 0.5)) + 0.3);
+    if (tr.v < 0.2) {
+      if (m.esce) this.toLine(tr, clock);
+      else {
+        if (this.locks.get(m.Y) === tr) this.locks.delete(m.Y);
+        if ((m.parked = (m.parked || 0) + dt) > 8) gone.push(tr);
+      }
+    }
+    return 0;
+  }
+  // uscendo, alla banchina di partenza: il tram passa sul binario della linea e parte all'ora. Lo scambio del capolinea si
+  // libera quando la coda ne è fuori (tr.esce)
+  toLine(tr, clock) {
+    const m = tr.rimessa, r = tr.run, P = r.track.path(r.dir), f = tr.track.P.at(tr.s), pr = P.projectNear(f.x, f.z, 3);
+    tr.rimessa = null;
+    if (this.locks.get(m.Y) === tr) this.locks.delete(m.Y);
+    tr.track = r.track; tr.dir = r.dir; tr.s = pr ? pr.s : r.ss[0];
+    tr.k = 1; tr.v = 0; tr.wait = Math.max(5, r.t - clock);
+    if (m.t && m.t.occ === tr) tr.esce = m.t;
+  }
   // clock: ora del gioco (secondi), per il servizio dall'orario
   update(dt, others = [], clock = null) {
     if (!Array.isArray(others)) others = [others];
     if (!this.runs || clock == null) { this.move(dt, others, null); return; }
     // con l'attesa accelerata in fermata l'orologio corre (x12): i tram la seguono a passi normali
     const cd = this.lastClock == null ? dt : clock - this.lastClock;
-    this.schedule(clock);
+    this.schedule(clock, others);
     const n = cd > dt * 1.5 && cd < 60 ? Math.min(15, Math.round(cd / dt)) : 1;
     for (let i = 0; i < n; i++) this.move(dt, others, clock - (n - 1 - i) * dt);
   }
   move(dt, others, clock) {
-    const ended = [], turned = [];
+    const ended = [], turned = [], gone = [];
     for (const tr of this.trams) {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
-      const T = tr.track, P = T.path(tr.dir);
+      let T = tr.track, P = T.path(tr.dir);
       let vt = 8.5;
       if (tr.wait > 0) { tr.wait -= dt; vt = 0; }
+      else if (tr.rimessa) vt = this.depotStep(tr, others, clock, dt, gone);
       else if (tr.man) {
         // al capolinea: a scambio libero avanti fino in fondo al binario (a 15 km/h), poi il cambio cabina
         const m = tr.man;
@@ -1263,6 +1422,8 @@ export class TramSim {
           if (d < 0.8) { tr.wait = 18; tr.served = next; }
         }
       }
+      // entrando in rimessa o uscendone il tram può essere passato su un altro percorso
+      if (tr.track !== T) { T = tr.track; P = T.path(tr.dir); }
       // segnale del tram a via impedita: si rallenta per fermarsi alla linea
       if (this.signals) {
         const d = this.signals.stopAhead(tr.s, tr.dir, T);
@@ -1320,7 +1481,7 @@ export class TramSim {
         if (t.field === 'dep' && this.onSwitch) this.onSwitch(t, 'diritto');
       }
       // al capolinea il guidatore cambia cabina: il muso diventa l'altra estremità, sul binario dell'altro verso
-      if (tr.s >= P.len - 2) {
+      if (tr.s >= P.len - 2 && !tr.rimessa) {
         if (tr.run) { tr.s = P.len - 2; tr.v = 0; if (!ended.includes(tr) && !tr.man) ended.push(tr); }
         else {
           const tail = P.at(tr.s - tr.L);
@@ -1358,10 +1519,11 @@ export class TramSim {
     }
     for (const tr of ended) this.endRun(tr, clock);
     for (const tr of turned) this.turnAt(tr);
+    for (const tr of gone) if (this.trams.includes(tr)) this.remove(tr);
   }
   // indicatore di linea e destinazione sulle due cabine
-  setDest(tr, dest) {
-    for (const m of tr.mods) if (m.led) { m.led.material.map.dispose(); m.led.material.map = ledTexture(tr.line, dest); m.led.material.needsUpdate = true; }
+  setDest(tr, dest, line = tr.line) {
+    for (const m of tr.mods) if (m.led) { m.led.material.map.dispose(); m.led.material.map = ledTexture(line, dest); m.led.material.needsUpdate = true; }
   }
   // di notte fanali accesi in testa e luci rosse in coda
   setNight(f) {

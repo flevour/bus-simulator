@@ -678,7 +678,7 @@ export class TramYard {
 // Percorso del tram di chi gioca nel deposito: pezzi di binario della linea ({ main: T, dir, s0, s1, portAt: 0 o 1, il
 // capo del pezzo dov'è la porta }) e rami ({ e, fwd }), in fila nel verso in cui il tram si muove. Il tram ci corre come su
 // un binario qualunque (track: questo oggetto, dir 1, nessuna quota né scambio dei capolinea)
-class YardRun {
+export class YardRun {
   constructor(yard, pieces, sws) {
     this.yard = yard; this.id = 'deposito'; this.terminals = {}; this.stopsDir = { 1: [], '-1': [] };
     this.pieces = pieces;
