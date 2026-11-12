@@ -257,7 +257,7 @@ Regione del Veneto (DBGT del Comune di Padova, DTM a 5 m), licenza IODL 2.0.
 
 ## Crediti
 
-Ideato e sviluppato da **Francesco Levorato** ([@flevour su Instagram](https://www.instagram.com/flevour/)).
+Ideato e sviluppato da **Francesco Levorato** ([@flevour su Instagram](https://www.instagram.com/flevour/)) e **Giovanni Levorato**.
 
 ## Modalità
 
