@@ -2,6 +2,7 @@
   "name": "padova-bus-simulator",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "description": "Simulatore di autobus urbano in prima persona ambientato a Padova (Three.js)",
   "scripts": {

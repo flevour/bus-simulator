@@ -259,6 +259,12 @@ Regione del Veneto (DBGT del Comune di Padova, DTM a 5 m), licenza IODL 2.0.
 
 Ideato e sviluppato da **Francesco Levorato** ([@flevour su Instagram](https://www.instagram.com/flevour/)) e **Giovanni Levorato**.
 
+## Licenza
+
+Il codice è rilasciato con la [PolyForm Noncommercial License 1.0.0](LICENSE): si può usare, studiare, modificare e
+ridistribuire solo per scopi non commerciali, citando gli autori. I dati di terzi (OpenStreetMap, Regione del Veneto,
+Overture, Busitalia) restano sotto le loro licenze originali: i dettagli sono in [`LICENSE`](LICENSE).
+
 ## Modalità
 
 * **Servizio di linea**: corsa con orario, fermate, passeggeri e punteggio.
