@@ -274,6 +274,72 @@ test('Voltabarozzo: la seconda comunicazione, a metà del binario di partenza, c
   expect(gioco.errori()).toEqual([]);
 });
 
+// Voltabarozzo (#72): dalla rimessa si arriva al binario d'arrivo, come nello schema OSM e nella foto dall'alto. In fondo
+// al deposito l'anello esterno (way 1453989054, il binario ovest), alla seconda comunicazione diritto, poi fuori dalla
+// porta la comunicazione del capolinea diritta (deviata porterebbe sul binario di partenza). Quella è uno scambio della
+// rete, 70 m dopo la porta: N la gira già dal deposito, quando non ci sono più scambi del deposito davanti. Il pilota
+// preme N quando lo scambio che girerebbe (tramSwitchAhead) non è come serve. Con gli scambi come partono si esce sul
+// binario di partenza
+test('Voltabarozzo: dalla rimessa sul binario d\'arrivo girando gli scambi con N', async ({ pagina, gioco }) => {
+  for (const [modo, arrivo] of [['roam', true], ['roam', false], ['free', true]]) {
+    await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: 1, modo });
+    const r = await pagina.evaluate((arrivo) => {
+      const g = window.__game, bus = g.bus, dt = 1 / 30, Y = g.city.tramYards.find((y) => y.name === 'Voltabarozzo');
+      const term = bus.track.terminals[1], porta = Y.ports.find((p) => p.dir === 1 && p.kind === 'end');
+      // in rimessa, col muso verso l'uscita
+      const pk = Y.parking(bus.length + 2)[0];
+      bus.yardStart(Y, { e: pk.e, fwd: pk.fwd }, bus.length + 1);
+      g.sim(0.3, dt, false);
+      const voluti = new Map();
+      if (arrivo) {
+        const { n, i } = Y.endAt(pk.e, pk.fwd);
+        for (const [sw, k] of Y.plan(n, i, (E) => E.port === porta) || []) voluti.set(sw, k);
+        voluti.set(term, 'diritto');
+      }
+      const msg = [], toast0 = g.hud.toast.bind(g.hud);
+      g.hud.toast = (t, k) => { msg.push(t); return toast0(t, k); };
+      const out = { voluti: voluti.size, N: [], uscita: null };
+      const dove = () => ({ deposito: !!bus.yard, track: bus.track.id, dir: bus.dirSig, facing: bus.facing, s: Math.round(bus.pathOffset + bus.sFront), xover: !!bus.xover });
+      bus.parking = false;
+      let prev = bus.modules.map((m) => [m.group.position.x, m.group.position.z]), salto = 0;
+      for (let t = 0; t < 120; t += dt) {
+        const a = g.tramSwitchAhead(), o = a && (a.ys ? a.ys.sw : a.jn.j);
+        if (o && voluti.has(o) && o.state !== voluti.get(o)) { g.press('KeyN'); out.N.push({ capolinea: o === term, deposito: !!bus.yard }); }
+        if (Math.abs(bus.v) < 4.7) g.keys.add('KeyW'); else g.keys.delete('KeyW');
+        const dentro = !!bus.yard;
+        g.sim(dt, dt, false);
+        const c = bus.modules.map((m) => [m.group.position.x, m.group.position.z]);
+        if (Math.abs(bus.v) > 0.02) salto = Math.max(salto, ...c.map((p, i) => Math.hypot(p[0] - prev[i][0], p[1] - prev[i][1]) - Math.abs(bus.v) * dt));
+        prev = c;
+        if (dentro && !bus.yard) out.uscita = dove();
+        // 100 m oltre la comunicazione del capolinea, su un binario o sull'altro
+        const sf = bus.pathOffset + bus.sFront;
+        if (!bus.yard && (bus.dirSig > 0 ? sf < term.link - 100 : sf > term.toe + 100)) break;
+      }
+      g.keys.delete('KeyW');
+      g.hud.toast = toast0;
+      out.fine = dove();
+      out.link = Math.round(term.link);
+      out.salto = Math.round(salto * 100) / 100;
+      out.msg = msg.filter((t) => /Scambio/.test(t));
+      return out;
+    }, arrivo);
+    const testo = JSON.stringify({ modo, arrivo, r });
+    if (arrivo) {
+      // due N: lo scambio in fondo al deposito e, ancora dal deposito, quello del capolinea
+      expect([r.voluti, r.N.length, r.N.filter((n) => n.capolinea && n.deposito).length], testo).toEqual([3, 2, 1]);
+      expect(r.msg.some((t) => /Scambio diritto tra \d+ m: si resta sul binario/.test(t)), testo).toBe(true);
+      // fuori sul binario d'arrivo, in marcia verso la città (all'indietro sul binario), e lì resta
+      expect([r.uscita.track, r.uscita.dir, r.uscita.facing], testo).toEqual(['SIR3', 1, -1]);
+      expect([r.fine.deposito, r.fine.dir, r.fine.facing, r.fine.xover, r.fine.s < r.link - 50], testo).toEqual([false, 1, -1, false, true]);
+    } else {
+      expect([r.N.length, r.uscita.track, r.uscita.dir, r.uscita.facing, r.fine.dir], testo).toEqual([0, 'SIR3', -1, 1, -1]);
+    }
+    expect(r.salto, testo).toBeLessThan(0.05);
+  }
+  expect(gioco.errori()).toEqual([]);
+});
+
 // Tram automatici e rimessa (#61): la prima corsa di un turno dalla Guizza o da Voltabarozzo esce dalla rimessa (5 minuti
 // prima, su un binario della rimessa, con gli scambi del deposito messi) fino alla banchina di partenza; dopo l'ultima il
 // tram scende alla banchina d'arrivo e va in fondo a un binario della rimessa. Un tram alla volta per deposito, con lo

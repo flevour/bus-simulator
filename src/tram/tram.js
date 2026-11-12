@@ -1409,6 +1409,16 @@ export class Tram {
     }
     return best;
   }
+  // nel deposito, col percorso che finisce a una porta: il binario della linea dopo la porta, con la progressiva dove
+  // sarebbe il muso contando i metri che mancano alla porta e il verso di marcia ({ T, dir, s, fw }), o null. Serve a N
+  // per gli scambi della rete subito fuori (a Voltabarozzo la comunicazione del capolinea, 70 m dopo la porta del binario
+  // d'arrivo)
+  yardLine() {
+    const Y = this.yard, k = Y ? Y.pieces.length - 1 : -1, pc = Y && Y.pieces[k];
+    if (!pc || !pc.main || pc.portAt !== 0 || this.facing < 0) return null;
+    const sg = Math.sign(pc.s1 - pc.s0);
+    return { T: pc.main, dir: pc.dir, s: pc.s0 + sg * (this.sFront - Y.bounds[k]), fw: sg > 0 };
+  }
   offAt(t) { return (this.xover && this.xover.off(t)) || (this.xend && this.xend.off(t)) || null; }
   // punto del percorso a s; sullo scambio del capolinea (il binario di partenza fino allo scambio corre su quello
   // d'arrivo) spostato verso il binario d'arrivo

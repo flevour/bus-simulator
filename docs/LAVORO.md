@@ -724,6 +724,16 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   - dopo una rigenerazione dei binari OSM (`data/osm-padova-tram*.json`) basta rilanciare `tram_depositi.py` e il
     controllo: `python3 scripts/binari_tram.py --elenco`, e nel gioco `tests/binari-tram.spec.js` e
     `tests/depositi-tram.spec.js`.
+- Uscita da Voltabarozzo sul binario d'arrivo (#72, 12 novembre). Nello schema OSM e nella foto dall'alto dal deposito
+  si arriva al binario d'arrivo con tre scambi: dove si uniscono i due anelli in fondo al deposito, l'anello esterno
+  (way 1453989054, il binario ovest; parte sull'anello interno, verso la porta del binario di partenza); alla seconda
+  comunicazione diritto (com'è alla partenza); fuori dalla porta la comunicazione del capolinea diritta. Il grafo era già
+  così: il tram usciva sul binario d'arrivo, ma 70 m dopo la porta la comunicazione del capolinea, deviata, lo portava su
+  quello di partenza, e dal deposito N girava solo gli scambi del deposito. Ora lo scambio che N gira lo dice
+  `tramSwitchAhead` in `main.js` (anche in `__game`, per le prove): nel deposito, quando davanti non ci sono più scambi
+  del deposito, anche quelli della rete presi di punta dopo la porta da cui si esce, con `Tram.yardLine` (il binario
+  della linea dopo la porta, con la progressiva dove sarebbe il muso). Prova in `tests/depositi-tram.spec.js`
+  ("Voltabarozzo: dalla rimessa sul binario d'arrivo…"), in Esplorazione e Giro libero.
 - Deposito di Rubano: fermo dall'11 novembre, da decidere (#8, con i dati OSM e le strade possibili).
 
 Verifiche: regola 3, guida con il pilota a ogni capolinea dei tram e nei depositi, foto dalla cabina agli scambi, tram
