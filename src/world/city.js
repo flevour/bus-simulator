@@ -2069,9 +2069,10 @@ export class City {
         const n = 6, step = (o1 - o0) / n;
         for (let i = 0; i < n; i++) line(o0 + step * i, i % 2 ? WC : WL, o0 + step * (i + 1), i % 2 ? WL : WC);
       };
-      const Z0 = -16, M0 = -11, M1 = 1, Z1 = 6;
-      zig(Z0, M0);
-      zig(M1, Z1);
+      // zig-zag fino alle strisce pedonali dietro e davanti (zb, za di allStopPlacements), non sopra
+      const Z0 = st.zb ?? -16, M0 = -11, Z1 = st.za ?? 6, M1 = Math.min(1, Z1);
+      if (M0 - Z0 > 1) zig(Z0, M0);
+      if (Z1 - M1 > 1) zig(M1, Z1);
       for (let o = M0 + 0.5; o < M1 - 0.4; o += 1.2) line(o, WL, Math.min(o + 0.6, M1), WL);
       // scritta BUS: il testo corre attraverso la corsia, le lettere guardano avanti
       const t0 = -6.2, t1 = -4.6;

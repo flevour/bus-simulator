@@ -32,6 +32,7 @@ const SOGLIE = {
   fermate_con_ostacoli: 9,
   fermate_fuori_strada: 4,
   fermate_spostate: 3,
+  fermate_sulle_strisce: 205,
   segni_sulla_sede: 0,
   asfalto_sopra_sede: 0,
   edifici_sui_binari_dei_depositi: 0,
@@ -45,6 +46,7 @@ const NOMI = {
   fermate_con_ostacoli: 'fermate dove il bus fermo tocca un ostacolo',
   fermate_fuori_strada: 'fermate dove il bus fermo ha le ruote oltre il cordolo',
   fermate_spostate: 'fermate agganciate a più di 40 m dalla fermata vera',
+  fermate_sulle_strisce: 'fermate dove il bus fermo copre le strisce pedonali',
   segni_sulla_sede: 'quadrati di 10 m con segni della strada sopra la sede del tram',
   asfalto_sopra_sede: 'quadrati di 10 m con asfalto sopra la sede del tram',
   edifici_sui_binari_dei_depositi: 'edifici sopra i binari dei depositi del tram o a meno di 2 m dal loro asse',
@@ -199,8 +201,19 @@ function misura() {
     }
     return null;
   };
-  casi.fermate_con_ostacoli = []; casi.fermate_fuori_strada = []; casi.fermate_spostate = [];
-  const s = g.settings, visti = { ostacoli: new Set(), strada: new Set(), spostate: new Set() };
+  // strisce pedonali disegnate (e.cross di City.buildRoads): 3,4 m nel verso della strada, larghe quanto la carreggiata
+  const strisce = new Map();
+  for (const e of g.net.edges) for (const sc of e.cross || []) {
+    const A = g.net.nodes[e.a], x = A.x + e.dx * sc, z = A.z + e.dz * sc, k = Math.floor(x / 20) + ',' + Math.floor(z / 20);
+    (strisce.get(k) || strisce.set(k, []).get(k)).push({ x, z, ux: e.dx, uz: e.dz, hl: 1.7, hw: e.width / 2 - 0.4, via: e.name });
+  }
+  // due rettangoli orientati si toccano se nessun asse li separa
+  const sovrapposti = (a, b) => [[a.ux, a.uz], [-a.uz, a.ux], [b.ux, b.uz], [-b.uz, b.ux]].every(([nx, nz]) => {
+    const r = (q) => q.hl * Math.abs(q.ux * nx + q.uz * nz) + q.hw * Math.abs(q.ux * nz - q.uz * nx);
+    return Math.abs((b.x - a.x) * nx + (b.z - a.z) * nz) <= r(a) + r(b);
+  });
+  casi.fermate_con_ostacoli = []; casi.fermate_fuori_strada = []; casi.fermate_spostate = []; casi.fermate_sulle_strisce = [];
+  const s = g.settings, visti = { ostacoli: new Set(), strada: new Set(), spostate: new Set(), strisce: new Set() };
   let varianti = 0, fermate = 0;
   for (const L of g.lines) {
     const snodato = L.id === '10';
@@ -226,6 +239,17 @@ function misura() {
           peggio = Math.max(peggio, fuori(q.x + fx * lz + fz * lato, q.z + fz * lz - fx * lato));
         }
         if (peggio > 1 && !visti.strada.has(chiave)) { visti.strada.add(chiave); casi.fermate_fuori_strada.push({ ...voce, metri: tondo(peggio), x: Math.round(q.x), z: Math.round(q.z), via: via(q.x, q.z) }); }
+        // carrozzeria da 6,2 m davanti al centro a 6,2 dietro, lo snodato 12 (rimorchio allineato), contro le strisce
+        const dietro = snodato ? 12 : 6.2, mezzo = (6.2 - dietro) / 2;
+        const bus = { x: q.x + fx * mezzo, z: q.z + fz * mezzo, ux: fx, uz: fz, hl: (6.2 + dietro) / 2, hw: 1.275 };
+        for (let i = -1; i <= 1 && !visti.strisce.has(chiave); i++) for (let j = -1; j <= 1; j++) {
+          const k = (strisce.get((Math.floor(bus.x / 20) + i) + ',' + (Math.floor(bus.z / 20) + j)) || []).find((c) => sovrapposti(bus, c));
+          if (!k) continue;
+          // dove stanno le strisce rispetto alla palina, lungo la strada (negativo: dietro)
+          visti.strisce.add(chiave);
+          casi.fermate_sulle_strisce.push({ ...voce, strisce: tondo((k.x - st.cx) * st.dx + (k.z - st.cz) * st.dz), via: k.via, x: Math.round(k.x), z: Math.round(k.z) });
+          break;
+        }
       }
     }
   }

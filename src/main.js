@@ -7,7 +7,7 @@ import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/t
 import { BusSim } from './world/buses.js';
 import { Bus } from './bus/bus.js';
 import { Mission, Transfer, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
-import { pointAt, projectOnRoute, startGoal, planTransfer, findPath, stopPose } from './game/routes.js';
+import { pointAt, projectOnRoute, startGoal, planTransfer, findPath, stopPose, ARTICULATED_LINES } from './game/routes.js';
 import { turnoOf, impostaSostaTram } from './game/turni.js';
 import { DEPOT_NAME, depotGate, DepotGate } from './world/depot.js';
 import { HUD } from './game/hud.js';
@@ -345,8 +345,6 @@ canvas.addEventListener('dblclick', () => { if (running) resetLook(true); });
 const L24 = LINES.find((l) => l.id === '24') || LINES[0];
 // linee bus e tram nel menu
 const ALL_LINES = [...LINES, ...TRAM_LINES];
-// linee servite con l'autobus snodato da 18 m
-const ARTICULATED_LINES = new Set(['10']);
 // sensibilità dello sterzo da tastiera, salvata in questo browser: 0.7 fa girare il bus, per un colpo di tasto in città,
 // quanto lo sterzo di prima del 6 novembre; 1 è lo sterzo progressivo dal 6 all'11 novembre
 const STEER_KEY = 'padova-bus-sim-sterzo';

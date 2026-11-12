@@ -332,6 +332,11 @@ export function projectOnRoute(route, x, z, sHint, back = 80, fwd = 400, h) {
   return best;
 }
 
+// linee servite con l'autobus snodato da 18 m (SNODATI in scripts/build_map.py)
+export const ARTICULATED_LINES = new Set(['10']);
+// Bus fermo alla palina (stopPose): carrozzeria da 0,3 m prima della palina fino a 12,7 m dietro, lo snodato 18,5
+const BUS_BACK = 12.7, BUS_BACK_SNODATO = 18.5, BUS_FRONT = 0.3;
+
 // Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia.
 // Una palina per ogni verso in cui la fermata è servita: ai capolinea la stessa fermata GTFS vale per l'arrivo e per
 // la partenza, spesso su lati o tratti diversi. Prima le partenze (lì si sale), poi le fermate intermedie, poi gli arrivi.
@@ -344,6 +349,13 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
     const rank = k === 0 ? 0 : k === v.stops.length - 1 ? 2 : 1;
     (vars.get(st.id) || vars.set(st.id, []).get(st.id)).push({ v, rank });
   });
+  // strisce pedonali disegnate (e.cross, che City.buildRoads porta fuori dagli incroci prima di buildStops), in celle
+  // da 20 m: rettangoli di 3,4 m nel verso della strada, larghi quanto la carreggiata
+  const strisce = new Map();
+  for (const e of net.edges) for (const s of e.cross || []) {
+    const A = net.nodes[e.a], x = A.x + e.dx * s, z = A.z + e.dz * s, key = `${Math.floor(x / 20)},${Math.floor(z / 20)}`;
+    (strisce.get(key) || strisce.set(key, []).get(key)).push({ x, z, ux: e.dx, uz: e.dz, hw: e.width / 2 - 0.4 });
+  }
   const out = [];
   for (const st of net.stops) {
     if (!served.has(st.id)) continue;
@@ -382,6 +394,47 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
     return { ks, kl: Math.min(...pts.map(([o, q]) => q - ks * o)) };
   }
 
+  // lunghezza del tratto j della variante (dal nodo j al nodo j + 1)
+  function segLen(v, j) {
+    const A = net.nodes[v.nodes[j]], B = net.nodes[v.nodes[j + 1]];
+    return Math.hypot(B.x - A.x, B.z - A.z);
+  }
+
+  // Strisce pedonali sotto il bus fermo alla palina in (cx, cz), nel verso (dx, dz), sulla corsia (hw: mezza carreggiata):
+  // per ognuna dove comincia e dove finisce lungo il bus, in metri dalla palina (negativi dietro), margine compreso
+  function crossingsAt(q) {
+    const rx = -q.dz, rz = q.dx, lat = q.hw - 1.6, out = [], i0 = Math.floor(q.cx / 20), j0 = Math.floor(q.cz / 20);
+    for (let i = i0 - 2; i <= i0 + 2; i++) for (let j = j0 - 2; j <= j0 + 2; j++) for (const k of strisce.get(`${i},${j}`) || []) {
+      // mezza misura del rettangolo delle strisce lungo l'asse (ax, az)
+      const half = (ax, az) => 1.7 * Math.abs(k.ux * ax + k.uz * az) + k.hw * Math.abs(k.ux * az - k.uz * ax);
+      const o = (k.x - q.cx) * q.dx + (k.z - q.cz) * q.dz, w = (k.x - q.cx) * rx + (k.z - q.cz) * rz, h = half(q.dx, q.dz) + 0.5;
+      if (Math.abs(w - lat) < half(rx, rz) + 1.3) out.push({ o0: o - h, o1: o + h });
+    }
+    return out;
+  }
+
+  // Punto della variante a u metri dall'inizio del tratto i. Con far può passare sui tratti vicini, ma solo attraverso
+  // i nodi in mezzo a una via (due archi), non gli incroci
+  function pointOn(v, i, u, far) {
+    let j = i, a = u;
+    for (;;) {
+      const l = segLen(v, j);
+      if (a >= 0 && a <= l && l > 0.1) break;
+      if (!far) return null;
+      if (a < 0) {
+        if (j === 0 || net.nodes[v.nodes[j]].edges.length !== 2) return null;
+        j--; a += segLen(v, j);
+      } else {
+        if (j + 2 >= v.nodes.length || net.nodes[v.nodes[j + 1]].edges.length !== 2) return null;
+        a -= l; j++;
+      }
+    }
+    const e = net.edgeBetween(v.nodes[j], v.nodes[j + 1]);
+    if (!e || e.elev) return null;
+    const A = net.nodes[v.nodes[j]], B = net.nodes[v.nodes[j + 1]], l = segLen(v, j), dx = (B.x - A.x) / l, dz = (B.z - A.z) / l;
+    return { cx: A.x + dx * a, cz: A.z + dz * a, dx, dz, hw: e.width / 2 };
+  }
+
   function placeFor(st, v) {
     let best = null, bd = 60;
     for (let i = 0; i < v.nodes.length - 1; i++) {
@@ -390,24 +443,64 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       if (l2 < 0.01) continue;
       const t = Math.max(0, Math.min(1, ((st.x - A.x) * ex + (st.z - A.z) * ez) / l2));
       const cx = A.x + ex * t, cz = A.z + ez * t, d = Math.hypot(st.x - cx, st.z - cz);
-      if (d < bd) { bd = d; best = { cx, cz, l: Math.sqrt(l2), ex, ez, at: t * Math.sqrt(l2), e: net.edgeBetween(v.nodes[i], v.nodes[i + 1]) }; }
+      if (d < bd) { bd = d; best = { i, cx, cz, l: Math.sqrt(l2), ex, ez, at: t * Math.sqrt(l2), e: net.edgeBetween(v.nodes[i], v.nodes[i + 1]) }; }
     }
     if (!best || !best.e || best.e.elev) return;
-    const dx = best.ex / best.l, dz = best.ez / best.l, hw = best.e.width / 2;
-    const rx = -dz, rz = dx; // la palina sta a destra della direzione di marcia
+    const dx = best.ex / best.l, dz = best.ez / best.l, rx = -dz, rz = dx; // la palina sta a destra della direzione di marcia
     // una palina per tratto e verso: due fermate vicine sulla stessa corsia ne hanno una sola, ma le corsie parallele di
     // un capolinea (stazione: corsia nord e corsia sud a 10 m) hanno ognuna la sua. Il confronto è con il punto di
     // partenza delle altre, prima dello spostamento lungo la strada (che faceva sfuggire i doppioni: a Boschetti c'erano
     // 16 paline una sopra l'altra)
     if (out.some((o) => o.dx * dx + o.dz * dz > 0.5 && Math.abs((o.bx - best.cx) * dx + (o.bz - best.cz) * dz) < 12 && Math.abs((o.bx - best.cx) * rx + (o.bz - best.cz) * rz) < 3)) return;
+    // il bus fermo non sta sulle strisce pedonali (a Bembo Rotonda via Ponchia la palina era 1,7 m dopo, all'uscita della
+    // rotonda): se le copre la palina va oltre, se le strisce sono dietro di lei, o prima, se sono davanti, del minimo che
+    // basta, fino a 18 m (alignStops la cerca entro 20 m dalla fermata). Se lì non c'è posto, come prima ogni 4 m, prima
+    // dove il bus non copre strisce
+    const back = [...served.get(st.id)].some((id) => ARTICULATED_LINES.has(id)) ? BUS_BACK_SNODATO : BUS_BACK;
+    // strisce sotto il bus con la palina a u metri dall'inizio del tratto; null se lì la palina non può stare
+    const sotto = (u) => {
+      const q = pointOn(v, best.i, u, true);
+      return q && crossingsAt(q).filter((k) => k.o1 > -back && k.o0 < -BUS_FRONT);
+    };
+    // spostamento minimo da sh perché il bus resti dopo (verso 1) o prima (-1) delle strisce che copre
+    const libero = (sh, verso) => {
+      let u = best.at + sh;
+      for (let n = 0; n < 6; n++) {
+        const hit = sotto(u);
+        if (!hit) return null;
+        if (!hit.length) return u - best.at;
+        u += verso > 0 ? Math.max(...hit.map((k) => k.o1 + back)) + 0.05 : Math.min(...hit.map((k) => k.o0 + BUS_FRONT)) - 0.05;
+      }
+      return null;
+    };
+    // da sh, gli spostamenti che liberano le strisce: prima dal lato dove sta già la palina
+    const liberi = (sh) => {
+      const hit = sotto(best.at + sh);
+      if (!hit || !hit.length) return [];
+      const versi = hit.some((k) => k.o0 + k.o1 <= 0) ? [1, -1] : [-1, 1];
+      return versi.map((verso) => libero(sh, verso)).filter((x) => x != null && Math.abs(x) <= 18).map((x) => ({ sh: x, far: true }));
+    };
+    // gli spostamenti in ordine, misurati solo quando servono: quasi sempre la palina resta dov'è
+    function* shifts() {
+      yield* liberi(0);
+      const coperti = [];
+      for (const sh of [0, -4, 4, -8, 8, -12, 12, -16]) {
+        const hit = sotto(best.at + sh);
+        if (hit && !hit.length) yield { sh };
+        else coperti.push(sh);
+      }
+      for (const sh of coperti) yield* liberi(sh);
+      for (const sh of coperti) yield { sh };
+    }
     // palina e pensilina non devono cadere su un'altra carreggiata (doppie carreggiate, incroci):
     // se il punto esatto è occupato si sposta la fermata di qualche metro lungo la strada
     let spot = null;
     // prima al cordolo vero, poi (se lì non c'è posto) alla distanza fissa dall'asse come prima
-    for (const useKerb of kerb ? [true, false] : [false]) for (const sh of [0, -4, 4, -8, 8, -12, 12, -16]) {
+    for (const useKerb of kerb ? [true, false] : [false]) for (const { sh, far } of shifts()) {
       if (spot) break;
-      if (best.at + sh < 0 || best.at + sh > best.l) continue;
-      const cx = best.cx + dx * sh, cz = best.cz + dz * sh;
+      const q = pointOn(v, best.i, best.at + sh, far);
+      if (!q) continue;
+      const { cx, cz, dx, dz, hw } = q, rx = -dz, rz = dx;
       // palina 0,7 m oltre il cordolo vero, 0,5 m sulle banchine strette (la carreggiata misurata può essere più larga
       // o più stretta dell'arco)
       const k = useKerb ? kerb(cx, cz, rx, rz, hw) : null;
@@ -418,16 +511,22 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
         for (const off of atKerb ? [k + 0.7, k + 0.5] : [hw + 1.6]) {
           const px = cx + rx * off, pz = cz + rz * off;
           if (clear(px, pz) < (atKerb ? 0.2 : 0.6) || (roof && clear(px + rx * 1.6 - dx * 3, pz + rz * 1.6 - dz * 3) < (atKerb ? 0.2 : 0.6))) continue;
-          spot = { cx, cz, px, pz, kerb: atKerb ? k : hw, roof, ...(atKerb ? busLine(cx, cz, k, dx, dz, hw) : {}) };
+          spot = { cx, cz, px, pz, dx, dz, rx, rz, hw, kerb: atKerb ? k : hw, roof, ...(atKerb ? busLine(cx, cz, k, dx, dz, hw) : {}) };
           break;
         }
         if (spot) break;
       }
     }
     if (!spot) return;
+    // segnaletica gialla (City.buildStops, da 16 m dietro la palina a 6 m avanti) fino alle strisce vicine, non sopra
+    let zb = -16, za = 6;
+    for (const k of crossingsAt(spot)) {
+      if (k.o0 + k.o1 < 0 && k.o1 > -16 && k.o1 <= -11) zb = Math.max(zb, k.o1);
+      if (k.o0 + k.o1 >= 0 && k.o0 < 6) za = Math.min(za, k.o0);
+    }
     out.push({
       id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, bx: best.cx, bz: best.cz, dx, dz, rx, rz, hw, kerb: spot.kerb, kl: spot.kl, ks: spot.ks, shelter: spot.roof ? st.shelter : 0, bench: spot.roof ? st.bench : 0,
+      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, bx: best.cx, bz: best.cz, dx: spot.dx, dz: spot.dz, rx: spot.rx, rz: spot.rz, hw: spot.hw, kerb: spot.kerb, kl: spot.kl, ks: spot.ks, shelter: spot.roof ? st.shelter : 0, bench: spot.roof ? st.bench : 0, zb, za,
     });
   }
 }
