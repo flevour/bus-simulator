@@ -379,7 +379,7 @@ aiuto in `index.html`, specifica in `docs/prompt-tram.md` (sezione "Cabina").
 | Gong | H, rintocchi finché è premuto | Va bene così |
 | Clacson | Manca (`audio.js`: "il tram non ha il clacson") | Aggiungerlo, per esempio Shift+H |
 | Veglia | Manca | Opzione "guida realistica", spenta di base: tenere premuto o battere un tasto (K, libero sul tram); 12 s, allarme, 2 s, freno d'emergenza con penalità |
-| Fungo rosso | `Tram.update` legge `input.emergency` (2,6 m/s²) ma nessun tasto lo imposta | Collegarlo a un tasto dedicato (per esempio Backspace) e al fungo cliccabile; si riarma solo da fermo; penalità se inutile, come già previsto in `docs/prompt-tram.md` |
+| Fungo rosso | Backspace o clic sul fungo, sulla plancia blu a sinistra dello schermo LCD (#62): toglie la trazione e frena a 2,6 m/s² fino all'arresto, si riarma solo da fermo ripremendolo; in servizio, in marcia senza un ostacolo davanti, −50 punti | Fatto |
 | Porte | F apre e chiude | Tenere F per il lato della banchina. Il lato sinistro è un comando a parte: sul tram Q/E potrebbero aprire a sinistra e a destra |
 | Frecce | Q/E/G valgono anche per il tram | Nessuna fonte mostra frecce di direzione sul Translohr (la tavoletta del T5 non ne ha). Le quattro frecce sì, nella consolle del T5 (inferenza): tenere G, usare Q/E per le porte |
 | Pantografo | O | Va bene. Idea: ogni tanto un allarme del contatto con la rotaia di guida che frena e abbassa il pantografo, da rialzare con O |

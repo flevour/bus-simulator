@@ -629,6 +629,26 @@ Fatto, con quello che serve sapere prima di toccare questi file:
 Verifiche: regola 3, guida con il pilota a ogni capolinea dei tram e nei depositi, foto dalla cabina agli scambi, tram
 automatici per 40 minuti senza blocchi.
 
+### Tram: freno d'emergenza (#62, 12 novembre)
+
+Backspace o clic sul fungo rosso della cabina. Da sapere prima di toccare la cabina o i comandi del tram:
+
+- stato nel `Tram` (`src/tram/tram.js`): `emergency`, che in `update` toglie la trazione e frena a 2,6 m/s² (prima
+  `update` leggeva `input.emergency`, che nessuno impostava); `pressEmergency` lo inserisce e lo riarma solo a tram
+  fermo; `obstacleAhead(world, dist)` cerca auto, bus e tram nella sagoma davanti al muso (`world.carsNear` e
+  `projectNear` sul percorso) e la fine del binario; `mushroomHit(ray)` per il clic. In `main.js` `tramEmergency`
+  (penalità di 50 punti in servizio, sopra 1,5 m/s, se non c'è un ostacolo entro lo spazio di una frenata a 1,3 m/s²
+  più un secondo e 10 m) e `overMushroom` (clic e cursore a manina sul canvas, solo nella vista dalla cabina);
+- il fungo (`fungo` del modulo di `buildModule`, con `userData.cap` che si abbassa quando è premuto) sta sulla plancia
+  blu a sinistra dell'LCD, dove HUD e specchietto destro non lo coprono a 1280×720. Al posto di prima, a destra, era
+  sotto lo specchietto;
+- trappola: `renderer.render` in `main.js` sposta la telecamera della quota del terreno, il frustum culling di three.js
+  guarda le posizioni senza, quindi gli oggetti piccoli a un metro dagli occhi spariscono dove la quota non è zero (alla
+  Guizza è -1,1 m). Il fungo ha `frustumCulled = false`; lo schermo LCD della cabina (`dash`) oggi non si vede per lo
+  stesso motivo (#81);
+- fuori dall'area: in `hud.js` e `index.html` l'icona 🛑 (`icon-emerg`, solo col tram) e la riga dell'aiuto. Prove in
+  `tests/freno-emergenza.spec.js`.
+
 ### Tram: regola dei binari (#68, 12 novembre)
 
 La regola per la stesura dei binari, con i numeri e le fonti (soprattutto il progetto del SIR3 di Italferr, 2020), è in

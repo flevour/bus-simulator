@@ -79,7 +79,7 @@ Stessa interfaccia del `Bus`, così missione, HUD, telecamere, audio e salvatagg
 * **Fisica**:
   * massa circa 30–40 t a vuoto più i passeggeri;
   * accelerazione di servizio circa 1,1 m/s²;
-  * frenata di servizio circa 1,3 m/s², emergenza circa 2,5 m/s² (Spazio);
+  * frenata di servizio circa 1,3 m/s², emergenza circa 2,5 m/s² (Backspace o il fungo rosso; Spazio è il freno di stazionamento);
   * velocità massima 70 km/h, limiti per tratta (centro storico e curve strette più bassi);
   * motore elettrico: suono dell'inverter (riusa quello del bus elettrico, più grave), compressore, gong.
 * **Comandi**:

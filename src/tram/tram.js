@@ -850,7 +850,7 @@ export function tramMaterials() {
     silver: lam(0xc5cbd3, { side: THREE.DoubleSide }), glass: lam(0x17232e), skirt: lam(0x17191b),
     bellows: lam(0x2b2e32), door: lam(0x24384a), head: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xfff4d6, emissiveIntensity: 0 }),
     tail: new THREE.MeshLambertMaterial({ color: 0x550000, emissive: 0xff1a1a, emissiveIntensity: 0 }),
-    console: lam(0xd9dcde), consoleBlue: lam(0x24476f), seat: lam(0x3a5e8c), floor: lam(0x5a5f63),
+    console: lam(0xd9dcde), consoleBlue: lam(0x24476f), seat: lam(0x3a5e8c), floor: lam(0x5a5f63), fungo: lam(0xd0101e),
     cabin: new THREE.MeshLambertMaterial({ color: 0xf4f1e6, emissive: 0xfff6dc, emissiveIntensity: 0.2 }),
   };
   return MATS;
@@ -972,7 +972,7 @@ function buildModule(kind, len, opts) {
     }
     doors.push({ z: dz, leaves, kind });
   }
-  let eye = null, dash = null, led = null, headMat = null, tailMat = null;
+  let eye = null, dash = null, led = null, headMat = null, tailMat = null, fungo = null;
   const wipers = [];
   if (cab) {
     // fanali bassi sul muso, display di linea sopra il parabrezza (inclinato come la testata)
@@ -1004,7 +1004,19 @@ function buildModule(kind, len, opts) {
     desk.position.set(0.12, 1.42, f - 1.05); desk.rotation.x = 0.38; inner.add(desk);
     box(1.15, 0.5, 0.4, M.console, 0.12, 1.12, f - 1.0, inner);
     box(0.5, 0.5, 0.42, M.consoleBlue, -0.72, 1.3, f - 0.85, inner);
-    box(0.09, 0.08, 0.09, M.tail, -0.9, 1.6, f - 0.95, inner);
+    // fungo del freno d'emergenza sul lato della plancia verso il guidatore, dove il cruscotto dell'HUD e lo specchietto
+    // non lo coprono: si clicca (Tram.mushroomHit) e premuto resta giù finché non si riarma
+    fungo = new THREE.Group();
+    fungo.position.set(-0.57, 1.55, f - 0.8);
+    box(0.06, 0.05, 0.06, M.skirt, 0, 0.025, 0, fungo);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2), M.fungo);
+    cap.scale.y = 0.55; cap.position.y = 0.05;
+    fungo.add(cap);
+    fungo.userData.cap = cap;
+    // la telecamera si disegna spostata della quota del terreno (renderer.render in main.js) e il frustum culling guarda
+    // le posizioni senza: un oggetto così piccolo a un metro dagli occhi verrebbe scartato
+    fungo.traverse((o) => { o.frustumCulled = false; });
+    inner.add(fungo);
     dash = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), new THREE.MeshBasicMaterial({ map: opts.dashTex }));
     dash.position.set(-0.7, 1.58, f - 1.07); dash.rotation.y = Math.PI; dash.rotation.x = 0.45; inner.add(dash);
     // cielo della cabina visto da dentro, chiaro come quello dei passeggeri (si ferma prima del parabrezza inclinato)
@@ -1030,7 +1042,7 @@ function buildModule(kind, len, opts) {
     if (doorZ.some((dz) => Math.abs(z - dz) < 1.2)) continue;
     for (const sx of [-0.62, 0.62]) box(0.48, 0.45, 0.45, M.seat, sx, 0.82, z, inner);
   }
-  return { group, inner, len, kind, doors, eye, dash, led, panto, headMat, tailMat, wipers };
+  return { group, inner, len, kind, doors, eye, dash, led, panto, headMat, tailMat, wipers, fungo };
 }
 
 // altezza del pantografo: 0 abbassato, 1 contro il filo di contatto
@@ -1066,6 +1078,8 @@ export class Tram {
     this.sA = 0;
     this.v = 0; this.dir = 1; this.gear = 1; this.rpm = 0; this.powerKw = 0;
     this.throttle = 0; this.brake = 0; this.parking = true;
+    // freno d'emergenza (fungo rosso, pressEmergency): inserito toglie la trazione e frena a 2,6 m/s²
+    this.emergency = false;
     // limitatore (km/h): 70 in servizio; fuori servizio (giro libero, esplorazione) lo alza main.js
     this.vmaxService = 70; this.vmax = this.vmaxService;
     this.aLong = 0; this.aLat = 0; this.yawRate = 0; this.odometer = 0;
@@ -1163,6 +1177,33 @@ export class Tram {
     return Math.max(15, Math.min(70, Math.floor(v / 5) * 5));
   }
   togglePantograph() { this.pantoUp = !this.pantoUp; return this.pantoUp; }
+  // fungo rosso: inserisce il freno d'emergenza, che resta inserito fino all'arresto e si riarma solo da fermo,
+  // premendolo di nuovo. Dice cosa è successo: 'inserito', 'riarmato' o 'in marcia' (resta inserito)
+  pressEmergency() {
+    if (!this.emergency) { this.emergency = true; return 'inserito'; }
+    if (Math.abs(this.v) > 0.05) return 'in marcia';
+    this.emergency = false;
+    return 'riarmato';
+  }
+  // il raggio (dal punto cliccato) passa sul fungo rosso della cabina attiva, con qualche centimetro di margine
+  mushroomHit(ray) {
+    const f = this.activeCab.fungo;
+    f.updateWorldMatrix(true, false);
+    return ray.distanceSqToPoint(f.localToWorld(new THREE.Vector3(0, 0.04, 0))) < 0.075 * 0.075;
+  }
+  // cosa c'è sul binario davanti al muso entro dist metri, o null: un veicolo nella sagoma del tram (auto, autobus, tram)
+  // o la fine del binario. Per il freno d'emergenza, che senza un ostacolo costa punti
+  obstacleAhead(world, dist) {
+    const sf = this.sFront, end = this.facing > 0 ? this.path.len - sf : sf;
+    if (end < dist && (!this.yard || this.yard.done)) return 'la fine del binario';
+    const fr = this.at(sf);
+    for (const c of world.carsNear ? world.carsNear(fr.x, fr.z, dist) : []) {
+      const pr = this.path.projectNear(c.x, c.z, TRAM.width / 2 + 1.1);
+      const ahead = pr ? (pr.s - sf) * this.facing : -1;
+      if (ahead > -1 && ahead < dist) return c.isTram ? 'un tram' : c.isBus ? 'un autobus' : 'un\'auto';
+    }
+    return null;
+  }
   // percorso nuovo (la corsa dopo sullo stesso binario): stesso verso di guida e stessa cabina. xover: lo scambio del
   // capolinea da cui il tram parte (TramTrack.terminal), che resta finché non si cambia di nuovo percorso
   setPath(path, dir, offset = 0, xover = null) {
@@ -1449,7 +1490,7 @@ export class Tram {
     this.wired = wire && this.pantoPos > 0.97;
     // trazione: 48 kN fino a ~36 km/h, poi potenza costante (480 kW dal filo, 160 kW a batteria); niente trazione a porte aperte
     const Pmax = this.wired ? 480000 : this.battery > 0.03 ? 160000 : 0;
-    let F = doorHold || this.derailT > 0 ? 0 : this.throttle * Math.min(48000, Pmax / Math.max(1, sp));
+    let F = doorHold || this.derailT > 0 || this.emergency ? 0 : this.throttle * Math.min(48000, Pmax / Math.max(1, sp));
     if (sp * 3.6 > this.vmax) F = 0;
     const res = 0.004 * m * 9.81 + 0.5 * 1.2 * 2.6 * 3.1 * sp * sp;
     // frenata di servizio: ~1,3 m/s² con S, ~2,2 m/s² con Shift+S; col manipolatore in neutro un leggero freno
@@ -1457,7 +1498,7 @@ export class Tram {
     let dec = this.brake * 2.2;
     if (this.throttle < 0.05 && this.brake < 0.05) dec = Math.max(dec, 0.3 * Math.min(1, sp / 3));
     if (this.parking || doorHold) dec = Math.max(dec, 2.2);
-    if (input.emergency) dec = 2.6;
+    if (this.emergency) dec = 2.6;
     const vPrev = this.v;
     let a = (F - res) / m;
     this.v += a * dt;
@@ -1525,7 +1566,8 @@ export class Tram {
     for (const m of [this.modules[0], this.modules[this.nMod - 1]]) {
       const front = m === this.activeCab;
       m.headMat.emissiveIntensity = front ? (this.lights ? 2.4 : 0.2) : 0;
-      m.tailMat.emissiveIntensity = front ? 0 : this.brake > 0.05 || doorHold ? 2.4 : this.lights ? 0.9 : 0.05;
+      m.tailMat.emissiveIntensity = front ? 0 : this.brake > 0.05 || doorHold || this.emergency ? 2.4 : this.lights ? 0.9 : 0.05;
+      m.fungo.userData.cap.position.y = front && this.emergency ? 0.032 : 0.05;
     }
     this.spot.intensity = this.lights ? 120 : 0;
     // tergicristallo della cabina attiva (quello dell'altra resta a riposo) e gocce sul parabrezza
@@ -1572,6 +1614,7 @@ export class Tram {
     x.fillText(this.throttle > 0.05 ? `T ${Math.round(this.throttle * 100)}%` : this.brake > 0.05 ? `F ${Math.round(this.brake * 100)}%` : 'N', 128, 150);
     if (state.doors) { x.fillStyle = '#c8102e'; x.fillText('PORTE', 40, 20); }
     if (this.parking) { x.fillStyle = '#c8102e'; x.fillText('P', 128, 20); }
+    if (this.emergency) { x.fillStyle = '#c8102e'; x.fillText('EMERG', 210, 20); }
     this.dashTex.needsUpdate = true;
   }
   setPassengerVisuals() {}

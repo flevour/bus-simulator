@@ -122,6 +122,8 @@ export class HUD {
     $('icon-lights').classList.toggle('on', bus.lights);
     $('icon-park').classList.toggle('on', bus.parking);
     $('icon-kneel').classList.toggle('on', bus.kneelTarget > 0);
+    $('icon-emerg').style.display = bus.isTram ? '' : 'none';
+    $('icon-emerg').classList.toggle('on', !!bus.emergency);
     $('icon-stopbrake').classList.toggle('on', bus.doorsAnyOpen);
     this.drawCluster(bus);
     this.drawMinimap(bus, m, ctx);

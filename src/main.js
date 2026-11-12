@@ -239,7 +239,7 @@ const input = { throttle: false, brake: false, left: false, right: false, shift:
 window.addEventListener('keydown', (e) => {
   // pannelli Novità e Richieste: i tasti vanno al modulo, Esc chiude
   if (news && news.open) { if (e.code === 'Escape') news.close(); return; }
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'Backspace'].includes(e.code)) e.preventDefault();
   if (!e.repeat) onKeyPress(e.code);
   keys.add(e.code);
   if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) pad.keyboardSteer();
@@ -294,10 +294,23 @@ function resetLook(toast) {
   mouseLook.yaw = 0; mouseLook.pitch = 0;
   if (toast) hud.toast('Sguardo in avanti', 'info');
 }
+// fungo rosso del tram: nella vista dalla cabina il clic fa il freno d'emergenza (come Backspace), col cursore a manina
+const clickRay = new THREE.Raycaster(), clickPt = new THREE.Vector2();
+function overMushroom(e) {
+  if (!bus || !bus.isTram || camMode !== 0) return false;
+  const r = canvas.getBoundingClientRect();
+  clickPt.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  clickRay.setFromCamera(clickPt, camera);
+  return bus.mushroomHit(clickRay.ray);
+}
+canvas.addEventListener('pointermove', (e) => {
+  if (!mouseLook.drag && e.pointerType === 'mouse') canvas.style.cursor = running && !paused && overMushroom(e) ? 'pointer' : '';
+});
 // (eventi pointer: funziona col mouse e con un dito sullo schermo; doppio tocco = sguardo in avanti)
 let lastTap = 0;
 canvas.addEventListener('pointerdown', (e) => {
   if (!running || paused || e.button !== 0 || mouseLook.drag) return;
+  if (overMushroom(e)) { onKeyPress('Backspace'); return; }
   if (e.pointerType !== 'mouse') {
     const now = performance.now();
     if (now - lastTap < 320) { resetLook(true); lastTap = 0; return; }
@@ -385,6 +398,9 @@ function onKeyPress(code) {
     case 'KeyN':
       if (bus.isTram) toggleTramSwitch();
       break;
+    case 'Backspace':
+      if (bus.isTram) tramEmergency();
+      break;
     case 'KeyK':
       if (bus.isTram) break;
       if (Math.abs(bus.v) < 0.3) { bus.kneelTarget = bus.kneelTarget ? 0 : 1; audio.noiseBurst({ dur: 1.4, freq: 2000, gain: 0.25 }); }
@@ -397,6 +413,20 @@ function onKeyPress(code) {
     case 'KeyY': greet.press(); break;
     case 'KeyI': showHelp = !showHelp; $('help').style.display = showHelp ? 'block' : 'none'; break;
   }
+}
+
+// Tram: freno d'emergenza (Backspace o clic sul fungo rosso della cabina). Resta inserito fino all'arresto e si riarma
+// solo da fermo, ripremendolo. In servizio, tirato in marcia senza un ostacolo davanti (Tram.obstacleAhead: nello spazio
+// di una frenata di servizio a 1,3 m/s², più un secondo e 10 m) costa 50 punti
+function tramEmergency() {
+  const v = Math.abs(bus.v), r = bus.pressEmergency();
+  if (r === 'in marcia') { hud.toast('Il freno d\'emergenza si riarma solo a tram fermo', 'bad'); return; }
+  if (r === 'riarmato') { audio.tick(true); hud.toast('Freno d\'emergenza riarmato: si può ripartire', 'info'); return; }
+  audio.noiseBurst({ dur: 1.2, freq: 1200, gain: 0.35 });
+  if (v < 1.5) { hud.toast('🛑 Freno d\'emergenza inserito: per ripartire riarmalo (Backspace)', 'info'); return; }
+  const why = bus.obstacleAhead(world, v * v / (2 * 1.3) + v + 10);
+  if (why || mission.free) hud.toast(`🛑 Frenata d'emergenza${why ? `: davanti c'è ${why}` : ''}`, 'info');
+  else mission.addScore(-50, '🛑 Frenata d\'emergenza senza un ostacolo davanti');
 }
 
 // Tram: cambio cabina (B), quando si vuole, da fermo con le porte chiuse. Il tram resta dov'è e si guida dall'altra
@@ -1314,7 +1344,7 @@ function startMission(resume = null) {
     hud.toast(`Linea ${L.id} per ${destName} – partenza ${fmtHM(settings.departure)}`, 'info');
     setTimeout(() => running && hud.toast('Apri le porte (F) per far salire i passeggeri', 'info'), 1800);
   }
-  if (!resume && bus.isTram) setTimeout(() => running && hud.toast('🚋 Tram: W/S manipolatore · F porte · H campanello · O pantografo · B cambio cabina · N scambio', 'info'), 3200);
+  if (!resume && bus.isTram) setTimeout(() => running && hud.toast('🚋 Tram: W/S manipolatore · F porte · H campanello · O pantografo · B cambio cabina · N scambio · Backspace freno d\'emergenza', 'info'), 3200);
   if (!resume) setTimeout(() => running && hud.toast('Premi I per l\'elenco dei comandi', 'info'), 4500);
   saveGame();
 }
@@ -1815,6 +1845,7 @@ function step(dt) {
   const hit = bus.update(dt, { ...input, wipers: wx.rain > 0.08, rain: wx.rain }, world);
   // il tram non deve finire dentro l'auto davanti: dopo un urto resta fermo
   if (hit && bus.isTram) bus.parking = bus.parking || hit.impact > 1.2;
+  if (bus.emergency && input.throttle && Math.abs(bus.v) < 0.05 && mission.cooldown('emerg', 8)) hud.toast('🛑 Freno d\'emergenza inserito: riarmalo (Backspace o clic sul fungo rosso) per ripartire', 'info');
   if (hit && hit.impact > 1.2 && !bus._crashCd) {
     audio.crash(hit.impact / 4);
     mission.onCrash(hit);
