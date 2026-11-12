@@ -8,6 +8,7 @@ import { AREA_SIZE, AREA_KEYS, areaData, requestArea, dropArea, areaKeysNear, lo
 import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, TramNet, TramYard, tramLength } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
 import { applyTerrain } from './terrain.js';
+import { edificioSorpresa } from './sorpresa.js';
 
 export const Y_ROAD = 0.14;
 export const TRAM_HW = 3.4; // metà larghezza della sede del tram (due corsie rosse e rotaia centrale)
@@ -2293,9 +2294,11 @@ export class City {
     if (p) this.ensureTiles(p.x, p.z, 700);
   }
 
-  // edifici nei riquadri da 400 m (per baricentro dei vertici, come le aree di scripts/aree_mappa.py)
+  // edifici nei riquadri da 400 m (per baricentro dei vertici, come le aree di scripts/aree_mappa.py); l'edificio della
+  // sorpresa (src/world/sorpresa.js) in un riquadro suo, che si può nascondere da solo, e senza muri tra gli ostacoli
   addBuildings(list, area) {
     const T = this.tileSize;
+    const sorpresa = edificioSorpresa(list);
     for (const b of list) {
       // accanto ai binari dei depositi: rimessa, edificio di servizio o, sopra i binari, niente
       b.deposito = this.depotRole(b);
@@ -2304,7 +2307,8 @@ export class City {
       let cx = 0, cz = 0;
       for (const p of b.pts) { cx += p.x; cz += p.z; }
       b.cx = cx / b.pts.length; b.cz = cz / b.pts.length;
-      const ix = Math.floor(b.cx / T), iz = Math.floor(b.cz / T), key = ix + ',' + iz;
+      b.sorpresa = b === sorpresa;
+      const ix = Math.floor(b.cx / T), iz = Math.floor(b.cz / T), key = b.sorpresa ? 'sorpresa' : ix + ',' + iz;
       let t = this.tiles.get(key);
       if (!t) {
         this.tiles.set(key, (t = { key, cx: (ix + 0.5) * T, cz: (iz + 0.5) * T, list: [], built: false, meshes: [], obs: [] }));
@@ -2516,7 +2520,7 @@ export class City {
           const cr = (v[1][2] - v[0][2]) * 0 + ((v[1][0] - v[0][0]) * nz - (v[1][2] - v[0][2]) * nx);
           const order = cr > 0 ? [0, 1, 2, 3, 4, 5] : [0, 2, 1, 3, 5, 4];
           for (const k of order) { W.pos.push(...v[k]); W.nrm.push(nx, 0, nz); W.col.push(col.r, col.g, col.b); W.seed.push(seed); W.h.push(h); }
-          tile.obs.push(this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building'));
+          if (!b.sorpresa) tile.obs.push(this.addObstacle((p.x + q.x) / 2, (p.z + q.z) / 2, l / 2, 0.3, Math.atan2(-ez, ex), 'building'));
         }
       }
       // tetto a padiglione sugli edifici quasi rettangolari senza cortile

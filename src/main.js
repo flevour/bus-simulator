@@ -20,6 +20,7 @@ import { GamepadControls } from './game/gamepad.js';
 import { liveryPreviews, disposeTree } from './game/liveryPreview.js';
 import { Terrain } from './world/terrain.js';
 import { Chargers, CHARGE_KW } from './world/charger.js';
+import { Sorpresa } from './world/sorpresa.js';
 
 const $ = (id) => document.getElementById(id);
 const capture = (event, properties) => {
@@ -110,6 +111,7 @@ let net, city, lights, trams, tramSignals, buses, greet, depot, depotMesh, charg
 let terrain = new Terrain(null);
 const hud = new HUD();
 const audio = new Audio();
+const sorpresa = new Sorpresa(scene);
 
 function buildWorld() {
   net = buildNetwork();
@@ -1895,6 +1897,7 @@ function step(dt) {
   if (bus.isTram && !mission.free) for (const x of tramSignals.violations) if (mission.cooldown('tsig', 5)) mission.addScore(-60, x.ap ? '🚦 Passato col rosso!' : '🚦 Passato col segnale del tram a via impedita (barra orizzontale)!');
   if (!bus.isTram && !mission.free) for (const x of tramSignals.giveWay) if (mission.cooldown('tprec', 5)) mission.addScore(-60, '🚋 Non hai dato la precedenza al tram!');
   city.streamTiles(bus.x, bus.z, 5);
+  sorpresa.update(bus, city);
   traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals, trams, bigs: buses.buses });
   buses.update(dt, { player: bus, traffic, trams, lights, clock: mission.clock });
   // colleghi da salutare: bus e tram automatici vicini

@@ -189,6 +189,12 @@ l'asfalto vicino alla sede del tram).
   dal Capolinea Ponte Brenta, dove il rimorchio, girato col cordolo, tocca le strisce di Via San Marco e `crossingsAt`,
   che non conosce ancora la pendenza del cordolo, non le vede.
 
+#91, sorpresa alla DonQ (12 novembre), in `src/world/sorpresa.js`. In `City.addBuildings` l'edificio che contiene il
+punto della foto (o il più vicino entro 15 m, `edificioSorpresa`) va in un riquadro suo, con chiave `'sorpresa'`, e
+`buildTile` non mette i suoi muri tra gli ostacoli (`b.sorpresa`). `Sorpresa.update`, in `step` di `main.js` dopo
+`streamTiles`, nasconde le mesh di quel riquadro quando il posto di guida è dentro: chi cambia come `streamTiles`
+rimette visibili i riquadri o come si raggruppano gli edifici lo tenga presente. Prova in `tests/sorpresa.spec.js`.
+
 ### Linee (corsia `capolinea`)
 
 Issue: `area:linee` (madre: #15 linee dei bus intere fino ai capolinea del GTFS).
