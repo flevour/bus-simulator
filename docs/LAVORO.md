@@ -25,7 +25,7 @@ divise per area.
    ```
    `npm test` compila il gioco senza PostHog in una cartella temporanea, lo serve su una porta libera e lancia le
    prove di Playwright in `tests/`. Sulla stessa macchina girano al più due serie di prove alla volta, anche lanciate
-   con `-g` (`tests/setup.js`, posti in `/tmp/bus-simulator-prove`): le altre aspettano il loro turno, e una serie
+   con `-g` (`tests/posto.js`, posti in `/tmp/bus-simulator-prove`): le altre aspettano il loro turno, e una serie
    interrotta libera il posto da sola. La prima volta (o quando il rebase porta una versione nuova di Playwright):
    `npx playwright install --only-shell chromium`. Chi rigenera la mappa lancia anche
    `python3 scripts/verifica_mappa.py --elenco` (venv con `shapely`). Il rapporto della mappa (`tests/mappa.spec.js` e
@@ -60,6 +60,9 @@ divise per area.
     di Playwright MCP e i browser visibili non si usano per il gioco. Il gioco tace da solo nei browser guidati da un
     programma (`navigator.webdriver`) e con `?muto` nell'indirizzo: suoni e annunci a voce, che su macOS passano dalla
     sintesi vocale del sistema anche con `--mute-audio`, darebbero fastidio a chi lavora al computer.
+    Anche gli script propri che aprono il gioco prendono uno dei due posti della macchina, come le serie di prove:
+    `const libera = await prendiPosto()` da `tests/posto.js` del worktree (import per percorso assoluto), poi
+    `libera()` alla fine; al più tre browser per posto, niente corse in parallelo oltre quelle.
 
 ## File condivisi
 
