@@ -1462,6 +1462,17 @@ export class TramSim {
     const n = cd > dt * 1.5 && cd < 60 ? Math.min(15, Math.round(cd / dt)) : 1;
     for (let i = 0; i < n; i++) this.move(dt, others, clock - (n - 1 - i) * dt);
   }
+  // il tram fermo col muso a s (di solito dov'è; arrivando in fermata, la fine della banchina) tiene chiamato un incrocio
+  // con la strada (ci sta sopra col muso o con la cassa) o la lanterna appena passata, con le condizioni di
+  // TramSignals.update per chi è in sosta: lì non si aspetta l'orario. Ci sono 25 fermate così, quasi tutte del SIR2:
+  // aspettando l'anticipo il tram teneva il semaforo in fase tram, o fermava le auto, per più di un minuto
+  onCrossing(tr, s = tr.s) {
+    const S = this.signals;
+    if (!S) return false;
+    for (const x of S.list) for (const r of x.refs) if (r.track === tr.track && r.dir === tr.dir && r.sT - s > -(tr.L + x.halfT) && r.sT - s <= x.halfT) return true;
+    for (const l of S.lanterns || []) if (l.track === tr.track && l.dir === tr.dir && l.sT - s > -8 && l.sT - s <= 0) return true;
+    return false;
+  }
   move(dt, others, clock) {
     const ended = [], turned = [], gone = [];
     for (const tr of this.trams) {
@@ -1481,10 +1492,9 @@ export class TramSim {
         } else vt = 0;
       } else if (tr.run) {
         const d = tr.run.ss[tr.k] - tr.s;
-        // in linea alla velocità che porta alla prossima fermata in orario (tra 11 e 30 km/h), arrivando 15 s prima
-        // della partenza; in ritardo si va al massimo
-        const left = tr.run.times[tr.k] - 15 - clock;
-        if (left > 0) vt = Math.max(3, Math.min(8.5, d / left));
+        // in linea alla velocità normale anche in anticipo sull'orario: l'anticipo si recupera in fermata, come per i bus
+        // automatici. Prima si rallentava fino a 3 m/s per arrivare 15 s prima della partenza: a Largo Europa la fase tram
+        // del semaforo durava 12-32 s invece di 8-13, e chi aspettava col rosso vedeva passare il tram a passo d'uomo
         vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d)) + 0.3);
         // sullo scambio del capolinea a 15 km/h; arrivando, se un altro tram fa la manovra ci si ferma prima della
         // comunicazione
@@ -1494,8 +1504,8 @@ export class TramSim {
         if (d < 0.8) {
           if (tr.k >= tr.run.ss.length - 1) ended.push(tr);
           // in anticipo sull'orario si aspetta la partenza (al massimo 2 minuti, alla prima fermata fino all'ora); in
-          // fermata comunque almeno 15 s
-          else { const early = tr.run.times[tr.k] - clock; tr.wait = Math.max(15, tr.k ? Math.min(120, early) : early); tr.k++; }
+          // fermata comunque almeno 15 s. Dove il tram fermo sta sopra un incrocio no: l'anticipo si recupera dopo
+          else { const early = tr.run.times[tr.k] - clock; tr.wait = Math.max(15, !tr.k ? early : this.onCrossing(tr, tr.run.ss[tr.k]) ? 0 : Math.min(120, early)); tr.k++; }
         }
       } else {
         const stopAt = (x) => x + 12;

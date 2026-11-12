@@ -181,8 +181,12 @@ test('scambio del capolinea girato in Esplorazione', async ({ pagina, gioco }) =
 // tram e nessuno resta fermo fuori dalle soste. Un tram per linea, a qualche fermata dal capolinea, resta fermo 4 minuti:
 // fa comunque la corsa dopo del suo turno, in ritardo, e nessuna corsa resta senza tram. Chi gioca guida un bus lontano
 // dai binari. Col codice di prima i tram saltavano sull'altro binario, e a Pontevigodarzere arrivavano due tram per ogni
-// partenza (le corse Santo → Pontevigodarzere doppie del GTFS restavano: l'altra corsa ha due fermate Pontevigodarzere)
-test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e con i ritardi', async ({ pagina, gioco }) => {
+// partenza (le corse Santo → Pontevigodarzere doppie del GTFS restavano: l'altra corsa ha due fermate Pontevigodarzere).
+// In anticipo sull'orario (#64) i tram vanno all'andatura normale e aspettano in fermata fino all'orario: tra due fermate
+// in media oltre 7 m/s (prima rallentavano fino a 3 m/s: 5,0 di media sul SIR1, 5,9 su SIR2 e SIR3), nessuna partenza
+// prima dell'orario salvo dopo più di 2 minuti d'attesa o dove il tram fermo sta sopra un incrocio (TramSim.onCrossing),
+// e a Largo Europa la fase tram del semaforo dura in media al più 14 s e mai più di 20 (prima in media 19 s, fino a 27)
+test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e con i ritardi, in anticipo all\'andatura normale', async ({ pagina, gioco }) => {
   test.setTimeout(300_000);
   await avviaCorsa(pagina, { linea: '24' });
   const r = await pagina.evaluate(() => {
@@ -191,14 +195,38 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
     const nome = (t) => { for (const [id, k] of Object.entries(g.city.tramTracks)) for (const d of [1, -1]) if (k.terminals[d] === t) return `${id} ${k.stopsDir[d].slice(-1)[0].name}`; return '?'; };
     const prima = new Map(), fermo = new Map(), manovre = {}, attesa = {}, salti = [], fermi = [], ritardati = [];
     const t0 = g.mission.clock;
+    // in anticipo: per ogni tram la fermata di prima (run, k, wait), l'anticipo all'ultimo arrivo e la partenza da lì
+    const sg = [...g.tramSignals.sigs].find((s) => s.nodes.some((n) => Math.hypot(n.x - 53, n.z + 333) < 10));
+    const stato = new Map(), arrivo = new Map(), via = new Map(), tratte = {}, presto = [], fasi = [];
+    let fase = 0;
     for (let sec = 0; sec < 25 * 60; sec++) {
       g.sim(1, dt, false);
       if (sec === 60) for (const id of ['SIR1', 'SIR2', 'SIR3']) {
-        const tr = T.trams.find((x) => x.line === id && x.run && x.run.next && !x.man && x.k >= 2 && x.k >= x.run.ss.length - 6 && x.k < x.run.ss.length - 1 && x.track.terminals[x.dir > 0 ? 1 : -1]);
+        // non sopra un incrocio, anche frenando (lì terrebbe il semaforo in fase tram per 4 minuti)
+        const tr = T.trams.find((x) => x.line === id && x.run && x.run.next && !x.man && x.k >= 2 && x.k >= x.run.ss.length - 6 && x.k < x.run.ss.length - 1 && x.track.terminals[x.dir > 0 ? 1 : -1] && !T.onCrossing(x) && !T.onCrossing(x, x.s + 10));
         if (tr) { tr.wait = 240; ritardati.push({ tr, next: tr.run.next }); }
       }
-      const per = {};
+      const per = {}, clock = g.mission.clock;
+      if (fase > 0 && !(sg.tramT > 0)) fasi.push(Math.round(sg.tramAge * 10) / 10);
+      fase = sg.tramT;
       for (const tr of T.trams) {
+        // arrivo alla fermata k (k cresce): l'anticipo e, se in anticipo, la velocità media dalla fermata prima; partenza
+        // (finisce l'attesa): non prima dell'orario, se all'arrivo l'anticipo era entro i 2 minuti d'attesa e il tram non
+        // era sopra un incrocio
+        const st = stato.get(tr);
+        if (tr.run && st && st.run === tr.run) {
+          if (tr.k === st.k + 1 && st.k >= 1) {
+            const e = tr.run.times[st.k] - clock, v0 = via.get(tr);
+            arrivo.set(tr, T.onCrossing(tr, tr.run.ss[st.k]) ? Infinity : e);
+            if (e > 0 && v0 && v0.k === st.k) (tratte[tr.line] ||= []).push((tr.s - v0.s) / (clock - v0.t));
+          }
+          if (st.wait > 0 && tr.wait <= 0 && tr.k >= 2 && !tr.man) {
+            const e = tr.run.times[tr.k - 1] - clock;
+            if (e > 1 && arrivo.get(tr) <= 120) presto.push({ id: tr.id, line: tr.line, k: tr.k - 1, e: Math.round(e) });
+            via.set(tr, { k: tr.k, t: clock, s: tr.s });
+          }
+        }
+        stato.set(tr, { run: tr.run, k: tr.k, wait: tr.wait });
         // ogni cassa a un secondo di distanza è vicina a una cassa di prima (al cambio cabina la testa diventa la coda)
         const c = tr.mods.map((m) => [m.group.position.x, m.group.position.z]), p = prima.get(tr);
         if (p && p.length === c.length && c.some((a) => Math.min(...p.map((b) => Math.hypot(a[0] - b[0], a[1] - b[1]))) > 12)) salti.push({ id: tr.id, line: tr.line });
@@ -215,7 +243,12 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
     // le corse dopo dei tram fermati le fa lo stesso tram; nessuna corsa partita nel frattempo è rimasta senza tram
     const turno = ritardati.map((r) => ({ line: r.tr.line, stesso: r.next.tram === r.tr, partitaDa: r.tr.run === r.next ? Math.round(g.mission.clock - r.next.t) : null }));
     const perse = T.runs.filter((r) => r.t > t0 + 120 && r.t < g.mission.clock - 60 && !r.tram).map((r) => `${r.line.id} ${r.v.stops[0].name}`);
-    return { salti, manovre: Object.keys(manovre).sort(), attesa, fermi, turno, perse };
+    const mediana = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
+    const anticipo = {
+      tratte: Object.fromEntries(['SIR1', 'SIR2', 'SIR3'].map((l) => [l, { n: (tratte[l] || []).length, mediana: Math.round(mediana(tratte[l] || [0]) * 100) / 100 }])),
+      presto, fasi, media: Math.round((fasi.reduce((a, b) => a + b, 0) / (fasi.length || 1)) * 10) / 10,
+    };
+    return { salti, manovre: Object.keys(manovre).sort(), attesa, fermi, turno, perse, anticipo };
   });
   const testo = JSON.stringify(r);
   console.log('tram automatici:', testo);
@@ -226,6 +259,14 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
   expect(r.turno.map((x) => x.line), testo).toEqual(['SIR1', 'SIR2', 'SIR3']);
   expect(r.turno.every((x) => x.stesso), testo).toBe(true);
   expect(r.perse, testo).toEqual([]);
+  for (const v of Object.values(r.anticipo.tratte)) {
+    expect(v.n, testo).toBeGreaterThan(20);
+    expect(v.mediana, testo).toBeGreaterThan(7);
+  }
+  expect(r.anticipo.presto, testo).toEqual([]);
+  expect(r.anticipo.fasi.length, testo).toBeGreaterThan(5);
+  expect(r.anticipo.media, testo).toBeLessThanOrEqual(14);
+  expect(Math.max(...r.anticipo.fasi), testo).toBeLessThanOrEqual(20);
   expect(gioco.errori()).toEqual([]);
 });
 
