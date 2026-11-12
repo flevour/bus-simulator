@@ -512,10 +512,22 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   9-27 m tra gli anelli). Il tram di chi gioca, fuori servizio (`bus.net`), lo prende di punta in
   `Tram.checkJunctions` e passa sull'altro binario con `switchTo` (anche cambio di `track`); in servizio la corsa resta
   sul suo percorso. Posizione: `updateJunctions` in `main.js` ogni mezzo secondo, per il tram più vicino che ci arriva
-  entro 150 m (in servizio anche quelli automatici, dalla loro `track`, `dir` e `s`); N (`toggleTramSwitch`) gira il
-  bivio più vicino davanti al tram entro 250 m o lo scambio del capolinea entro 120 m. I tram automatici non cambiano
-  linea: seguono il loro binario, e i bivi si mettono per loro. Gli scambi dei capolinea restano `TramTrack.terminal`,
-  fuori dalla rete (#10).
+  entro 150 m (in servizio anche quelli automatici, dalla loro `track`, `dir` e `s`). I tram automatici non cambiano
+  linea: seguono il loro binario, e i bivi si mettono per loro.
+- Scambi dei capolinea nella rete (#10, 12 novembre). `TramTrack.terminal` resta com'era per la geometria e la
+  manovra (`off`, `other`, `toe`, `heel`, `link`, `fondo`; `terminalOff` e i tram automatici di `TramSim` non
+  cambiano), ma ogni scambio del capolinea è anche un nodo di `TramNet` (`tipo: 'capolinea'`, accanto ai bivi con
+  `tipo: 'bivio'`; `net.terminals`, `net.nodes`). Il segnale è il `panel` come per i bivi (`t.panel.sig`, `side`,
+  `state`; prima `t.sig` e `t.side`) e lo costruisce lo stesso ciclo di `buildTramway` (`t.sign`; `city.tramSwitches`
+  non c'è più, `setSwitch` aggiorna `t.sign`). `net.on(T, dir)` dà per ogni binario dove si prende di punta ogni
+  scambio (`{ j, role, s, fw }`): i bivi come prima, gli scambi dei capolinea sul binario d'arrivo, a `toe` andando
+  verso il tronco ('avanti') o a `link` tornando dal tronco ('dopo', 'prima'). N (`toggleTramSwitch`) sceglie con
+  `TramNet.pick`: il più vicino preso di punta davanti entro 250 m; poi, entro 120 m e con 100 m in più, quelli che il
+  tram prenderà di punta dopo il cambio cabina (da fermo alle spalle, e davanti se il binario finisce entro 150 m: lo
+  scambio dei capolinea 'dopo' arrivando alla banchina). Lo gira `TramNet.turn`. Lo scambio del capolinea si comporta
+  come un bivio anche al passaggio (`Tram.checkJunctions`, solo fuori servizio): deviato e preso tornando dal tronco
+  sul binario d'arrivo (dopo B con lo scambio diritto, poi N), porta il tram sul binario di partenza come il cambio cabina in fondo (`reseat` e `xover`, senza spostarlo). La
+  manovra con B in fondo resta quella di prima. Prova in `tests/bivi-tram.spec.js`.
 - Depositi della Guizza e di Voltabarozzo (11 novembre). Dati: `scripts/tram_depositi.py` → `data/tram-depositi.json`
   (way OSM attorno al deposito), `TRAM_DEPOTS` in `padova.js`; la mappa non cambia. Grafo: `TramYard` in `tram.js`
   (`city.tramYards`, disegnato in `buildTramway`, rimessa in `buildDepotShed`); porte 6 m prima della fine dei binari

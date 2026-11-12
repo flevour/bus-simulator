@@ -537,28 +537,17 @@ function tramDepotCheck() {
   tramRientro = null;
   showShiftEnd();
 }
-// Tram: N gira lo scambio più vicino davanti al tram: un bivio tra le linee preso di punta sul binario, entro 250 m
-// (TramNet), o lo scambio del capolinea entro 120 m. In servizio si girano da soli; non si girano mentre il tram ci passa
+// Tram: N gira lo scambio più vicino davanti al tram: della rete (TramNet: bivi tra le linee e scambi dei capolinea, con
+// TramNet.pick: davanti entro 250 m, poi quelli che il tram prenderà di punta dopo il cambio cabina) o del deposito.
+// In servizio si girano da soli; non si girano mentre il tram ci passa
 function toggleTramSwitch() {
-  let jn = null, jd = 250;
-  const sf = bus.pathOffset + bus.sFront, fw = bus.facing > 0;
-  for (const { j, s } of city.tramNet ? city.tramNet.on(bus.track, bus.dirSig) : []) {
-    const d = fw ? s - sf : sf - s;
-    if (TramNet.facing(j, fw) && d >= 0 && d < jd) { jd = d; jn = j; }
-  }
-  // lo scambio del capolinea dietro al muso conta 100 m in più: vince quello davanti, se c'è (in fondo al tronco, prima
-  // del cambio cabina, resta lui)
-  let sw = null, bd = Infinity;
-  const fr = bus.at(bus.sFront), fdx = fr.dx * bus.facing, fdz = fr.dz * bus.facing;
-  for (const w of city.tramSwitches || []) {
-    const ex = w.term.sig.x - fr.x, ez = w.term.sig.z - fr.z, d = Math.hypot(ex, ez);
-    if (d < 120 && d + (ex * fdx + ez * fdz < 0 ? 100 : 0) < bd) { bd = d + (ex * fdx + ez * fdz < 0 ? 100 : 0); sw = w; }
-  }
+  const sf = bus.pathOffset + bus.sFront;
+  const jn = city.tramNet && !bus.yard ? city.tramNet.pick(bus.track, bus.dirSig, sf, bus.facing > 0, Math.abs(bus.v) < 0.05) : null;
   // scambio del deposito davanti (nel deposito, o dopo la porta verso cui si va)
   const ys = bus.yardAhead();
-  if (!jn && !sw && !ys) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
+  if (!jn && !ys) { hud.toast('Nessuno scambio qui vicino', 'info'); return; }
   if (!mission.free) { hud.toast('In servizio gli scambi si girano da soli, secondo la linea', 'info'); return; }
-  if (ys && (!jn || ys.d < jd) && (!sw || ys.d < bd || bus.yard)) {
+  if (ys && (!jn || ys.d < jn.k || bus.yard)) {
     audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
     if (ys.port) {
       // scambio sul binario della linea verso il deposito (porta a metà binario)
@@ -573,19 +562,15 @@ function toggleTramSwitch() {
     hud.toast(`${ys.sw.state ? '↗️ Scambio deviato' : '⬆️ Scambio diritto'} tra ${Math.round(ys.d)} m`, 'info');
     return;
   }
-  if (jn && (!sw || jd < bd)) {
-    jn.state = jn.state === 'x' ? 'o' : 'x';
-    jn.manual = true;
-    jn.sign.update();
-    audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
-    hud.toast(`${jn.state === jn.dev ? '↗️' : '⬆️'} Bivio tra ${Math.round(jd)} m: verso il binario del ${jn.name(jn.state)}`, 'info');
-    return;
-  }
-  if (bus.xover === sw.term || (bus.xend === sw.term && bus.pathOffset + bus.sFront > sw.term.toe - 1)) { hud.toast('Scambio bloccato: il tram ci sta passando', 'bad'); return; }
-  sw.term.state = sw.term.state === 'deviato' ? 'diritto' : 'deviato';
-  sw.update();
+  const j = jn.j, dove = jn.d >= 0 ? `tra ${Math.round(jn.d)} m` : `${Math.round(-jn.d)} m dietro`;
+  if (j.tipo === 'capolinea' && bus.xend === j && sf > j.toe - 1) { hud.toast('Scambio bloccato: il tram ci sta passando', 'bad'); return; }
+  TramNet.turn(j);
   audio.noiseBurst({ dur: 0.6, freq: 700, gain: 0.15 });
-  hud.toast(sw.term.state === 'deviato' ? '↗️ Scambio deviato: col cambio cabina si passa sull\'altro binario' : '⬆️ Scambio diritto: col cambio cabina si resta sul binario', 'info');
+  if (j.tipo === 'bivio') hud.toast(`${j.state === j.dev ? '↗️' : '⬆️'} Bivio ${dove}: verso il binario del ${j.name(j.state)}`, 'info');
+  else {
+    const poi = jn.fw !== bus.facing > 0 ? 'col cambio cabina ' : '';
+    hud.toast(j.state === 'deviato' ? `↗️ Scambio deviato ${dove}: ${poi}si passa sull'altro binario` : `⬆️ Scambio diritto ${dove}: ${poi}si resta sul binario`, 'info');
+  }
 }
 // Bivi tra le linee (TramNet), ogni mezzo secondo: si mettono da soli per il tram più vicino che ci arriva (entro 150 m):
 // in servizio quello di chi gioca o uno automatico, ognuno sul binario della sua linea; in Esplorazione e Giro libero
@@ -609,8 +594,7 @@ function updateJunctions(dt) {
     if (best && best !== j.state) { j.state = best; j.sign.update(); }
   }
 }
-function refreshSwitch(term) { for (const w of city.tramSwitches || []) if (w.term === term) w.update(); }
-function setSwitch(term, state) { if (term.state !== state) { term.state = state; refreshSwitch(term); } }
+function setSwitch(term, state) { if (term.state !== state) { term.state = state; if (term.sign) term.sign.update(); } }
 // capolinea con lo scambio: se il tram è tutto dalla parte del tronco, la progressiva sul binario di partenza della coda
 // di ora, che diventa il muso; altrimenti null. Con le distanze lungo i binari dello scambio (TramTrack.terminal): il
 // tram resta esattamente dov'è
@@ -1208,7 +1192,7 @@ function startMission(resume = null) {
     bus.onJunction = (o) => {
       const ln = TRAM_LINES.find((x) => x.id === o.T.id), st = o.T.stopsDir[o.dir];
       hud.setLine({ id: o.T.id, color: ln ? ln.color : L.color }, settings.mode === 'roam' ? 'Esplorazione' : 'Giro libero');
-      hud.toast(`🔀 Bivio: sei sul binario del ${o.T.id}${st.length ? ' verso ' + st[st.length - 1].name : ''}`, 'info');
+      hud.toast(`🔀 ${o.capolinea ? 'Scambio' : 'Bivio'}: sei sul binario del ${o.T.id}${st.length ? ' verso ' + st[st.length - 1].name : ''}`, 'info');
     };
     // in servizio gli scambi dei capolinea si mettono da soli per l'arrivo: diritto dove si passa sull'altro binario
     // dopo il cambio cabina (lo si gira con B), deviato dove si passa prima. In Esplorazione e Giro libero si comincia

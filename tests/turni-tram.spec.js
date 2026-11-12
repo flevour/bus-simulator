@@ -131,8 +131,7 @@ for (const c of [
 test('scambio del capolinea girato in Esplorazione', async ({ pagina, gioco }) => {
   await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: 0, modo: 'roam' });
   const r = await pagina.evaluate(() => {
-    const g = window.__game, bus = g.bus, dt = 1 / 30, d = bus.dirSig, t = bus.track.terminals[d];
-    const sw = g.city.tramSwitches.find((w) => w.term === t);
+    const g = window.__game, bus = g.bus, dt = 1 / 30, d = bus.dirSig, t = bus.track.terminals[d], sw = t.sign;
     bus.setFront(bus.path.len - 2);
     g.sim(0.5, dt, false);
     const out = { tipo: t.kind, iniziale: t.state };

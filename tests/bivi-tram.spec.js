@@ -100,3 +100,53 @@ test('bivi in servizio: si mettono da soli per la linea e N non li gira', async 
   expect(r, JSON.stringify(r)).toEqual({ messo: true, dopoN: true, track: 'SIR1', oltre: true });
   expect(gioco.errori()).toEqual([]);
 });
+
+// Gli scambi dei capolinea sono nodi della stessa rete dei bivi, ognuno col suo segnale e girato con N. A Voltabarozzo,
+// in fondo al tronco e da fermo, N gira lo scambio alle spalle (quello da cui si riparte); con lo scambio diritto B
+// cambia solo cabina. Poi N gira lo scambio, ora davanti: tornando indietro il tram lo prende di punta e passa sul
+// binario di partenza come a un bivio, senza salti
+test('scambi dei capolinea nella rete: dopo il cambio cabina N porta il tram sull\'altro binario', async ({ pagina, gioco }) => {
+  await avviaCorsa(pagina, { linea: 'SIR3', tram: true, verso: 0, modo: 'roam' });
+  const r = await pagina.evaluate(() => {
+    const g = window.__game, bus = g.bus, dt = 1 / 30, net = g.city.tramNet, t = bus.track.terminals[bus.dirSig];
+    g.traffic.target = 0; g.traffic.cars.splice(0);
+    const capolinea = Object.values(g.city.tramTracks).flatMap((T) => [T.terminals[1], T.terminals[-1]]).filter(Boolean);
+    const out = { capolinea: capolinea.length, nellaRete: capolinea.every((x) => net.nodes.includes(x) && !!x.sign), tipo: t.kind };
+    bus.setFront(bus.path.len - 2);
+    g.sim(0.5, dt, false);
+    g.press('KeyN');
+    out.dietro = t.state;
+    g.press('KeyB');
+    g.sim(0.2, dt, false);
+    out.cabina = { verso: bus.dirSig, facing: bus.facing };
+    const toasts = [], toast0 = g.hud.toast.bind(g.hud);
+    g.hud.toast = (x, k) => { toasts.push(x); return toast0(x, k); };
+    g.press('KeyN');
+    out.davanti = t.state;
+    out.segnale = t.sign.diverted.visible ? 'deviato' : 'diritto';
+    bus.parking = false;
+    let prev = bus.modules.map((m) => [m.group.position.x, m.group.position.z]), salto = 0;
+    for (let s = 0; s < 60 && !(bus.dirSig === t.dep && bus.sFront - bus.length > t.heel + 2); s += dt) {
+      if (Math.abs(bus.v) < 4.7) g.keys.add('KeyW'); else g.keys.delete('KeyW');
+      g.sim(dt, dt, false);
+      const c = bus.modules.map((m) => [m.group.position.x, m.group.position.z]);
+      salto = Math.max(salto, ...c.map((p, i) => Math.hypot(p[0] - prev[i][0], p[1] - prev[i][1]) - Math.abs(bus.v) * dt));
+      prev = c;
+    }
+    g.keys.delete('KeyW');
+    g.hud.toast = toast0;
+    const p = bus.path.at(bus.sFront), f = bus.at(bus.sFront);
+    return {
+      ...out, toasts, dopo: { verso: bus.dirSig, facing: bus.facing, oltre: bus.sFront - bus.length > t.heel },
+      salto: Math.round(salto * 100) / 100, sulBinario: Math.round(Math.hypot(p.x - f.x, p.z - f.z) * 100) / 100,
+    };
+  });
+  const testo = JSON.stringify(r);
+  expect([r.capolinea, r.nellaRete, r.tipo], testo).toEqual([5, true, 'dopo']);
+  expect([r.dietro, r.cabina.facing, r.davanti, r.segnale], testo).toEqual(['diritto', -1, 'deviato', 'deviato']);
+  expect(r.toasts.some((x) => /Scambio deviato tra \d+ m: si passa sull'altro binario/.test(x)), testo).toBe(true);
+  expect(r.toasts.some((x) => /Scambio: sei sul binario del SIR3/.test(x)), testo).toBe(true);
+  expect(r.dopo, testo).toEqual({ verso: -r.cabina.verso, facing: 1, oltre: true });
+  expect([r.salto < 0.05, r.sulBinario < 0.05], testo).toEqual([true, true]);
+  expect(gioco.errori()).toEqual([]);
+});

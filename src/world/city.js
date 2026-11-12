@@ -1416,11 +1416,10 @@ export class City {
       }
     }
     // scambi ai capolinea (cambio cabina): la S tra il binario d'arrivo e quello di partenza (TramTrack.terminal), corsia
-    // rossa e rotaia, e il segnale della posizione dello scambio (freccia dritta o deviata) per chi riparte dal tronco.
+    // rossa e rotaia; il segnale, come per i bivi, più sotto con la rete (TramNet).
     // La corsia della S sta sotto quelle dritte e in tinta unita: si vede solo dove riempie lo spazio tra i due binari. Sopra,
     // con le righe bianche dei bordi e le strisce scure, sembrava una X (foto di Voltabarozzo dell'11 novembre); la via la
     // dice la rotaia
-    this.tramSwitches = [];
     const redS = new GeoBuilder();
     for (const track of tracks) for (const d of [1, -1]) {
       const t = track.terminals && track.terminals[d];
@@ -1432,12 +1431,12 @@ export class City {
         redS.disc(b.x, b.z, L, Y_ROAD + 0.029, 8, 8);
         rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.051, 8);
       }
-      this.tramSwitches.push(this.switchSign(t));
     }
     redS.uv.fill(0.5);
-    // bivi tra le linee (TramNet), ognuno col segnale della posizione per chi lo prende di punta. Il segnale sta a destra
-    // di chi arriva, qualche metro prima del bivio; in stazione, dove i binari sono fitti, il primo posto a 2,3 m da ogni
-    // binario, a destra o a sinistra
+    // rete dei binari (TramNet): bivi tra le linee e scambi dei capolinea, ognuno col segnale della posizione per chi lo
+    // prende di punta. Il segnale del bivio sta a destra di chi arriva, qualche metro prima; in stazione, dove i binari
+    // sono fitti, il primo posto a 2,3 m da ogni binario, a destra o a sinistra. Quello del capolinea tra i due binari,
+    // all'inizio della S
     this.tramNet = new TramNet(tracks);
     // depositi (TramYard, binari OSM di data/tram-depositi.json): rami con corsia rossa e rotaia, senza cordoli (dove i
     // binari si avvicinano agli scambi si sovrapporrebbero)
@@ -1462,7 +1461,7 @@ export class City {
       const spot = [4, 7, 10, 2, 13].flatMap((a) => [w, -w, w + 0.8, -w - 0.8].map((l) => ({ x: bx - s.dx * a - s.dz * l, z: bz - s.dz * a + s.dx * l }))).find((p) => free(p.x, p.z));
       if (spot) Object.assign(s, spot);
     };
-    for (const j of this.tramNet.junctions) { place(j.panel.sig); j.sign = this.switchSign(j.panel); }
+    for (const j of this.tramNet.nodes) { if (j.tipo === 'bivio') place(j.panel.sig); j.sign = this.switchSign(j.panel); }
     for (const Y of this.tramYards) for (const sw of Y.switches.values()) { place(sw.panel.sig); sw.sign = this.switchSign(sw.panel); }
     for (const Y of this.tramYards) for (const pt of Y.ports) if (pt.panel) { place(pt.panel.sig); pt.sign = this.switchSign(pt.panel); }
     const tex = TX.tramLaneTexture();
@@ -1572,9 +1571,9 @@ export class City {
     this.group.add(m);
   }
 
-  // Segnale dello scambio al capolinea: palo tra i due binari all'inizio della S, pannello nero verso chi ci arriva
-  // (dal tronco dopo il cambio cabina, o dalla banchina d'arrivo dove si passa prima) con la freccia bianca dritta (si
-  // resta sul binario) o deviata (si passa sull'altro)
+  // Segnale dello scambio (bivi e scambi dei capolinea di TramNet, scambi dei depositi), dal suo panel: palo in sig,
+  // pannello nero verso chi lo prende di punta con la freccia bianca dritta (si resta sul binario) o deviata (si passa
+  // sull'altro, dalla parte side)
   switchSign(t) {
     const g = new THREE.Group(), s = t.sig;
     g.position.set(s.x, 0, s.z);
@@ -1610,7 +1609,7 @@ export class City {
     const straight = panel(dritta), diverted = panel(deviata(right)), straightB = panel(dritta, true), divertedB = panel(deviata(!right), true);
     g.add(pole, head, straight, diverted, straightB, divertedB);
     this.group.add(g);
-    const sw = { term: t, group: g, straight, diverted, update() {
+    const sw = { group: g, straight, diverted, update() {
       const dev = t.state === 'deviato';
       straight.visible = straightB.visible = !dev; diverted.visible = divertedB.visible = dev;
     } };
