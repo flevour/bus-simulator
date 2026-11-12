@@ -800,6 +800,7 @@ export class Traffic {
       let gap = 80, leadV = Infinity; // leadV: velocità di chi c'è davanti (nessuno: Infinity)
       let v0 = c.turn ? c.turn.vmax : c.vmax;
       // auto davanti
+      let lead = null, through = false;
       this.grid.query(c.x + fx * 15, c.z + fz * 15, 18, near);
       for (const o of near) {
         if (o === c) continue;
@@ -812,9 +813,13 @@ export class Traffic {
           // e tra due auto che svoltano verso lo stesso arco passa chi ha meno curva da fare (a Lion, entrando in Via
           // Mascagni da Via Sant'Andrea e dalla traversa, ognuna aveva l'altra davanti e restavano ferme per sempre)
           if (c.turn && o.turn && o.turn.next.edge === c.turn.next.edge && (1 - c.turn.t) * c.turn.len < (1 - o.turn.t) * o.turn.len) continue;
-          if (fwd - 4.4 < gap) { gap = fwd - 4.4; leadV = o.v; }
+          // chi esce da un giro di attese (sotto) passa davanti all'auto che aspettava, finché non l'ha superata
+          if (o === c.through) { through = true; continue; }
+          if (fwd - 4.4 < gap) { gap = fwd - 4.4; leadV = o.v; lead = o; }
         }
       }
+      if (!through) c.through = null;
+      const carGap = gap;
       // il bus del giocatore e i bus automatici
       let blocker = null;
       if (c.passT <= 0) {
@@ -872,6 +877,11 @@ export class Traffic {
       acc = Math.max(-9, acc);
       c.v = Math.max(0, c.v + acc * dt);
       if (gap < 0.2) c.v = 0;
+      // chi si aspetta: l'auto davanti, se basta da sola a tenerla ferma (a meno di 2 m l'IDM non riparte), e se a
+      // fermarla non c'è anche altro (un semaforo, un bus, un tram, i binari)
+      c.lead = carGap < 2 ? lead : null;
+      c.alone = gap === carGap;
+      c.halt = c.v < 0.1 ? (c.halt || 0) + dt : 0;
 
       // bloccati da un bus fermo: clacson (solo col giocatore) e sorpasso; un bus automatico si sorpassa in fermata
       // o se resta fermo a lungo (al semaforo rosso si aspetta)
@@ -933,6 +943,7 @@ export class Traffic {
       while (dh < -Math.PI) dh += 2 * Math.PI;
       c.h += dh * Math.min(1, dt * 10);
     }
+    this.untangle();
 
     // istanze
     const { M, Q, Y, S, P } = this;
@@ -952,6 +963,28 @@ export class Traffic {
     this.grid = new Grid(30);
     for (const c of this.cars) this.grid.insertAABB(c, c.x - 3, c.z - 3, c.x + 3, c.z + 3);
     for (const B of this.bigs) for (const p of B.parts || []) this.grid.insertAABB(p, p.x - 3, p.z - 3, p.x + 3, p.z + 3);
+  }
+
+  // giri di attese tra auto: A aspetta B che aspetta ... A, ferme da almeno un secondo. Nessuna ripartirebbe più: a
+  // Porta Trento chi da Via Bezzecca svolta in Via Belfiore e chi dalla rotonda esce in Via Bezzecca hanno le curve che
+  // si toccano a 2 m, e ognuna ha l'altra davanti. Passa chi ha l'auto che aspetta più di lato, cioè meno in mezzo alla
+  // sua strada, tra quelle che non sono ferme anche per altro: nella rotonda del SIR3 vicino a Via Falloppio tre auto si
+  // aspettavano in giro, e una era ferma anche prima dei binari perché oltre c'era un'altra delle tre
+  untangle() {
+    for (const c of this.cars) {
+      if (!c.lead || c.halt < 1) continue;
+      const ring = [c];
+      for (let o = c.lead; o !== c; o = o.lead) {
+        if (!o || o.halt < 1 || ring.length > 8 || ring.includes(o)) { ring.length = 0; break; }
+        ring.push(o);
+      }
+      let best = null, side = -1;
+      for (const o of ring) {
+        const s = Math.abs((o.lead.x - o.x) * Math.cos(o.h) - (o.lead.z - o.z) * Math.sin(o.h));
+        if (o.alone && s > side) { side = s; best = o; }
+      }
+      if (best) { best.through = best.lead; best.lead = null; }
+    }
   }
 
   near(x, z, r) {

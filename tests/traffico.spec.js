@@ -281,3 +281,65 @@ test('segnali del tram: verde entro un ciclo, lanterna disegnata uguale allo sta
   expect(pace.messaggi).toContain('-60 🚦 Passato col rosso!');
   expect(gioco.errori()).toEqual([]);
 });
+
+// Piazzale di Porta Trento, all'imbocco della rotonda da Via Bezzecca: chi da Via Bezzecca svolta in Via Belfiore e chi
+// dalla rotonda esce in Via Bezzecca hanno le curve che si toccano a 2 m. Le due auto ferme dove ognuna ha l'altra
+// davanti (la regola delle auto davanti di Traffic.update: più di 0,5 m avanti, meno di 1,7 m di lato, direzioni a meno
+// di 107°): quanti secondi ci mettono a finire le due svolte, chi è passata davanti all'altra (through) e se le due auto
+// erano davvero l'una davanti all'altra
+function stallo({ ta, tb }) {
+  const g = window.__game, T = g.traffic, N = g.net.nodes;
+  const n = Object.values(N).filter((n) => n.edges.some((e) => e.name === 'Via Belfiore') && n.edges.filter((e) => e.name === 'Via Bezzecca').length === 2)
+    .sort((p, q) => Math.hypot(p.x + 970, p.z + 1111) - Math.hypot(q.x + 970, q.z + 1111))[0];
+  if (!n || Math.hypot(n.x + 970, n.z + 1111) > 20) return { nodo: false };
+  const bez = n.edges.filter((e) => e.name === 'Via Bezzecca').sort((p, q) => p.len - q.len);
+  const [rotonda, via] = bez, belfiore = n.edges.find((e) => e.name === 'Via Belfiore');
+  // un'auto ferma a t della curva da da (che arriva a n) ad a (che parte da n)
+  const inCurva = (da, a, t) => {
+    const c = { car: true, edge: da, fwd: da.b === n.id, s: 0, v: 0, vmax: 9, turn: null, route: [], tramOff: 0, latOff: 0, blocked: 0, pass: 0, passT: 0, honkCd: 0, id: Math.random(), color: T.cars[0].color };
+    const G = T.laneGeom(c), nx = { edge: a, fwd: a.a === n.id, node: n };
+    c.s = G.s1;
+    c.turn = { ...T.turnPath(c, G, nx), t, next: nx };
+    const { p0, p1, p2 } = c.turn, w = 1 - t;
+    c.x = w * w * p0.x + 2 * w * t * p1.x + t * t * p2.x; c.z = w * w * p0.z + 2 * w * t * p1.z + t * t * p2.z;
+    c.h = Math.atan2(w * (p1.x - p0.x) + t * (p2.x - p1.x), w * (p1.z - p0.z) + t * (p2.z - p1.z));
+    return c;
+  };
+  const davanti = (c, o) => {
+    const fx = Math.sin(c.h), fz = Math.cos(c.h), dx = o.x - c.x, dz = o.z - c.z;
+    return dx * fx + dz * fz > 0.5 && Math.abs(dx * fz - dz * fx) < 1.7 && Math.cos(o.h - c.h) >= -0.3;
+  };
+  g.teleport(n.x + 60, n.z + 100);
+  g.sim(0.1, 1 / 30, false);
+  const A = inCurva(via, belfiore, ta), B = inCurva(rotonda, via, tb);
+  const prima = { a: davanti(A, B), b: davanti(B, A), d: Math.hypot(A.x - B.x, A.z - B.z) };
+  // da sole: le altre auto e quelle nuove tornano dopo
+  const altre = T.cars, quante = T.target;
+  T.cars = [A, B]; T.target = 0;
+  let fa = null, fb = null, passata = null;
+  for (let i = 1; i <= 300 && (fa == null || fb == null); i++) {
+    g.sim(0.1, 1 / 30, false);
+    if (!passata && (A.through || B.through)) passata = A.through ? 'Via Belfiore' : 'Via Bezzecca';
+    if (fa == null && A.edge === belfiore) fa = i / 10;
+    if (fb == null && B.edge === via) fb = i / 10;
+  }
+  T.cars = altre; T.target = quante;
+  return { nodo: true, prima, fuori: fa != null && fb != null ? Math.max(fa, fb) : null, passata };
+}
+
+// #79: negli incroci senza semaforo due auto in svolta che si aspettano a vicenda restavano ferme per sempre (a Porta
+// Trento, in Via Pilade Bronzetti, in Piazzale Mazzini, tra Via Tirana e Via delle Melette). Ora chi aspetta chi si
+// segue fino a tornare al punto di partenza (Traffic.untangle): in un giro di attese tra auto ferme passa chi ha l'auto
+// che aspetta più di lato. A Porta Trento esce prima chi lascia la rotonda verso Via Bezzecca, poi l'altra.
+test('auto in svolta che si aspettano a vicenda: a Porta Trento una passa e l\'altra la segue', async ({ pagina, gioco }) => {
+  await avviaCorsa(pagina, { linea: '3' });
+  const r = await pagina.evaluate(stallo, { ta: 0.6, tb: 0.32 });
+  expect(r.nodo, 'incrocio di Via Bezzecca con Via Belfiore').toBe(true);
+  expect(r.prima.a, 'chi va in Via Belfiore ha davanti chi esce dalla rotonda').toBe(true);
+  expect(r.prima.b, 'chi esce dalla rotonda ha davanti chi va in Via Belfiore').toBe(true);
+  expect(r.prima.d).toBeLessThan(2.5);
+  expect(r.fuori, 'secondi per finire le due svolte').not.toBeNull();
+  expect(r.fuori).toBeLessThan(10);
+  expect(r.passata).toBe('Via Bezzecca');
+  expect(gioco.errori()).toEqual([]);
+});

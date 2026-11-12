@@ -406,6 +406,39 @@ nome lungo 8,7 m, tutto curva. Nei controlli dei fermi (40 minuti alle 8:15 e al
 già su `main`: auto in svolta che si aspettano a vicenda lontano dai binari (#79) e Corso Milano, SIR2 e auto muso a
 muso con le auto in coda sovrapposte (#80).
 
+Auto in svolta che si aspettano a vicenda (#79, 12 novembre). Negli incroci senza semaforo due auto con le curve che
+si toccano a 2 m arrivavano insieme dove ognuna aveva l'altra davanti (più di 0,5 m avanti, meno di 1,7 m di lato,
+direzioni a meno di 107°) e restavano ferme per sempre, con la coda dietro. Su `main`, in 14 giri da 40 minuti col
+doppio delle auto (8:15 e 17:30, giocatore in otto punti), 11 casi, tutti di due auto in svolta: Via Pilade Bronzetti
+(due volte), Via Gaspare Gozzi (due volte), Piazzale Mazzini, Via delle Melette con Via Tirana, Cavalcavia Dalmazia,
+Via dei Savonarola con Via Fusinato, Piazzetta Palatucci, Via Guerrazzi con Via Panzini (1333 s), Via Aldini con Via
+Avogadro (2116 s). Con le auto normali, in 4 giri, nessuno. Come funziona ora:
+
+- `Traffic.update`: ogni auto ricorda chi aspetta (`lead`: l'auto davanti, se basta da sola a tenerla ferma, cioè a
+  meno di 2 m, dove l'IDM da fermi non riparte), se a fermarla c'è solo lei (`alone`: non anche un semaforo, un bus, un
+  tram o la regola dei binari) e da quanti secondi è ferma (`halt`);
+- `Traffic.untangle`, dopo il passo di tutte: da ogni auto ferma da almeno 1 s segue `lead` (al più 9 auto, tutte
+  ferme); se torna all'auto di partenza è un giro di attese e nessuna ripartirebbe. Tra le auto del giro con `alone`
+  passa chi ha l'auto che aspetta più di lato, cioè meno in mezzo alla sua strada: la ignora (`through`) finché non è
+  uscita dalla fascia davanti, poi `through` torna `null`. L'altra la segue. Con `alone` non si sceglie chi starebbe
+  fermo comunque: nella rotonda del SIR3 vicino a Via Falloppio (794, 367) tre auto si aspettavano in giro e una era
+  ferma anche prima dei binari, perché oltre c'era un'altra delle tre (166 s con la prima versione, che guardava solo
+  le auto ferme per l'auto davanti);
+- scatta per chi aspetta chi e non dopo un tempo: in una coda che si muove o ferma al rosso `lead` non chiude un giro.
+  È lo schema che #59 chiede per `unstick`, `carT` e `busT`, che potrebbero partire da `lead`. La regola di #46 (tra due
+  auto che svoltano verso lo stesso arco passa chi ha meno curva da fare) resta: lì lo stallo non si forma nemmeno.
+
+Con questo codice, in otto punti alle 8:15 e alle 17:30 ((2300, 3000) al posto di (2000, 3200), vedi sotto), 16 giri
+col doppio delle auto e 8 con le auto normali: nessun giro di attese. I giri delle 8:15 con le auto normali sono
+identici a quelli di `main`: la simulazione è deterministica (seme fisso) e `untangle` cambia qualcosa solo quando si
+forma un giro.
+
+I fermi che restano nei controlli sono auto davanti ai binari con il tram fermo: Corso Milano e Porta Savonarola col
+SIR2 (#80) e altri incroci col SIR3 e col SIR2, tra cui Piazzetta Nievo, Via Chiesanuova e Via Vicenza (#89); e a
+(2785, 3300) un anello di strade di servizio da cui non si esce, che `deadEnd` non vede (#90).
+Nei controlli il giocatore va tenuto lontano dai binari: fermo a 4,3 m dall'asse del SIR3 (teletrasportato a
+(2000, 3200)) tiene fermo il tram per tutta la prova.
+
 Bus automatici in anticipo (segnalazione dell'11 novembre, "in Prato della Valle a 20 all'ora"): vanno al più il 15%
 sotto il limite e recuperano l'anticipo in fermata: oltre 40 s avanti si fermano anche senza prenotazioni, fino
 all'orario (al più un minuto). Per `tram-turni` (#64): i tram automatici rallentano ancora quando sono in
@@ -418,7 +451,9 @@ Livio, Ponti Romani-Battisti, Largo Europa e Piazza Garibaldi, tram e auto mai d
 tram automatici, nessun tram fermo a un segnale (barre o lanterna) oltre 60 s e lanterne disegnate uguali allo stato;
 20 minuti sul SIR3 tra Via San Mattia e Via Rosmini (14 incroci senza semaforo); penalità in Via De Leva; nella
 rotonda Rosetta Gagliardi `calledAhead` vede i binari di Viale della Pace dall'ingresso e a metà curva, poi 20 minuti
-attorno alle rotonde Rosetta Gagliardi e Graziana Campanato, a Corso del Popolo e al Piazzale della Stazione.
+attorno alle rotonde Rosetta Gagliardi e Graziana Campanato, a Corso del Popolo e al Piazzale della Stazione; a Porta
+Trento due auto ferme in svolta, ognuna con l'altra davanti (da Via Bezzecca verso Via Belfiore e dalla rotonda verso
+Via Bezzecca), finiscono le due svolte in meno di 10 s.
 
 Per `mappa` (11 novembre, #65): su Riviera dei Ponti Romani verso Largo Europa (arco 17836 da (53, -333) a
 (71, -306) e il successivo fino a (77, -283)) il binario del SIR1 verso nord corre a 2,2 m dall'asse, dentro la
