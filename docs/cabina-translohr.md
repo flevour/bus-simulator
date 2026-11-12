@@ -57,7 +57,7 @@ Confronto tra la foto del 2006 di un tram del SIR1 ([ferrovie.it, foto 4, "La co
   alto a sinistra, sul montante del parabrezza, con lampade rosse e verdi.
 * Diverso: nel 2006 il cruscotto è blu e lo schermo centrale mostra un tachimetro a lancetta; nel 2026 il cruscotto è
   grigio scuro e lo schermo è bianco, con data, ora e campi di testo. Nel 2026 c'è in più un monitor con la cornice
-  blu a destra. Il fungo giallo a sinistra si vede solo nel 2026 (nel 2006 quella zona è coperta dal guidatore).
+  blu a destra, probabilmente la console del sistema di esercizio (sezione 3). Il fungo giallo a sinistra si vede solo nel 2026 (nel 2006 quella zona è coperta dal guidatore).
 * Non ho trovato nulla sulla cabina dei tram da 32 m del SIR2, né su come sono le cabine del SIR1 dopo il rinnovo.
 
 ## 2. I comandi della cabina, uno per uno
@@ -181,6 +181,48 @@ parla [Foot 2018][foot2018] (inferenza).
   dopo una fermata. Ogni cabina ha una "console del conducente" per questi sistemi. Confermato per il SIR3
   ([Italferr 2020][italferr2020], §§ 6.2 e 7.4).
 * Il tasto con il semaforo sulla tavoletta del T5 potrebbe essere un comando simile. Inferenza.
+* La priorità dipende dall'orario: niente priorità se il tram è in anticipo, richiesta se è in orario o in
+  ritardo (e niente priorità se il tram è senza passeggeri). Confermato come requisito del SIR3 ([Italferr
+  2020][italferr2020], § 6.1).
+
+### Console del conducente: orario, fermate, messaggi (SAE)
+
+Il SAE (Sistema di Ausilio all'Esercizio) è il sistema che localizza i tram e regola il servizio dal posto centrale.
+Tutto confermato come requisito del progetto del SIR3 ([Italferr 2020][italferr2020]), salvo dove scritto:
+
+* a bordo ci sono un computer, i sensori per la posizione (radar, accelerometro, satellite), la radio verso terra,
+  il pulsante "Ready to Start" e una **"Console del conducente (una per cabina)"** (§ 7.4);
+* il computer di bordo calcola la posizione al metro e la manda al posto centrale (PCC), che la usa per l'orario,
+  i semafori, gli scambi e l'informazione ai passeggeri (§ 5);
+* regolazione "a orario": il PCC calcola l'**anticipo o il ritardo** rispetto all'orario; il dato "viene trasferito
+  al sistema di bordo e visualizzato sul console del conducente, in modo che il conducente possa decidere di
+  regolare la velocità del veicolo" (§ 10.2);
+* regolazione "a intervallo" (nelle ore di punta): sulla console compare un **conto alla rovescia per la
+  partenza**, per gestire la sosta a ogni fermata e tenere la frequenza (§ 10.2);
+* il PCC parla con i conducenti (può scegliere un tram sullo schema della linea e chiamarlo), riceve le chiamate
+  d'emergenza dei passeggeri e manda dati ai tram (§ 10.2); voce e dati viaggiano su GSM/GPRS, come per il SIR1,
+  e su una rete WiFi lungo la linea (§ 9.1);
+* il PCC del SIR3 è un ampliamento di quello del SIR1 ([Italferr 2020, posto centrale][italferr2020pcc], § 4).
+  Quindi anche i tram del SIR1 sono già localizzati e seguiti dal PCC (inferenza: non ho trovato come è fatta la
+  loro console);
+* per i passeggeri ci sono due monitor da 17" dietro le cabine (§ 9.4): non sono la console del conducente.
+
+Chi fornisce il sistema e com'è fatta la console: **non trovato**. Il progetto Italferr non nomina un fornitore. Il
+SIR3 è stato costruito da un raggruppamento con C.S.E., Ferrari Ferruccio, MERMEC STE ed Euroferroviaria
+([presentazione SMART][mit2025]); non ho trovato chi di loro fornisca il SAE. Non ho trovato nemmeno il fornitore
+dell'AVM dei bus di Busitalia Veneto o di APS (gare, capitolati, comunicati: nessun risultato su INIT, Pluservice,
+AEP, Divitech, Swarco, Hitachi).
+
+Esempi di console di questo tipo, non quella di Padova:
+
+* SWARCO NEXT OBU GUI mostra al conducente il capolinea precedente e successivo, le prossime fermate, linea e
+  corsa, l'**anticipo o il ritardo**, l'intervallo dal mezzo davanti, i messaggi con la centrale, una linea voce con
+  la centrale e gli allarmi di diagnostica ([pagina SWARCO][swarco]).
+* IVU.box.panel è un terminale da 7" o 10" "specially developed for bi-directional operation in trams" ([pagina
+  IVU][ivu]).
+
+Non ho trovato foto confrontabili con l'apparecchio della foto del SIR3 (cornice blu, cinque tasti sotto lo
+schermo, tre sul lato destro).
 
 ### Freno d'emergenza
 
@@ -216,6 +258,9 @@ parla [Foot 2018][foot2018] (inferenza).
   Confermato ([BEA-TT 2012][beatt2012], §§ 3.1 e 3.4.2).
 * Nella foto del T5 la cornetta della radio, nera con il cavo a spirale, è in alto a sinistra accanto alla
   tavoletta ([Commons][commons-t5a]). Inferenza sulla funzione.
+* Sul SIR3 il PCC chiama i conducenti attraverso il sistema SAE, su GSM, e manda loro dati e messaggi. Confermato
+  come requisito ([Italferr 2020][italferr2020], §§ 9.1 e 10.2). Dove arrivano i messaggi scritti (console SAE o
+  schermo centrale) non è scritto.
 
 ### Consolle a sinistra: chiave, selettori, pulsanti protetti
 
@@ -250,7 +295,7 @@ parla [Foot 2018][foot2018] (inferenza).
 | Pulsante arancione sopra la tavoletta | Non identificato. Forse il riconoscimento degli allarmi, che a Clermont è tra i comandi di guida | inferenza debole | [Foot 2018][foot2018] |
 | Schermo centrale | Velocità, stato delle porte, allarmi. Nella foto: data, ora, campi di testo e un'icona | confermato a Clermont; inferenza per Padova | [Foot e Doniol-Shaw 2009][foot2009]; [BEA-TT 2012][beatt2012] |
 | Colonna di LED rossi accanto allo schermo | Una barra luminosa. Nel T5 ci sono due barre ai lati dello schermo, una con la scala 5-15-25-35. Forse lo sforzo chiesto con i pedali o la velocità: nessuna fonte | sconosciuto | [Commons T5][commons-t5b] |
-| Monitor con cornice blu a destra | Monitor aggiunto: telecamere, oppure la console del conducente per localizzazione e priorità del SIR3. Non c'è nella foto del 2006 | inferenza | [Italferr 2020][italferr2020] § 7.4 |
+| Monitor con cornice blu a destra (schermo spento, cinque tasti sotto, tre sul lato destro, su una staffa nera) | Probabilmente la **console del conducente del SAE**: anticipo o ritardo sull'orario, conto alla rovescia per la partenza, fermate, messaggi del PCC. Il progetto del SIR3 chiede una console così in ogni cabina. Meno probabile un monitor delle telecamere: il Translohr ha già gli schermi di retrovisione nel cruscotto, ai lati dello schermo centrale. Non c'è nella foto del 2006. Modello e fornitore non trovati | inferenza (la console è confermata dal progetto; che sia questo apparecchio no) | [Italferr 2020][italferr2020] §§ 7.4 e 10.2; [Foot 2018][foot2018] p. 32; [ferrovie.it 2006][ferrovie2006] |
 | Pulsanti rosso e verde in basso a sinistra, con una serratura tra i due | Consolle a sinistra: la serratura è probabilmente la **chiave di attivazione della cabina**, come nella foto del T5 | inferenza | [Commons T5][commons-t5a] |
 
 ## 4. Le procedure del conducente
@@ -345,12 +390,32 @@ aiuto in `index.html`, specifica in `docs/prompt-tram.md` (sezione "Cabina").
 | Tergicristallo | Automatico con la pioggia | Va bene |
 | Freno di stazionamento | Spazio | Va bene; nel cruscotto la spia "P" c'è già |
 | Schermo centrale | Tachimetro a lancetta, T/F in %, PORTE, P | Aggiungere lo schema del tram con le porte e una riga per gli allarmi |
+| Console SAE (monitor blu) | Nella cabina non c'è. Anticipo e ritardo, prossima fermata e conto alla rovescia sono solo nel pannello dell'HUD (`hud.js`, con `fmtDelay` di `mission.js`) | Disegnarli anche sul monitor blu della cabina, vedi sotto |
 | Retrovisione | Non ci sono schermi delle telecamere | Due schermi ai lati dello schermo centrale con le telecamere laterali (lo chiede già `docs/prompt-tram.md`) |
 
 Tasti liberi sul tram: K non fa nulla e R mostra solo un messaggio; Q ed E si liberano se il tram non usa le frecce.
 
 Pulsanti cliccabili: la tavoletta può diventare una texture con zone cliccabili. Le più utili: gong e clacson (rossi,
 a sinistra), porte (azzurri, in basso a destra), pantografo, scambio, luci, TEST; il fungo rosso a destra.
+
+Console SAE nella cabina. Il gioco conosce già quello che la console vera deve mostrare: in `hud.js` il pannello della
+linea calcola il ritardo stimato sulla prossima fermata, lo scrive con `fmtDelay` di `mission.js` (+m:ss o −m:ss: verde
+in orario, rosso oltre 2 minuti di ritardo, giallo oltre 1 minuto di anticipo) e, fermi in fermata, scrive "partenza
+tra m:ss" o "PRONTO A PARTIRE". Proposta: una seconda texture su canvas, come `Tram.drawDash`, sul monitor con la
+cornice blu a destra del fungo rosso:
+
+* in alto linea e destinazione, l'ora;
+* al centro, grande, l'anticipo o il ritardo con gli stessi colori dell'HUD; in fermata il conto alla rovescia per
+  la partenza (è proprio quello che la console mostra nella regolazione "a intervallo");
+* sotto, le prossime tre fermate con l'orario teorico e la distanza dalla prima;
+* in fondo una riga per i messaggi del PCC: lì possono finire i messaggi del tram che oggi sono toast (scambio,
+  pantografo, cambio cabina);
+* i cinque tasti sotto lo schermo come zone cliccabili, per esempio: pagina fermate, pagina messaggi, "Ready to
+  Start". Quali siano i tasti veri non si sa: è una scelta di gioco.
+
+Facoltativo, dal progetto del SIR3: oggi ogni incrocio dà sempre la precedenza al tram (`TramSignals` in
+`src/world/traffic.js`); nella realtà la priorità non si chiede se il tram è in anticipo. Si può fare lo stesso, così
+anticipare ha un costo anche agli incroci.
 
 Differenze tra il modello di oggi e le fonti (non corrette qui):
 
@@ -366,7 +431,10 @@ Differenze tra il modello di oggi e le fonti (non corrette qui):
   sono dedotti dalle foto e da Clermont e Parigi.
 * Cabina dei tram da 32 m del SIR2: nessuna foto né descrizione.
 * Chiave, selettore del senso di marcia, retromarcia, cambio di cabina: nessuna fonte scritta sul Translohr.
-* Fungo giallo, pulsante arancione, colonna di LED, scatola in alto, monitor blu: nessuna fonte.
+* Fungo giallo, pulsante arancione, colonna di LED, scatola in alto: nessuna fonte.
+* Monitor blu: il progetto conferma che ogni cabina ha una console del SAE con anticipo e ritardo, ma non ho trovato
+  il fornitore (né del SAE dei tram né dell'AVM dei bus di Busitalia Veneto e APS), il modello, cosa fanno i suoi
+  tasti, né una foto confrontabile. Nella foto lo schermo è spento.
 * Tempi della veglia a Padova: sconosciuti.
 * Simboli dei tasti di Padova: illeggibili nelle due foto.
 
@@ -404,6 +472,9 @@ Lette il 12 novembre 2026. I PDF di HAL sono dietro un controllo anti robot e li
   Clermont-Ferrand (63), le 10 janvier 2011", marzo 2012.
 * [italferr2020]: Italferr per APS Holding, "Progettazione definitiva della nuova linea tramviaria SIR3. Relazione
   tecnica impianti segnalamento, localizzazione, supervisione", aprile 2020.
+* [italferr2020pcc]: Italferr per APS Holding, stesso progetto, "Relazione Tecnica Posto Centrale Operativo", 2020.
+* [swarco]: SWARCO, pagina del prodotto NEXT OBU GUI (console di bordo per il conducente).
+* [ivu]: IVU, pagina dei computer di bordo (IVU.box.panel per i tram).
 * [alstom2022]: Alstom, comunicato del 23 settembre 2022 sui 26 Translohr per Padova.
 * [trampadova2025]: trampadova.it, arrivo del primo tram del SIR3 a Voltabarozzo, gennaio 2025.
 * [padovaoggi2026]: PadovaOggi, Giulia Ariti, "Sul tram per Voltabarozzo, viaggio a bordo della nuova linea", 11
@@ -445,3 +516,6 @@ Lette il 12 novembre 2026. I PDF di HAL sono dietro un controllo anti robot e li
 [wiki-it]: https://it.wikipedia.org/wiki/NTL_Translohr
 [wiki-en]: https://en.wikipedia.org/wiki/Translohr
 [wiki-it-pd]: https://it.wikipedia.org/wiki/Tranvia_di_Padova
+[italferr2020pcc]: https://www.comune.padova.it/urbanistica/Varianti_Pi_2021/44_progetto_variante_SIR3/599_NP0000D16RHIS0000002A.pdf
+[swarco]: https://swarco.com/products/software/public-transport/next-obu-gui
+[ivu]: https://www.ivu.com/en/on-board-systems/on-board-computers
