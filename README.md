@@ -255,6 +255,10 @@ gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright). Contiene dati della
 Regione del Veneto (DBGT del Comune di Padova, DTM a 5 m), licenza IODL 2.0.
 
+## Crediti
+
+Ideato e sviluppato da **Francesco Levorato** ([@flevour su Instagram](https://www.instagram.com/flevour/)).
+
 ## Modalità
 
 * **Servizio di linea**: corsa con orario, fermate, passeggeri e punteggio.

@@ -1,6 +1,7 @@
 // Novità per chi gioca: una riga per ogni modifica che si vede in gioco, in italiano semplice, dalla più recente.
 // n cresce di uno a ogni riga nuova: il gioco ricorda in questo browser l'ultima letta e mostra le successive.
 export const NOVITA = [
+  { n: 115, d: '2026-11-12', t: 'Nel menu ci sono i crediti: il gioco è di Francesco Levorato, che trovi su Instagram come @flevour.' },
   { n: 114, d: '2026-11-12', t: 'Auto negli incroci senza semaforo: due auto che svoltavano insieme e finivano muso contro muso restavano ferme per sempre, con la coda dietro (a Porta Trento, in Via Pilade Bronzetti, in Piazzale Mazzini). Ora una passa e l\'altra la segue.' },
   { n: 113, d: '2026-11-12', t: 'Tram: dal deposito di Voltabarozzo puoi uscire anche sul binario d\'arrivo, come sui binari veri. In Esplorazione e Giro libero, uscendo dalla rimessa, premi N per mandare il tram sulla curva esterna in fondo al deposito, poi ancora N, già dal deposito, per mettere diritto lo scambio del capolinea: il tram resta sul binario d\'arrivo invece di passare su quello di partenza.' },
   { n: 112, d: '2026-11-12', t: 'Tram: nei depositi della Guizza e di Voltabarozzo i binari sono stesi come quelli veri, con curve morbide e scambi che partono dritti dal binario invece degli spigoli di prima. Entrando nel deposito, sui ventagli degli scambi e attorno agli anelli il tram gira senza scatti.' },

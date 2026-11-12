@@ -77,6 +77,8 @@ button.primary:hover { filter: brightness(1.08); }
 .stops-col li span.t { opacity: .6; font-variant-numeric: tabular-nums; }
 .keys { margin-top: 16px; font-size: 12px; opacity: .75; line-height: 1.6; }
 .disclaimer { margin-top: 6px; font-size: 11px; opacity: .45; }
+.credits { margin-top: 10px; font-size: 13px; opacity: .8; }
+.credits a { color: inherit; }
 
 /* HUD */
 #hud { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 10; }
