@@ -1669,6 +1669,14 @@ export class TramSignals {
           if (sinA < 0.3) continue; // strade che corrono accanto alla sede, non la attraversano
           const sT = C.cum[i] + t * tl, tE = u * el;
           if (T.heightAt(dir, sT) > 1.5) continue; // binario in quota: la strada passa sotto
+          // strada che il tram imbocca o da cui esce: la incontra al nodo dell'incrocio e poi (o prima) le corre accanto
+          // dentro la carreggiata, parallelo; non la attraversa (a Pace dal binario in Via Tommaseo alla sede lungo Via
+          // Gozzi, che i binari secondo la regola toccano a meno di un metro dal nodo)
+          const lungo = [-15, -10, -5, 5, 10, 15].some((o) => {
+            const q = C.at(Math.max(0, Math.min(C.len, sT + o))), w = Math.max(0, Math.min(1, ((q.x - it.ax) * ex + (q.z - it.az) * ez) / (el * el)));
+            return Math.hypot(it.ax + ex * w - q.x, it.az + ez * w - q.z) < e.width / 2 + 1 && Math.abs(q.dx * ex + q.dz * ez) / el > 0.9;
+          });
+          if (lungo && Math.min(tE, el - tE) < 2) continue;
           const px = a.x + (b.x - a.x) * t, pz = a.z + (b.z - a.z) * t;
           // lo stesso incrocio sulla rotaia di un'altra sede (tratto in comune)
           const same = this.list.find((x) => x.e === e && Math.hypot(x.px - px, x.pz - pz) < 2 && x.tdx * tdx + x.tdz * tdz > 0.9);

@@ -77,7 +77,7 @@ divise per area.
 | `src/bus/bus.js` | `area:veicoli`, le altre aree nelle loro funzioni | |
 | `src/main.js` | tutte le aree, ognuna nelle sue funzioni | |
 | `src/tram/tram.js` | `area:tram` | scambi, binari, depositi, cambio cabina e turni: le funzioni sono nelle note del tram qui sotto |
-| `scripts/binari_tram.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
+| `scripts/binari_tram.py`, `scripts/binari_regola.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): `binari_regola.py` rifà le linee, `tram_stesura.py` i depositi; chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `SOGLIE_CAVALCAVIA` in `scripts/verifica_mappa.py` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari abbassa le soglie; usa `binari_tram.Griglia` e `raggruppa` |
 
 ## Note per area
@@ -849,16 +849,61 @@ sapere prima di toccare i binari:
   script, `tests/binari-tram.spec.js` sui binari del gioco (li scrive in `test-results/<prova>/binari-gioco.json` e
   chiama lo script con `--gioco`). Le soglie dei dati sono `SOGLIE_BINARI` in `verifica_mappa.py`, quelle del gioco in
   testa alla prova; i punti peggiori con `--elenco`;
-- i casi nelle zone di `ECCEZIONI` (oggi il piazzale della stazione, per gli scarti da OSM) si elencano a parte: una
-  zona nuova va lì con il suo perché e nella sezione 1 di `binari-tram.md`;
-- dati e gioco danno numeri diversi perché il gioco ritocca i binari (`smoothTrack` e `clearOfBuildings` in
-  `padova.js`, `smoothLane` in `TramTrack`): toglie quasi tutti gli spigoli e porta il binario fino a 3,4 m fuori da
-  OSM. Con i dati secondo la regola i ritocchi vanno spenti, come già nel piazzale;
-- la prova del gioco legge `TramTrack.paths`, `terminalCurve`, `TramTrack.h`, `stopsDir` e i nodi, i rami e le porte
-  di `TramYard`: chi li cambia aggiorna `binari()` nella prova e `rete_gioco` nello script;
-- la stesura secondo la regola è in `scripts/tram_stesura.py` (`stendi`: una traccia OSM, con i capi liberi o tangenti
-  a un altro binario): la usano i depositi (#70, nota in "Tram: scambi e depositi"), è pensata per servire anche alle
-  linee (#69).
+- i casi nelle zone di `ECCEZIONI` (il piazzale della stazione e i suoi raccordi, le curve che OSM disegna sotto i
+  12 m, la curva sud-ovest del deposito di Voltabarozzo) si elencano a parte: una zona nuova va lì con il suo perché e
+  nella sezione 4 di `binari-tram.md`;
+- con i dati secondo la regola (#69, sotto) il gioco non ritocca più i binari delle linee: dati e gioco danno gli
+  stessi numeri, tranne le S degli scambi ai capolinea (le disegna il gioco) e le pendenze (solo nel gioco);
+- la prova del gioco legge `TramTrack.paths`, `TramTrack.terminals` (la S degli scambi con `off`, `toe`, `heel`),
+  `TramTrack.h`, `stopsDir` e i nodi, i rami e le porte di `TramYard`: chi li cambia aggiorna `binari()` nella prova e
+  `rete_gioco` nello script;
+- i metodi di stesura sono due: `scripts/tram_stesura.py` (`stendi`: clotoide, arco, clotoide su una traccia OSM, con
+  i capi liberi o tangenti a un altro binario) per i depositi (#70, nota in "Tram: scambi e depositi"),
+  `scripts/binari_regola.py` (minimi quadrati, sotto) per le linee (#69), che hanno doppio binario e tratti in comune.
+
+Binari delle linee secondo la regola (#69, 12 novembre). Da sapere prima di toccarli:
+
+- `scripts/binari_regola.py` (numpy: il venv con shapely) rifà i due binari di una linea: traccia OSM ogni 0,5 m,
+  tratti fissi (anelli e S del piazzale con `tram_stazione.su_anelli`, binari di un'altra linea già rifatta), doppio
+  binario con asse e interasse costante a tratti, raccordo ai minimi quadrati con raggio almeno 12 m ed entro 0,8 m
+  dalla traccia. Metodo e parametri nella sezione 3 di [`binari-tram.md`](binari-tram.md);
+- l'ordine conta: `scripts/tram_linee.py` rifà SIR3 e poi SIR2 (agganciato al SIR3 verso Pace, con l'interasse del SIR1
+  sui binari del SIR1) e scrive `data/tram-linee-nuove.json` (`regola: true`); poi `scripts/build_map.py` fa il SIR1
+  (`sir1_binari`: percorso sui binari OSM di `data/osm-padova-tram-cantiere.json`, punti di passaggio dallo shape GTFS
+  ogni 120 m sul binario a destra, tronchi fino all'inversione dello shape, `inversione`) agganciato ai binari di SIR2 e
+  SIR3, e scrive `tram` e `tramRegola` nella mappa. Chi cambia una linea rigenera tutte e due;
+- nel gioco, con `tramRegola` e `regola`: niente `smoothTrack`, `clearOfBuildings` e tronchi allungati in `padova.js`,
+  niente `smoothLane` in `TramTrack`, che prende i vertici dei dati (`sampleV`); `snapShared` prende come tratto in comune
+  solo quello che coincide entro 5 cm (`SHARE_REGOLA`); la S degli scambi ai capolinea è di due archi con raggio
+  almeno 12 m (`R_COMUNICAZIONE`), e una comunicazione OSM più corta si allunga dalle due parti (cambiano `toe`, `heel`
+  e `link`, non `fondo` né `other`);
+- i dati sono più grandi: `tram` nella mappa 176 KB invece di 17, `tram-linee-nuove.json` 396 KB invece di 69 (punti
+  fitti nelle curve, lat/lon a 8 decimali: con meno l'arrotondamento fa andare e venire l'interasse);
+- il corridoio di celle attorno ai binari di SIR2 e SIR3 (`tram_corridors` in `build_map.py`) lo scrive
+  `tram_linee.py` in `corridoio`, calcolato sulla traccia OSM dei percorsi come prima: dai binari rifatti (punti fitti,
+  qualche decimetro più in là) cambiavano quattro celle, con le strade di Corso Irlanda e il rapporto dei cavalcavia.
+  `corridor_cells` conta le celle ai punti del percorso e a passi di 62,5 m: sul percorso rifatto ne aggiungerebbe tre
+  che il binario attraversa ((-13, -1), (-12, -5), (14, -7));
+- nel controllo (`binari_tram.py`): le comunicazioni dei capolinea si misurano nel gioco (nei dati sono i due capi),
+  con 10 m di binario della linea ai capi dei quali contano i 5 m vicino alla S (`CONTESTO`); nei 15 m dello scambio
+  dove i due versi diventano un binario solo (Busa di Vigonza) l'interasse non conta; per le linee e le comunicazioni
+  uno spigolo si misura anche contro la svolta in valore assoluto (le S: `assoluta` in `curve`, accanto a `esse` dei
+  depositi); eccezioni nuove: i raccordi del piazzale (interassi) e le curve che OSM disegna sotto i 12 m (scarti e
+  interassi);
+- funzioni di altre aree cambiate da #69: in `TramTrack.terminal` (`tram-scambi`) la S è di due archi (sopra) e, per
+  la S calcolata dove OSM non ha la comunicazione, l'altro binario conta come accanto se è in controsenso entro 37°
+  invece che entro 25° (`beside`: a Busa di Vigonza, dove OSM ha un tronco solo, il binario di partenza si stacca dal
+  tronco più ripido di prima e la S finiva prima delle banchine); in `TramSignals` (`traffico`) una strada che il tram
+  incontra al nodo dell'incrocio e poi (o prima) affianca dentro la sua carreggiata non è un incrocio (a Pace la curva
+  del SIR3 dalla corsia di Via Tommaseo alla sede lungo Via Gozzi tocca l'arco di Via Gozzi a 0,8 m dal nodo, e senza
+  questo la lanterna di Via Tommaseo spariva); in `BusSim.move` (`traffico`) un bus non entra in un incrocio col tram
+  se oltre i binari il semaforo non è verde e tra l'uscita e la linea d'arresto non ci sta (`rosso`, anche lontano dal
+  giocatore, dove `full` non vale: alla stazione due bus fermi al rosso di Piazzale della Stazione restavano sui binari
+  del SIR3, la fase tram restava tutto rosso e il tram aspettava loro, 19 tram fermi alle 8:30; su main lo stesso
+  incastro può capitare, coi binari nuovi è capitato); in `tests/bivi-tram.spec.js` il bivio preso dopo il cambio cabina è quello del SIR3
+  sull'anello esterno del piazzale (i tratti in comune sugli anelli ora coincidono), e la prova guarda l'altra linea del
+  bivio invece del SIR2; le soglie di `tests/cavalcavia.spec.js`, `tests/linea-aerea.spec.js` e dei cavalcavia in
+  `verifica_mappa.py` (binari: le rampe sono di #74).
 
 ### Tram: SIR2 e SIR3 (corsia `tram-reti`, chiusa il 9 novembre)
 

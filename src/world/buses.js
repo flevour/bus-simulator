@@ -576,12 +576,17 @@ export class BusSim {
         }
       }
       // incrocio con la sede: ci si ferma prima del primo binario se un tram l'ha chiamato o se oltre non c'è posto.
-      // waitX: l'incrocio chiamato per cui il bus è fermo (il tram che l'ha chiamato non aspetta lui)
+      // Anche lontano dal giocatore, dove non si guarda la coda: se oltre i binari il semaforo non è verde e tra
+      // l'uscita e la linea d'arresto il bus (12 m) non ci sta, fermo al rosso resterebbe sui binari, e con la fase tram
+      // tutto rosso il tram aspetterebbe lui e lui il verde (alla stazione i binari del SIR3 tagliano Piazzale della
+      // Stazione 10 m prima della linea d'arresto). waitX: l'incrocio chiamato per cui il bus è fermo (il tram che l'ha
+      // chiamato non aspetta lui)
       while (b.tx < L.tram.length && L.tram[b.tx].s < front - 0.5) b.tx++;
       b.waitX = null;
+      const rosso = (X) => sg && lights && sg.s > X.s && sg.s - X.out < 13 && lights.lightFor(sg.node, sg.edge) !== 'G';
       for (let j = b.tx; j < L.tram.length && L.tram[j].s - front < 60; j++) {
         const X = L.tram[j];
-        if (X.x.call || full(X.out)) {
+        if (X.x.call || full(X.out) || rosso(X)) {
           const v = stopAt(X.s - front);
           vt = Math.min(vt, v);
           if (X.x.call && v < 0.3) b.waitX = X.x;

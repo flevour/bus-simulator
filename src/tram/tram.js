@@ -144,13 +144,27 @@ function rampWeights(flags, step, ramp) {
 }
 const STEP = 3, NEAR = 9;
 const XO = 24; // m: lunghezza dello scambio ai capolinea (S tra il binario d'arrivo e quello di partenza)
+const R_COMUNICAZIONE = 12; // m: raggio minimo della S degli scambi ai capolinea (il Translohr gira a 10,5 m)
 const sampleS = (len) => { const out = []; for (let s = 0; s < len; s += STEP) out.push(s); out.push(len); return out; };
+// binari secondo la regola: i vertici dei dati (fitti nelle curve), e sui tratti lunghi un punto almeno ogni STEP metri
+const sampleV = (P) => {
+  const out = [];
+  for (let i = 0; i < P.pts.length - 1; i++) {
+    const a = P.cum[i], l = P.cum[i + 1] - a, n = Math.max(1, Math.ceil(l / STEP - 1e-9));
+    for (let k = 0; k < n; k++) out.push(a + (l * k) / n);
+  }
+  out.push(P.len);
+  return out;
+};
 export class TramTrack {
   // net: la rete (net.tram, net.tramLanes, net.tramStops: la sede del SIR1). Per le altre linee opts: id, lanes (i binari
   // OSM dei versi +1 e -1), lines (le linee che ci corrono), over (sedi già posate, per i tratti in comune)
   constructor(net, opts = {}) {
     this.id = opts.id || 'SIR1';
     const raw = opts.lanes || net.tram || [], osm = opts.lanes ? true : net.tramLanes;
+    // binari già secondo la regola (docs/binari-tram.md): niente medie, i punti dei dati come sono
+    const regola = opts.lanes ? !!opts.regola : !!net.tramRegola;
+    const sample = (P) => (regola ? sampleV(P) : sampleS(P.len));
     this.lines = opts.lines || TRAM_LINES.filter((L) => !L.building);
     this.tramStops = opts.lanes ? [] : net.tramStops || [];
     // binari delle sedi già posate, con il loro verso
@@ -159,13 +173,13 @@ export class TramTrack {
     const C = (this.C = new TrackPath(raw[0]));
     const S = raw[1] && raw[1].length > 1 ? new TrackPath(raw[1]) : null;
     // verso nord: lungo l'asse, a destra di 1,7 m dove c'è l'altro verso (con i binari OSM: il suo binario)
-    const ns = sampleS(C.len);
-    const wN = rampWeights(ns.map((s) => { const p = C.at(s); return (S && S.project(p.x, p.z).d < NEAR) || nearOther(p) ? 1 : 0; }), STEP, 25);
+    const ns = sample(C);
+    const wN = rampWeights(ns.map((s) => { const p = C.at(s); return (S && S.projectNear(p.x, p.z, NEAR)) || nearOther(p) ? 1 : 0; }), STEP, 25);
     const north = ns.map((s, i) => { const p = C.at(s), o = osm ? 0 : TRAM.lane * wN[i]; return { x: p.x - p.dz * o, z: p.z + p.dx * o }; });
     let south, wS;
     if (S && osm) {
-      const ss = sampleS(S.len);
-      wS = rampWeights(ss.map((s) => { const p = S.at(s); return C.project(p.x, p.z).d < NEAR || nearOther(p) ? 1 : 0; }), STEP, 25);
+      const ss = sample(S);
+      wS = rampWeights(ss.map((s) => { const p = S.at(s); return C.projectNear(p.x, p.z, NEAR) || nearOther(p) ? 1 : 0; }), STEP, 25);
       south = ss.map((s) => { const p = S.at(s); return { x: p.x, z: p.z }; });
     } else if (S) {
       const ss = sampleS(S.len), cs = [], flags = [];
@@ -185,14 +199,14 @@ export class TramTrack {
     // anelli regolari di scripts/tram_stazione.py (net.tramStazione): la media stringerebbe di più le testate interne e
     // la distanza tra gli anelli non sarebbe più costante
     const fixed = inStazione(net.tramStazione);
-    smoothLane(north, 3, 2, fixed); smoothLane(south, 3, 2, fixed);
+    if (!regola) { smoothLane(north, 3, 2, fixed); smoothLane(south, 3, 2, fixed); }
     // tratti in comune con le sedi già posate e scambi ai loro capi
     this.shared = { 1: [], '-1': [] };
     this.switches = [];
     this.paths = {};
     for (const [d, pts] of [[1, north], [-1, south]]) {
       // il verso -1 può correre anche sul binario +1 della stessa linea (capolinea ad anello: SIR3 in stazione)
-      const hit = snapShared(pts, d > 0 ? others : [...others, { T: this, dir: 1, P: this.paths[1] }]), keep = dedupIdx(pts);
+      const hit = snapShared(pts, d > 0 ? others : [...others, { T: this, dir: 1, P: this.paths[1] }], regola), keep = dedupIdx(pts);
       const P = (this.paths[d] = new TrackPath(keep.map((i) => pts[i])));
       const h = keep.map((i) => hit[i]);
       for (let i = 0; i < h.length;) {
@@ -259,7 +273,9 @@ export class TramTrack {
       const out = [];
       for (let s = Math.max(0, Math.floor(from)); s <= Math.min(Math.floor(P.len), Math.ceil(to)); s++) {
         const q = P.at(s), pr = Q.projectNear(q.x, q.z, 9), a = pr && Q.at(pr.s);
-        out[s] = a && a.dx * q.dx + a.dz * q.dz < -0.9 ? { x: a.x - q.x, z: a.z - q.z } : null;
+        // in controsenso entro 37°: dove il binario di partenza si stacca dal tronco unico (Busa di Vigonza) la Y dei binari
+        // secondo la regola supera i 25°
+        out[s] = a && a.dx * q.dx + a.dz * q.dz < -0.8 ? { x: a.x - q.x, z: a.z - q.z } : null;
       }
       return out;
     };
@@ -293,15 +309,28 @@ export class TramTrack {
     if (!kind) return null;
     // Scostamento verso l'altro binario, con le distanze lungo i binari: a d metri dallo scambio su un binario
     // corrisponde il punto a d metri sull'altro (link: dove lo scambio tocca l'altro binario), così il tram resta dov'è
-    // anche dove i due binari non sono paralleli. Pesato con un raccordo a coseno tra toe e heel: sul binario di
+    // anche dove i due binari non sono paralleli. Pesato con una S di due archi uguali tra toe e heel: sul binario di
     // partenza tutto fino a toe e niente da heel ('dopo', 'prima'), su quello d'arrivo niente fino a toe e tutto da heel
     // ('avanti'). other(s): progressiva sull'altro binario del punto corrispondente a s
-    const P = field === 'dep' ? B : A, Q = field === 'dep' ? A : B, n = Math.ceil(field === 'dep' ? heel : P.len) + 2;
+    const P = field === 'dep' ? B : A, Q = field === 'dep' ? A : B;
     const other = field === 'dep' ? (s) => link + (toe - s) : (s) => link - (s - heel);
-    const ox = new Float32Array(n), oz = new Float32Array(n), L = heel - toe;
+    // la S ha raggio (L² + D²) / 4D con D la distanza tra i binari: una comunicazione di OSM più corta del minimo
+    // (R_COMUNICAZIONE, docs/binari-tram.md: tra binari a 3 m circa 11 m) si allunga dalle due parti, con la stessa
+    // corrispondenza tra i binari
+    const mid = P.at((toe + heel) / 2), mq = Q.at(Math.max(0, Math.min(Q.len, other((toe + heel) / 2))));
+    const D = Math.max(0.5, Math.hypot(mq.x - mid.x, mq.z - mid.z)), Lmin = Math.sqrt(Math.max(0, 4 * D * R_COMUNICAZIONE - D * D));
+    if (heel - toe < Lmin) {
+      const e = (Lmin - (heel - toe)) / 2;
+      toe -= e; heel += e; link += field === 'dep' ? e : -e;
+    }
+    const n = Math.ceil(field === 'dep' ? heel : P.len) + 2;
+    const ox = new Float32Array(n), oz = new Float32Array(n), L = heel - toe, Rs = (L * L + D * D) / (4 * D);
+    // quota della S a x metri dall'inizio, da 0 a 1
+    const arco = (x) => (Rs - Math.sqrt(Math.max(0, Rs * Rs - x * x))) / D;
     for (let s = 0; s < n; s++) {
       const p = P.at(s), q = Q.at(Math.max(0, Math.min(Q.len, other(s))));
-      const c = s <= toe ? 1 : s >= heel ? 0 : (1 + Math.cos((Math.PI * (s - toe)) / L)) / 2, w = field === 'dep' ? c : 1 - c;
+      const x = s - toe, u = x <= L / 2 ? arco(x) : 1 - arco(L - x);
+      const c = s <= toe ? 1 : s >= heel ? 0 : 1 - u, w = field === 'dep' ? c : 1 - c;
       ox[s] = (q.x - p.x) * w; oz[s] = (q.z - p.z) * w;
     }
     // segnale (panel, come per i bivi di TramNet): all'inizio della S, tra i due binari, verso il tram che ci arriva (dal
@@ -767,7 +796,10 @@ function dedupIdx(pts) { const out = []; pts.forEach((p, i) => { if (i === 0 || 
 // i capi lo scarto che c'era tra i due binari si sfuma in 20 m. Restituisce per ogni punto { o, s } (binario e
 // progressiva su cui corre) o null.
 const SHARE = 1.5, SHARE_MIN = 20, SWITCH_LEN = 20;
-function snapShared(pts, others) {
+// con i binari secondo la regola i tratti in comune coincidono già (scripts/binari_regola.py): conta solo chi ci sta
+// sopra, e i capi sono dove se ne stacca davvero
+const SHARE_REGOLA = 0.05, SPLIT_REGOLA = 0.02;
+function snapShared(pts, others, regola = false) {
   const n = pts.length, hit = new Array(n).fill(null);
   if (!others.length) return hit;
   for (let i = 0; i < n; i++) {
@@ -775,7 +807,7 @@ function snapShared(pts, others) {
     // il binario più vicino; a pari distanza (5 cm) quello del punto prima (in stazione il SIR2 sulla S del SIR3, che
     // finisce sul SIR1)
     for (const o of others) {
-      const pr = o.P.projectNear(pts[i].x, pts[i].z, SHARE);
+      const pr = o.P.projectNear(pts[i].x, pts[i].z, regola ? SHARE_REGOLA : SHARE);
       if (!pr) continue;
       const q = o.P.at(pr.s);
       if ((q.dx * (b.x - a.x) + q.dz * (b.z - a.z)) / l <= 0.9) continue;
@@ -793,7 +825,7 @@ function snapShared(pts, others) {
   }
   // capi: indietro finché il binario si sta allontanando dall'altro (oltre SPLIT: sotto, i due binari sono lo stesso,
   // tracciato da due fonti)
-  const SPLIT = 0.3;
+  const SPLIT = regola ? SPLIT_REGOLA : 0.3;
   for (let i = 0; i < n;) {
     if (!hit[i]) { i++; continue; }
     let j = i;

@@ -239,6 +239,10 @@ mappa.
 python3 scripts/tram_linee.py data/osm-padova-tram-cantiere.json data/tram-fermate-nuove.json data/tram-linee-nuove.json
 ```
 
+Dal 12 novembre (#69) i binari dei due versi passano da `scripts/binari_regola.py` (serve numpy, il venv con shapely
+della mappa), che li rifà secondo la regola di [`binari-tram.md`](binari-tram.md); le fermate e le progressive si
+calcolano sui binari rifatti. Dopo si rigenera la mappa: il SIR1 si appoggia ai binari di SIR2 e SIR3 dove li condivide.
+
 * **Stazione**: SIR2 e SIR3 passano dall'anello interno, il SIR1 resta sull'esterno. In OSM l'anello interno e i quattro
   raccordi tra i due anelli ci sono e sono collegati, ma senza senso unico: lo script li percorre in senso antiorario.
   Stazione nord e Stazione sud stanno sui lati lunghi dell'anello interno, tra i raccordi (55 m di rettilineo, ci sta

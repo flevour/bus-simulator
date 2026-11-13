@@ -10,12 +10,12 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
-// Linee prima che seguano la regola (#69); i depositi la seguono (#70). Pendenze: le rampe dei cavalcavia Chiesanuova
-// (fino al 18,5%) e San Marco (11%) del SIR2 e del Borgomagno (7,4%) del SIR1 (#74)
+// Linee (#69) e depositi (#70) secondo la regola. Pendenze: le rampe dei cavalcavia Chiesanuova (fino al 18,9%) e San
+// Marco (11%) del SIR2 e del Borgomagno (7,4%) del SIR1 (#74)
 const SOGLIE = {
-  SIR1: { spigoli: 7, raggi: 0, interassi: 38, scarti_osm: 25, pendenze: 4 },
-  SIR3: { spigoli: 4, raggi: 2, interassi: 16, scarti_osm: 12, pendenze: 0 },
-  SIR2: { spigoli: 7, raggi: 0, interassi: 23, scarti_osm: 30, pendenze: 14 },
+  SIR1: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 4 },
+  SIR3: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
+  SIR2: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 14 },
   Guizza: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
   Voltabarozzo: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
 };
@@ -42,13 +42,24 @@ test('binari del tram secondo la regola', async ({ pagina, gioco }, info) => {
 // Gira nella pagina: deve bastare a sé stessa (Playwright la passa come testo). I binari del gioco nel formato che
 // legge rete_gioco di scripts/binari_tram.py.
 function binari() {
-  const g = window.__game, city = g.city, r = (v) => Math.round(v * 100) / 100, P = (pts) => pts.map((p) => [r(p.x), r(p.z)]);
+  // al millimetro: nelle curve i punti sono a mezzo metro, e al centimetro l'arrotondamento pesa sull'interasse che va e viene
+  const g = window.__game, city = g.city, r = (v) => Math.round(v * 1000) / 1000, P = (pts) => pts.map((p) => [r(p.x), r(p.z)]);
   const tracks = Object.values(city.tramTracks).map((T) => ({
     id: T.id,
     paths: { 1: P(T.paths[1].pts), '-1': P(T.paths[-1].pts) },
     // scambi tra le linee (capi dei tratti in comune) e comunicazioni dei capolinea, come le percorre il tram
     switches: T.switches.map((s) => ({ x: r(s.x), z: r(s.z) })),
-    terminals: [1, -1].map((d) => (T.terminals[d] ? { curve: P(T.terminalCurve(d) || []) } : null)),
+    // la S degli scambi ai capolinea come la percorre il tram, con 10 m di binario prima e dopo (da sola, una S corta
+    // sembrerebbe uno spigolo: la svolta delle corde lunghe uscirebbe dalla curva)
+    terminals: [1, -1].map((d) => {
+      const t = T.terminals[d];
+      if (!t) return null;
+      const Q = T.paths[(t.field === 'dep' ? t.dep : t.arr) > 0 ? 1 : -1], on = t.state, out = [];
+      t.state = 'deviato';
+      for (let s = Math.max(0, t.toe - 10); s <= Math.min(Q.len, t.heel + 10); s += 1) { const p = Q.at(s), o = t.off(s) || { x: 0, z: 0 }; out.push({ x: p.x + o.x, z: p.z + o.z }); }
+      t.state = on;
+      return { curve: P(out) };
+    }),
     // quote dei binari ogni 5 m, fermate per i nomi dei posti
     quote: T.h[1] ? { 1: T.h[1].map(r), '-1': T.h[-1].map(r) } : null,
     fermate: [1, -1].flatMap((d) => T.stopsDir[d].map((s) => [r(s.x), r(s.z), s.name])),

@@ -1,9 +1,11 @@
 // Linea aerea del tram: pali sui marciapiedi (o sul verde, sulle isole), mai in mezzo alla strada, e nessun tirante
 // sopra la sede di un altro binario. Soglie dell'11 novembre: se un numero scende si abbassa la soglia nello stesso
-// commit, se sale per una buona ragione si alza scrivendo il perché.
+// commit, se sale per una buona ragione si alza scrivendo il perché. Dal 12 novembre (#69) i binari secondo la regola
+// stanno a 3 m invece che a 3,4 e la sede è più stretta: 9 pali in più sul cordolo della corsia rossa, 5 in meno
+// sull'asfalto.
 import { test, expect } from './gioco.js';
 
-const SOGLIE = { pali_sull_asfalto: 7, pali_sul_cordolo: 103, tiranti_sopra_un_altra_sede: 0 };
+const SOGLIE = { pali_sull_asfalto: 2, pali_sul_cordolo: 112, tiranti_sopra_un_altra_sede: 0 };
 
 test('linea aerea: pali fuori dalla strada, tiranti mai sopra un\'altra sede', async ({ pagina, gioco }) => {
   const r = await pagina.evaluate(() => {

@@ -13,10 +13,11 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
 // Prima che i cavalcavia seguano la regola (#84). Binari: la media di setHeights sulle rampe di Chiesanuova, San Marco
-// e Borgomagno (#74)
+// e Borgomagno (#74); dal 12 novembre (#69) i binari rifatti con la regola passano qualche decimetro più in là sulle
+// rampe: una pendenza e tre tratti fuori quota in più, un'onda e un raccordo in meno
 const SOGLIE = {
   strade: { onde: 113, pendenze: 228, raccordi: 484, scarti_dtm: 221 },
-  binari: { onde: 18, pendenze: 32, raccordi: 13, fuori_quota: 25 },
+  binari: { onde: 17, pendenze: 33, raccordi: 12, fuori_quota: 28 },
 };
 
 test('cavalcavia secondo la regola del profilo', async ({ pagina, gioco }, info) => {

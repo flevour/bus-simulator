@@ -24,6 +24,7 @@ from collections import defaultdict
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import tram_percorsi as tp
 import tram_stazione
+import binari_regola as br
 
 # anello interno e raccordi tra i due anelli della stazione: verso di percorrenza rispetto all'ordine dei nodi della
 # way (+1 come la way, -1 al contrario). Senso antiorario: verso est sul lato sud, verso ovest sul lato nord
@@ -183,10 +184,13 @@ def stazione(staz, full, pos, first, last):
     return new, s0, s_of(pos[last], s0) - s0
 
 
-def proietta(path, pos, cum, p):
-    """Punto p (metri) sul percorso: (distanza, progressiva) del punto del percorso più vicino."""
+def proietta(path, pos, cum, p, vicino=None, finestra=60.0):
+    """Punto p (metri) sul percorso: (distanza, progressiva) del punto del percorso più vicino (con vicino, tra i punti
+    a meno di finestra metri da quella progressiva)."""
     best = (1e18, 0.0)
     for i, (a, b) in enumerate(zip(path, path[1:])):
+        if vicino is not None and (cum[i + 1] < vicino - finestra or cum[i] > vicino + finestra):
+            continue
         (ax, ay), (bx, by) = pos[a], pos[b]
         L2 = (bx - ax) ** 2 + (by - ay) ** 2 or 1e-9
         t = max(0, min(1, ((p[0] - ax) * (bx - ax) + (p[1] - ay) * (by - ay)) / L2))
@@ -283,11 +287,25 @@ def main(osm, stops_json, out):
                   'APS-Comune del 2/12/2025); SIR2 ogni 7 minuti (6-8 nella presentazione), 18 km/h di velocità '
                   'commerciale come il SIR3. Mattino presto, sera e festivi meno frequenti, come il SIR1.',
         'anelli': 'SIR2 e SIR3 sull\'anello interno della stazione (senso antiorario, raccordi OSM), il SIR1 su quello esterno.',
-    }, 'linee': []}
+        'regola': 'Binari rifatti sopra quelli OSM secondo la regola di docs/binari-tram.md (scripts/binari_regola.py).',
+    }, 'regola': True, 'linee': []}
+    # binari rifatti con la regola (scripts/binari_regola.py), in metri attorno alla stazione: le linee dopo prendono i
+    # binari di quelle prima dove ci corrono sopra (il SIR2 sul SIR3 verso Pace); sui binari del SIR1 (Corso Garibaldi,
+    # Corso del Popolo) l'interasse è quello del SIR1
+    prj = br.Proiezione(*staz.ll(0, 0)) if staz else br.Proiezione(45.4, 11.88)
+    sir1_segs = br.Segmenti([[prj.xy(g['lat'], g['lon']) for g in e['geometry']] for e in json.load(open(osm))['elements']
+                             if e['type'] == 'way' and e.get('tags', {}).get('railway') == 'tram' and tp.line_of(e['tags']) == 'SIR1'])
+    rifatti = []
+
+    def fisso(p, t):
+        # gli anelli della stazione restano com'erano (prj e staz.loc hanno gli stessi assi)
+        return bool(staz) and tram_stazione.su_anelli(staz, staz.loc(*prj.ll(*p)), t)
+    tracce = []  # i percorsi sui binari OSM, prima della regola: le celle del corridoio della mappa
     for L in LINES:
         names = [n for n, *_ in kml[L['id']] if not n.startswith('*') and n not in KML_SKIP]
         ll = {n: (la, lo) for n, la, lo in kml[L['id']]}
         versi = []
+        grezzi = []
         for headsign, order in L['versi']:
             seq = order(names)
             W, stops = [], []
@@ -307,6 +325,29 @@ def main(osm, stops_json, out):
             # binario prima e dopo, per il convoglio fermo al capolinea e il cambio cabina
             full = extend(adj, pos, extend(adj, pos, path, EXTEND, True), EXTEND, False)
             full, s0, Lp = stazione(staz, full, pos, path[0], path[-1])
+            grezzi.append((headsign, seq, path, full, wrong, building, s0, Lp))
+            tracce.append((L['id'], full))
+        # i due versi secondo la regola
+        base = lambda p, b=br.INTERASSE[L['id']]: br.INTERASSE['SIR1'] if sir1_segs.vicino(p, 1.5) else b
+        nuovi, note = br.rifai({1: [prj.xy(*n) for n in grezzi[0][3]], -1: [prj.xy(*n) for n in grezzi[1][3]]}, base,
+                               rifatti, fisso)
+        rifatti += [nuovi[1], nuovi[-1]]
+        print(f'{L["id"]} secondo la regola: comuni {[(c["da"], c["a"]) for c in note["comuni"]]}, doppio binario '
+              f'{[(c["da"], c["a"], c["interassi"]) for c in note["doppio"]]}')
+        for d, r in note['binari'].items():
+            if r.get('cede') or r.get('curve_strette'):
+                print(f'  verso {d}: tolleranza ceduta al raggio minimo in {r["cede"]}, curve strette {len(r["curve_strette"])}')
+        for k, (headsign, seq, path, _, wrong, building, s0, Lp) in enumerate(grezzi):
+            full = [tuple(round(v, 8) for v in prj.ll(*p)) for p in nuovi[1 if k == 0 else -1]]
+            for n in full:
+                pos.setdefault(n, tp.P(*n))
+            cum = [0.0]
+            for a, b in zip(full, full[1:]):
+                cum.append(cum[-1] + math.dist(pos[a], pos[b]))
+            # progressive del primo e dell'ultimo nodo del percorso sui binari nuovi, vicino a quelle di prima
+            s1 = proietta(full, pos, cum, pos[path[-1]], s0 + Lp)[1]
+            s0 = proietta(full, pos, cum, pos[path[0]], s0)[1]
+            Lp = s1 - s0
             # fermate sul percorso, quelle OSM e quelle messe a mano, in ordine. Il punto del KML al capolinea può
             # stare poco prima della fermata OSM (Voltabarozzo): oltre gli estremi conta solo la fermata del capolinea
             ends = (tp.norm(seq[0]), tp.norm(seq[-1]))
@@ -341,6 +382,10 @@ def main(osm, stops_json, out):
                     v[day] = [[t + i * L['ogni'] * 30, D] for t in hw[day]]
         res['linee'].append({'id': L['id'], 'nome': L['nome'], 'colore': L['colore'], 'moduli': L['moduli'],
                              'stato': 'in costruzione', 'ogni': L['ogni'], 'versi': versi})
+    # celle del corridoio attorno ai binari nella mappa (scripts/build_map.py, tram_corridors): dalla traccia OSM, come
+    # prima della regola, così la rete della mappa non cambia per qualche decimetro dei binari rifatti
+    import build_map
+    res['corridoio'] = sorted(build_map.corridor_cells([t for i, t in tracce if i in build_map.CORRIDOI_TRAM]))
     # comunicazioni tra i binari (service=crossover), i due capi (lat, lon): il gioco ci fa passare il tram ai capolinea
     # (TramTrack.terminal in src/tram/tram.js)
     res['scambi'] = [[*e['geometry'][0].values(), *e['geometry'][-1].values()] for e in json.load(open(osm))['elements']

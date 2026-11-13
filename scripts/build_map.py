@@ -283,8 +283,12 @@ def corridor_cells(paths, cell=CELLA, ring=1):
 
 def tram_corridors(path=TRAM_NUOVE, ids=CORRIDOI_TRAM):
     """Celle dei corridoi attorno ai binari delle linee del tram nuove (tutti e due i versi)."""
-    linee = json.load(open(path, encoding='utf-8'))['linee']
-    return corridor_cells([v['percorso'] for l in linee if l['id'] in ids for v in l['versi']])
+    dati = json.load(open(path, encoding='utf-8'))
+    # le celle le calcola scripts/tram_linee.py sulla traccia, i binari OSM del percorso: i binari rifatti con la regola
+    # hanno i punti fitti nelle curve e passano a qualche decimetro, e qualche cella al bordo cambierebbe
+    if dati.get('corridoio'):
+        return {tuple(c) for c in dati['corridoio']}
+    return corridor_cells([v['percorso'] for l in dati['linee'] if l['id'] in ids for v in l['versi']])
 
 
 def bus_corridors(gt, ids=CORRIDOI_BUS):
@@ -1374,18 +1378,22 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         if opp_shape:
             op = sorted((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])) for r in rd('shapes.txt') if r['shape_id'] == opp_shape)
             tram.append([round(v, 1) for _, la, lo in op for v in xz(la, lo)])
-        # binari veri: ogni shape (uno per verso) agganciato ai binari OSM
-        if tram_path:
-            tram = [tram_lane(t, *tram_grid(tram_path)) for t in tram]
-            # in stazione l'anello esterno regolare e concentrico a quello di SIR2 e SIR3 (scripts/tram_stazione.py)
-            staz = tram_stazione.Stazione.from_osm(tram_path)
-            tram = [stazione_xz(staz, t) for t in tram]
-            tram_lanes = True
         trip = ttrips[main_shape]
         for r in rd('stop_times.txt'):
             if r['trip_id'] == trip:
                 tram_stop_ids.add((int(r['stop_sequence']), r['stop_id']))
     stops_by_id = {s['stop_id']: s for s in rd('stops.txt')}
+    # binari veri: un binario per verso sui binari OSM, dalla fine del tronco a un capolinea (dove lo shape GTFS fa
+    # l'inversione) a quella dell'altro, con le fermate GTFS come punti di passaggio; in stazione l'anello esterno
+    # (scripts/tram_stazione.py); poi la regola dei binari (scripts/binari_regola.py)
+    cantiere = os.path.join(os.path.dirname(tram_path), 'osm-padova-tram-cantiere.json') if tram_path else None
+    if tshapes and cantiere and os.path.exists(cantiere) and opp_shape:
+        inv = [inversione(t) for t in tram]
+        # verso +1 (lo shape principale): dal fondo del tronco dove l'altro shape fa l'inversione al suo
+        versi = [(tram[0], inv[1], inv[0]), (tram[1], inv[0], inv[1])]
+        staz = tram_stazione.Stazione.from_osm(tram_path)
+        tram = sir1_binari(cantiere, versi, staz, nt_path=os.path.join(os.path.dirname(tram_path), 'tram-linee-nuove.json'))
+        tram_lanes = True
     tram_stops = []
     for _, sid in sorted(tram_stop_ids):
         s = stops_by_id[sid]
@@ -1478,7 +1486,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'origin': [ORIGIN_LAT, ORIGIN_LON], 'ferDate': build_gtfs.FER_DATE, 'fesDate': build_gtfs.FES_DATE,
         'nodes': nodes_flat, 'edges': [v for e in edges for v in e], 'names': names,
         'stops': gt['stops'], 'lines': lines_out,
-        'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramStops': tram_stops,
+        'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramRegola': tram_lanes, 'tramStops': tram_stops,
         'tramStazione': tram_stazione.zona(staz, xz) if staz else None,
         'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
         # corsie dai tag OSM: [arco, codice] (lane_code), e frecce a terra [arco, avanti, indietro]
@@ -1494,24 +1502,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
 
 BUS_MIN_2, BUS_MIN_1, BUS_MIN_RING = 7.5, 5.5, 7.0  # m: carreggiata minima sui percorsi dei bus (doppio senso, senso unico, rotatoria)
-TRAM_SNAP = 9  # m: distanza massima tra lo shape GTFS e un binario OSM
-TRAM_PAIR = (2.2, 6.0)  # m: interasse dei due binari affiancati
-
-
-def tram_grid(path, cell=20):
-    """Segmenti dei binari OSM (railway=tram) in una griglia."""
-    segs = []
-    for e in json.load(open(path, encoding='utf-8'))['elements']:
-        if e['tags'].get('railway') != 'tram':
-            continue  # banchine
-        pts = [xz(g['lat'], g['lon']) for g in e['geometry']]
-        segs += [(a, b) for a, b in zip(pts, pts[1:]) if a != b]
-    grid = defaultdict(list)
-    for k, ((ax, az), (bx, bz)) in enumerate(segs):
-        for gx in range(int(min(ax, bx) // cell), int(max(ax, bx) // cell) + 1):
-            for gz in range(int(min(az, bz) // cell), int(max(az, bz) // cell) + 1):
-                grid[(gx, gz)].append(k)
-    return segs, grid, cell
+PASSO_SIR1 = 120  # m tra i punti di passaggio del SIR1 sui binari OSM, presi dallo shape GTFS
 
 
 def central_platforms(path, stops, lanes):
@@ -1596,70 +1587,120 @@ def snap_tram_stops(path, tram, tram_stops, tram_lines, reach=25.0):
     return moved, total
 
 
-def stazione_xz(staz, flat):
-    """Binario (x, z in fila) rifatto sugli anelli della stazione (tram_stazione)."""
-    pts = [latlon(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
-    return [round(v, 2) for p in tram_stazione.fix_ll(staz, pts) for v in xz(*p)]
+def inversione(flat):
+    """Punto (x, z) dove lo shape GTFS del tram fa l'inversione al capolinea d'arrivo (in fondo al tronco), come
+    cutReversal di src/data/padova.js; senza inversione l'ultimo punto."""
+    t = [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+    n, cut = len(t), -1
+    for i in range(max(1, n - 15), n - 1):
+        (ax, az), (bx, bz), (ex, ez) = t[i - 1], t[i], t[n - 1]
+        l1, l2 = math.hypot(bx - ax, bz - az) or 1, math.hypot(ex - bx, ez - bz) or 1
+        if 5 < l2 < 250 and ((bx - ax) * (ex - bx) + (bz - az) * (ez - bz)) / (l1 * l2) < -0.6:
+            cut = i
+    return t[cut] if cut > 0 else t[-1]
 
 
-def tram_lane(flat, segs, grid, cell):
-    """Binario di un verso. Lo shape GTFS ha punti radi e corre su uno dei due binari (non in mezzo): campionato ogni
-    2 m, ogni punto va sul binario OSM vicino e parallelo; dove i binari sono due si tiene quello a destra di chi
-    percorre lo shape (si marcia a destra)."""
-    pts = [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
-    smp = []
-    for (ax, az), (bx, bz) in zip(pts, pts[1:]):
-        n = max(1, int(math.hypot(bx - ax, bz - az) // 2))
-        smp += [(ax + (bx - ax) * k / n, az + (bz - az) * k / n) for k in range(n)]
-    smp.append(pts[-1])
-    out, snapped = [], 0
-    for i, (px, pz) in enumerate(smp):
-        a, b = smp[max(0, i - 3)], smp[min(len(smp) - 1, i + 3)]
-        L = math.hypot(b[0] - a[0], b[1] - a[1]) or 1
-        dx, dz = (b[0] - a[0]) / L, (b[1] - a[1]) / L
-        rx, rz = -dz, dx
-        seen, cand = set(), []
-        for gx in range(int((px - TRAM_SNAP) // cell), int((px + TRAM_SNAP) // cell) + 1):
-            for gz in range(int((pz - TRAM_SNAP) // cell), int((pz + TRAM_SNAP) // cell) + 1):
-                for k in grid.get((gx, gz), ()):
-                    if k in seen:
-                        continue
-                    seen.add(k)
-                    (sx, sz), (ex, ez) = segs[k]
-                    ux, uz = ex - sx, ez - sz
-                    l2 = ux * ux + uz * uz
-                    if abs(ux * dx + uz * dz) < 0.8 * math.sqrt(l2):
-                        continue  # binario di traverso (scambi, altre linee)
-                    t = max(0.0, min(1.0, ((px - sx) * ux + (pz - sz) * uz) / l2))
-                    qx, qz = sx + ux * t, sz + uz * t
-                    d = math.hypot(qx - px, qz - pz)
-                    if d <= TRAM_SNAP:
-                        cand.append(((qx - px) * rx + (qz - pz) * rz, d, qx, qz))
-        # binari distinti: offset laterali che differiscono più di 1,2 m
-        cand.sort()
-        tracks = []
-        for c in cand:
-            if tracks and c[0] - tracks[-1][0] < 1.2:
-                if c[1] < tracks[-1][1]:
-                    tracks[-1] = c
-            else:
-                tracks.append(c)
-        pair = [(abs(t1[0] + t2[0]), t2) for t1, t2 in zip(tracks, tracks[1:]) if TRAM_PAIR[0] <= t2[0] - t1[0] <= TRAM_PAIR[1]]
-        pick = min(pair)[1] if pair else min(tracks, key=lambda c: c[1]) if tracks else None
-        if pick:
-            snapped += 1
-            out.append((pick[2], pick[3]))
-        else:
-            out.append((px, pz))
-    # media mobile su ±4 m contro i salti tra un segmento e l'altro, poi semplificazione
-    sm = []
-    for i in range(len(out)):
-        w = out[max(0, i - 2):i + 3]
-        sm.append((sum(p[0] for p in w) / len(w), sum(p[1] for p in w) / len(w)))
-    sm[0], sm[-1] = out[0], out[-1]
-    keep = rdp(sm, 0.15)
-    print(f'  binario agganciato ai binari OSM: {snapped}/{len(smp)} campioni, {len(keep)} punti')
-    return [round(v, 2) for i in keep for v in sm[i]]
+def sir1_binari(cantiere, versi, staz, nt_path=None):
+    """I due binari del SIR1 (x, z in fila, verso +1 e -1) sui binari OSM di cantiere, rifatti con la regola.
+
+    versi: per verso (shape GTFS in x, z in fila, (x, z) dove comincia il tronco di partenza, (x, z) dove finisce
+    quello d'arrivo). Il percorso segue lo shape sui binari OSM (scripts/tram_linee.py, marcia a destra: un punto di
+    passaggio ogni PASSO_SIR1 metri, i nodi del SIR1 vicini allo shape) e si allunga sui binari più dritti fino ai capi
+    dei tronchi (dove lo shape fa l'inversione: lì comincia il deposito); in stazione va sull'anello esterno. Dove
+    corre sui binari di SIR2 e SIR3 (data/tram-linee-nuove.json, già rifatti) li prende com'erano."""
+    import tram_linee
+    import tram_percorsi as tp
+    import binari_regola
+    adj, pos, own, _cons, osm_stops, _way = tram_linee.load(cantiere)
+    bad = tp.right_hand(adj, pos)
+    bad = {(a, b) for a, b in bad if a in adj[b]}
+    tracce = []
+    mine = [n for n in pos if 'SIR1' in own[n]]
+    g = defaultdict(list)
+    for n in mine:
+        x, z = xz(*n)
+        g[(int(x // 20), int(z // 20))].append((x, z, n))
+
+    def vicini(p, r):
+        return {n for gx in range(int((p[0] - r) // 20), int((p[0] + r) // 20) + 1)
+                for gz in range(int((p[1] - r) // 20), int((p[1] + r) // 20) + 1)
+                for x, z, n in g.get((gx, gz), ()) if math.hypot(x - p[0], z - p[1]) < r}
+    for shape, ini, fin in versi:
+        # lo shape fino all'inversione, un punto ogni PASSO_SIR1 metri: i nodi del SIR1 vicini sono i punti di passaggio
+        sh = [(shape[i], shape[i + 1]) for i in range(0, len(shape), 2)]
+        sh = sh[:min(range(len(sh)), key=lambda i: math.dist(sh[i], fin)) + 1]
+        # gli ultimi metri prima dell'inversione possono essere già sull'altro binario: ci arriva il prolungamento
+        while len(sh) > 2 and math.dist(sh[-2], fin) < 30:
+            sh.pop()
+        cam, acc = [sh[0]], 0.0
+        for a, b in zip(sh, sh[1:]):
+            acc += math.dist(a, b)
+            if acc >= PASSO_SIR1:
+                cam.append(b)
+                acc = 0.0
+        cam.append(sh[-1])
+        # dove lo shape ha due binari vicini si prende quello a destra (si marcia a destra): con lo shape tra i due
+        # binari il percorso passava sull'altro dalle comunicazioni (Corso Vittorio Emanuele)
+        W = []
+        for k, p in enumerate(cam):
+            q = cam[min(k + 1, len(cam) - 1)] if k < len(cam) - 1 else p
+            o = cam[max(k - 1, 0)] if k == len(cam) - 1 else p
+            l = math.dist(o, q) or 1.0
+            rx, rz = -(q[1] - o[1]) / l, (q[0] - o[0]) / l  # z verso sud: a destra
+            # i nodi OSM sono radi (uno ogni 10-20 m): quelli entro 20 m, e solo i binari che passano a meno di 8 m
+            near = vicini(p, 20)
+            lat = {n: (xz(*n)[0] - p[0]) * rx + (xz(*n)[1] - p[1]) * rz for n in near}
+            near = {n for n in near if abs(lat[n]) < 8}
+            if lat and max(lat.values()) - min(lat.values()) > 2:
+                mid = (max(lat.values()) + min(lat.values())) / 2
+                near = {n for n in near if lat[n] > mid}
+            # due punti di passaggio con un nodo in comune non si possono toccare uno dopo l'altro
+            if near and not (W and near & W[-1]):
+                W.append(near)
+        path, k = tp.route(adj, pos, W, bad)
+        # un punto dove lo shape sta tra i due binari può prendere quello dell'altro verso: si salta
+        while not path and 0 < k < len(W) - 1:
+            print(f'  SIR1: punto di passaggio {sorted({tuple(round(v) for v in xz(*n)) for n in W[k]})} saltato')
+            del W[k]
+            path, k = tp.route(adj, pos, W, bad)
+        if not path:
+            sys.exit(f'SIR1: bloccato al punto di passaggio {k} di {len(W)}, '
+                     f'{sorted({tuple(round(v) for v in xz(*n)) for n in W[k - 1]})} -> {sorted({tuple(round(v) for v in xz(*n)) for n in W[k]})}')
+        # tronchi: fin dove arriva lo shape GTFS
+        for back, capo in ((True, ini), (False, fin)):
+            e = path[0] if back else path[-1]
+            longer = tram_linee.extend(adj, pos, path, math.dist(xz(*e), capo) + 5, back)
+            # si taglia nel punto più vicino al capo, sul prolungamento o sugli ultimi 300 m del percorso (l'ultimo
+            # punto di passaggio può stare oltre: alla Guizza il nodo OSM 20 m dentro il deposito)
+            seq = longer[::-1] if back else longer
+            P = [xz(*n) for n in seq]
+            acc, k0 = 0.0, len(P) - 1
+            while k0 > 0 and acc < 300 + math.dist(xz(*e), capo):
+                acc += math.dist(P[k0], P[k0 - 1])
+                k0 -= 1
+            best = min(range(k0, len(P) - 1), key=lambda i: _dist_line(capo, P[i:i + 2])[0])
+            (ax, az), (bx, bz) = P[best], P[best + 1]
+            L2 = (bx - ax) ** 2 + (bz - az) ** 2 or 1e-9
+            t = max(0.0, min(1.0, ((capo[0] - ax) * (bx - ax) + (capo[1] - az) * (bz - az)) / L2))
+            seq = seq[:best + 1] + ([latlon(ax + (bx - ax) * t, az + (bz - az) * t)] if t > 0 else [])
+            path = seq[::-1] if back else seq
+        full = [(la, lo) for la, lo in tram_stazione.fix_ll(staz, path)]
+        tracce.append([xz(*p) for p in full])
+    # gli anelli della stazione restano com'erano; i binari di SIR2 e SIR3 dove il SIR1 ci corre sopra
+    def fisso(p, t):
+        # gli anelli della stazione restano com'erano (z del gioco verso sud, y di staz.loc verso nord)
+        return bool(staz) and tram_stazione.su_anelli(staz, staz.loc(*latlon(*p)), (t[0], -t[1]))
+    altre = []
+    if nt_path and os.path.exists(nt_path):
+        for L in json.load(open(nt_path, encoding='utf-8'))['linee']:
+            altre += [[xz(*p) for p in v['percorso']] for v in L['versi']]
+    res, note = binari_regola.rifai({1: tracce[0], -1: tracce[1]}, binari_regola.INTERASSE['SIR1'], altre, fisso)
+    print('SIR1 secondo la regola:', {d: len(v) for d, v in res.items()}, 'punti;',
+          'comuni', [(c['da'], c['a']) for c in note['comuni']], 'doppio binario', [(c['da'], c['a'], c['interassi']) for c in note['doppio']])
+    for d, r in note['binari'].items():
+        if r.get('cede') or r.get('curve_strette'):
+            print(f'  verso {d}: tolleranza ceduta al raggio minimo in {r["cede"]}, curve strette {len(r["curve_strette"])}')
+    return [[round(float(v), 3) for p in res[d] for v in p] for d in (1, -1)]
 
 
 CALMING = {'bump': 0, 'hump': 1, 'cushion': 2, 'table': 3}  # traffic_calming -> tipo nei dati del gioco

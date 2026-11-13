@@ -48,14 +48,20 @@ OSM_TOLL = 1.0        # m: scarto massimo dal binario OSM
 PASSO = 1.0       # m: i binari si ricampionano ogni metro
 CORDA = 3         # m: il raggio da due corde di 3 m attorno al punto (i binari del gioco hanno un punto ogni 3 m)
 CORTO, LUNGO = 2, 10  # m: corde per gli spigoli
+CONTESTO = 5.0    # m: ai capi di una comunicazione, binario della linea che non conta con lei
 SPIGOLO = 2.0     # gradi: svolta minima nelle corde corte perché conti come spigolo
 CONCENTRATA = 0.5  # parte della svolta delle corde lunghe che uno spigolo fa nelle corde corte (una curva: un quinto)
 R_TOLL = 0.1      # m: raggi fino a R_MIN - R_TOLL contano come R_MIN (punti arrotondati al centimetro)
 INTERASSE_TOLL = 0.3  # m: quanto l'interasse può andare e venire in OSCILLA metri
 DOPPIO = 6.0      # m: i binari dei due versi più vicini di così sono nella stessa sede
 UNICO = 1.0       # m: più vicini ancora sono lo stesso binario, percorso nei due versi (un tronco al capolinea)
+SCAMBIO = 15.0    # m: attorno a dove i due versi diventano lo stesso binario c'è lo scambio (un ramo da R 10,5 m)
 OSCILLA = 30.0    # m: finestra in cui l'interasse non deve andare e venire
 OSM_VICINO = 15.0  # m: oltre, il binario non ha un binario OSM accanto (tratti disegnati dal gioco)
+CURVA_OSM = 25.0   # m attorno a una curva OSM sotto il raggio minimo dove scarti da OSM e interassi sono un'eccezione
+RACCORDI = 20.0    # m oltre la zona del piazzale: i raccordi verso le vie (RACC_OUT di scripts/tram_stazione.py)
+CURVA_OSM_R = 12.0  # m: raggio delle curve OSM troppo strette, il minimo con il margine dei binari rifatti
+                    # (scripts/binari_regola.py, R_FIT)
 GIUNTO = 10.0     # m: un ramo del deposito si misura con tanti metri dei binari che lo continuano
 SPOSTA = 5.0      # m: nei depositi la svolta tra le corde lunghe è la più grande tra le finestre spostate fino a tanto
 UNITO = 3         # m: casi più vicini di così lungo il binario sono lo stesso caso
@@ -244,10 +250,10 @@ def rete_dati(M=None):
         b = [[xz(*p) for p in v['percorso']] for v in L['versi']]
         R.linee[L['id']] = {'binari': {1: b[0], -1: b[1]}}
         R.fermate += [(*xz(f['lat'], f['lon']), f['nome']) for v in L['versi'] for f in v['fermate']]
-    # comunicazioni OSM (service=crossover) accanto ai binari di una linea
+    # comunicazioni: nei dati sono i loro due capi (gli scambi di data/tram-linee-nuove.json), la S tra i due binari la
+    # disegna il gioco (TramTrack.terminal) e si misura lì; le way OSM delle comunicazioni non sono i binari del gioco
     for L in R.linee.values():
-        g = Griglia(segmenti(L['binari'].values()), 20.0)
-        L['comunicazioni'] = [w['pts'] for w in ways if w['servizio'] == 'crossover' and all(g.piu_vicino(p, 30) is not None for p in w['pts'])]
+        L['comunicazioni'] = []
     dep = json.load(open(os.path.join(RADICE, 'data/tram-depositi.json')))
     for D in dep['depositi']:
         g = Griglia(segmenti(R.linee[D['linea']]['binari'].values()), 20.0)
@@ -403,14 +409,21 @@ def raggruppa(flags, unito=UNITO):
     return out
 
 
-def curve(S, esse=False):
+def curve(S, esse=False, assoluta=False):
     """Spigoli e raggi sotto R_MIN lungo i punti S (ogni PASSO metri); 'i' è l'indice del punto in S. Con esse (nei
     depositi) la svolta tra le corde lunghe è la più grande tra quelle a meno di SPOSTA metri: in una S due curve opposte
-    si annullano tra le corde lunghe, ma una delle finestre vicine ne vede una intera; uno spigolo o uno zig-zag no."""
+    si annullano tra le corde lunghe, ma una delle finestre vicine ne vede una intera; uno spigolo o uno zig-zag no. Con
+    assoluta (le linee e le comunicazioni) la svolta delle corde lunghe è la netta, o metà di quella in valore assoluto
+    metro per metro se è di più: in una S (una comunicazione, un binario che si scosta) la svolta netta su 20 m è quasi
+    nulla e ogni curva sembrerebbe uno spigolo; per uno spigolo o un arco a poligono non cambia niente."""
     t2, t10, t3 = svolte(S, CORTO), svolte(S, LUNGO), svolte(S, CORDA)
     if esse:
         k = round(SPOSTA / PASSO)
         t10 = [max(abs(v) for v in t10[max(0, i - k):i + k + 1]) for i in range(len(S))]
+    if assoluta:
+        t1 = [abs(v) for v in svolte(S, PASSO)]
+        k = round(LUNGO / PASSO)
+        t10 = [max(abs(t10[i]), sum(t1[max(0, i - k + 1):i + k]) / 2) for i in range(len(S))]
     sp = [abs(t2[i]) >= math.radians(SPIGOLO) and abs(t2[i]) >= CONCENTRATA * abs(t10[i]) for i in range(len(S))]
     vicino_sp = [any(sp[max(0, i - UNITO):i + UNITO + 1]) for i in range(len(S))]
     rg = [not vicino_sp[i] and abs(t3[i]) > 1e-9 and CORDA / abs(t3[i]) < R_MIN - R_TOLL for i in range(len(S))]
@@ -453,7 +466,12 @@ def interassi(A, B):
     S = ricampiona(A)
     g = Griglia(segmenti([B]))
     d = [g.piu_vicino(p, DOPPIO, direzione(S, i), coseno=-0.9) for i, p in enumerate(S)]
-    d = [v if v is not None and v >= UNICO else None for v in d]
+    # dove i due versi diventano un binario solo (il tronco di un capolinea con un binario) c'è lo scambio: lì i binari
+    # si stringono per forza, per SCAMBIO metri
+    unico = [v is not None and v < UNICO for v in d]
+    k_sc = round(SCAMBIO / PASSO)
+    vicino_unico = [any(unico[max(0, i - k_sc):i + k_sc + 1]) for i in range(len(S))]
+    d = [v if v is not None and v >= UNICO and not vicino_unico[i] else None for i, v in enumerate(d)]
     m = minimi(S)
     k = round(OSCILLA / 2 / PASSO)
 
@@ -537,14 +555,31 @@ def pendenze(P, quote):
     return casi
 
 
-def in_stazione(Z, p):
-    """Punto nella zona della stazione (net.tramStazione: centri delle testate a e b, raggio r, near)?"""
+def in_stazione(Z, p, oltre=0.0):
+    """Punto nella zona della stazione (net.tramStazione: centri delle testate a e b, raggio r, near), allargata di
+    oltre metri?"""
     if not Z:
         return False
     (ax, az), (bx, bz) = Z['a'], Z['b']
     ex, ez = bx - ax, bz - az
     t = max(0.0, min(1.0, ((p[0] - ax) * ex + (p[1] - az) * ez) / (ex * ex + ez * ez or 1e-9)))
-    return math.hypot(p[0] - ax - ex * t, p[1] - az - ez * t) - Z['r'] < Z['near']
+    return math.hypot(p[0] - ax - ex * t, p[1] - az - ez * t) - Z['r'] < Z['near'] + oltre
+
+
+def curve_strette_osm(R):
+    """Vertici dei binari OSM dove la curva è più stretta del raggio minimo: la circonferenza per il vertice e i due
+    accanto (a meno di 15 m) ha raggio sotto CURVA_OSM_R. Una griglia, calcolata la prima volta."""
+    if getattr(R, '_strette', None) is None:
+        # i segmenti OSM in fila: vertici con il segmento prima e quello dopo
+        vertici = []
+        for (a, b), (c, e) in zip(R.osm, R.osm[1:]):
+            if b != c or math.dist(a, b) > 15 or math.dist(c, e) > 15:
+                continue
+            cr = abs((b[0] - a[0]) * (e[1] - a[1]) - (b[1] - a[1]) * (e[0] - a[0]))
+            if cr > 1e-9 and math.dist(a, b) * math.dist(b, e) * math.dist(e, a) / (2 * cr) < CURVA_OSM_R:
+                vertici.append(b)
+        R._strette = Griglia([(v, (v[0] + 0.01, v[1])) for v in vertici], 20.0)
+    return R._strette
 
 
 # Zone dove la regola cede a un vincolo scritto: i casi dentro si elencano a parte e non contano.
@@ -558,6 +593,16 @@ ECCEZIONI = [
      'perche': "OSM (il cantiere, way 1453989055) disegna la curva del binario interno dell'anello con un raggio di "
                "6,4 m, sotto il minimo del Translohr: col raggio minimo il binario passa fino a 1,2 m più all'interno "
                "dell'anello (nella foto aerea la curva della massicciata è ancora più larga)"},
+    {'nome': 'raccordi del piazzale', 'tipi': {'interassi'}, 'dentro': lambda R, p: in_stazione(R.stazione, p, RACCORDI),
+     'perche': f'fino a {RACCORDI:g} m oltre la zona del piazzale (i raccordi di scripts/tram_stazione.py tra le vie e gli '
+               'anelli) i due versi di una linea vanno e vengono da anelli e raccordi diversi e si incrociano con le altre '
+               'linee: non sono un doppio binario'},
+    {'nome': 'curve di OSM sotto il raggio minimo', 'tipi': {'scarti_osm', 'interassi'},
+     'dentro': lambda R, p: R.osm and curve_strette_osm(R).piu_vicino(p, CURVA_OSM) is not None,
+     'perche': f'a meno di {CURVA_OSM:g} m da una curva che OSM disegna più stretta di {CURVA_OSM_R:g} m (circonferenza '
+               f'per tre vertici vicini; {R_MIN:g} m del veicolo più il margine dei binari rifatti): il binario non la può '
+               'seguire entro la tolleranza, e l\'interasse con l\'altro binario, che la segue, cambia; OSM taglia gli '
+               'angoli, il progetto del SIR3 ha in quei punti raggi da 10,5 a 20 m'},
 ]
 
 
@@ -574,11 +619,17 @@ def misura(R):
         for d in (1, -1):
             for P in tagli_inversioni(L['binari'][d]):
                 S = ricampiona(P)
-                for c in curve(S) + scarti(S, osm):
+                for c in curve(S, assoluta=True) + scarti(S, osm):
                     casi.append({**c, 'binario': d})
             if L.get('quote'):
                 casi += [{**c, 'binario': d} for c in pendenze(L['binari'][d], L['quote'][d])]
-        casi += [{**c, 'binario': 'comunicazione'} for P in L.get('comunicazioni', []) for c in curve(ricampiona(P))]
+        # le comunicazioni hanno attorno 10 m del binario della linea, per misurare dove la S si attacca; i primi e gli
+        # ultimi CONTESTO metri si misurano con la linea: lì le finestre tagliate dal capo fanno sembrare uno spigolo
+        # anche una curva (a Busa di Vigonza il binario prima della S gira con un raggio di 47 m)
+        for P in L.get('comunicazioni', []):
+            S = ricampiona(P)
+            casi += [{**c, 'binario': 'comunicazione'} for c in curve(S, assoluta=True)
+                     if CONTESTO <= c['i'] * PASSO <= (len(S) - 1) * PASSO - CONTESTO]
         casi += [{**c, 'binario': 1} for c in interassi(L['binari'][1], L['binari'][-1])]
         out[nome] = casi
     for nome, D in R.depositi.items():

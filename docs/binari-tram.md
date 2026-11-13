@@ -37,9 +37,10 @@ vale quello del SIR3 (inferenza).
 6. **Pendenza** al massimo **6%** in linea, **4%** in fermata, nelle rotaie di manovra e ai capolinea (in fermata
    meglio il 2%). Il veicolo arriva al 13% solo come limite. Raccordi verticali di almeno **350 m** nelle conche e
    **120 m** sui dossi (200 m nelle conche dei binari di servizio e del deposito).
-7. **Eccezioni scritte.** Dove un vincolo vero obbliga a uscire dalla regola (il piazzale della stazione, la curva
-   sud-ovest del deposito di Voltabarozzo), l'eccezione ha una zona e il suo perché in `ECCEZIONI` di
-   `scripts/binari_tram.py` e nella sezione 4. Il controllo la elenca a parte.
+7. **Eccezioni scritte.** Dove un vincolo vero obbliga a uscire dalla regola (il piazzale della stazione e i suoi
+   raccordi, le curve che OSM disegna sotto il raggio minimo, la curva sud-ovest del deposito di Voltabarozzo),
+   l'eccezione ha una zona e il suo perché in `ECCEZIONI` di `scripts/binari_tram.py` e nella sezione 4. Il controllo la
+   elenca a parte.
 
 ## 2. I numeri e le fonti
 
@@ -150,25 +151,50 @@ vale quello del SIR3 (inferenza).
 * La tolleranza di 1 m è una scelta di questa regola, non di una fonte: è più di quanto sbaglia un binario tracciato
   su foto aeree e basta per mettere un arco al posto di una spezzata o portare i due binari a interasse costante.
 
-## 3. Come si rifà un binario (per #69 e #70)
+## 3. Come si rifanno i binari (#69 per le linee, #70 per i depositi)
 
-È il metodo già usato per il piazzale della stazione (`scripts/tram_stazione.py`, sezione "Binari della stazione" di
-[`linee-tram-nuove.md`](linee-tram-nuove.md)), da allargare a tutta la rete:
+I binari delle tre linee li rifà `scripts/binari_regola.py` (numpy), chiamato da `scripts/tram_linee.py` per SIR3 e
+SIR2 e da `scripts/build_map.py` per il SIR1, in quest'ordine: una linea che corre sui binari di una già rifatta li
+prende com'erano. Per ogni linea:
 
-1. dai binari OSM, la successione delle way di ogni binario (come già fanno `scripts/tram_linee.py` e
-   `scripts/tram_depositi.py`), ricampionata ogni metro;
-2. i tratti dritti diventano rettilinei (la retta che segue meglio i punti), le svolte archi con il raggio più grande
-   che sta tra i due rettilinei e resta entro 1 m da OSM, mai sotto 10,5 m, con le clotoidi ai capi;
-3. dove i due binari di una linea sono nella stessa sede, prima l'asse comune e poi i due binari a metà interasse
-   per parte: l'interasse resta costante e cambia solo con una S;
-4. scambi e comunicazioni con la geometria della sezione 2, in rettilineo; nei depositi i ventagli fatti di scambi
-   uno dopo l'altro;
-5. i punti scritti ogni metro o meno (come il piazzale), così il gioco li prende come sono.
+1. **la traccia**: il percorso di ogni verso sui binari OSM (way dopo way, come già per SIR2 e SIR3; il SIR1 dal 12
+   novembre segue anche lui i binari OSM, con lo shape GTFS solo per i punti di passaggio, un punto ogni 120 m sul
+   binario a destra dello shape, e per i capi dei tronchi, dove lo shape fa l'inversione), con il piazzale della
+   stazione già sugli anelli di `scripts/tram_stazione.py`; ricampionata ogni 0,5 m;
+2. **i tratti fissi**: gli anelli della stazione e le S tra i due anelli (uguali per tutte le linee:
+   `tram_stazione.su_anelli`), e i tratti dove la linea corre sui binari di un'altra già rifatta (il SIR2 sul SIR3
+   verso Pace, il SIR1 sul SIR2 in Corso Garibaldi e Corso del Popolo). Dove le linee si separano il tratto comune
+   finisce 15 m prima (`STACCO`), così la curva comincia in tempo;
+3. **il doppio binario**: dove i due versi corrono in controsenso tra 1,5 e 6,5 m (`DOPPIO`), l'asse a metà tra i due
+   binari OSM; l'interasse è costante a tratti: quello della linea (3,00 m, 3,50 m per il SIR2, 3,00 m sui binari del
+   SIR1) dove sta entro `DELTA` (1,2 m) dall'interasse di OSM, altrimenti il valore a 10 cm più vicino a quello della
+   linea che ci sta; mai sotto il minimo delle fasce d'ingombro per il raggio del binario interno; un tratto con un
+   interasse diverso dura almeno 70 m (`PIANO`), e tra due tratti c'è una S di 40 m (`TRANS`). L'asse si raccorda (sotto)
+   e i due binari sono l'asse più e meno mezzo interasse: l'interasse è quello, punto per punto. Ai capi del tratto,
+   dove i binari di OSM si allontanano di più di 0,6 m dall'interasse (`CAPO`), il doppio binario finisce;
+4. **il raccordo** di ogni binario: un problema ai minimi quadrati sui punti ogni 0,5 m, vicino alla traccia (il punto
+   più vicino), con la terza differenza piccola (la curvatura cambia piano, come in una clotoide: `L3` = 9 m) e, dove la
+   curvatura supera 1/12 m (`R_FIT`, 1,5 m di margine sul minimo), un vincolo che la riporta sotto. Si ripete finché
+   nessun punto è oltre il raggio o oltre 0,8 m dalla traccia (`TOLL`). Dove la curva non ci sta, prima si accorcia il
+   tratto fisso del doppio binario lì vicino, poi la traccia cede: è il caso delle curve che OSM disegna sotto i 12 m;
+5. **i punti scritti** densi nelle curve e radi sui rettilinei (semplificati a 2 mm), in lat/lon a 8 decimali per SIR2
+   e SIR3 e in x, z al millimetro per il SIR1: il gioco li prende come sono.
+
+Con i dati secondo la regola (`tramRegola` nella mappa, `regola` in `data/tram-linee-nuove.json`) il gioco spegne i suoi
+ritocchi: niente `smoothTrack`, `clearOfBuildings` e tronchi allungati in `src/data/padova.js`, niente `smoothLane` in
+`TramTrack`, che prende i vertici dei dati (e un punto ogni 3 m sui rettilinei); i tratti in comune tra le linee
+(`snapShared`) sono solo quelli che coincidono entro 5 cm. La S degli scambi ai capolinea è fatta di due archi uguali,
+con raggio almeno 12 m (`R_COMUNICAZIONE` in `tram.js`): una comunicazione di OSM più corta si allunga dalle due parti
+(tra binari a 3 m le servono 11 m).
+
+Restano lontani dalla regola, nel gioco: l'interasse disegnato (le corsie rosse sono larghe 3,4 m, `TRAM.lane`, e dove i
+binari stanno a 3 m si sovrappongono) e il raccordo di 20 m dei bivi tra le linee (`SWITCH_LEN`, che con i dati
+secondo la regola non sposta più niente).
 
 ### Nei depositi (#70)
 
 I depositi della Guizza e di Voltabarozzo sono rifatti così da `scripts/tram_depositi.py`, con la geometria di
-`scripts/tram_stesura.py` (solo libreria standard, da riusare per le linee):
+`scripts/tram_stesura.py` (solo libreria standard):
 
 * **un binario** (`stendi`): la traccia OSM semplificata (Douglas-Peucker a 0,2 m) dà le tangenti; le svolte dello
   stesso verso troppo vicine per avere ognuna la sua curva diventano una sola all'incrocio delle tangenti esterne, se la
@@ -191,25 +217,20 @@ I depositi della Guizza e di Voltabarozzo sono rifatti così da `scripts/tram_de
   esattamente sulla way, un raccordo di Hermite di 15 m dal binario della linea (posizione e direzione) al ramo del
   deposito.
 
-Nel gioco oggi i binari passano da tre ritocchi che con dati già secondo la regola non servono più e che spostano la
-geometria (gli scarti da OSM del gioco vengono soprattutto da lì: dove i dati hanno uno spigolo il raccordo taglia
-l'angolo, come in Via Guizza e in Via Carlo Zeno): i raccordi fino a 28 m di raggio a ogni vertice
-(`smoothTrack` in `src/data/padova.js`), lo spostamento fino a 5 m lontano dalle facciate (`clearOfBuildings`, stesso
-file) e la media mobile su ±9 m (`smoothLane` in `src/tram/tram.js`, già spenta nel piazzale). Altre misure del gioco
-lontane dalla regola: l'interasse disegnato di 3,4 m (`TRAM.lane` 1,7 m, e `GAP` di `tram_stazione.py`), la S dello
-scambio ai capolinea lunga 24 m (`XO` in `tram.js`) contro i 10,8 m veri, il raccordo di 20 m dei bivi (`SWITCH_LEN`).
-
 ## 4. Il controllo
 
 `scripts/binari_tram.py` misura una rete di binari contro la regola, per linea (SIR1, SIR2, SIR3) e per deposito
 (Guizza, Voltabarozzo). Solo libreria standard di Python. Le reti sono due:
 
-* **i dati**, quello che scrivono gli script: il SIR1 in `src/data/padova-map.json` (shape GTFS agganciato ai binari
-  OSM), SIR2 e SIR3 in `data/tram-linee-nuove.json`, le comunicazioni OSM dei capolinea e i depositi di
-  `data/tram-depositi.json`. Li misura `scripts/verifica_mappa.py`, con le soglie in `SOGLIE_BINARI`;
-* **il gioco**, i binari come li disegna dopo i ritocchi della sezione 3: `TramTrack.paths` (con i bivi tra le linee),
-  le S degli scambi ai capolinea (`terminalCurve`), le quote (`TramTrack.h`), i rami e i nodi di `TramYard`. Li misura
-  `tests/binari-tram.spec.js`, che li scrive in un file e chiama lo script con `--gioco`; le soglie sono nella prova.
+* **i dati**, quello che scrivono gli script: il SIR1 in `src/data/padova-map.json`, SIR2 e SIR3 in
+  `data/tram-linee-nuove.json`, i depositi di `data/tram-depositi.json`. Le comunicazioni dei capolinea nei dati sono i
+  loro due capi: la S la disegna il gioco, e si misura lì. Li misura `scripts/verifica_mappa.py`, con le soglie in
+  `SOGLIE_BINARI`;
+* **il gioco**, i binari come li disegna: `TramTrack.paths` (con i bivi tra le linee), le S degli scambi ai capolinea
+  come le percorre il tram (con 10 m di binario prima e dopo: contano i casi nei 5 m vicino alla S, gli altri sono
+  della linea e lì le finestre tagliate dal capo vedono spigoli che non ci sono), le quote (`TramTrack.h`), i rami e i
+  nodi di `TramYard`. Li misura `tests/binari-tram.spec.js`, che li scrive in un file e chiama lo script con `--gioco`;
+  le soglie sono nella prova.
 
 ```bash
 python3 scripts/binari_tram.py --elenco                       # i dati, con i punti peggiori
@@ -222,12 +243,16 @@ Cosa conta (i binari ricampionati ogni metro; un caso è un tratto, con il punto
 
 * **spigoli**: la direzione cambia di almeno **2°** tra due corde di 2 m, e lì si concentra almeno metà della svolta
   fatta tra due corde di 10 m. Una curva distribuisce la svolta (in 4 m ne fa un quinto di quella in 20 m), uno
-  spigolo no. Un arco disegnato con punti più radi di 4-5 m conta come una fila di spigoli;
+  spigolo no. Un arco disegnato con punti più radi di 4-5 m conta come una fila di spigoli. Per le linee e le
+  comunicazioni la svolta in 20 m è la netta o, se è di più, metà di quella in valore assoluto: in una S (una
+  comunicazione, un binario che si scosta) la svolta netta è quasi nulla e ogni curva sembrava uno spigolo; per uno
+  spigolo vero o un arco a poligono non cambia niente. Nei depositi la misura è un'altra (sotto);
 * **raggi sotto il minimo**: raggio sotto 10,5 m, misurato con due corde di 3 m attorno al punto (il passo dei binari
   del gioco). I tratti sotto il minimo a meno di 10 m l'uno dall'altro sono una curva sola;
 * **interassi fuori misura**: dove i due binari di una linea corrono nella stessa sede (entro 6 m, in controsenso, e
-  non sullo stesso binario, come un tronco al capolinea), più vicini del minimo delle fasce d'ingombro per il raggio
-  più stretto entro 10 m; oppure un interasse che va e viene: nei 30 m attorno al punto la strada fatta
+  non sullo stesso binario, come un tronco al capolinea, né nei 15 m dello scambio dove i due versi diventano un
+  binario solo, come a Busa di Vigonza), più vicini del minimo delle fasce d'ingombro per il raggio più stretto entro
+  10 m; oppure un interasse che va e viene: nei 30 m attorno al punto la strada fatta
   dall'interasse, tolto il cambio netto, supera 0,3 m. Un interasse costante o che passa da un valore a un altro senza
   tornare indietro va bene. Nel deposito: binari paralleli più vicini del minimo, a più di 15 m dai nodi;
 * **scarti da OSM**: tratti a più di 1 m dal binario OSM più vicino e parallelo (entro 15 m: più lontano non c'è un
@@ -241,24 +266,32 @@ a un nodo (lo scambio a cerniera parte con l'arco) o una way spezzata a metà cu
 tagliata, dove sembrerebbero spigoli. E nei depositi la svolta tra le corde di 10 m è la più grande tra le finestre
 spostate fino a 5 m: in una S (il ramo deviato che gira al contrario del binario da cui parte, due scambi a punta contro
 punta) le due curve si annullano tra le corde lunghe e la svolta in 4 m sembrerebbe concentrata; una delle finestre
-vicine vede una curva intera, mentre uno spigolo o uno zig-zag restano spigoli. Sulle linee la misura resta quella di
-prima. Ogni caso ha il posto (coordinate del gioco, via e fermata più vicine) e un peso: gradi diviso 2 per gli spigoli, 10,5 diviso il raggio, 1 più i metri sotto il
+vicine vede una curva intera, mentre uno spigolo o uno zig-zag restano spigoli. Ogni caso ha il posto (coordinate del gioco, via e fermata più vicine) e un peso: gradi diviso 2 per gli spigoli, 10,5 diviso il raggio, 1 più i metri sotto il
 minimo diviso 0,3 per gli interassi stretti, l'oscillazione diviso 0,3 m, metri da OSM, pendenza diviso 6%. L'elenco
 dei punti peggiori va per peso.
 
-Eccezioni (`ECCEZIONI`), per gli scarti da OSM:
+Eccezioni (`ECCEZIONI`), elencate a parte con il loro perché:
 
-* il **piazzale della stazione**. I binari lì vengono dal rendering del progetto del piazzale: anelli regolari e
-  raccordi morbidi al posto dei binari OSM, che fanno S e si incrociano;
-* la **curva sud-ovest del deposito di Voltabarozzo** (2334, 3690). OSM (il cantiere, way 1453989055) disegna la curva
-  del binario interno dell'anello con un raggio di 6,4 m, sotto il minimo del Translohr: col raggio minimo il binario
-  passa fino a 1,2 m più all'interno dell'anello. Nella foto aerea la curva della massicciata è ancora più larga.
+* il **piazzale della stazione**, per gli scarti da OSM: i binari lì vengono dal rendering del progetto del piazzale,
+  anelli regolari e raccordi morbidi al posto dei binari OSM, che fanno S e si incrociano;
+* i **raccordi del piazzale**, per gli interassi, fino a 20 m oltre la zona del piazzale (`RACCORDI`, i raccordi di
+  `tram_stazione.py` verso le vie): i due versi di una linea vanno e vengono da anelli e raccordi diversi e si
+  incrociano con le altre linee, non sono un doppio binario;
+* le **curve di OSM sotto il raggio minimo**, per scarti da OSM e interassi, a meno di 25 m da un vertice OSM dove la
+  circonferenza per lui e i due vertici accanto (a meno di 15 m) ha raggio sotto 12 m (`CURVA_OSM_R`: 10,5 m del veicolo
+  più il margine dei binari rifatti): il binario non può seguire OSM, e l'interasse con l'altro binario, che la segue,
+  cambia. OSM taglia gli angoli; il progetto del SIR3 ha in quei punti raggi da 10,5 a 20 m (Via Carlo Zeno e Via
+  Piovese, il tornante del SIR1 a Bassanello, la curva di Viale della Pace);
+* la **curva sud-ovest del deposito di Voltabarozzo** (2334, 3690), per gli scarti da OSM. OSM (il cantiere, way
+  1453989055) disegna la curva del binario interno dell'anello con un raggio di 6,4 m, sotto il minimo del Translohr:
+  col raggio minimo il binario passa fino a 1,2 m più all'interno dell'anello. Nella foto aerea la curva della
+  massicciata è ancora più larga.
 
-Non si contano ancora: le clotoidi (le hanno i depositi, non ancora le linee), gli scambi in curva o vicini agli
-incroci, la lunghezza delle comunicazioni, le pendenze in fermata e i raccordi verticali.
+Non si contano ancora: le clotoidi, gli scambi in curva o vicini agli incroci, la lunghezza delle comunicazioni, le
+pendenze in fermata e i raccordi verticali.
 
-Le soglie delle linee sono i valori del 12 novembre, quelle dei depositi 0: se un numero scende, si abbassa la soglia
-nello stesso commit, come per il resto del rapporto della mappa.
+Le soglie sono 0, tranne le pendenze delle linee nel gioco (le rampe dei cavalcavia, #74): se un numero scende, si
+abbassa la soglia nello stesso commit, come per il resto del rapporto della mappa.
 
 ## 5. La rete del 12 novembre 2026
 
@@ -282,7 +315,32 @@ Casi per linea e deposito, dati / gioco (le pendenze solo nel gioco):
 * **Pendenze**: le rampe dei cavalcavia nel gioco arrivano al 18,5% (Chiesanuova, SIR2), oltre il limite del veicolo;
   il progetto del SIR2 non supera il 4,8%. Ticket a parte: #74.
 
-### Punti peggiori delle linee (per #69)
+### Dopo #69 e #70 (12 novembre, sera)
+
+Le linee e i depositi rifatti con la regola (sezione 3), dati / gioco:
+
+| | spigoli | raggi | interassi | scarti da OSM | pendenze | nelle eccezioni |
+|---|---|---|---|---|---|---|
+| SIR1 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | – / 4 | 4 / 4 |
+| SIR3 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | – / 0 | 7 / 7 |
+| SIR2 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | – / 14 | 7 / 7 |
+| Guizza | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | – / 0 | |
+| Voltabarozzo | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | – / 0 | 1 / 1 |
+
+* **Nelle eccezioni**: 3 scarti nel piazzale della stazione (fino a 3,5 m, il SIR2 verso il Cavalcavia Borgomagno); 5
+  interassi nei raccordi del piazzale (a ovest verso il Cavalcavia Borgomagno e Corso del Popolo, a est verso Pace, dove
+  i binari verso la stazione girano nel raccordo e quelli verso Pace proseguono); 10 casi accanto alle curve che OSM disegna sotto i 12 m: Via Carlo Zeno e Via Piovese
+  (SIR3, fino a 3,5 m da OSM, dove OSM fa una S da 6 m di raggio), Via Luigi Anelli (SIR2, fino a 3,2 m, la curva
+  attorno all'aiuola: il binario rifatto resta sull'asfalto), il tornante del SIR1 verso nord a Bassanello (interasse),
+  la curva di Viale della Pace (SIR2 e SIR3, 1,1 m), la curva del SIR3 da Via Tommaseo verso sud a Pace (1,2 m).
+* **Punti peggiori di prima**: in Corso Vittorio Emanuele i due binari del SIR1 stanno a 3 m (lo shape GTFS saltava
+  sull'altro binario dalla comunicazione: il SIR1 ora segue i binari OSM); ai capolinea di Rubano, della Guizza e di
+  Pontevigodarzere niente spigoli, e la S degli scambi ai capolinea è di due archi da almeno 12 m.
+* **Pendenze**: le rampe dei cavalcavia, come prima (#74).
+* **Depositi**: rifatti da #70 (sezione 3), a 0 anche con i binari delle linee rifatti, ai quali le porte si
+  raccordano; nelle eccezioni la curva sud-ovest di Voltabarozzo.
+
+### Punti peggiori delle linee (prima di #69)
 
 Dal gioco, in ordine di peso; coordinate del gioco (x verso est, z verso sud).
 

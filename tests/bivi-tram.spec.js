@@ -19,7 +19,8 @@ async function alBivio(page, { kind, gira, cabina = false, prima = 100, oltre = 
     const { j, s } = c;
     bus.setFront(s - (fw ? prima : -prima));
     g.sim(0.6, dt, false);
-    const out = { da: bus.track.id, ruolo: c.role, stato0: j.state };
+    // la linea dell'altro ramo del bivio
+    const out = { da: bus.track.id, ruolo: c.role, stato0: j.state, altra: (j.x.T === bus.track ? j.o : j.x).T.id };
     const toasts = [];
     const toast0 = g.hud.toast.bind(g.hud);
     g.hud.toast = (t, k) => { toasts.push(t); return toast0(t, k); };
@@ -68,7 +69,10 @@ test('bivi in Esplorazione: dopo il cambio cabina N porta sull\'altro binario an
   await avviaCorsa(pagina, { linea: 'SIR1', tram: true, verso: 0, modo: 'roam' });
   const r = await alBivio(pagina, { kind: 'unione', gira: true, cabina: true });
   const testo = JSON.stringify(r);
-  expect([r.da, r.a], testo).toEqual(['SIR1', 'SIR2']);
+  // il bivio più lontano sul binario del SIR1 verso nord: dal 12 novembre (#69) nel piazzale della stazione, sull'anello
+  // esterno in comune col SIR3; prima era quello del SIR2
+  expect([r.da, r.a], testo).toEqual(['SIR1', r.altra]);
+  expect(r.altra, testo).not.toBe('SIR1');
   expect([r.salto < 0.05, r.sulBinario < 0.05], testo).toEqual([true, true]);
   expect(gioco.errori()).toEqual([]);
 });

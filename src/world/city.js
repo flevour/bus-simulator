@@ -1282,7 +1282,7 @@ export class City {
     // una sede per linea: quelle in costruzione si appoggiano alle sedi già posate nei tratti in comune
     this.tramTracks = { [track.id]: track };
     for (const T of this.net.tramLines || []) {
-      this.tramTracks[T.id] = new TramTrack(this.net, { id: T.id, lanes: T.lanes, lines: TRAM_LINES.filter((L) => L.id === T.id), over: Object.values(this.tramTracks) });
+      this.tramTracks[T.id] = new TramTrack(this.net, { id: T.id, lanes: T.lanes, regola: T.regola, lines: TRAM_LINES.filter((L) => L.id === T.id), over: Object.values(this.tramTracks) });
     }
     const tracks = Object.values(this.tramTracks);
     for (const T of tracks) T.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz));

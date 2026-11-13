@@ -76,8 +76,9 @@ La mappa unisce due fonti aperte:
 * **Nodi OpenStreetMap** (`data/osm-padova-nodes.json`, query `scripts/overpass-nodes.ql`): semafori, STOP, dare
   precedenza, attraversamenti pedonali e dossi reali.
 * **Binari del tram OpenStreetMap** (`data/osm-padova-tram.json`, query `scripts/overpass-tram.ql`): la sede del gioco
-  segue i binari veri, uno per verso. Lo shape GTFS corre su uno dei due binari e ha punti radi: viene campionato ogni
-  2 m e agganciato al binario OSM vicino e parallelo. Le fermate vanno sul nodo OSM dove si ferma il tram
+  segue i binari veri, uno per verso: il percorso del SIR1 sui binari OSM (`data/osm-padova-tram-cantiere.json`), con lo
+  shape GTFS per i punti di passaggio e i capi dei tronchi, rifatto con la regola di `docs/binari-tram.md`
+  (`scripts/binari_regola.py`: curve senza spigoli né raggi sotto il minimo, interasse costante). Le fermate vanno sul nodo OSM dove si ferma il tram
   (`railway=tram_stop`, `stop_position`), a metà della banchina vera, oppure al centro della banchina OSM: le fermate GTFS
   stanno in fondo alla banchina, circa 10 m più avanti. I binari delle linee nuove (SIR2, SIR3) li legge da
   `data/tram-linee-nuove.json`, accanto all'export dei binari: la loro sede entra nella pianta delle strade come quella

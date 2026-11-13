@@ -350,3 +350,17 @@ def fix_ll(st, path_ll):
     if not st:
         return path_ll
     return [st.ll(*p) for p in st.fix([st.loc(*p) for p in path_ll])]
+
+
+
+def su_anelli(st, p, d=None, toll=0.03, allineato=0.97):
+    """Il punto p (nel sistema di loc) sta sugli anelli o tra i due (le S degli scambi tra gli anelli): la geometria
+    del piazzale, uguale per tutte le linee che ci passano. scripts/binari_regola.py la tiene com'è. Con d, la direzione
+    del binario (x est, y nord), solo dove corre lungo gli anelli: i raccordi che li toccano di traverso restano liberi."""
+    t, w = st.proj(p)
+    if not -toll < w < GAP + toll:
+        return False
+    if d is None:
+        return True
+    a = st.at(t)[1]
+    return abs(a[0] * d[0] + a[1] * d[1]) > allineato
