@@ -482,14 +482,14 @@ Nei controlli il giocatore va tenuto lontano dai binari: fermo a 4,3 m dall'asse
 Bus automatici in anticipo (segnalazione dell'11 novembre, "in Prato della Valle a 20 all'ora"): vanno al più il 15%
 sotto il limite e recuperano l'anticipo in fermata: oltre 40 s avanti si fermano anche senza prenotazioni, fino
 all'orario (al più un minuto). Dal 12 novembre (#64) anche i tram automatici in anticipo vanno all'andatura normale e
-aspettano in fermata (nota del tram, "Turni e stazione"): la fase tram di Largo Europa dura 8-13 s con un tram (prima
-12-32 s con uno o due). Non nelle fermate dove il tram fermo sta sopra un incrocio: `TramSim.onCrossing` ripete le
-condizioni di `TramSignals.update` per chi è in sosta, e se cambiano lì va cambiato anche lui. Se qualcuno sul suo
-binario lo aspetta (`TramSim.queued`: auto, bus, chi gioca o un altro tram) il tram riparte finita la sosta di 15 s: a
-Tito Livio e a Ponti Romani, nella carreggiata, i bus restavano fermi fino a 100 s. `queued` dipende da `ahead` e `full`
-di `buses.js`: il bus si ferma al semaforo fino a 50 m dietro la coda del tram (non entra nell'incrocio senza 15 m di
-posto oltre). Un tram fermo a lungo sopra un incrocio col semaforo tiene ancora la fase tram agli altri tram dopo
-`TRAM_HOLD` (#92).
+aspettano in fermata (nota del tram, "Turni e stazione"): a Largo Europa passano le linee d'arresto a 8,5 m/s (prima
+3,8) e la fase tram con un tram solo dura 8-10 s (prima 15,5). Non nelle fermate dove il tram fermo sta sopra un
+incrocio: `TramSim.onCrossing` ripete le condizioni di `TramSignals.update` per chi è in sosta, e se cambiano lì va
+cambiato anche lui. Se qualcuno sul suo binario lo aspetta (`TramSim.queued`: auto, bus, chi gioca o un altro tram) il
+tram riparte finita la sosta di 15 s: a Tito Livio e a Ponti Romani, nella carreggiata, i bus restavano fermi fino a 100
+s. `queued` dipende da `ahead` e `full` di `buses.js`: il bus si ferma al semaforo fino a 50 m dietro la coda del tram
+(non entra nell'incrocio senza 15 m di posto oltre). Un tram fermo a lungo sopra un incrocio col semaforo tiene ancora
+la fase tram agli altri tram dopo `TRAM_HOLD` (#92).
 
 Prove in `tests/traffico.spec.js`: la 3 guidata nel traffico dal pilota (`guidaFermate` con `traffico`) fino a
 Garibaldi giardini, nessuno fermo oltre 60 s da Tito Livio a Piazza Garibaldi; 20 minuti attorno ai semafori di Tito
@@ -702,11 +702,13 @@ Fatto, con quello che serve sapere prima di toccare questi file:
 - Tram automatici in anticipo (12 novembre, #64). In `TramSim.move` la corsa in linea va a 8,5 m/s anche in anticipo
   sull'orario, e l'anticipo si recupera in fermata: il tram aspetta l'orario (`wait`, almeno 15 s; nelle fermate in
   mezzo al più 2 minuti, alla prima fino all'ora). Prima rallentava fino a 3 m/s per arrivare 15 s prima della
-  partenza. In 40 minuti alle 8:30 e alle 17:40, giocatore lontano: tra due fermate in anticipo 7,6-7,8 m/s di media
-  (prima 5,0 sul SIR1, 5,9 su SIR2 e SIR3), arrivo in media 36 s prima dell'orario, nessun tram fermo. A Largo Europa
-  la fase tram del semaforo dura 8-13 s con un tram e 22 s con due SIR2 nella stessa fase (prima 12-32 s). Nei tratti
-  lunghi dell'orario GTFS del SIR1 l'anticipo arriva a 3 minuti: lì, oltre i 2 minuti d'attesa, il tram riparte prima
-  dell'orario (6 volte su 770 arrivi). Provato anche al più il 15% sotto, come i bus: 6,7 m/s, fase 11-14 s.
+  partenza. In 25 minuti dalle 8:29 e dalle 17:38, giocatore lontano, confronto con `main` del 13 novembre: tra due
+  fermate in anticipo 7,6-7,8 m/s di media (prima 5,0 sul SIR1, 5,9 su SIR2 e SIR3); alle linee d'arresto di Largo
+  Europa (barre e lanterna) i tram passano a 8,5 m/s di mediana (prima 3,8); la fase tram di quel semaforo dura 8-23 s,
+  in media 14 (prima 15,5-27, in media 19), e la più corta, un tram da solo, 8-10 s (prima 15,5). Le fasi lunghe che
+  restano sono tram e bus che si incontrano sul binario (#65) o due tram insieme. Nessun tram fermo oltre 90 s. Nei
+  tratti lunghi dell'orario GTFS del SIR1 l'anticipo arriva a 3 minuti: oltre i 2 minuti d'attesa il tram riparte
+  prima dell'orario. Provato anche al più il 15% sotto, come i bus: 6,7 m/s, fase 11-14 s.
   Nelle fermate dove il tram fermo sta sopra un incrocio con la strada (col muso o con la cassa) o appena oltre una
   lanterna (`TramSim.onCrossing`, deciso sulla fine della banchina `ss[k]`) l'orario non si aspetta: 15 s e via,
   l'anticipo si recupera alla fermata dopo. Sono 25, 19 del SIR2 (se sono al posto giusto: #93). In sosta il tram
@@ -727,7 +729,8 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   minuti prima, alle 23:15 alla Guizza ce n'erano tre e il terzo restava oltre i 90 s davanti allo scambio (prova "alla
   fine del servizio" di `tests/depositi-tram.spec.js`).
   Prova in "tram automatici" di `tests/turni-tram.spec.js`, che ha anche le misure in anticipo: velocità tra le
-  fermate, partenze, fasi di Largo Europa (semaforo con il nodo in (53, -333)). Il tram che la prova ferma 4 minuti
+  fermate, partenze prima dell'orario (salvo `onCrossing`, `tr.cut` e oltre 2 minuti), velocità alle linee d'arresto e
+  fase più corta di Largo Europa (semaforo con il nodo in (53, -333)). Il tram che la prova ferma 4 minuti
   non si sceglie sopra un incrocio: con le velocità nuove capitava un SIR2 su Via Antonio Marchi, che teneva la fase
   tram per tutto il tempo.
 

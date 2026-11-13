@@ -1533,8 +1533,9 @@ export class TramSim {
       } else if (tr.run) {
         const d = tr.run.ss[tr.k] - tr.s;
         // in linea alla velocità normale anche in anticipo sull'orario: l'anticipo si recupera in fermata, come per i bus
-        // automatici. Prima si rallentava fino a 3 m/s per arrivare 15 s prima della partenza: a Largo Europa la fase tram
-        // del semaforo durava 12-32 s invece di 8-13, e chi aspettava col rosso vedeva passare il tram a passo d'uomo
+        // automatici. Prima si rallentava fino a 3 m/s per arrivare 15 s prima della partenza: a Largo Europa i tram
+        // passavano le linee d'arresto a 3,8 m/s invece di 8,5 (mediane), e chi aspettava col rosso li vedeva passare a
+        // passo d'uomo
         vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d)) + 0.3);
         // sullo scambio del capolinea a 15 km/h; arrivando, se un altro tram fa la manovra ci si ferma prima della
         // comunicazione

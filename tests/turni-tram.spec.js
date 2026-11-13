@@ -185,8 +185,9 @@ test('scambio del capolinea girato in Esplorazione', async ({ pagina, gioco }) =
 // In anticipo sull'orario (#64) i tram vanno all'andatura normale e aspettano in fermata fino all'orario: tra due fermate
 // in media oltre 7 m/s (prima rallentavano fino a 3 m/s: 5,0 di media sul SIR1, 5,9 su SIR2 e SIR3), nessuna partenza
 // prima dell'orario salvo dopo più di 2 minuti d'attesa, dove il tram fermo sta sopra un incrocio (TramSim.onCrossing) o
-// se qualcuno lo aspetta (TramSim.queued), e a Largo Europa la fase tram del semaforo dura in media al più 14 s
-// (prima 19 s; una fase si allunga anche per un'auto sull'incrocio o per due tram insieme)
+// se qualcuno lo aspetta (TramSim.queued). Al semaforo di Largo Europa i tram passano le linee d'arresto (barre e
+// lanterna) a più di 6 m/s (mediana; prima 3,8), e la fase tram più corta, un tram da solo, dura al più 12 s (prima
+// 15,5): le altre si allungano anche per un'auto sull'incrocio, per un bus sul binario o per due tram insieme
 test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e con i ritardi, in anticipo all\'andatura normale', async ({ pagina, gioco }) => {
   test.setTimeout(300_000);
   await avviaCorsa(pagina, { linea: '24' });
@@ -198,7 +199,9 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
     const t0 = g.mission.clock;
     // in anticipo: per ogni tram la fermata di prima (run, k, wait), l'anticipo all'ultimo arrivo e la partenza da lì
     const sg = [...g.tramSignals.sigs].find((s) => s.nodes.some((n) => Math.hypot(n.x - 53, n.z + 333) < 10));
-    const stato = new Map(), arrivo = new Map(), via = new Map(), tratte = {}, presto = [], fasi = [];
+    const stato = new Map(), arrivo = new Map(), via = new Map(), tratte = {}, presto = [], fasi = [], passaggi = [];
+    // linee d'arresto del semaforo per i tram: gli incroci col binario e le lanterne, con la distanza del muso al secondo prima
+    const linee = [...g.tramSignals.list.filter((x) => x.sig === sg).flatMap((x) => x.refs), ...g.tramSignals.lanterns.filter((l) => l.sig === sg)].map((l) => ({ track: l.track, dir: l.dir, sT: l.sT, d: new Map() }));
     let fase = 0;
     for (let sec = 0; sec < 25 * 60; sec++) {
       g.sim(1, dt, false);
@@ -228,6 +231,12 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
           }
         }
         stato.set(tr, { run: tr.run, k: tr.k, wait: tr.wait });
+        for (const l of linee) {
+          if (l.track !== tr.track || l.dir !== tr.dir) continue;
+          const d = l.sT - tr.s, d0 = l.d.get(tr);
+          if (d0 > 0 && d <= 0 && d0 < 15) passaggi.push(Math.round(tr.v * 10) / 10);
+          l.d.set(tr, d);
+        }
         // ogni cassa a un secondo di distanza è vicina a una cassa di prima (al cambio cabina la testa diventa la coda)
         const c = tr.mods.map((m) => [m.group.position.x, m.group.position.z]), p = prima.get(tr);
         if (p && p.length === c.length && c.some((a) => Math.min(...p.map((b) => Math.hypot(a[0] - b[0], a[1] - b[1]))) > 12)) salti.push({ id: tr.id, line: tr.line });
@@ -247,7 +256,7 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
     const mediana = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
     const anticipo = {
       tratte: Object.fromEntries(['SIR1', 'SIR2', 'SIR3'].map((l) => [l, { n: (tratte[l] || []).length, mediana: Math.round(mediana(tratte[l] || [0]) * 100) / 100 }])),
-      presto, fasi, media: Math.round((fasi.reduce((a, b) => a + b, 0) / (fasi.length || 1)) * 10) / 10,
+      presto, fasi, passaggi, vPassaggi: mediana(passaggi.length ? passaggi : [0]),
     };
     return { salti, manovre: Object.keys(manovre).sort(), attesa, fermi, turno, perse, anticipo };
   });
@@ -265,8 +274,10 @@ test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e c
     expect(v.mediana, testo).toBeGreaterThan(7);
   }
   expect(r.anticipo.presto, testo).toEqual([]);
+  expect(r.anticipo.passaggi.length, testo).toBeGreaterThan(5);
+  expect(r.anticipo.vPassaggi, testo).toBeGreaterThan(6);
   expect(r.anticipo.fasi.length, testo).toBeGreaterThan(5);
-  expect(r.anticipo.media, testo).toBeLessThanOrEqual(14);
+  expect(Math.min(...r.anticipo.fasi), testo).toBeLessThanOrEqual(12);
   expect(gioco.errori()).toEqual([]);
 });
 
