@@ -711,7 +711,7 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   prima dell'orario. Provato anche al più il 15% sotto, come i bus: 6,7 m/s, fase 11-14 s.
   Nelle fermate dove il tram fermo sta sopra un incrocio con la strada (col muso o con la cassa) o appena oltre una
   lanterna (`TramSim.onCrossing`, deciso sulla fine della banchina `ss[k]`) l'orario non si aspetta: 15 s e via,
-  l'anticipo si recupera alla fermata dopo. Sono 25, 19 del SIR2 (se sono al posto giusto: #93). In sosta il tram
+  l'anticipo si recupera alla fermata dopo. Sono 25, 20 del SIR2 (se sono al posto giusto: #93). In sosta il tram
   tiene chiamato l'incrocio su cui sta (`TramSignals.update`): aspettando l'anticipo teneva il semaforo in fase tram
   oltre i 30 s di `TRAM_HOLD`, e il tram dell'altro verso restava alla barra orizzontale (#92). `onCrossing` ripete le
   condizioni di `TramSignals.update` per chi è in sosta (`d > -(len + halfT) && d <= halfT`, lanterna
