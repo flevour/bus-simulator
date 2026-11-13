@@ -25,7 +25,7 @@ const ORA = 11;
 const TOLLERANZA = { threshold: 0.2, maxDiffPixels: 40 };
 
 test('vedute di riferimento', async ({ pagina, gioco }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(900_000); // 2 minuti sul Mac; in CI i processori sono più lenti e le prove girano insieme
   expect(new Set(ELENCO.map((v) => v.nome)).size, 'nomi delle vedute tutti diversi').toBe(ELENCO.length);
   const prima = await pagina.evaluate(preparaVedute, { ora: ORA });
   try {
