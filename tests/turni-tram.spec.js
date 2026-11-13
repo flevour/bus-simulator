@@ -84,10 +84,28 @@ test('B al capolinea: SIR3 a Stazione sud (anello, senza cambio cabina)', async 
   expect(gioco.errori()).toEqual([]);
 });
 
+// Il tram fermo a una banchina del capolinea ('arrivo': l'ultima fermata della corsa, 'partenza': la prima): quante
+// fermate della corsa hanno il nome del capolinea, se il tram copre il punto della fermata (metà banchina), i metri tra
+// il tram fermo e la comunicazione dello scambio e tra la zona della fermata e la comunicazione (negativi: ci sta sopra),
+// le penalità per porte aperte fuori fermata
+function fermoAlCapolinea(chi) {
+  const g = window.__game, m = g.mission, bus = g.bus, T = bus.track, d = bus.dirSig, arrivo = chi === 'arrivo';
+  const st = arrivo ? m.stops[m.stops.length - 1] : m.stops[0], off = bus.pathOffset, muso = off + bus.sFront, coda = muso - bus.length;
+  const p = T.path(d).project(st.gtfs.x, st.gtfs.z).s, [a, b] = T.terminals[arrivo ? d : -d].span[d];
+  const R = (v) => Math.round(v * 10) / 10;
+  return {
+    nome: st.name, uguali: m.stops.filter((x) => x.name === st.name).length, copre: coda <= p && p <= muso,
+    scambio: R(arrivo ? a - muso : coda - b), zona: R(arrivo ? a - off - st.s - st.zone[1] : off + st.s + st.zone[0] - bus.length - b),
+    penalita: m.log.filter((e) => /Porte aperte fuori fermata/.test(e.msg)).length,
+  };
+}
+
 // Ai capolinea su binario tronco, con il pilota: dalla penultima fermata al capolinea, discesa, avanti fino in fondo al
 // binario, B, ripartenza fino alla fermata di partenza sull'altro binario e poi fino alla fermata dopo. A Voltabarozzo
 // e Rubano la comunicazione di OSM porta sull'altro binario dopo il cambio cabina, a Pontevigodarzere e Guizza prima;
-// a Busa di Vigonza OSM non ne ha e c'è quella del gioco
+// a Busa di Vigonza OSM non ne ha e c'è quella del gioco. Alla banchina d'arrivo e a quella di partenza il tram fermo
+// copre il punto della fermata, non sta sullo scambio e apre le porte senza penalità (#99: a Pontevigodarzere e alla
+// Guizza il GTFS ripete il capolinea dopo l'inversione, e l'ultima fermata cadeva 30 m più avanti, sullo scambio)
 for (const c of [
   { linea: 'SIR1', verso: 0, capolinea: 'Pontevigodarzere', avanti: true },
   { linea: 'SIR1', verso: 1, capolinea: 'Guizza Capolinea', avanti: true },
@@ -108,9 +126,15 @@ for (const c of [
     });
     const arrivo = await guidaFermate(pagina, { fermate: 1 });
     expect(arrivo.every((e) => e.arrivato), JSON.stringify(arrivo)).toBe(true);
+    const fa = await pagina.evaluate(fermoAlCapolinea, 'arrivo');
     const r = await guidaCapolinea(pagina);
-    const testo = JSON.stringify(r);
+    const fp = await pagina.evaluate(fermoAlCapolinea, 'partenza');
+    const testo = JSON.stringify({ ...r, arrivo: fa, partenza: fp });
     info.annotations.push({ type: 'capolinea', description: testo });
+    for (const f of [fa, fp]) {
+      expect([f.nome, f.uguali, f.copre, f.penalita], testo).toEqual([c.capolinea, 1, true, 0]);
+      expect(Math.min(f.scambio, f.zona), testo).toBeGreaterThanOrEqual(0);
+    }
     expect(r.finita, testo).toBe(true);
     expect(r.fondo.arrivato && !r.fondo.deragliato && !r.fondo.urti, testo).toBe(true);
     if (c.avanti) expect(r.oltreScambio, testo).toBe(true);
@@ -125,6 +149,65 @@ for (const c of [
     expect(gioco.errori()).toEqual([]);
   });
 }
+
+// Oltre la banchina d'arrivo fin sullo scambio (Pontevigodarzere): lì la fermata non si serve, le porte aperte danno la
+// penalità e il navigatore dice di cambiare cabina; con la cabina girata dice quanti metri fare indietro, alla banchina
+// si cambia di nuovo cabina e le porte servono il capolinea
+test('capolinea superato fin sullo scambio: si torna alla banchina', async ({ pagina, gioco }) => {
+  const corsa = await avviaCorsa(pagina, { linea: 'SIR1', tram: true, verso: 0 });
+  expect(corsa.ultima).toBe('Pontevigodarzere');
+  const r = await pagina.evaluate(() => {
+    const g = window.__game, m = g.mission, bus = g.bus, n = m.stops.length, st = m.stops[n - 1], dt = 1 / 30;
+    g.traffic.target = 0;
+    g.traffic.cars.splice(0);
+    for (const x of m.stops.slice(0, -1)) Object.assign(x, { arrived: true, left: true, doneMsg: true });
+    m.nextStop = n - 1;
+    m.clock = st.sched - 60;
+    // col manipolatore finché l'estremità verso il capolinea è a meta, avanti o indietro secondo la cabina
+    const fino = (meta) => {
+      bus.parking = false;
+      for (let t = 0; t < 120; t += dt) {
+        const capo = bus.facing > 0 ? bus.sFront : bus.sFront + bus.length, resto = (meta - capo) * bus.facing;
+        const vt = Math.min(4, Math.sqrt(2 * 0.8 * Math.max(0, resto - 0.3))), e = vt - Math.abs(bus.v);
+        if (vt > 0.05 && e > 0.3) g.keys.add('KeyW'); else g.keys.delete('KeyW');
+        if ((vt <= 0.05 && Math.abs(bus.v) > 0.01) || e < -0.3) g.keys.add('KeyS'); else g.keys.delete('KeyS');
+        g.sim(dt, dt, false);
+        if (resto < 0.8 && Math.abs(bus.v) < 0.05) break;
+      }
+      g.keys.delete('KeyW');
+      g.keys.delete('KeyS');
+    };
+    const nav = () => { const x = m.navInfo(); return x.text || x.street; };
+    const penalita = () => m.log.filter((e) => /Porte aperte fuori fermata/.test(e.msg)).length;
+    bus.setFront(st.s - 40);
+    m.s = bus.sFront - 6;
+    const scambio = bus.track.terminals[bus.dirSig].span[bus.dirSig][0] - bus.pathOffset;
+    fino(scambio + 3);
+    g.press('KeyF');
+    g.sim(1, dt, false);
+    const out = { oltre: Math.round(bus.sFront - scambio), inZona: m.stopInfo.inZone, servita: !!st.arrived, penalita: penalita(), nav: nav() };
+    g.press('KeyF');
+    g.sim(4, dt, false);
+    g.press('KeyB');
+    g.sim(0.5, dt, false);
+    out.indietro = nav();
+    fino(st.s - 0.5);
+    g.press('KeyB');
+    g.sim(0.5, dt, false);
+    out.banchina = nav();
+    g.press('KeyF');
+    for (let t = 0; t < 150 && !m.finished; t++) g.sim(1, dt, false);
+    Object.assign(out, { finita: m.finished, penalitaDopo: penalita(), deragliato: bus.derailT > 0 });
+    return out;
+  });
+  const testo = JSON.stringify(r);
+  expect(r.oltre, testo).toBeGreaterThan(1);
+  expect([r.inZona, r.servita, r.penalita, r.nav], testo).toEqual([false, false, 1, 'Cambia cabina (B)']);
+  expect(r.indietro, testo).toMatch(/^Indietro \d+ m, poi cambia cabina \(B\)$/);
+  expect(r.banchina, testo).toBe('Fermata Pontevigodarzere');
+  expect([r.finita, r.penalitaDopo, r.deragliato], testo).toEqual([true, 1, false]);
+  expect(gioco.errori()).toEqual([]);
+});
 
 // Esplorazione: lo scambio del capolinea si gira (N). Diritto: B cambia solo cabina e il tram torna indietro sullo
 // stesso binario. Deviato: B fa ripartire sul binario dell'altro verso passando dallo scambio

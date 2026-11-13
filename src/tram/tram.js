@@ -340,8 +340,11 @@ export class TramTrack {
     const v = field === 'dep' ? { x: -o.x, z: -o.z } : o, side = v.x * -pt.dz + v.z * pt.dx > 0 ? 1 : -1;
     // fondo utile del binario d'arrivo: oltre, il binario di partenza non c'è più (il tram non ci sta tutto)
     const fondo = Math.min(A.len, field === 'dep' ? link + toe : heel + link);
+    // tratto di ogni binario (per verso) dove c'è la comunicazione: su quello del campo da toe a heel, sull'altro dove la
+    // tocca (link). Il tram fermo a una banchina non ci sta sopra (Mission, zona della fermata)
+    const span = { [field === 'dep' ? -d : d]: [toe, heel], [field === 'dep' ? d : -d]: [link, link] };
     const t = {
-      arr: d, dep: -d, kind, field, toe, heel, link, other, len, fondo, ox, oz, state: 'deviato',
+      arr: d, dep: -d, kind, field, toe, heel, link, other, len, fondo, span, ox, oz, state: 'deviato',
       panel: { sig: { x: pt.x + o.x / 2, z: pt.z + o.z / 2, dx: pt.dx, dz: pt.dz }, side, get state() { return t.state; } },
       // dev: lo scambio è deviato (i tram automatici lo passano sempre deviato)
       off(s, dev = t.state === 'deviato') {

@@ -987,6 +987,29 @@ Binari delle linee secondo la regola (#69, 12 novembre). Da sapere prima di tocc
   bivio invece del SIR2; le soglie di `tests/cavalcavia.spec.js`, `tests/linea-aerea.spec.js` e dei cavalcavia in
   `verifica_mappa.py` (binari: le rampe sono di #74).
 
+### Tram: fermate dei capolinea (#99, 13 novembre)
+
+Da sapere prima di toccare le fermate del tram o la zona della fermata:
+
+- nel GTFS alcune corse del SIR1 finiscono con il capolinea due volte, a 3 minuti: la banchina d'arrivo e, dopo
+  l'inversione, quella di partenza (verso Pontevigodarzere nello stesso punto, verso la Guizza a 3 m). `buildTramRoute`
+  in `routes.js` toglie l'ultima fermata se ha il nome della penultima e sta a meno di 30 m; prima la metteva 30 m più
+  avanti, sopra lo scambio. I dati restano com'erano (`tramLines` nella mappa, `v.stops` e `offsets`): `senzaTratti`
+  in `turni.js` confronta i tratti con l'ora della seconda fermata e la sosta al capolinea comincia da lì (`r.end`).
+  L'elenco delle fermate nel menu (`#stop-list`) mostra ancora le due righe;
+- zona della fermata in `Mission` (`st.zone`, metri del muso dalla palina): da -12 a 10, all'ultima fermata del tram
+  fino alla fine del binario (7033784). Ai capolinea con lo scambio il tram fermo non sta sulla comunicazione:
+  `TramTrack.terminal` dà `span[d]`, il tratto del binario d dove c'è (su quello del campo da `toe` a `heel`,
+  sull'altro il punto `link`), e `Mission` stringe la zona: all'arrivo il muso resta prima, alla partenza la coda è
+  oltre (a Voltabarozzo, Rubano e Busa di Vigonza la zona di partenza comincia 4-6 m prima della palina invece di 12).
+  Per farlo `Mission` legge dove comincia il percorso della corsa sul binario intero, `V.trackOffset`, che `main.js`
+  scrive accanto a `V.trackPath`;
+- chi supera la zona del capolinea fin sullo scambio non serve la fermata (porte aperte: penalità); il navigatore
+  (`tramNav` in `main.js`) dice "Cambia cabina (B)" e, con la cabina girata, "Indietro N m, poi cambia cabina (B)";
+- prove in `tests/turni-tram.spec.js`: "manovra al capolinea" (all'arrivo e alla partenza il tram fermo copre il punto
+  della fermata, non sta sullo scambio e apre le porte senza penalità) e "capolinea superato fin sullo scambio". Il
+  rilievo dei cinque capolinea (banchine OSM, fermate, scambi) è nel commento di chiusura di #99.
+
 ### Tram: SIR2 e SIR3 (corsia `tram-reti`, chiusa il 9 novembre)
 
 SIR3 e SIR2, tappe 1 e 2 del piano in [`linee-tram-nuove.md`](linee-tram-nuove.md), fatte:

@@ -505,7 +505,15 @@ function tramNav() {
   if (mission.free || mission.transfer) return null;
   if (mission.depotOut) return { dist: 0, dir: 'straight', text: 'Esci dalla rimessa', street: `Fuori servizio fino alla banchina di ${mission.stops[0].name}` };
   if (tramRientro) return { dist: bus.yard ? Math.max(0, bus.yard.P.len - bus.sFront) : 0, dir: 'straight', text: 'Rientro in rimessa', street: 'Avanti fino in fondo al binario della rimessa' };
-  if (!mission.finished) return bus.facing < 0 ? { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: `Si guida all'indietro: la corsa per ${mission.dest} è dall'altra parte` } : null;
+  if (!mission.finished) {
+    // al capolinea con l'estremità verso il fondo oltre la zona della fermata (sullo scambio): B, indietro, di nuovo B
+    const st = mission.stops[mission.nextStop], capo = bus.facing > 0 ? bus.sFront : bus.sFront + bus.length;
+    const over = st && st.idx === mission.stops.length - 1 ? capo - st.s - st.zone[1] + 1 : 0;
+    if (over > 0) return bus.facing > 0
+      ? { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: `Oltre la banchina di ${st.name}: si torna indietro, fuori dallo scambio` }
+      : { dist: over, dir: 'straight', text: `Indietro ${Math.ceil(over)} m, poi cambia cabina (B)`, street: `Banchina di ${st.name}, prima dello scambio` };
+    return bus.facing < 0 ? { dist: 0, dir: 'uturn', text: 'Cambia cabina (B)', street: `Si guida all'indietro: la corsa per ${mission.dest} è dall'altra parte` } : null;
+  }
   const t = nextOfTurno(), next = t && t.next;
   if (!next) return { dist: 0, dir: 'straight', text: 'Ultima corsa del turno', street: 'Dal menu (Esc) scegli una corsa nuova' };
   const after = `poi la corsa delle ${fmtHM(next.t)} per ${next.v.stops[next.v.stops.length - 1].name}`;
@@ -676,6 +684,7 @@ function tramNextRun() {
   const L = settings.line, V = next.v, dest = V.stops[V.stops.length - 1].name, clock = mission.clock;
   const tr = tramRoute(bus.track, V, L.modules, false);
   V.trackPath = tr.path;
+  V.trackOffset = tr.offset;
   const sNow = tr.sig === bus.dirSig ? bus.pathOffset + bus.sFront - tr.offset : -1;
   bus.setPath(tr.path, tr.sig, tr.offset, bus.xover && bus.xover.dep === tr.sig ? bus.xover : null);
   const tEnd = bus.track.terminals && bus.track.terminals[tr.sig > 0 ? 1 : -1];
@@ -1240,6 +1249,7 @@ function startMission(resume = null) {
     const T = city.tramTracks[L.id] || city.tramTrack;
     const tr = tramRoute(T, V, L.modules, settings.mode !== 'service');
     V.trackPath = tr.path;
+    V.trackOffset = tr.offset;
     bus = new Tram(scene, { line: L.id, dest: destName, modules: L.modules, path: tr.path, track: T, dir: tr.sig, offset: tr.offset });
     bus.onRerail = () => hud.toast('🛠️ Il tram è stato rimesso sulla rotaia: puoi ripartire', 'info');
     // fuori servizio i bivi tra le linee portano il tram sull'altro binario (TramNet); in servizio la corsa resta sul suo

@@ -197,8 +197,13 @@ export function buildTramRoute(path, variant) {
   const route = { seq: [], pts, cum, segs, length: path.len, tram: true };
   const stops = [];
   let sPrev = 0;
-  variant.stops.forEach((g, k) => {
-    const last = k === variant.stops.length - 1;
+  // alcune corse del SIR1 nel GTFS finiscono con il capolinea due volte, a 3 minuti: la banchina d'arrivo e, dopo
+  // l'inversione, quella di partenza (Pontevigodarzere, Guizza). Nel gioco la corsa finisce alla banchina d'arrivo e
+  // quella di partenza è la prima fermata della corsa dopo: la seconda, messa 30 m più avanti, cadeva sullo scambio
+  const V = variant.stops, n = V.length;
+  const dup = n > 2 && V[n - 1].name === V[n - 2].name && Math.hypot(V[n - 1].x - V[n - 2].x, V[n - 1].z - V[n - 2].z) < 30;
+  (dup ? V.slice(0, -1) : V).forEach((g, k, list) => {
+    const last = k === list.length - 1;
     const pr = projectOnRoute(route, g.x, g.z, sPrev, 40, 6000);
     const s = Math.min(route.length - 15, Math.max(pr.s + TRAM_STOP_AHEAD, sPrev + (k ? 30 : 0)));
     sPrev = s;

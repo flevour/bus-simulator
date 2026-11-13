@@ -58,7 +58,7 @@ export class Mission {
     this.roam = roam; // esplorazione: nessuna regola né punteggio
     const variant = day;
     this.net = net; this.line = line; this.variant = day; this.routeData = route; this.hud = hud; this.audio = audio; this.lights = lights; this.city = city;
-    // il tram segue la sua corsia (route.trackPath); il bus le strade
+    // il tram segue la sua corsia (route.trackPath, da route.trackOffset metri del binario); il bus le strade
     this.tram = !!route.tram;
     this.route = this.tram ? buildTramRoute(route.trackPath, route) : buildRoute(net, route);
     this.stops = this.route.stops;
@@ -75,6 +75,18 @@ export class Mission {
       const O = T.path(-T.dirOf(route)), q = O.at(O.project(st.cx, st.cz).s), half = Math.hypot(q.x - st.cx, q.z - st.cz) / 2 || 2.2;
       Object.assign(st, { side: -1, rx: -st.rx, rz: -st.rz });
       st.x = st.cx + st.rx * half; st.z = st.cz + st.rz * half;
+    }
+    // zona della fermata (dove può stare il muso, in metri dalla palina): da 12 m prima a 10 m dopo; all'ultima fermata del
+    // tram fino alla fine del binario (fermo oltre la banchina restava incastrato). Ai capolinea con lo scambio il tram fermo
+    // non sta sulla comunicazione (TramTrack.terminal, span): all'arrivo il muso resta prima, alla partenza la coda oltre
+    for (const st of this.stops) st.zone = [-12, this.tram && st.idx === this.stops.length - 1 ? Infinity : 10];
+    if (T) {
+      const sig = T.dirOf(route), off = route.trackOffset || 0;
+      for (const t of Object.values(T.terminals)) for (const st of t && t.span[sig] ? this.stops : []) {
+        const [a, b] = t.span[sig], f = st.s + off;
+        if (f <= a) st.zone[1] = Math.min(st.zone[1], a - f);
+        else if (f - t.len >= b) st.zone[0] = Math.max(st.zone[0], b + t.len - f);
+      }
     }
     if (!this.tram && city && city.stopPlacements) alignStops(this.route, city.stopPlacements);
     this.maneuvers = this.tram ? [] : routeManeuvers(net, this.route);
@@ -205,11 +217,8 @@ export class Mission {
       const along = sFront - st.s; // 0 = muso del bus alla palina
       // accostamento misurato dal cordolo vero della fermata (kerb), se c'è
       const kerb = st.kerb ?? st.hw;
-      // al capolinea del tram fino alla fine del binario (17 m oltre la banchina): fermo più avanti non poteva servire il
-      // capolinea, né proseguire, né tornare indietro
-      const end = this.tram && st.idx === this.stops.length - 1 ? Infinity : 10;
       // il tram con la cabina al contrario (B a metà corsa) non serve le fermate: si guida all'indietro
-      const inZone = along > -12 && along < end && proj.d < Math.max(st.hw, kerb) + 2.5 && !(this.tram && bus.facing < 0);
+      const inZone = along > st.zone[0] && along < st.zone[1] && proj.d < Math.max(st.hw, kerb) + 2.5 && !(this.tram && bus.facing < 0);
       const lat = Math.abs(proj.lat - ((st.kl ?? kerb) - 1.6));
       this.stopInfo = { st, along, inZone, lat };
       const stopped = Math.abs(bus.v) < 0.3;
