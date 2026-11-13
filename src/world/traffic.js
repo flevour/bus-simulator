@@ -1473,11 +1473,12 @@ export class TramSim {
     for (const l of S.lanterns || []) if (l.track === tr.track && l.dir === tr.dir && l.sT - s > -8 && l.sT - s <= 0) return true;
     return false;
   }
-  // qualcuno aspetta il tram fermo sul suo binario: un altro tram, un'auto, un bus o il mezzo di chi gioca dietro la coda
-  // nel suo verso (entro 20 m, o fermo entro 50), o fermo entro 70 m davanti al muso e rivolto verso di lui. Dove il
+  // qualcuno aspetta il tram fermo: un bus automatico che si è fermato per lui (waitTram, anche svoltando davanti al
+  // muso: a Tito Livio), o sul suo binario un altro tram, un'auto, un bus o il mezzo di chi gioca dietro la coda nel
+  // suo verso (entro 20 m, o fermo entro 50), o fermo entro 70 m davanti al muso e rivolto verso di lui. Dove il
   // binario corre nella carreggiata il tram che aspetta l'orario tiene fermo il traffico: a Tito Livio i bus dietro di
-  // lui, a Ponti Romani quelli al semaforo 30 m dietro la coda (il bus non entra nell'incrocio senza 15 m di posto oltre);
-  // all'Arcella, la sera, il tram dietro (una corsa che comincia a metà linea) aspettava oltre 90 s
+  // lui, a Ponti Romani quelli al semaforo 30 m dietro la coda (il bus non entra nell'incrocio senza 15 m di posto
+  // oltre); all'Arcella, la sera, il tram dietro (una corsa che comincia a metà linea) aspettava oltre 90 s
   queued(tr, others) {
     const P = tr.track.path(tr.dir), m = P.at(tr.s);
     // progressiva dal muso lungo il binario e verso (1 lo stesso del tram, -1 l'opposto) di chi ci sta sopra
@@ -1496,6 +1497,7 @@ export class TramSim {
     }
     for (const o of others) {
       if (!o) continue;
+      if (o.isBus && o.bus.waitTram === tr && o.bus.v < 0.3) return true;
       if (o.isTram) {
         // il tram di chi gioca: il muso e il verso dai primi due punti sul binario
         const pts = o.trackPoints ? o.trackPoints() : [];

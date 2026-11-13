@@ -720,7 +720,8 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   e Ponti Romani i bus restavano fermi 70-100 s e la prova di Tito Livio di `tests/traffico.spec.js` falliva;
   all'Arcella, la sera, un SIR1 aspettava 2 minuti dietro una corsa che comincia a metà linea. Ora il tram riparte
   finita la sosta di 15 s (`tr.hold`: i secondi d'attesa oltre la sosta; `tr.cut` quando l'attesa è stata tagliata) se
-  sul suo binario qualcuno lo aspetta (`TramSim.queued`, proiettando sul binario entro 3 m): un'auto, un bus, il mezzo
+  qualcuno lo aspetta (`TramSim.queued`): un bus automatico fermo per lui (`waitTram` di `buses.js`, anche il bus
+  che svolta a Tito Livio davanti al muso), o sul binario (proiettando entro 3 m) un'auto, un bus, il mezzo
   di chi gioca o un altro tram dietro la coda nel suo verso (entro 20 m, o fermo entro 50: il bus resta al semaforo
   prima dell'incrocio finché oltre non ha 15 m di posto, `full` in `buses.js`), o fermo entro 70 m davanti al muso e
   rivolto verso di lui.
