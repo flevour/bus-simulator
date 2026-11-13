@@ -8,6 +8,7 @@
 // scritto in test-results/<prova>/rapporto-mappa.json.
 import { writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
+import { misuraPali } from './pali.js';
 
 // 9 novembre: lampioni e alberi dei viali stanno fuori dall'asfalto vero (City.buildTreesAndLamps); con la corsia
 // mappa sopra il piazzale della stazione fermate con ostacoli 9, fuori strada 5, spostate 11. Corsia capolinea,
@@ -31,6 +32,11 @@ import { test, expect } from './gioco.js';
 // 12 novembre (#29): ostacoli 0. I muri degli edifici vanno dalla facciata verso l'interno (City.buildTile): centrati
 // sporgevano 0,3 m in strada, e il bus accostato toccava le facciate sul bordo dell'asfalto (Milano 61 sotto i portici,
 // Tommaseo 114). A Buonarroti 46 la linea del cordolo non segue più la laterale dietro la palina (busLine)
+// 13 novembre (#97): pali accanto ai binari (tests/pali.js). Prima nella sagoma del tram 14, in carreggiata 488 (371
+// lanterne del tram, 98 pali della linea aerea sul cordolo della sede); restano 7 pali del tram in carreggiata dove
+// attorno c'è solo asfalto e nessun tirante vicino: nel piazzale della stazione tre lanterne (166, -1053) e il segnale
+// del bivio in (301, -1002), all'incrocio tra la stazione e Via Tommaseo due lanterne del SIR2 (362, -963 e 367, -953), in
+// Via San Marco una lanterna accanto alla banchina della fermata (4722, -1600)
 const SOGLIE = {
   semafori_in_carreggiata: 2,
   paline_in_carreggiata: 3,
@@ -44,6 +50,8 @@ const SOGLIE = {
   segni_sulla_sede: 0,
   asfalto_sopra_sede: 0,
   edifici_sui_binari_dei_depositi: 0,
+  pali_nella_sagoma_del_tram: 0,
+  pali_del_tram_in_carreggiata: 7,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',
@@ -58,6 +66,8 @@ const NOMI = {
   segni_sulla_sede: 'quadrati di 10 m con segni della strada sopra la sede del tram',
   asfalto_sopra_sede: 'quadrati di 10 m con asfalto sopra la sede del tram',
   edifici_sui_binari_dei_depositi: 'edifici sopra i binari dei depositi del tram o a meno di 2 m dal loro asse',
+  pali_nella_sagoma_del_tram: 'pali (linea aerea, lanterne e segnali del tram, semafori, lampioni) nella sagoma del tram',
+  pali_del_tram_in_carreggiata: 'pali del tram (linea aerea, lanterne, segnali degli scambi, cartelli del pantografo) in carreggiata',
 };
 
 test('rapporto di verifica sulla mappa', async ({ pagina, gioco }, info) => {
@@ -65,6 +75,10 @@ test('rapporto di verifica sulla mappa', async ({ pagina, gioco }, info) => {
   // con la mappa divisa in aree (src/data/aree.js) si misura tutta: si caricano tutte, e non si liberano più
   await pagina.evaluate(() => window.__game.city.loadAll());
   const r = await pagina.evaluate(misura);
+  // pali sul percorso del tram e in carreggiata (#97, tests/pali.js)
+  const pali = await pagina.evaluate(misuraPali);
+  Object.assign(r.casi, pali.casi);
+  for (const [tipo, d] of Object.entries(pali.distribuzioni)) r.distribuzioni[`pali: ${tipo}`] = d;
   const valori = Object.fromEntries(Object.keys(SOGLIE).map((k) => [k, r.casi[k].length]));
   const righe = [
     ...Object.entries(r.distribuzioni).map(([k, d]) => `${k}: ${Object.entries(d).map(([a, n]) => `${n} ${a}`).join(', ')}`),

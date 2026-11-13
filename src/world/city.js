@@ -1292,18 +1292,27 @@ export class City {
     this.tramSpans = []; // tiranti e mensole: centro, mezza larghezza delle sedi, estremi (per le prove)
     const L = TRAM.lane;
     // Facciate vicine alla sede: i tiranti della linea aerea si agganciano lì (le piante reali, gli ostacoli dei muri
-    // si costruiscono dopo)
+    // si costruiscono dopo). Gli stessi edifici in tramBld, per i pali accanto ai binari (poleSpot)
     const FC = 20, fac = new Map(), nearTrack = new Set(), ck = (x, z) => Math.floor(x / FC) + ',' + Math.floor(z / FC);
     for (const T of tracks) for (const d of [1, -1]) { const P = T.path(d); for (let s = 0; s <= P.len; s += 10) { const p = P.at(s); for (const ox of [-1, 0, 1]) for (const oz of [-1, 0, 1]) nearTrack.add(ck(p.x + ox * FC, p.z + oz * FC)); } }
+    this.tramBld = new Grid(20);
     for (const b of this.net.tramBuildings || this.net.buildings) {
       if (!b.pts.some((p) => nearTrack.has(ck(p.x, p.z)))) continue;
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (const p of b.pts) { x0 = Math.min(x0, p.x); z0 = Math.min(z0, p.z); x1 = Math.max(x1, p.x); z1 = Math.max(z1, p.z); }
+      this.tramBld.insertAABB({ pts: b.pts }, x0, z0, x1, z1);
       for (let i = 0; i < b.pts.length; i++) {
         const a = b.pts[i], c = b.pts[(i + 1) % b.pts.length], seg = [a.x, a.z, c.x, c.z];
         for (const k of new Set([ck(a.x, a.z), ck(c.x, c.z), ck((a.x + c.x) / 2, (a.z + c.z) / 2)])) { if (!fac.has(k)) fac.set(k, []); fac.get(k).push(seg); }
       }
     }
-    // distanza dall'asfalto: con la pianta delle strade conta l'asfalto vero (la sede è asfalto), non il nastro dell'arco
-    const offRoad = this.asphRings ? (x, z) => Math.min(this.surfaceOff(x, z), this.clearance(x, z, ['tram'], 12) + 0.3) : (x, z) => this.clearance(x, z, ['road', 'tram'], 12) - 0.2;
+    // depositi (TramYard, binari OSM di data/tram-depositi.json): rami con corsia rossa e rotaia, senza cordoli (dove i
+    // binari si avvicinano agli scambi si sovrapporrebbero). Costruiti qui perché i pali della linea aerea ne stiano fuori
+    this.tramYards = TRAM_DEPOTS.filter((d) => this.tramTracks[d.line]).map((d) => new TramYard(d, this.tramTracks[d.line]));
+    const yardPaths = this.tramYards.flatMap((Y) => Y.edges.map((e) => e.path));
+    // fuori dall'asfalto di almeno 0,4 m: con la pianta delle strade conta l'asfalto vero (la sede è asfalto), non il
+    // nastro dell'arco; prima l'asfalto, la distanza dalla sede del SIR1 costa di più
+    const offRoad = this.asphRings ? (x, z) => this.surfaceOff(x, z) >= 0.4 && this.clearance(x, z, ['tram'], 12) >= 0.1 : (x, z) => this.clearance(x, z, ['road', 'tram'], 12) >= 0.6;
     // sedi di tutti i binari in una griglia (un punto ogni 1,5 m): un tirante non passa mai sopra un'altra sede
     const SG = 4, sedi = new Map(), sk = (x, z) => Math.floor(x / SG) + ',' + Math.floor(z / SG);
     for (const T of tracks) for (const d of [1, -1]) {
@@ -1319,25 +1328,37 @@ export class City {
       return false;
     };
     // spanAnchor: dal centro (cx, cz) verso (nx, nz), oltre half metri, dove agganciare il tirante: la prima facciata
-    // entro 14 m, altrimenti un palo dove finisce l'asfalto (marciapiede, isola, verde) entro 16 m. Con la sede in mezzo
-    // alla strada i pali stanno così sui marciapiedi e il tirante passa sopra le corsie. La ricerca si ferma sulla sede
-    // di un altro binario (versi separati con le corsie in mezzo): da quel lato niente aggancio (null)
+    // entro 14 m, altrimenti un palo dove finisce l'asfalto (marciapiede, isola, verde) entro 24 m, fuori dalla sagoma di
+    // ogni binario e prima della facciata che c'è dietro (o la facciata stessa). Con la sede in mezzo alla strada i pali
+    // stanno così sui marciapiedi e il tirante passa sopra le corsie: nel progetto del SIR2 i pali stanno ai bordi di una
+    // strada larga 24 m, con il tirante su tutta la carreggiata (docs/linee-tram-nuove.md). Fino al 13 novembre la
+    // ricerca finiva a 16 m e nelle strade larghe i pali restavano sul cordolo della sede, in carreggiata (#97). La
+    // ricerca si ferma sulla sede di un altro binario (versi separati con le corsie in mezzo): da quel lato niente
+    // aggancio (null)
+    const REACH = 24;
+    // fuori dalla sagoma dei binari delle linee e dei depositi (con la cassa che in curva stretta va verso l'interno);
+    // skip: i binari da non contare (quelli del tirante, per i pali sul cordolo)
+    const sagomaPaths = tracks.flatMap((T) => [T.path(1), T.path(-1)]).concat(yardPaths);
+    const fuoriSagoma = (x, z, r = L + 0.6, skip = null) => !sagomaPaths.some((P) => (!skip || !skip.includes(P)) && P.projectNear(x, z, r));
     const spanAnchor = (cx, cz, nx, nz, half) => {
-      let stop = 16;
-      for (let k = half; k < 16; k += 0.5) if (onSede(cx + nx * k, cz + nz * k)) { stop = k; break; }
-      const lim = Math.min(14, stop);
-      let best = lim;
+      let stop = REACH;
+      for (let k = half; k < REACH; k += 0.5) if (onSede(cx + nx * k, cz + nz * k)) { stop = k; break; }
+      let best = stop;
       const cells = new Set();
-      for (let k = half; k < lim + 5; k += 5) cells.add(ck(cx + nx * Math.min(k, lim), cz + nz * Math.min(k, lim)));
+      for (let k = half; k < stop + 5; k += 5) cells.add(ck(cx + nx * Math.min(k, stop), cz + nz * Math.min(k, stop)));
       for (const key of cells) for (const sg of fac.get(key) || []) {
         const [ax, az, bx, bz] = sg, ex = bx - ax, ez = bz - az, den = nx * ez - nz * ex;
         if (Math.abs(den) < 1e-9) continue;
         const t = ((ax - cx) * ez - (az - cz) * ex) / den, u = ((ax - cx) * nz - (az - cz) * nx) / den;
         if (t >= half && t < best && u >= 0 && u <= 1) best = t;
       }
-      if (best < lim) return { x: cx + nx * best, z: cz + nz * best, pole: false };
-      for (let k = half; k < stop; k += 0.25) if (offRoad(cx + nx * k, cz + nz * k) >= 0.4) return { x: cx + nx * k, z: cz + nz * k, pole: true };
-      return null;
+      const facade = best < stop ? { x: cx + nx * best, z: cz + nz * best, pole: false } : null;
+      if (best < 14) return facade;
+      for (let k = half; k < best; k += 0.25) {
+        const x = cx + nx * k, z = cz + nz * k;
+        if (offRoad(x, z) && fuoriSagoma(x, z)) return { x, z, pole: true };
+      }
+      return facade;
     };
     // ogni binario una volta: i tratti in comune li disegna la sede che c'era già
     // corsie rosse dei due versi in due mesh, il verso -1 un gradino sopra: dove i binari sono vicini le corsie si
@@ -1407,23 +1428,49 @@ export class City {
         }
         prevWire = { x: p.x, z: p.z, h };
         if (sp - lastPole < 30) continue;
+        const prevPole = lastPole;
         lastPole = sp;
-        // sul doppio binario il tirante lo mette il verso nord, per tutti e due i fili (non dove il binario accanto è di
+        // tirante trasversale sopra i fili alla progressiva s, agganciato alle facciate o a pali ai lati della strada. Sul
+        // doppio binario il tirante lo mette il verso nord, per tutti e due i fili (non dove il binario accanto è di
         // un'altra linea)
-        const O = track.path(-dir), q0 = track.doubleAt(dir, sp) > 0.5 ? O.at(O.project(p.x, p.z).s) : null;
-        const q = q0 && Math.hypot(q0.x - p.x, q0.z - p.z) < 10 ? q0 : null;
-        if (q && dir < 0) continue;
-        // tirante trasversale sopra i fili, agganciato alle facciate o a pali ai lati della strada
-        const cx = q ? (p.x + q.x) / 2 : p.x, cz = q ? (p.z + q.z) / 2 : p.z, half = (q ? Math.hypot(p.x - q.x, p.z - q.z) / 2 : 0) + L + 0.6;
-        let ends = [-1, 1].map((side) => spanAnchor(cx, cz, -p.dz * side, p.dx * side, half));
+        const O = track.path(-dir);
+        const span = (s) => {
+          const p = P.at(s), q = track.doubleAt(dir, s) > 0.5 ? O.projectNear(p.x, p.z, 10) : null, o = q && O.at(q.s);
+          const cx = o ? (p.x + o.x) / 2 : p.x, cz = o ? (p.z + o.z) / 2 : p.z, half = (o ? q.d / 2 : 0) + L + 0.6;
+          return { s, p, q: o, cx, cz, half, h: track.heightAt(dir, s), ends: [-1, 1].map((side) => spanAnchor(cx, cz, -p.dz * side, p.dx * side, half)) };
+        };
+        let S = span(sp);
+        if (S.q && dir < 0) continue;
+        // un lato senza aggancio (un incrocio, una piazza): il tirante si sposta di qualche metro lungo il binario, dove
+        // ci sono gli agganci dai due lati, come i pali veri agli angoli degli incroci
+        if (!S.ends[0] || !S.ends[1]) for (const o of [3, -3, 6, -6, 9, -9]) {
+          const s2 = sp + o;
+          if (s2 < 0 || s2 > P.len || !track.wireAt(dir, s2) || track.sharedAt(dir, s2)) continue;
+          const S2 = span(s2);
+          if (S2.ends[0] && S2.ends[1] && !S2.q === !S.q) { S = S2; break; }
+        }
+        const { p: pt, q, cx, cz, half } = S;
+        let ends = S.ends, mid = false;
         // un lato senza aggancio: il tirante diventa una mensola dal palo dell'altro lato fino a 0,6 m oltre il filo più
-        // lontano; senza aggancio ai due lati (corsie larghe ai due lati), pali sul cordolo della sede
+        // lontano. Senza aggancio ai due lati (corsie larghe ai due lati): palo in mezzo ai due binari con due mensole, se
+        // l'interasse lo lascia fuori dalle due sedi e a 0,3 m dalla cassa, che in curva va verso l'interno (il SIR2 a
+        // 3,50 m; nel progetto del SIR3 i pali in mezzo chiedono da 3,06 m in rettilineo a 3,78 m a 10,5 m di raggio,
+        // docs/binari-tram.md), altrimenti pali sul cordolo della sede
         const reach = half - L, side = (i) => (i ? 1 : -1);
-        if (!ends[0] && !ends[1]) ends = ends.map((e, i) => ({ x: cx - p.dz * side(i) * (half - 0.55), z: cz + p.dx * side(i) * (half - 0.55), pole: true }));
-        else ends = ends.map((e, i) => e || { x: cx - p.dz * side(i) * reach, z: cz + p.dx * side(i) * reach, pole: false });
+        if (!ends[0] && !ends[1]) {
+          const u = P.at(S.s - 4), v = P.at(S.s + 4), k = Math.abs(Math.atan2(u.dx * v.dz - u.dz * v.dx, u.dx * v.dx + u.dz * v.dz)) / 8;
+          const env = Math.max(L + 0.05, TRAM.width / 2 + 0.3 + (TRAM.cab * TRAM.cab * k) / 8 + 0.11), d = q ? Math.hypot(pt.x - q.x, pt.z - q.z) : 0;
+          mid = !!q && d / 2 >= env;
+          // pali sul cordolo (o nella sagoma di un'altra linea, in stazione): il tirante si sposta 6 m più avanti, finché il
+          // filo non resta senza sostegno per 54 m (90 m se il palo cadrebbe sulla sede di un'altra linea)
+          const o = mid ? reach : d / 2 + env;
+          ends = ends.map((e, i) => ({ x: cx - pt.dz * side(i) * o, z: cz + pt.dx * side(i) * o, pole: !mid }));
+          const altra = !mid && ends.some((e) => !fuoriSagoma(e.x, e.z, L + 0.4, [P, O]));
+          if (!mid && sp - prevPole < (altra ? 90 : 54)) { lastPole = prevPole; continue; }
+        } else ends = ends.map((e, i) => e || { x: cx - pt.dz * side(i) * reach, z: cz + pt.dx * side(i) * reach, pole: false });
         this.tramSpans.push({ cx, cz, half, a: ends[0], b: ends[1] });
-        const y = Y_ROAD + h + CATENARY_HEIGHT + 0.3;
-        for (const a of ends) if (a.pole) { poles.push(new THREE.CylinderGeometry(0.08, 0.11, y - Y_ROAD - h + 0.4, 6).translate(a.x, Y_ROAD + h + (y - Y_ROAD - h + 0.4) / 2, a.z)); this.tramPoles.push({ x: a.x, z: a.z }); }
+        const h0 = S.h, y = Y_ROAD + h0 + CATENARY_HEIGHT + 0.3;
+        for (const a of mid ? [{ x: cx, z: cz, pole: true }, ...ends] : ends) if (a.pole) { poles.push(new THREE.CylinderGeometry(0.08, 0.11, y - Y_ROAD - h0 + 0.4, 6).translate(a.x, Y_ROAD + h0 + (y - Y_ROAD - h0 + 0.4) / 2, a.z)); this.tramPoles.push({ x: a.x, z: a.z, h: h0 }); }
         const [a, b] = ends, sl = Math.hypot(b.x - a.x, b.z - a.z);
         wires.push(new THREE.BoxGeometry(0.03, 0.03, sl).rotateY(Math.atan2(b.x - a.x, b.z - a.z)).translate((a.x + b.x) / 2, y, (a.z + b.z) / 2));
       }
@@ -1447,13 +1494,8 @@ export class City {
     }
     redS.uv.fill(0.5);
     // rete dei binari (TramNet): bivi tra le linee e scambi dei capolinea, ognuno col segnale della posizione per chi lo
-    // prende di punta. Il segnale del bivio sta a destra di chi arriva, qualche metro prima; in stazione, dove i binari
-    // sono fitti, il primo posto a 2,3 m da ogni binario, a destra o a sinistra. Quello del capolinea tra i due binari,
-    // all'inizio della S
+    // prende di punta (place, più sotto)
     this.tramNet = new TramNet(tracks);
-    // depositi (TramYard, binari OSM di data/tram-depositi.json): rami con corsia rossa e rotaia, senza cordoli (dove i
-    // binari si avvicinano agli scambi si sovrapporrebbero)
-    this.tramYards = TRAM_DEPOTS.filter((d) => this.tramTracks[d.line]).map((d) => new TramYard(d, this.tramTracks[d.line]));
     // binari dei depositi in una griglia, per gli edifici che arrivano con le aree (depotRole); i capi dei binari tronchi
     // (un ramo solo, non una porta) sono il fondo dei binari della rimessa
     this.yardSegs = new Grid(20);
@@ -1478,13 +1520,25 @@ export class City {
       rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8);
     }
     const lanes = tracks.flatMap((T) => [T.path(1), T.path(-1)]).concat(this.tramYards.flatMap((Y) => Y.edges.map((e) => e.path)));
+    // tutti i binari, con le S dei capolinea: i pali accanto ai binari ne stanno fuori (poleSpot)
+    this.tramLanes = lanes.concat(tracks.flatMap((T) => [1, -1].map((d) => T.terminalCurve(d)).filter((c) => c && c.length > 1).map((c) => new TrackPath(c))));
     const free = (x, z) => !lanes.some((P) => P.projectNear(x, z, L + 0.6));
+    // Segnale dello scambio (s: dove il panel lo mette, verso di chi lo prende di punta): sul marciapiede, su un'isola o
+    // sul verde, fuori dalla sagoma di ogni binario, entro 12 m a destra di chi arriva o, se lì non c'è posto, a sinistra,
+    // fino a 9 m prima (poleSpot). Dove attorno è tutto asfalto (il piazzale della stazione) il primo posto a 2,3 m da
+    // ogni binario, a destra o a sinistra, come prima. Fino al 13 novembre i segnali dei capolinea stavano tra i due
+    // binari, sulla sede (#97)
     const place = (s) => {
-      const w = L + 0.9, bx = s.x + s.dx * 4 + s.dz * w, bz = s.z + s.dz * 4 - s.dx * w; // il punto sul binario
-      const spot = [4, 7, 10, 2, 13].flatMap((a) => [w, -w, w + 0.8, -w - 0.8].map((l) => ({ x: bx - s.dx * a - s.dz * l, z: bz - s.dz * a + s.dx * l }))).find((p) => free(p.x, p.z));
-      if (spot) Object.assign(s, spot);
+      let foot = null, bd = 4;
+      for (const P of lanes) { const pr = P.projectNear(s.x, s.z, bd); if (pr) { bd = pr.d; foot = P.at(pr.s); } }
+      const p = foot ? { x: foot.x, z: foot.z, dx: s.dx, dz: s.dz } : null, along = [0, -3, -6, 2, -9];
+      const spot = p && (this.poleSpot(p, 1, { along, max: 12 }) || this.poleSpot(p, -1, { along, max: 12 }));
+      if (spot) { s.x = spot.x; s.z = spot.z; return; }
+      const w = L + 0.9, bx = p ? p.x + s.dx * 4 : s.x + s.dx * 4 + s.dz * w, bz = p ? p.z + s.dz * 4 : s.z + s.dz * 4 - s.dx * w; // il punto sul binario
+      const near = [4, 7, 10, 2, 13].flatMap((a) => [w, -w, w + 0.8, -w - 0.8].map((l) => ({ x: bx - s.dx * a - s.dz * l, z: bz - s.dz * a + s.dx * l }))).find((q) => free(q.x, q.z));
+      if (near) Object.assign(s, near);
     };
-    for (const j of this.tramNet.nodes) { if (j.tipo === 'bivio') place(j.panel.sig); j.sign = this.switchSign(j.panel); }
+    for (const j of this.tramNet.nodes) { place(j.panel.sig); j.sign = this.switchSign(j.panel); }
     for (const Y of this.tramYards) for (const sw of Y.switches.values()) { place(sw.panel.sig); sw.sign = this.switchSign(sw.panel); }
     for (const Y of this.tramYards) for (const pt of Y.ports) if (pt.panel) { place(pt.panel.sig); pt.sign = this.switchSign(pt.panel); }
     const tex = TX.tramLaneTexture();
@@ -1499,12 +1553,17 @@ export class City {
     if (poles.length) { const pm = new THREE.Mesh(mergeGeometries(poles), new THREE.MeshLambertMaterial({ color: 0x6f767c })); pm.castShadow = true; this.group.add(pm); }
     if (wires.length) this.group.add(new THREE.Mesh(mergeGeometries(wires), new THREE.MeshBasicMaterial({ color: 0x2a2d30 })));
     if (bed.pos.length) { const bm = new THREE.Mesh(bed.build(), layer(new THREE.MeshLambertMaterial({ color: 0x8a8781 }), 4.2)); bm.receiveShadow = true; this.group.add(bm); }
-    // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per ogni verso
+    // cartelli "abbassare / alzare il pantografo" ai bordi dei tratti senza linea, per ogni verso: a destra, fuori
+    // dall'asfalto e dalla sagoma dei binari (poleSpot); dove non c'è posto a 3,6 m dal binario, come prima
     const pan = [], panTex = TX.pantographSignTexture();
+    this.panSigns = [];
     for (const track of tracks) for (const dir of [1, -1]) {
       const P = track.path(dir);
       for (const [g0, g1] of track.gaps[dir]) for (const [sAt, up] of [[g0 - 60, 0], [g1 + 8, 1]]) {
-        const p = P.at(sAt), px = p.x - p.dz * (L + 1.9), pz = p.z + p.dx * (L + 1.9), h = track.heightAt(dir, sAt);
+        const p = P.at(sAt), h = track.heightAt(dir, sAt), along = [0, -3, 3, -6, 6];
+        const spot = this.poleSpot(p, 1, { along, max: 10 }) || this.poleSpot(p, -1, { along, max: 10 }) || { x: p.x - p.dz * (L + 1.9), z: p.z + p.dx * (L + 1.9) };
+        const px = spot.x, pz = spot.z;
+        this.panSigns.push({ x: px, z: pz, h });
         const ang = Math.atan2(-p.dx, -p.dz); // il cartello guarda il tram che arriva
         pan.push({ g: new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6).translate(px, Y_ROAD + h + 1.3, pz), mat: 'pole' });
         const pl = new THREE.PlaneGeometry(0.7, 0.7);
@@ -1629,6 +1688,24 @@ export class City {
     for (const h of b.holes || []) shape.holes.push(new THREE.Path(h.map((p) => new THREE.Vector2(p.x, -p.z))));
     const wm = new THREE.Mesh(mergeGeometries(walls), this.shedMat), rm = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).translate(0, H, 0), this.shedRoofMat);
     for (const m of [wm, rm]) { m.castShadow = m.receiveShadow = true; this.group.add(m); tile.meshes.push(m); }
+  }
+
+  // Posto per un palo accanto al binario (segnali degli scambi, cartelli del pantografo, lanterne del tram; #97): dal
+  // punto p del binario, verso (dx, dz), dalla parte side (1 a destra di chi va verso dx, dz), il punto più vicino al
+  // binario tra min e max metri che sta fuori dall'asfalto di almeno 0,4 m (marciapiede, isola, verde: dove stanno i
+  // pali veri), a più di clear metri da ogni binario (tramLanes: fuori dalla sagoma del tram, cassa e franco compresi) e
+  // fuori dagli edifici vicini ai binari. A ogni distanza si prova anche qualche metro prima o dopo (along). Con
+  // asfalto: true va bene anche l'asfalto (piazzali dove non c'è altro). null se non c'è posto
+  poleSpot(p, side, { min = TRAM.lane + 0.6, max = 12, along = [0], clear = TRAM.lane + 0.5, asfalto = false } = {}) {
+    const q = this._qp || (this._qp = []);
+    for (let o = min; o <= max; o += 0.25) for (const a of along) {
+      const x = p.x + p.dx * a - p.dz * side * o, z = p.z + p.dz * a + p.dx * side * o;
+      if (!asfalto && (this.asphRings ? this.surfaceOff(x, z) : this.clearance(x, z, ['road'], 20)) < 0.4) continue;
+      if ((this.tramLanes || []).some((P) => P.projectNear(x, z, clear))) continue;
+      if (this.tramBld && this.tramBld.query(x, z, 0.5, q).some((b) => inRing(x, z, b.pts))) continue;
+      return { x, z, o, side };
+    }
+    return null;
   }
 
   // Segnale dello scambio (bivi e scambi dei capolinea di TramNet, scambi dei depositi), dal suo panel: palo in sig,

@@ -553,6 +553,14 @@ erano. Dietro prima c'era un rettangolo nero vuoto: a Voltabarozzo chi arriva al
 la lanterna dei tram in partenza vista da dietro (2385, 3519) da 70 m fino all'attraversamento. Le 468 lanterne
 passano da 64.116 a 125.892 triangoli (132 in più per lanterna) e `buildHeads` da circa 27 a 49 ms con SwiftShader.
 
+Pali delle lanterne del tram fuori dalla strada (#97, `area:tram`, 13 novembre): `TramSignals.buildHeads(scene, city)`
+mette il palo con `City.poleSpot` (sul marciapiede, su un'isola o sul verde, fuori dalla sagoma di ogni binario), a
+destra fino a 14 m e fino a 6 m prima, se no a sinistra fino a 12 m; oltre 4 m a destra la lanterna sta su uno sbraccio
+a `MAST_Y`, a `TRAM.lane` + 0,6 m dal binario. Senza posto per un palo è appesa al tirante della linea aerea più vicino
+fino a 30 m prima (`city.tramSpans`, 30 lanterne), e senza neanche quello accanto alla sede fuori dalla sagoma. `hd.pole`
+dice dov'è il palo (null se appesa), per `tests/pali.js`. Logica, stati e `drawHeads` non cambiano; le luci (`hd.pos`)
+si spostano col palo. `buildHeads` passa da circa 38 a 100 ms con SwiftShader.
+
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
 Aperta e chiusa l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
@@ -1009,6 +1017,33 @@ Da sapere prima di toccare le fermate del tram o la zona della fermata:
 - prove in `tests/turni-tram.spec.js`: "manovra al capolinea" (all'arrivo e alla partenza il tram fermo copre il punto
   della fermata, non sta sullo scambio e apre le porte senza penalità) e "capolinea superato fin sullo scambio". Il
   rilievo dei cinque capolinea (banchine OSM, fermate, scambi) è nel commento di chiusura di #99.
+
+### Tram: pali accanto ai binari (#97, 13 novembre)
+
+Segnalazione di chi gioca dopo un giro sul SIR1: pali e semafori in mezzo alla strada e sul percorso del tram. Il
+controllo è `misuraPali` in `tests/pali.js`, nel rapporto di `tests/mappa.spec.js` (`pali_nella_sagoma_del_tram`,
+`pali_del_tram_in_carreggiata`): ogni palo della linea aerea, lanterna del tram, segnale degli scambi, cartello del
+pantografo, semaforo e lampione contro la sagoma del tram (centro sulla sede, o fusto a meno di 0,3 m dalla cassa, il
+franco della UNI 7156 delle tabelle del SIR3; la cassa in curva va verso l'interno come in `Tram.syncTransform`) su
+linee, S dei capolinea e depositi, e contro l'asfalto della pianta (tranne tra i due binari di una sede). Su `main` erano
+14 nella sagoma e 488 in carreggiata (elenco nel commento dell'issue); ora 0 e 7, spiegati in testa a `mappa.spec.js`.
+
+- `City.poleSpot(p, side, { min, max, along, clear, asfalto })`: il posto per un palo accanto al binario, il più vicino
+  fuori dall'asfalto di 0,4 m, a più di `clear` da ogni binario di `city.tramLanes` (linee, depositi, S dei capolinea) e
+  fuori dagli edifici vicini ai binari (`city.tramBld`, da `net.tramBuildings`). La usano segnali degli scambi (`place`
+  in `buildTramway`, ora anche per i capolinea, entro 12 m), cartelli del pantografo (`city.panSigns`) e lanterne;
+- linea aerea (`buildTramway`): `spanAnchor` cerca il palo fino a 24 m (prima 16; il progetto del SIR2 ha i pali dietro
+  i marciapiedi di una strada di 24 m), fuori dalla sagoma di ogni binario (`fuoriSagoma`, depositi compresi: per questo
+  `this.tramYards` si costruisce prima della linea aerea) e prima della facciata dietro; un tirante senza aggancio da un
+  lato si sposta fino a 9 m lungo il binario; senza agganci ai due lati c'è il palo in mezzo se l'interasse lo lascia
+  fuori dalla sagoma in curva (oggi nessuno), altrimenti il tirante va 6 m più avanti, fino a 54 m senza sostegno (90 m
+  se il palo cadrebbe sulla sede di un'altra linea). I pali sul cordolo della sede non ci sono più. `city.tramPoles` ha
+  anche la quota `h`. Pali da 1533 a 1647; `buildTramway` da circa 1,90 a 1,78 s (l'asfalto si guarda prima della
+  distanza dalla sede del SIR1), triangoli uguali;
+- restano in carreggiata 7 pali dove attorno c'è solo asfalto e nessun tirante vicino: il piazzale della stazione,
+  l'incrocio tra la stazione e Via Tommaseo, la fermata di Via San Marco (4722, -1600), dove il palo starebbe sulla
+  banchina del tram, che `poleSpot` non conosce (le banchine si disegnano in `buildTramway`, non sono nella pianta);
+- mensole (tirante agganciato da un lato solo): da 223 a 74, ma la più lunga arriva a 27,4 m; c'erano già (19,6 m): #118.
 
 ### Tram: SIR2 e SIR3 (corsia `tram-reti`, chiusa il 9 novembre)
 

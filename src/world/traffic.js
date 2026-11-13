@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
 import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
 import { ledTexture } from './textures.js';
-import { TRAM, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
+import { TRAM, CATENARY_HEIGHT, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
 import { driveOffset, laneSpan } from '../data/padova.js';
 import { turni } from '../game/turni.js';
@@ -1821,15 +1821,22 @@ export class TramSignals {
         this.sigs.add(sg);
       }
     }
-    this.buildHeads(scene);
+    this.buildHeads(scene, city);
   }
-  // un segnale per incrocio, a destra del binario, prima della strada: lanterna a tre luci in colonna (dall'alto barra
-  // orizzontale bianca = via impedita, triangolo arancione = attenzione, barra verticale bianca = via libera); ne è
-  // accesa una sola, le altre si vedono spente (lente scura, simbolo appena visibile, visiera). Cassa grigia con il
-  // pannello nero davanti; dietro una calotta per luce, e il palo accanto con due staffe: chi arriva sull'altro binario
-  // vede il retro di una lanterna. Prima la cassa era tutta nera sopra il palo e da dietro sembrava un segnale spento
-  // (a Voltabarozzo chi arriva al capolinea l'ha davanti, sopra i binari, da 70 m fino all'attraversamento)
-  buildHeads(scene) {
+  // un segnale per incrocio, prima della strada: lanterna a tre luci in colonna (dall'alto barra orizzontale bianca = via
+  // impedita, triangolo arancione = attenzione, barra verticale bianca = via libera); ne è accesa una sola, le altre si
+  // vedono spente (lente scura, simbolo appena visibile, visiera). Cassa grigia con il pannello nero davanti; dietro una
+  // calotta per luce, e il palo accanto con due staffe: chi arriva sull'altro binario vede il retro di una lanterna.
+  // Prima la cassa era tutta nera sopra il palo e da dietro sembrava un segnale spento (a Voltabarozzo chi arriva al
+  // capolinea l'ha davanti, sopra i binari, da 70 m fino all'attraversamento).
+  // Il palo sta dove starebbe davvero (#97): sul marciapiede, su un'isola o sul verde, fuori dalla sagoma di ogni
+  // binario (City.poleSpot), a destra fino a 14 m e fino a 6 m prima, altrimenti a sinistra oltre l'altro binario. Lontano
+  // dal binario la lanterna sta su uno sbraccio sopra le corsie, alta come le lanterne stradali a sbraccio (MAST_Y),
+  // appena fuori dalla sede. Senza posto per un palo è appesa al tirante della linea aerea; dove non c'è neanche quello
+  // (piazzali tutti asfalto) il palo sta accanto alla sede, fuori dalla sagoma dei binari, e in quota accanto alla sede.
+  // Fino al 13 novembre era sempre lì, a TRAM.lane + 0,68 m dal binario: dove la sede corre tra le corsie delle auto, il
+  // palo stava sulla corsia
+  buildHeads(scene, city) {
     const n = this.list.length;
     if (!n) return;
     const statics = [], body = [], lenses = [];
@@ -1842,13 +1849,37 @@ export class TramSignals {
     this.heads = [];
     const Y0 = 3.25, DY = 0.36, HH = DY * 3 + 0.1;
     for (const x of this.list) {
-      const T = x.track, s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s);
-      const px = p.x - p.dz * (TRAM.lane + 0.35), pz = p.z + p.dx * (TRAM.lane + 0.35), ang = Math.atan2(-p.dx, -p.dz);
-      const fx = Math.sin(ang), fz = Math.cos(ang), y = Y_ROAD + h + Y0, y0 = Y_ROAD + h;
-      // ox, oz: verso l'esterno, lontano dal binario (l'asse x della cassa ruotata di ang)
-      const ox = -p.dz, oz = p.dx, top = y + HH / 2 + 0.12;
-      body.push(new THREE.CylinderGeometry(0.05, 0.06, top - y0, 6).translate(px + ox * 0.33, (top + y0) / 2, pz + oz * 0.33));
-      for (const k of [1, -1]) body.push(new THREE.BoxGeometry(0.16, 0.06, 0.08).rotateY(ang).translate(px + ox * 0.26, y + k * DY * 1.2, pz + oz * 0.26));
+      const T = x.track, s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s), along = [0, -1.5, -3, -4.5, -6];
+      const ang = Math.atan2(-p.dx, -p.dz), fx = Math.sin(ang), fz = Math.cos(ang), y0 = Y_ROAD + h;
+      let spot = h < 0.5 && city && city.poleSpot ? city.poleSpot(p, 1, { along, max: 14 }) || city.poleSpot(p, -1, { along, max: 12 }) : null;
+      // senza posto per un palo: appesa al tirante della linea aerea più vicino che passa sopra il binario prima
+      // dell'incrocio (fino a 30 m prima), a destra appena fuori dalla sede
+      let hang = null;
+      if (!spot && h < 0.5) for (const sp of (city && city.tramSpans) || []) {
+        const pr = P.projectNear(sp.cx, sp.cz, sp.half), ds = pr ? pr.s - s : 99;
+        if (ds < -30 || ds > 2 || (hang && Math.abs(ds) >= Math.abs(hang.ds))) continue;
+        const q = P.at(pr.s), lx = q.x - q.dz * (TRAM.lane + 0.35), lz = q.z + q.dx * (TRAM.lane + 0.35);
+        if (distToSeg(lx, lz, sp.a.x, sp.a.z, sp.b.x, sp.b.z).d < 0.3) hang = { x: lx, z: lz, ds, y: Y_ROAD + T.heightAt(x.dir, pr.s) + CATENARY_HEIGHT + 0.3 };
+      }
+      // né l'uno né l'altro (piazzali tutti asfalto): accanto alla sede, fuori dalla sagoma dei binari
+      if (!spot && !hang && h < 0.5 && city && city.poleSpot) spot = city.poleSpot(p, 1, { along, max: 4, asfalto: true }) || city.poleSpot(p, -1, { along, max: 8, asfalto: true });
+      if (!spot && !hang) spot = { x: p.x - p.dz * (TRAM.lane + 0.68), z: p.z + p.dx * (TRAM.lane + 0.68), o: TRAM.lane + 0.68, side: 1 };
+      let px, pz, y;
+      if (hang) {
+        // gancio dal tirante alla cassa
+        px = hang.x; pz = hang.z; y = hang.y - 0.25 - HH / 2;
+        body.push(new THREE.BoxGeometry(0.05, 0.27, 0.05).translate(px, hang.y - 0.12, pz));
+      } else {
+        // ox, oz: dal binario verso il palo (l'asse x della cassa ruotata di ang); arm: lanterna sullo sbraccio, a
+        // TRAM.lane + 0,6 m dal binario, altrimenti sul palo, 0,33 m verso il binario
+        const ox = -p.dz * spot.side, oz = p.dx * spot.side, arm = spot.side > 0 && spot.o > 4;
+        const inward = arm ? spot.o - (TRAM.lane + 0.6) : 0.33;
+        px = spot.x - ox * inward; pz = spot.z - oz * inward; y = y0 + (arm ? MAST_Y + HH / 2 : Y0);
+        const top = y + HH / 2 + 0.12;
+        body.push(new THREE.CylinderGeometry(arm ? 0.09 : 0.05, arm ? 0.12 : 0.06, top - y0, 6).translate(spot.x, (top + y0) / 2, spot.z));
+        if (arm) body.push(new THREE.BoxGeometry(0.08, 0.08, inward + 0.1).rotateY(Math.atan2(ox, oz)).translate(spot.x - (ox * inward) / 2, top - 0.06, spot.z - (oz * inward) / 2));
+        else for (const k of [1, -1]) body.push(new THREE.BoxGeometry(0.16, 0.06, 0.08).rotateY(ang).translate(px + ox * 0.26, y + k * DY * 1.2, pz + oz * 0.26));
+      }
       body.push(new THREE.BoxGeometry(0.42, HH, 0.16).rotateY(ang).translate(px - fx * 0.01, y, pz - fz * 0.01));
       statics.push(new THREE.BoxGeometry(0.42, HH, 0.02).rotateY(ang).translate(px + fx * 0.08, y, pz + fz * 0.08));
       const pos = [];
@@ -1860,7 +1891,7 @@ export class TramSignals {
         statics.push(new THREE.BoxGeometry(0.36, 0.025, 0.16).rotateY(ang).translate(px + fx * 0.16, ly + 0.17, pz + fz * 0.16));
         pos.push(new THREE.Vector3(px + fx * 0.096, ly, pz + fz * 0.096));
       }
-      this.heads.push({ x, pos, ang, shown: null });
+      this.heads.push({ x, pos, ang, shown: null, pole: spot ? { x: spot.x, z: spot.z, h } : null });
     }
     const box = new THREE.Mesh(mergeGeometries(statics), new THREE.MeshLambertMaterial({ color: 0x1b1d1f }));
     const lens = new THREE.Mesh(mergeGeometries(lenses), new THREE.MeshBasicMaterial({ color: 0x0b0c0d }));
