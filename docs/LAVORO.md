@@ -39,7 +39,8 @@ divise per area.
    - `src/data/novita.js` e `IDEE.md`: si tengono le righe di tutti; in `novita.js` la riga nuova va in cima con
      `n` successivo all'ultimo di `main`;
    - `src/data/padova-map.json` e `public/mappa/aree/` (nei ticket che rigenerano la mappa): si prende la mappa di
-     `main` (rete e aree) e si rigenera.
+     `main` (rete e aree) e si rigenera con `scripts/rigenera_mappa.sh`. La mappa si pubblica intera, come esce dal
+     comando: niente composizioni a mano con le sole celle della zona toccata (nota Verifiche, #106).
 5. Ogni worktree ha il suo `node_modules` (`npm install`): la cache di Vite sta in `node_modules/.vite` e due server
    che la condividono si pestano i piedi.
 6. Porte dal numero dell'issue: dev `5200 + n`, preview `4200 + n` (ticket #46: 5246 e 4246); il checkout principale
@@ -79,7 +80,7 @@ divise per area.
 
 | File | Chi ci lavora | Perché |
 |---|---|---|
-| `src/data/padova-map.json`, `public/mappa/aree/` | i ticket che rigenerano la mappa, uno alla volta | la rete (una riga sola da 5,9 MB) e le aree da 800 m (edifici, marciapiedi, verde, alberi) le scrive `build_map.py`: due rigenerazioni non si uniscono, si prende la mappa di `main` e si rigenera (regola 4) |
+| `src/data/padova-map.json`, `public/mappa/aree/` | i ticket che rigenerano la mappa, uno alla volta | la rete (una riga sola da 5,9 MB) e le aree da 800 m (edifici, marciapiedi, verde, alberi) le scrive `build_map.py`: due rigenerazioni non si uniscono, si prende la mappa di `main` e si rigenera (regola 4); il job `rigenera` è rosso se la mappa del commit non è quella che esce da `scripts/rigenera_mappa.sh` |
 | `scripts/build_map.py`, `scripts/street_surfaces.py` | `area:mappa` (dettagli dentro l'area) e `area:linee` (estensione dell'area) | producono la mappa; chi ha bisogno di dati nuovi li scrive in un file a parte |
 | `scripts/tram_linee.py`, `scripts/tram_depositi.py`, `data/tram-linee-nuove.json`, `data/tram-depositi.json` | `area:tram` e `area:linee` (SIR2 fino ai capolinea) | dopo, si rigenera la mappa (la sede nella pianta delle strade segue i binari) |
 | `src/world/city.js` | tutte le aree, ognuna nelle sue funzioni | edifici, marciapiedi, verde e alberi arrivano per aree (`src/data/aree.js`); chi cambia la geometria misura prima e dopo `city.timings` e i triangoli |
@@ -123,6 +124,21 @@ Chiusa il 9 novembre 2026. Cosa c'è (dettagli nel README, sezione "Verifiche"):
   prova rossa ferma la pubblicazione di tutti finché un push non la ripara. Per un'emergenza `gh workflow run pages.yml`
   pubblica la testa di `main` senza aspettare. `workflow_run` usa il file del workflow che sta su `main`: una modifica a
   `pages.yml` vale dalla serie di verifiche successiva al push che la porta.
+- Mappa riproducibile (#106, 13 novembre): la mappa si rigenera con `scripts/rigenera_mappa.sh`, che lancia
+  `scripts/rigenera_mappa.py` dentro un'immagine Docker fissata (Linux, Python 3.12) con le librerie di
+  `scripts/requirements-mappa.txt` (shapely 2.2.0, numpy 2.5.4, scipy 1.18.1, pyarrow 26.0.1, con gli hash) e il feed GTFS di
+  `data/gtfs-biv.zip`, scaricato il 9 novembre. Misure del 13 novembre, con lo stesso lock e gli stessi dati: Linux
+  amd64, Linux arm64 e Linux con glibc 2.31 invece di 2.41 danno gli stessi file, byte per byte; macOS dà 115 celle
+  della rete e 20 aree diverse (vertici spostati di 0,1-0,3 m, binari di 1 mm), per questo dal Mac si passa da Docker;
+  shapely 2.1.2 dà altre differenze ancora. Il feed vivo cambia ogni giorno (cinque zip diversi tra il 9 e il 13
+  novembre) e le date di riferimento di `build_gtfs.py` (`FER_DATE`, `FES_DATE`) escono dal feed: con quello del 13
+  novembre il SIR1 restava senza corse feriali. Lo script si ferma se sistema, Python o librerie non sono quelli
+  fissati (`--altre-versioni` per le prove). Il job `rigenera` di `verifiche.yml` gira nella stessa immagine, lancia
+  `rigenera_mappa.py --controlla` (rigenera in una cartella temporanea e confronta rete e aree con quelle del commit)
+  ed è rosso se differiscono, quindi ferma la pubblicazione: chi cambia uno script della mappa o un file di `data/`
+  rigenera e pubblica la mappa nello stesso commit, intera. Dura circa 7 minuti accanto alle prove, che ne durano di
+  più. Il job `mappa` usa lo stesso lock. Cambiare librerie, immagine o feed: in testa ai due script, sempre con la
+  mappa rigenerata nello stesso commit.
 - Se si riapre: pilota più bravo nelle svolte a T e in quelle strette (sbaglia sulle linee 9 e 21) per allargare il
   giro guidato a tutte le linee; casi di prova dalle segnalazioni di chi gioca.
 
@@ -220,7 +236,7 @@ cause erano due.
 
 Issue: `area:mappa`.
 
-Rigenera la mappa (venv con `shapely` e `pyarrow`, comandi in `CLAUDE.md`), una rigenerazione alla volta con le altre
+Rigenera la mappa (`scripts/rigenera_mappa.sh`, comandi in `CLAUDE.md`), una rigenerazione alla volta con le altre
 corsie della tabella dei file condivisi. File: `scripts/build_map.py` (i dettagli dentro l'area; la definizione
 dell'area è di `capolinea`), `scripts/street_surfaces.py`, le query e i filtri OSM (`scripts/overpass-*.ql`,
 `scripts/filter_osm_*.py`), la parte delle strade di `src/world/city.js`, `src/data/padova.js`,

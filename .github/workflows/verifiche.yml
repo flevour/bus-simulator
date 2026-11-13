@@ -54,6 +54,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # La mappa del commit deve essere quella che la build produce dai dati in data/, nell'ambiente fissato: la stessa
+  # immagine di scripts/rigenera_mappa.sh e le librerie di scripts/requirements-mappa.txt. Gira accanto alle prove,
+  # che durano di più: non allunga la serie.
+  rigenera:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: pip install --disable-pip-version-check --root-user-action=ignore --require-hashes -r scripts/requirements-mappa.txt
+      - run: python scripts/rigenera_mappa.py --controlla
+
   mappa:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -62,7 +74,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - run: pip install shapely
+          cache: pip
+          cache-dependency-path: scripts/requirements-mappa.txt
+      # le stesse librerie della rigenerazione: i numeri del rapporto non cambiano con la versione di shapely
+      - run: pip install --require-hashes -r scripts/requirements-mappa.txt
       - run: python3 scripts/verifica_mappa.py --elenco --json rapporto-mappa.json
       - if: always()
         uses: actions/upload-artifact@v7

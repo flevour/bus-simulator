@@ -1,0 +1,7 @@
+# Librerie degli script che producono la mappa (scripts/build_map.py e quelli che chiama).
+# Le versioni fissate, con gli hash, sono in requirements-mappa.txt: come si rigenera è in testa a
+# scripts/rigenera_mappa.py.
+shapely
+numpy
+scipy
+pyarrow

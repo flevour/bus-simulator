@@ -62,15 +62,22 @@ npm run build:single  # dist-single/index.html autosufficiente
 python3 scripts/to_artifact.py dist-single/index.html <uscita>.html   # pagina per un artefatto claude.ai
 ```
 
-Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e binari OSM; servono `shapely`,
-`pyarrow`, `numpy` e `scipy`; `CAVALCAVIA=registro` davanti al comando riscrive i campi di `data/cavalcavia.json` che
-vengono dalla rete):
+Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e binari OSM). Serve Docker: il comando
+gira su Linux con Python 3.12 e le librerie fissate in `scripts/requirements-mappa.txt` (`shapely`, `numpy`, `scipy`, `pyarrow`);
+`CAVALCAVIA=registro` davanti al comando riscrive i campi di `data/cavalcavia.json` che vengono dalla rete:
 
 ```bash
-curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
-python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json data/osm-corridoio.json
+scripts/rigenera_mappa.sh
+scripts/rigenera_mappa.sh --controlla   # rigenera a parte e confronta col repository
 python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore se i casi non sono quelli degli elenchi
 ```
+
+`scripts/rigenera_mappa.py` chiama `build_map.py` con i dati di `data/` e con il feed GTFS fissato in
+`data/gtfs-biv.zip` (quello vivo cambia ogni giorno), e si ferma se sistema, Python o librerie non sono quelli fissati:
+con uno shapely diverso, o su macOS con lo stesso, la mappa esce diversa in un centinaio di celle. La mappa nel
+repository deve essere quella che questo comando produce, e il job `rigenera` di `.github/workflows/verifiche.yml` lo
+controlla a ogni push: chi cambia uno script o un dato della mappa la rigenera e la pubblica nello stesso commit. Come
+si cambiano le librerie, l'immagine o il feed è in testa a `scripts/rigenera_mappa.py` e a `scripts/rigenera_mappa.sh`.
 
 `build_map.py` scrive la mappa in due parti (`scripts/aree_mappa.py`): la rete (nodi, archi, linee, fermate,
 segnaletica, terreno, carreggiate e isole della pianta delle strade) in `src/data/padova-map.json`, dentro il bundle, ed
