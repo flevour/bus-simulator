@@ -479,6 +479,31 @@ SIR2 (#80) e altri incroci col SIR3 e col SIR2, tra cui Piazzetta Nievo, Via Chi
 Nei controlli il giocatore va tenuto lontano dai binari: fermo a 4,3 m dall'asse del SIR3 (teletrasportato a
 (2000, 3200)) tiene fermo il tram per tutta la prova.
 
+Pozzi (#90, 12 novembre). Accanto a Corso Esperanto (2785, 3300) un anello di strade di servizio a senso unico, con le
+uscite a senso unico fino al bordo dell'area, è un pozzo: da dentro non si torna nella rete. `deadEnd` contava fino a
+12 archi raggiungibili e dall'anello se ne raggiungono 17: le auto ci entravano, le uscite erano vicoli ciechi e
+giravano nell'anello per sempre, con la coda ferma sulla strada d'ingresso. Come funziona ora:
+
+- `Traffic.pit(e, fwd)`: dall'arco nel verso, con le sole mosse lecite (le svolte permesse e l'inversione a U in fondo
+  a una strada a doppio senso senza altre uscite), si raggiungono meno di 200 archi nel loro verso. Nella mappa i pozzi
+  arrivano a 35, gli altri archi ne raggiungono più di 44.000; il risultato coincide con "non arriva alla componente
+  fortemente connessa più grande" su tutti gli archi. Memoria a parte (`_pit`): chi raggiunge un arco che non è un pozzo
+  non lo è, gli archi raggiunti da un pozzo lo sono tutti;
+- `deadEnd` è vero anche per i pozzi: le auto non ci nascono (`spawn`) e ci entrano solo se non c'è altro. In
+  `chooseNext`, se tutte le uscite sono vicoli ciechi, si sceglie tra quelle che non sono pozzi (succede da 7 archi, tra cui uno
+  in Via delle Porte Contarine);
+- 93 archi d'ingresso ai pozzi (passaggi leciti da un arco da cui si torna a uno da cui no): 75 erano già vicoli ciechi,
+  18 erano aperti e ora non lo sono. Sono, oltre all'anello (entrando da Via Marconi verso Corso Esperanto), un anello
+  di servizio a (3571, -125), Via Ronchi Bassi e Via Po verso la Tangenziale di Limena, Via San Tommaso e Via Bonetto, e
+  carreggiate a senso unico che finiscono al bordo dell'area (Corso Australia, Corso Boston, Corso Tredici Giugno e Via
+  Boves, Corso Esperanto verso Corso Primo Maggio, Via Meucci e Via Galvani): lì le auto arrivavano al bordo e tornavano
+  indietro contromano, ora quelle carreggiate restano vuote. Nei pozzi non passa nessuna linea dei bus;
+- prova in `tests/traffico.spec.js`: attorno all'anello nessuna auto nasce in un pozzo e nessuna scelta ci entra;
+- controllo col giocatore a (2300, 3000), doppio delle auto (144), 40 minuti: con `main` alle 8:15 89 auto ferme oltre
+  90 s e alle 17:32 84, tutte nella coda dalla strada d'ingresso fino a Via Marconi (fino a 2169 s), e in media 62
+  auto su 144 nei pozzi; ora nessuna auto ferma oltre 90 s e nessuna nei pozzi. Per il confronto basta spegnere
+  `pit` nel prototipo (`P.pit = () => false`): `deadEnd` e `chooseNext` tornano come su `main`.
+
 Bus automatici in anticipo (segnalazione dell'11 novembre, "in Prato della Valle a 20 all'ora"): vanno al più il 15%
 sotto il limite e recuperano l'anticipo in fermata: oltre 40 s avanti si fermano anche senza prenotazioni, fino
 all'orario (al più un minuto). Dal 12 novembre (#64) anche i tram automatici in anticipo vanno all'andatura normale e

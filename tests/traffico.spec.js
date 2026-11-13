@@ -343,3 +343,42 @@ test('auto in svolta che si aspettano a vicenda: a Porta Trento una passa e l\'a
   expect(r.passata).toBe('Via Bezzecca');
   expect(gioco.errori()).toEqual([]);
 });
+
+// Archi percorribili dalle auto attorno all'anello di strade di servizio accanto a Corso Esperanto (x, z): quelli
+// dell'anello, i pozzi, le auto nuove nate attorno e le scelte agli incroci da chi non è in un pozzo
+function pozzo({ x, z }) {
+  const g = window.__game, T = g.traffic, N = g.net.nodes;
+  const lontano = (id) => Math.hypot(N[id].x - x, N[id].z - z);
+  const vicini = [...new Set(Object.values(N).filter((n) => lontano(n.id) < 600).flatMap((n) => n.edges))]
+    .flatMap((e) => [true, false].filter((f) => T.allowed(e, f)).map((f) => ({ e, f })));
+  const anello = vicini.filter(({ e }) => e.service && e.oneway && lontano(e.a) < 40 && lontano(e.b) < 40);
+  const nate = [];
+  for (let i = 0; i < 400; i++) T.spawn({ x, z }, 0, 500, nate);
+  let scelte = 0, dentro = 0;
+  for (const { e, f } of vicini) {
+    if (T.pit(e, f)) continue;
+    for (let i = 0; i < 20; i++, scelte++) { const n = T.chooseNext(e, f); if (T.pit(n.edge, n.fwd)) dentro++; }
+  }
+  return {
+    anello: anello.length, chiuso: anello.filter(({ e, f }) => T.deadEnd(e, f)).length,
+    pozzi: vicini.filter(({ e, f }) => T.pit(e, f)).length,
+    nate: nate.length, nelPozzo: nate.filter((c) => T.pit(c.edge, c.fwd)).length, scelte, dentro,
+  };
+}
+
+// #90: accanto a Corso Esperanto (2785, 3300) un anello di strade di servizio a senso unico, con le uscite a senso
+// unico fino al bordo dell'area, è un pozzo: chi ci entra non torna più nella rete. Le auto ci entravano (deadEnd
+// contava fino a 12 archi raggiungibili, dall'anello se ne raggiungono 17), le uscite erano vicoli ciechi e giravano
+// nell'anello per sempre, con la coda ferma sulla strada d'ingresso. Ora (Traffic.pit) lì non nascono e non ci entrano
+test('anello di strade di servizio senza uscita accanto a Corso Esperanto: le auto non ci nascono e non ci entrano', async ({ pagina, gioco }) => {
+  await avviaCorsa(pagina, { linea: '3' });
+  const r = await pagina.evaluate(pozzo, { x: 2785, z: 3300 });
+  expect(r.anello, 'archi dell\'anello').toBeGreaterThanOrEqual(6);
+  expect(r.chiuso, 'archi dell\'anello chiusi alle auto (deadEnd)').toBe(r.anello);
+  expect(r.pozzi, 'archi nei pozzi entro 600 m: l\'anello e la strada che ci porta').toBeGreaterThan(r.anello);
+  expect(r.nate).toBeGreaterThan(100);
+  expect(r.nelPozzo, 'auto nate in un pozzo').toBe(0);
+  expect(r.scelte).toBeGreaterThan(1000);
+  expect(r.dentro, 'scelte che entrano in un pozzo').toBe(0);
+  expect(gioco.errori()).toEqual([]);
+});

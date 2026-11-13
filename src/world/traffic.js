@@ -572,7 +572,7 @@ export class Traffic {
   // vicolo cieco per le auto: percorrendo l'arco nel verso fwd si raggiungono meno di 12 archi (senza tornare indietro
   // sullo stesso). Le auto non ci nascono e ci entrano solo se non c'è altro: in Piazza Garibaldi uno spezzone di 5 m
   // sopra i binari, che porta solo alla corsia dei bus, e in Via Morgagni due spezzoni che portano solo l'uno nell'altro
-  // tenevano un'auto a fare inversioni sulla sede
+  // tenevano un'auto a fare inversioni sulla sede. Lo è anche l'arco da cui non si torna nella rete (pit)
   deadEnd(e, fwd) {
     const memo = this._dead || (this._dead = new Map()), key = fwd ? e.id : -1 - e.id;
     if (memo.has(key)) return memo.get(key);
@@ -584,8 +584,35 @@ export class Traffic {
         if (x !== a && this.allowed(x, xf) && !seen.has(k)) { seen.add(k); queue.push([x, xf]); }
       }
     }
-    memo.set(key, seen.size < 12);
-    return seen.size < 12;
+    const dead = seen.size < 12 || this.pit(e, fwd);
+    memo.set(key, dead);
+    return dead;
+  }
+  // pozzo: dall'arco nel verso fwd, con le sole mosse lecite (le svolte permesse e l'inversione a U in fondo a una
+  // strada a doppio senso senza altre uscite), si raggiungono meno di 200 archi nel loro verso. Accanto a Corso Esperanto
+  // (2785, 3300) un anello di strade di servizio a senso unico ne raggiunge 17, con le uscite a senso unico fino al bordo
+  // dell'area: le auto ci entravano, le uscite erano vicoli ciechi e giravano nell'anello per sempre, con la coda ferma
+  // sulla strada d'ingresso. Nella mappa i pozzi hanno al più 35 archi, gli altri ne raggiungono più di 44.000. Chi
+  // raggiunge un arco che non è un pozzo non lo è; gli archi raggiunti da un pozzo lo sono tutti
+  pit(e, fwd) {
+    const memo = this._pit || (this._pit = new Map()), key = fwd ? e.id : -1 - e.id;
+    if (memo.has(key)) return memo.get(key);
+    const seen = new Set([key]), queue = [[e, fwd]];
+    let out = false;
+    while (queue.length && !out) {
+      const [a, f] = queue.shift(), n = this.net.nodes[f ? a.b : a.a];
+      const next = n.edges.filter((x) => x !== a && this.allowed(x, x.a === n.id)).map((x) => [x, x.a === n.id]);
+      if (!next.length && this.allowed(a, !f)) next.push([a, !f]);
+      for (const [x, xf] of next) {
+        const k = xf ? x.id : -1 - x.id;
+        if (seen.has(k)) continue;
+        if (memo.get(k) === false || seen.size >= 200) { out = true; break; }
+        seen.add(k); queue.push([x, xf]);
+      }
+    }
+    if (out) memo.set(key, false);
+    else for (const k of seen) memo.set(k, true);
+    return !out;
   }
   // le auto non entrano nelle vie pedonali né nelle corsie riservate ai bus
   allowed(e, fwd) { return !e.ped && !e.psv && (!e.oneway || (e.oneway === 1) === fwd); }
@@ -622,8 +649,11 @@ export class Traffic {
   chooseNext(edge, fwd) {
     const to = fwd ? this.net.nodes[edge.b] : this.net.nodes[edge.a];
     let opts = to.edges.filter((e) => e !== edge && this.allowed(e, e.a === to.id));
+    // prima chi non è un vicolo cieco, poi chi non è un pozzo (in Via delle Porte Contarine due vicoli ciechi, uno lo è)
     const open = opts.filter((e) => !this.deadEnd(e, e.a === to.id));
+    const back = opts.filter((e) => !this.pit(e, e.a === to.id));
     if (open.length) opts = open;
+    else if (back.length) opts = back;
     if (!opts.length) opts = to.edges.filter((e) => !e.ped && !e.psv);
     if (!opts.length) opts = [edge];
     // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio
