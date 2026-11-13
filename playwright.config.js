@@ -12,6 +12,8 @@ export default defineConfig({
   timeout: 240_000,
   expect: { timeout: 20_000 },
   forbidOnly: !!process.env.CI,
+  // immagini di riferimento delle vedute (tests/vedute.spec.js): le stesse su ogni sistema, senza suffisso
+  snapshotPathTemplate: '{testDir}/vedute/riferimenti/{arg}{ext}',
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
     browserName: 'chromium',

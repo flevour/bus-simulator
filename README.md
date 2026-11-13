@@ -32,7 +32,11 @@ di `tests/` in Chromium headless (WebGL in software):
   da `scripts/binari_tram.py`, che la prova chiama con Python;
 * `cavalcavia.spec.js`: il profilo dei cavalcavia con il terreno e le quote dei binari del gioco, misurato con la
   regola di [`docs/cavalcavia.md`](docs/cavalcavia.md) (onde, pendenze, raccordi verticali, binari fuori quota,
-  scarti dal DTM) da `scripts/cavalcavia.py`.
+  scarti dal DTM) da `scripts/cavalcavia.py`;
+* `vedute.spec.js`: 43 vedute da punti fissi a 2,5 m dal piano della strada (cavalcavia, ponti, capolinea del tram,
+  rotonde e incroci con la sede, elenco in `tests/vedute/elenco.json`), con ora e meteo fissi e senza traffico,
+  confrontate con le immagini di `tests/vedute/riferimenti/`. Chi cambia una veduta di proposito aggiorna il
+  riferimento nello stesso commit: `npx playwright test vedute.spec --update-snapshots`.
 
 `python3 scripts/verifica_mappa.py` (serve `shapely`) controlla il JSON della mappa: edifici in carreggiata e nella
 corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m, i

@@ -32,7 +32,9 @@ divise per area.
    lo script) confronta i casi uno per uno con gli elenchi di `data/eccezioni/` (regola 12). Lo stesso controllo gira
    in CI (workflow Verifiche) a ogni push su `main`, e il gioco va su GitHub Pages solo se finisce verde (nota
    Verifiche, in fondo): dopo il push si guarda `gh run list --workflow verifiche.yml --limit 3` e, se la serie è
-   rossa, la si ripara subito.
+   rossa, la si ripara subito. Tra le prove ci sono le vedute di riferimento
+   (`tests/vedute.spec.js`): chi cambia di proposito quello che si vede da uno dei punti aggiorna l'immagine nello
+   stesso commit (nota "Verifiche: vedute di riferimento").
 4. Conflitti nel rebase:
    - `src/data/novita.js` e `IDEE.md`: si tengono le righe di tutti; in `novita.js` la riga nuova va in cima con
      `n` successivo all'ultimo di `main`;
@@ -141,6 +143,38 @@ Soglie per caso (#105, 13 novembre). Da sapere:
   con le zone di eccezione in `binari_tram.py`; resta a conteggio la pendenza dei binari nel gioco (#120);
 - i casi di partenza sono quelli del 13 novembre, uguali sul Mac e in CI (shapely 2.2.0, GEOS 3.14.1). Un'altra versione
   di shapely può spostare di qualche metro quadro il marciapiede stretto di un riquadro: la tolleranza serve a questo.
+
+### Verifiche: vedute di riferimento (#104, 13 novembre)
+
+`tests/vedute.spec.js` fotografa il gioco da 43 punti fissi, a 2,5 m dal piano della strada, e confronta ogni immagine
+con quella di `tests/vedute/riferimenti/` (640 x 360, una per veduta). I punti sono in `tests/vedute/elenco.json`:
+nome, `x`, `z`, `verso` in gradi (0 verso +z, 90 verso +x, come la direzione del bus) e perché la veduta è lì
+(cavalcavia, ponti, capolinea del tram, rotonde e incroci con la sede). Da sapere:
+
+- la scena la prepara `preparaVedute` di `tests/vedute.js`: esplorazione sulla 24, sereno, luce delle 11
+  (`settings.lightHour`), tutta la mappa caricata e costruita, niente pedoni, acqua dei canali ferma, il mezzo
+  nascosto, i semafori rimessi tutti allo stesso ciclo: ogni tram che passa sposta per sempre il ciclo del suo incrocio
+  (`TrafficLights.tramCall`), e senza questo le lanterne dipendono dalle prove che hanno usato la pagina prima. La
+  telecamera libera è `__game.veduta` (in `updateCamera` di `src/main.js`); `__game.walkers` dà i pedoni;
+- una veduta cambiata fa fallire la prova, e in `test-results/vedute-vedute-di-riferimento/` restano, per ognuna,
+  l'immagine nuova (`-actual`), il riferimento (`-expected`) e le differenze (`-diff`); in CI stanno nell'artefatto
+  `risultati-prove`. Prima si guardano: se il cambiamento è quello voluto, i riferimenti si aggiornano nello stesso
+  commit con `npx playwright test vedute.spec --update-snapshots`, che riscrive solo le immagini cambiate; `git status`
+  dice quali, e vanno nominate nel messaggio di commit. Una veduta cambiata lontano dalla zona toccata è un difetto da
+  capire prima di aggiornare qualsiasi cosa;
+- il filtro è `vedute.spec` e non `vedute`: Playwright lo confronta col percorso intero, e in un worktree che ha
+  "vedute" nel nome partirebbero tutte le prove;
+- tolleranza (`TOLLERANZA` nella prova): sulla stessa macchina due lanci danno immagini identiche; tra macOS e Linux
+  i colori cambiano di qualche unità su molti pixel, fili e bordi sottili cadono su pixel vicini e i cartelli col testo
+  usano un altro font, quindi un pixel conta oltre la soglia 0,2 di pixelmatch e se ne ammettono 40 (con i riferimenti
+  del Mac la veduta peggiore su Linux amd64 ne ha 4; un cavalcavia alzato di 0,5 m ne cambia più di 600, una lanterna
+  del tram rimessa in carreggiata 1900). I riferimenti si possono fare sul Mac e valgono in CI;
+- per aggiungere una veduta: una riga nell'elenco, poi lo stesso comando, che scrive l'immagine che manca. Il punto va
+  sulla corsia o sul binario, a qualche decina di metri da quello che si vuole inquadrare;
+- le vedute fissano anche i difetti di oggi (in cima al Cavalcavia San Marco l'asfalto copre la sede del tram, #85):
+  chi li corregge aggiorna il riferimento;
+- cambiano tutte le vedute insieme se cambiano luce, cielo, nebbia, colori dei materiali o l'altezza della telecamera:
+  in quel caso si rifanno tutti i riferimenti in un commit a parte.
 
 ### Mappa (corsia `mappa`)
 

@@ -107,6 +107,11 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
 * **Niente nomi di luoghi nel codice degli algoritmi.** Una correzione che vale per un solo luogo è una riga in un
   file di dati in `data/` (zona, valore, perché) che l'algoritmo legge, non un ramo nel codice con una via o delle
   coordinate.
+* Vedute di riferimento: `tests/vedute.spec.js` confronta le immagini da 43 punti fissi (`tests/vedute/elenco.json`:
+  cavalcavia, ponti, capolinea del tram, rotonde e incroci con la sede) con quelle di `tests/vedute/riferimenti/`. Chi
+  cambia una veduta di proposito aggiorna il riferimento nello stesso commit
+  (`npx playwright test vedute.spec --update-snapshots`, dopo aver guardato le differenze in `test-results/`); i
+  dettagli sono in `docs/LAVORO.md`, nota "Verifiche: vedute di riferimento".
 * `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
   `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.
