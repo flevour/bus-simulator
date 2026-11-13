@@ -2411,9 +2411,11 @@ export class City {
   addArea(A, d) {
     A.added = true;
     const walk = new GeoBuilder(), green = new GeoBuilder();
+    // quanti oggetti ha portato l'area, per tipo, come nel conto della build (data/conto-aree.json, tests/aree.spec.js)
+    A.conto = { edifici: d.edifici.length, marciapiedi: 0, verde: 0, alberi: d.alberi.length / 2 };
     for (const [, , W, V] of d.celle) {
-      for (const poly of W || []) walk.polygon(poly, Y_SIDEWALK, 6);
-      for (const poly of V || []) green.polygon(poly, Y_GREEN, 8);
+      for (const poly of W || []) { walk.polygon(poly, Y_SIDEWALK, 6); A.conto.marciapiedi++; }
+      for (const poly of V || []) { green.polygon(poly, Y_GREEN, 8); A.conto.verde++; }
     }
     if (walk.pos.length) { const m = new THREE.Mesh(walk.build(), this.walkMat); m.receiveShadow = true; A.meshes.push(m); }
     if (green.pos.length) { const m = new THREE.Mesh(green.build(), this.greenMat); m.receiveShadow = true; m.renderOrder = -0.4; A.meshes.push(m); }
@@ -2462,7 +2464,7 @@ export class City {
       this.tiles.delete(t.key);
     }
     this.realBuildingCount -= A.buildings || 0;
-    Object.assign(A, { added: false, meshes: [], obs: [], tiles: [], buildings: 0 });
+    Object.assign(A, { added: false, meshes: [], obs: [], tiles: [], buildings: 0, conto: null });
     this._order = null;
     dropArea(A.key);
   }

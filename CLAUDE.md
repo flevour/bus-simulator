@@ -71,7 +71,10 @@ python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con er
 `build_map.py` scrive la mappa in due parti (`scripts/aree_mappa.py`): la rete (nodi, archi, linee, fermate,
 segnaletica, terreno, carreggiate e isole della pianta delle strade) in `src/data/padova-map.json`, dentro il bundle, ed
 edifici, marciapiedi, verde e alberi in un file per riquadro da 800 m in `public/mappa/aree/`, che il gioco scarica
-all'avvio (`src/data/aree.js`). Gli script che leggono la mappa intera usano `aree_mappa.load`.
+all'avvio (`src/data/aree.js`). Gli script che leggono la mappa intera usano `aree_mappa.load`. Con le aree scrive
+`data/conto-aree.json`, quanti oggetti ci sono per tipo in ogni area: lo confrontano con la scena `tests/aree.spec.js`
+e con i file delle aree `scripts/verifica_mappa.py` (si riscrive da solo con la mappa, o con
+`python3 scripts/aree_mappa.py conta src/data/padova-map.json`).
 
 `data/misure-strade.json` (larghezze misurate di carreggiate e marciapiedi) e `data/dbgt-volumi.json` (altezze degli
 edifici) vengono dal DBGT della Regione del Veneto con `scripts/measure_streets.py` e `scripts/dbgt_volumes.py`;
@@ -114,6 +117,11 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   cambia una veduta di proposito aggiorna il riferimento nello stesso commit
   (`npx playwright test vedute.spec --update-snapshots`, dopo aver guardato le differenze in `test-results/`); i
   dettagli sono in `docs/LAVORO.md`, nota "Verifiche: vedute di riferimento".
+* Elementi che spariscono (#110): `tests/volumi.spec.js` controlla che ogni oggetto del mondo stia nel volume col
+  terreno che usa il culling (`terrainVolume` in `src/world/terrain.js`, il solo punto che lo calcola);
+  `tests/strati.spec.js` guarda gli strati sullo stesso piano (`layer()` in `src/world/city.js`) da 20 m e da 300 m nei
+  punti delle vedute, con i casi noti in `data/eccezioni/strati.json`; `tests/aree.spec.js` confronta la scena con il
+  conto per area della build. Dettagli in `docs/LAVORO.md`, nota #110 della Mappa.
 * `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
   `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.

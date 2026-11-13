@@ -57,24 +57,51 @@ export function suspendTerrain() { const was = K.value.z; K.value.z = 0; return 
 export function resumeTerrain(was) { K.value.z = was; }
 THREE.Material.prototype.onBeforeCompile = function (sh) { applyTerrain(sh, !!(this.userData && this.userData.terrainGround)); };
 
-// frustum culling col terreno: la telecamera si alza della quota nel suo punto (renderer.render in main.js), ma three.js
-// confronta il suo frustum con le bounding sphere senza quota, e gli oggetti piccoli a un metro dagli occhi (lo schermo
-// della cabina del tram) sparivano dove la quota non è zero. Col terreno acceso la sfera si alza della quota nel suo
-// centro e si allarga di quanto il terreno può cambiare dentro di lei (più un gradino della quota in un byte, per il
-// filtro della texture). Vale anche per le ombre, che si disegnano con le quote.
+// Volumi col terreno, il solo punto del codice che li calcola. La telecamera si alza della quota nel suo punto
+// (renderer.render in main.js) e il vertex shader alza la geometria, ma three.js sceglie cosa disegnare dalle bounding
+// sphere senza quota: gli oggetti piccoli a un metro dagli occhi (lo schermo della cabina del tram) sparivano dove la
+// quota non è zero. Col terreno acceso il volume di un oggetto è la sua sfera alzata della quota nel centro e allargata
+// di quanto il terreno può cambiare dentro di lei (più un gradino della quota in un byte, per il filtro della texture).
+// Lo usano il culling della vista, delle ombre e degli specchietti; tests/volumi.spec.js controlla che dentro ci siano
+// tutti i vertici alzati di ogni oggetto del mondo.
 let active = null;
 const SPH = new THREE.Sphere();
-const intersectsObject = THREE.Frustum.prototype.intersectsObject;
-THREE.Frustum.prototype.intersectsObject = function (o) {
-  if (K.value.z < 0.5 || !active) return intersectsObject.call(this, o);
-  // InstancedMesh e BatchedMesh hanno la sfera loro, le altre quella della geometria
-  const b = o.boundingSphere !== undefined ? o : o.geometry;
-  if (b.boundingSphere === null) b.computeBoundingSphere();
-  SPH.copy(b.boundingSphere).applyMatrix4(o.matrixWorld);
-  const ground = !!(o.material && o.material.userData && o.material.userData.terrainGround);
-  SPH.center.y += active.at(SPH.center.x, SPH.center.z, ground);
-  SPH.radius += Math.min(active.span, SPH.radius * active.slope) + active.scale;
-  return this.intersectsSphere(SPH);
+const isGround = (m) => !!(m && m.userData && m.userData.terrainGround);
+// la sfera `s` (nel mondo, senza quota) di un oggetto con il materiale `mat` (o i materiali) diventa il suo volume
+function lift(s, mat) {
+  let ground = false, mixed = false;
+  if (Array.isArray(mat)) {
+    let n = 0;
+    for (const m of mat) if (isGround(m)) n++;
+    ground = n > 0 && n === mat.length;
+    mixed = n > 0 && !ground; // materiali delle due varianti nello stesso oggetto: tutta l'escursione
+  } else ground = isGround(mat);
+  s.center.y += active.at(s.center.x, s.center.z, ground);
+  s.radius += (mixed ? active.span : Math.min(active.span, s.radius * active.slope)) + active.scale;
+  return s;
+}
+// volume di un oggetto (Mesh, Line, Points, Sprite) nel mondo, col terreno; null se il terreno è spento
+export function terrainVolume(o, target = SPH) {
+  if (K.value.z < 0.5 || !active) return null;
+  if (o.isSprite) {
+    target.center.set(0, 0, 0);
+    target.radius = Math.SQRT1_2;
+  } else {
+    // InstancedMesh e BatchedMesh hanno la sfera loro, le altre quella della geometria
+    const b = o.boundingSphere !== undefined ? o : o.geometry;
+    if (b.boundingSphere === null) b.computeBoundingSphere();
+    target.copy(b.boundingSphere);
+  }
+  return lift(target.applyMatrix4(o.matrixWorld), o.material);
+}
+const intersectsObject = THREE.Frustum.prototype.intersectsObject, intersectsSprite = THREE.Frustum.prototype.intersectsSprite;
+THREE.Frustum.prototype.intersectsObject = function (o, ...rest) {
+  const v = terrainVolume(o);
+  return v ? this.intersectsSphere(v) : intersectsObject.call(this, o, ...rest);
+};
+THREE.Frustum.prototype.intersectsSprite = function (o) {
+  const v = terrainVolume(o);
+  return v ? this.intersectsSphere(v) : intersectsSprite.call(this, o);
 };
 
 // chiusura morfologica su una finestra quadrata di lato 2r+1: massimo e poi minimo, a passate separate per righe e
@@ -170,4 +197,12 @@ export class Terrain {
   }
   // terreno acceso solo per la scena del mondo (non per l'overlay del cruscotto)
   enable(on) { K.value.z = on && this.ok ? 1 : 0; }
+  // volume col terreno di un oggetto del mondo, come lo usa il culling (per le prove): { x, y, z, r }
+  volume(o) {
+    const was = K.value.z;
+    this.enable(true);
+    const v = terrainVolume(o, new THREE.Sphere());
+    K.value.z = was;
+    return v && { x: v.center.x, y: v.center.y, z: v.center.z, r: v.radius };
+  }
 }

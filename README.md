@@ -37,10 +37,19 @@ di `tests/` in Chromium headless (WebGL in software):
   rotonde e incroci con la sede, elenco in `tests/vedute/elenco.json`), con ora e meteo fissi e senza traffico,
   confrontate con le immagini di `tests/vedute/riferimenti/`. Chi cambia una veduta di proposito aggiorna il
   riferimento nello stesso commit: `npx playwright test vedute.spec --update-snapshots`.
+* `volumi.spec.js`: con una corsa in servizio e tutta la mappa caricata, ogni oggetto del mondo sta dentro il volume
+  che il gioco usa per decidere se disegnarlo, compresa la quota del terreno (`terrainVolume` in
+  `src/world/terrain.js`): fuori dal suo volume un oggetto può sparire dallo schermo;
+* `strati.spec.js`: nei punti delle vedute, gli strati sullo stesso piano (asfalto, sede del tram, marciapiedi, isole,
+  segni) guardati da 20 m e da 300 m lungo la stessa linea di vista: in ogni punto si deve vedere lo stesso strato. I
+  casi noti sono in `data/eccezioni/strati.json`.
+* `aree.spec.js`: la scena confrontata con il conto per area scritto dalla build (`data/conto-aree.json`: edifici,
+  marciapiedi, verde e alberi di ogni area da 800 m), alla partenza, dopo essersi allontanati di 6 km e al ritorno.
 
 `python3 scripts/verifica_mappa.py` (serve `shapely`) controlla il JSON della mappa: edifici in carreggiata e nella
 corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m, i
-binari del tram scritti dagli script secondo la stessa regola e il profilo dei cavalcavia nei dati.
+binari del tram scritti dagli script secondo la stessa regola, il profilo dei cavalcavia nei dati, i metri quadri
+dove asfalto, marciapiede e isola della pianta a terra si sovrappongono e il conto degli oggetti per area.
 Script e rapporto nel gioco confrontano i casi uno per uno con gli elenchi dei casi noti in `data/eccezioni/`, ognuno
 con il suo perché (`scripts/eccezioni.py`): escono con errore se trovano un caso fuori dall'elenco, anche a totale
 uguale, o se un caso dell'elenco è sparito e va tolto. Il workflow `.github/workflows/verifiche.yml` lancia build,

@@ -34,6 +34,7 @@ Serve shapely (come per scripts/street_surfaces.py).
 import argparse
 import json
 import math
+import os
 import sys
 from collections import defaultdict
 
@@ -73,6 +74,8 @@ NOMI = {
     'fermate_lontane': f'fermate a più di {STOP_FAR:.0f} m dal percorso',
     'fermate_spostate': 'fermate agganciate nel punto sbagliato del percorso',
     'marciapiedi_stretti_m2': f'marciapiede più stretto di {WALK_MIN:.1f} m (m²)'.replace('.', ','),
+    'pianta_sovrapposta_m2': 'pianta a terra: asfalto, marciapiede e isola sovrapposti (m²)',
+    'verde_coperto_m2': 'pianta a terra: verde sotto asfalto, marciapiedi e isole (m²)',
 }
 # la chiave di ogni caso nell'elenco delle eccezioni (data/eccezioni/verifica-mappa.json): parte fissa e posto. Gli
 # edifici non hanno un nome stabile (l'indice cambia a ogni rigenerazione): li distingue il posto
@@ -270,6 +273,48 @@ def marciapiedi_stretti(mappa):
     return round(stretto.area), round(tutto.area), {k: round(v) for k, v in per.items()}
 
 
+def sovrapposizioni(mappa):
+    """Pianta delle strade a terra come partizione (#110): metri quadri dove asfalto, marciapiede e isola si
+    sovrappongono, e di verde sotto di loro. Per cella da 200 m, sommati per riquadro da 800 m. Le carreggiate in quota
+    non contano: stanno su un altro piano e passano sopra le strade a terra (le guarda tests/strati.spec.js)."""
+    S = mappa.M['surfaces']
+    T = S['tile']
+    unione = lambda anelli: unary_union([p for p in (poligono(r) for r in anelli) if p is not None and not p.is_empty])
+    coppie_m2 = defaultdict(float)
+    pianta, verde = defaultdict(float), defaultdict(float)
+    for c in S['cells']:
+        ix, iz, A, W, I = c[:5]
+        V = c[5] if len(c) > 5 else []
+        a, w, i = unione(A), unione(W), unione(I)
+        k = f'riquadro {aree_mappa.key(ix * T, iz * T)}'
+        for nome, g, h in (('asfalto e marciapiede', a, w), ('asfalto e isola', a, i), ('marciapiede e isola', w, i)):
+            m2 = g.intersection(h).area if not g.is_empty and not h.is_empty else 0.0
+            coppie_m2[nome] += m2
+            pianta[k] += m2
+        if V:
+            m2 = unione(V).intersection(unary_union([a, w, i])).area
+            coppie_m2['verde sotto asfalto, marciapiedi e isole'] += m2
+            verde[k] += m2
+    tondo = lambda d: {k: round(v) for k, v in d.items() if round(v) > 0}
+    return {k: round(v) for k, v in coppie_m2.items()}, tondo(pianta), tondo(verde)
+
+
+def conto_aree(path):
+    """Il conto delle aree scritto dalla build (aree_mappa.scrivi_conto) contro i file delle aree: le righe diverse."""
+    rete = json.load(open(path, encoding='utf-8'))
+    if 'aree' not in rete:
+        return []
+    f = aree_mappa.conto_file(path)
+    if not os.path.exists(f):
+        return [f'manca il conto delle aree {os.path.relpath(f)}: python3 scripts/aree_mappa.py conta {path}']
+    scritto, vero = json.load(open(f, encoding='utf-8'))['aree'], aree_mappa.conta(aree_mappa.leggi_aree(path))
+    diverse = [f'area {k}: nel conto {scritto.get(k)}, nei file {vero.get(k)}' for k in sorted({*scritto, *vero}) if scritto.get(k) != vero.get(k)]
+    if diverse:
+        diverse = [f'Il conto delle aree {os.path.relpath(f)} non è quello dei file delle aree ({len(diverse)} aree): '
+                   f'python3 scripts/aree_mappa.py conta {path}'] + ['  ' + r for r in diverse[:25]]
+    return diverse
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('mappa', nargs='?', default='src/data/padova-map.json')
@@ -288,8 +333,11 @@ def main():
     casi['fermate_lontane'], casi['fermate_spostate'] = fermate(mappa)
     dove = paline(mappa)
     stretto, totale, stretto_per_riquadro = marciapiedi_stretti(mappa)
+    sovrapposte, pianta_per_riquadro, verde_per_riquadro = sovrapposizioni(mappa)
     valori = {k: len(v) for k, v in casi.items()}
     valori['marciapiedi_stretti_m2'] = stretto
+    valori['pianta_sovrapposta_m2'] = sum(pianta_per_riquadro.values())
+    valori['verde_coperto_m2'] = sum(verde_per_riquadro.values())
 
     # caso per caso contro l'elenco delle eccezioni. Gli edifici lungo i percorsi dei bus sono un sottoinsieme di quelli
     # in carreggiata: stanno nello stesso controllo, con la loro parte fissa della chiave
@@ -297,6 +345,8 @@ def main():
     for k, f in CHIAVI.items():
         E.confronta(k, [chiave(f(c), c['x'], c['z']) for c in casi[k]], TOLL, args.aggiorna)
     E.confronta_misura('marciapiedi_stretti_m2', stretto_per_riquadro, args.aggiorna)
+    E.confronta_misura('pianta_sovrapposta_m2', pianta_per_riquadro, args.aggiorna)
+    E.confronta_misura('verde_coperto_m2', verde_per_riquadro, args.aggiorna)
     if args.aggiorna:
         E.scrivi()
 
@@ -305,6 +355,7 @@ def main():
           f'{sum(len(L["variants"]) for L in mappa.M["lines"])} varianti di linea')
     print('  fermate delle linee bus nei dati: ' + ', '.join(f'{n} {k}' for k, n in sorted(dove.items(), key=lambda kv: -kv[1])))
     print(f'  marciapiede: {totale} m² in tutto')
+    print('  pianta a terra, sovrapposizioni: ' + ', '.join(f'{k} {v} m²' for k, v in sovrapposte.items()))
     for k, nome in NOMI.items():
         if k in E.esiti:
             segno, esito = E.segno(k)
@@ -319,12 +370,14 @@ def main():
     valori_c, casi_c, errori_c = cavalcavia.rapporto(cavalcavia.rete_dati(mappa.M), args.elenco, aggiorna=args.aggiorna)
     if args.json:
         json.dump({'valori': valori, 'eccezioni': E.esiti, 'fermate': dove, 'casi': casi, 'marciapiedi_stretti_per_riquadro': stretto_per_riquadro,
+                   'pianta_sovrapposta': {'coppie': sovrapposte, 'per_riquadro': pianta_per_riquadro, 'verde_per_riquadro': verde_per_riquadro},
                    'binari': {'valori': valori_b, 'soglie': SOGLIE_BINARI, 'casi': casi_b},
                    'cavalcavia': {'valori': valori_c, 'casi': casi_c}},
                   open(args.json, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     if sopra_b:
         errori.append('Binari del tram sopra la soglia: ' + ', '.join(sopra_b))
     errori += errori_c
+    errori += conto_aree(args.mappa)
     if errori:
         print('\n'.join(errori))
         print('Con --elenco i casi di oggi, con le coordinate del gioco.')

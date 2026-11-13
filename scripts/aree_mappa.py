@@ -17,9 +17,15 @@ Un edificio va nell'area del baricentro dei vertici del contorno, una cella nell
 quella del suo punto. Dentro un'area l'ordine è quello della mappa intera; rimessa insieme (load, o il gioco) la mappa
 ha edifici e alberi in ordine di chiave dell'area, le celle nell'ordine di prima.
 
+Accanto alle aree la build scrive il loro conto (conto_file): per ogni area quanti edifici, poligoni di marciapiede e
+di verde e alberi ci sono. Il gioco non lo legge: lo usano tests/aree.spec.js, che lo confronta con quello che la città
+ha messo in scena per ogni area caricata, e scripts/verifica_mappa.py, che lo confronta con i file delle aree. Nel
+diff di una rigenerazione dice quali aree sono cambiate e di quanto.
+
 Uso:
     python3 scripts/aree_mappa.py dividi src/data/padova-map.json    # divide una mappa intera (build_map.py lo fa da sé)
     python3 scripts/aree_mappa.py unisci src/data/padova-map.json <mappa intera>.json
+    python3 scripts/aree_mappa.py conta src/data/padova-map.json     # riscrive il conto dalle aree che ci sono
 
 Le aree stanno in public/mappa/aree per src/data/padova-map.json, accanto alla mappa in <nome>-aree/ per le altre
 (le rigenerazioni di prova non toccano quelle del gioco).
@@ -42,6 +48,42 @@ def aree_dir(path):
     if p.endswith(os.sep + tail):
         return os.path.join(p[:-len(tail)], 'public', 'mappa', 'aree')
     return p[:-5] + '-aree' if p.endswith('.json') else p + '-aree'
+
+
+def conto_file(path):
+    """File del conto delle aree della mappa path: data/conto-aree.json per la mappa del gioco."""
+    p = os.path.abspath(path)
+    tail = os.path.join('src', 'data', 'padova-map.json')
+    if p.endswith(os.sep + tail):
+        return os.path.join(p[:-len(tail)], 'data', 'conto-aree.json')
+    return aree_dir(path) + '-conto.json'
+
+
+def conta(aree):
+    """{chiave: {tipo: quanti}} delle aree: edifici, poligoni di marciapiede e di verde, alberi."""
+    return {k: {'edifici': len(a['edifici']), 'marciapiedi': sum(len(c[2]) for c in a['celle']),
+                'verde': sum(len(c[3]) for c in a['celle']), 'alberi': len(a['alberi']) // 2} for k, a in aree.items()}
+
+
+def scrivi_conto(aree, path):
+    """Scrive il conto delle aree, una riga per area (il diff di una rigenerazione dice quali sono cambiate)."""
+    c = conta(aree)
+    tot = {t: sum(v[t] for v in c.values()) for t in ('edifici', 'marciapiedi', 'verde', 'alberi')}
+    righe = ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in c.items())
+    cosa = ('Quanti oggetti ci sono in ogni area della mappa (scripts/aree_mappa.py): edifici, poligoni di marciapiede e di '
+            'verde, alberi. Lo scrive la build con le aree; tests/aree.spec.js lo confronta con la scena del gioco, '
+            'scripts/verifica_mappa.py con i file delle aree. Non si scrive a mano: python3 scripts/aree_mappa.py conta '
+            'src/data/padova-map.json.')
+    with open(conto_file(path), 'w', encoding='utf-8') as f:
+        f.write('{\n "cosa": ' + json.dumps(cosa, ensure_ascii=False) + ',\n "totale": ' + json.dumps(tot) + ',\n "aree": {\n' + righe + '\n }\n}\n')
+    return c
+
+
+def leggi_aree(path):
+    """{chiave: area} dei file delle aree della mappa divisa in path, in ordine di chiave."""
+    rete = json.load(open(path, encoding='utf-8'))
+    d = aree_dir(path)
+    return {k: json.load(open(os.path.join(d, k + '.json'), encoding='utf-8')) for k in rete['aree']['chiavi']}
 
 
 def key(x, z):
@@ -150,6 +192,7 @@ def write(data, out):
             json.dump(a, f, ensure_ascii=False, separators=(',', ':'))
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(rete, f, ensure_ascii=False, separators=(',', ':'))
+    scrivi_conto(aree, out)
     return len(aree)
 
 
@@ -167,6 +210,9 @@ if __name__ == '__main__':
     if cmd == 'dividi':
         n = write(load(path), path)
         print(f'rete in {path}, {n} aree in {aree_dir(path)}')
+    elif cmd == 'conta':
+        c = scrivi_conto(leggi_aree(path), path)
+        print(f'conto di {len(c)} aree in {conto_file(path)}')
     elif cmd == 'unisci':
         with open(sys.argv[3], 'w', encoding='utf-8') as f:
             json.dump(load(path), f, ensure_ascii=False, separators=(',', ':'))

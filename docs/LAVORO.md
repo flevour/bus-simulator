@@ -91,6 +91,7 @@ divise per area.
 | `scripts/binari_tram.py`, `scripts/binari_regola.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): `binari_regola.py` rifà le linee, `tram_stesura.py` i depositi; chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
 | `data/cavalcavia.json`, `scripts/profilo_cavalcavia.py` | `area:mappa` (#123, #124, #125) | registro delle strutture e risolutore del profilo ([`cavalcavia.md`](cavalcavia.md), sezione 6): le correzioni per luogo sono righe del registro con il perché; chi attiva una struttura rigenera e aggiorna vedute ed eccezioni |
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
+| `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
 ## Note per area
@@ -327,6 +328,59 @@ ombre, a 13 ns l'una per `at`. Da sapere:
   cielo) viene provato come se fosse alzato: se è piccolo e vicino conviene `frustumCulled = false`;
 - chi cambia lo spostamento nello shader (`PROJECT` e `terrainH`) cambia anche questa funzione;
 - prova in `tests/schermo-cabina.spec.js` (con `onBeforeRender`, che three.js chiama solo per chi passa il culling).
+
+#110, elementi che spariscono (13 novembre): volumi col terreno, strati da vicino e da lontano, conto per area. I quattro
+meccanismi dell'issue, con quello che si riesce a riprodurre oggi:
+
+1. **Volumi senza quota.** Era #81. Il volume col terreno lo calcola solo `terrainVolume(o)` di `src/world/terrain.js`
+   (sfera alzata della quota nel centro e allargata dell'escursione dentro di lei): la usano
+   `Frustum.intersectsObject` e `intersectsSprite`, quindi vista, ombre e specchietti. Vale anche per gli oggetti con
+   più materiali (se mescolano "via" e "fondo", tutta l'escursione) e per gli sprite, che oggi non ci sono.
+   `tests/volumi.spec.js` prende ogni Mesh, Line e Points della scena con una corsa in servizio e tutta la mappa
+   caricata (6.197 oggetti, 13,6 milioni di vertici, 0,4 s) e controlla che i vertici alzati stiano nel volume
+   (`Terrain.volume`, `tests/volumi.js`): a zero, senza eccezioni. Vede anche una sfera vecchia: chi sposta le
+   istanze di una `InstancedMesh` dopo il primo disegno rifà la sfera (`computeBoundingSphere`) o mette
+   `frustumCulled = false`, come fanno traffico, pedoni e bus automatici (18 oggetti).
+2. **Strati sullo stesso piano.** `polygonOffset` sposta uno strato in avanti di una quantità che cresce con la
+   distanza e con l'angolo radente, mentre i centimetri di quota tra gli strati restano quelli: dove due strati si
+   sovrappongono in pianta, da vicino vince il più alto e da lontano quello col numero di `layer()` più grande. In
+   cima al San Marco, dove l'asfalto in quota sta pochi millimetri sopra la sede, il cambio comincia tra 20 e 30 m: da
+   30 m cambia il 3% dei punti, da 300 m il 25%. `tests/strati.spec.js` (funzioni in `tests/strati.js`) disegna solo
+   gli strati, ognuno col suo numero e con la quota in ogni pixel, e guarda il punto di ogni veduta da 20 m e da 300 m
+   sulla stessa linea di vista (35 gradi sotto l'orizzonte, telecamera del gioco): circa 800 punti per veduta, 25
+   secondi in tutto. Un caso è una veduta con una coppia di strati diversi su almeno 8 punti (3 m² circa); un caso
+   dell'elenco resta finché ne ha 3. Oggi 9 casi in `data/eccezioni/strati.json`, tutti sui cavalcavia: l'asfalto in
+   quota copre la sede del tram da vicino in cima a San Marco (200 punti su 800, la foto di #85), Chiesanuova e
+   Borgomagno e sulla rampa di San Marco, e ai piedi della rampa della Montà asfalto a terra e in quota si scambiano.
+   A terra (capolinea, rotonde, incroci con la sede, ponti) nessun caso. Li toglie la pianta come partizione, #126.
+   Chi aggiunge uno strato sceglie il numero sapendo che vince da lontano su tutto quello che ha un numero più basso
+   entro mezzo metro di quota.
+3. **Geometria tolta per vicinanza** (`sedeSkip`, `offTram`). Oggi non dà sparizioni: su 659.517 punti dell'asfalto dove
+   `onSede` toglie i segni, la sede disegnata c'è sempre entro 0,75 m. I casi passati (trattini sulla corsia rossa,
+   lanterna di Via Tommaseo) sono chiusi, e `segni_sulla_sede` in `tests/mappa.spec.js` è a zero.
+4. **Aree caricate attorno al mezzo.** Entro 1.500 m (`AREA_NEAR`) c'è tutto; tra 1.500 e 2.600 m (`AREA_FAR`, e fine
+   della nebbia col sereno) c'è solo quello che si è già visitato. All'avvio della 24 da Mandria mancano 3.932 edifici
+   su 4.340 in quella fascia e 121 su 1.416 tra 650 e 1.500 m (la partenza aspetta le aree entro 650 m); nello stesso
+   punto la scena ha 17 aree e 3.561 edifici arrivando dal centro, 15 e 2.562 dopo essere andati a 6 km e tornati.
+   `areasReady` conta come pronta anche un'area che non è arrivata (`failed`).
+
+Conto per area (#110). `scripts/aree_mappa.py` scrive con le aree `data/conto-aree.json`: per ogni area quanti edifici,
+poligoni di marciapiede e di verde e alberi ci sono, una riga per area, così il diff di una rigenerazione dice quali aree
+sono cambiate e di quanto. Il gioco non lo legge. `City.addArea` tiene in `A.conto` quello che ha contato caricando
+l'area, e `tests/aree.spec.js` (funzione in `tests/aree.js`) confronta conto della build, `A.conto` e scena (edifici nei
+riquadri più quelli tolti dai depositi, una mesh di marciapiede e una di verde se l'area ne ha, tronchi, chiome e
+ostacoli per gli alberi fuori da strade e binari, riquadri e mesh in scena) alla partenza, con tutte le aree entro
+1.500 m, a 6 km e al ritorno; a zero, senza eccezioni. `scripts/verifica_mappa.py` confronta il conto con i file delle
+aree. Chi rigenera la mappa con `build_map.py` ha il conto riscritto; chi cambia i file delle aree in un altro modo
+lancia `python3 scripts/aree_mappa.py conta src/data/padova-map.json`.
+
+Pianta a terra come partizione, misura di partenza (#110). `scripts/verifica_mappa.py` misura per riquadro da 800 m i
+metri quadri dove asfalto, marciapiede e isola della pianta si sovrappongono (`pianta_sovrapposta_m2`: 14.614 m² tra
+asfalto e marciapiede, 1.687 tra asfalto e isola, 30 tra marciapiede e isola) e il verde che sta sotto di loro
+(`verde_coperto_m2`, 475.208 m²), con i valori di oggi in `data/eccezioni/verifica-mappa.json` e 20 m² di tolleranza.
+Le carreggiate in quota non entrano: passano sopra le strade a terra, e le guarda la prova degli strati. Chi rigenera
+la mappa riscrive i valori con `--aggiorna`; la partizione vera (sovrapposizione zero, sede del tram come classe a sé,
+asfalto in quota senza la sede) è #126.
 
 ### Linee (corsia `capolinea`)
 

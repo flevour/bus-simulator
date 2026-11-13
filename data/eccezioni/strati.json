@@ -1,0 +1,26 @@
+{
+ "cosa": "Casi noti della prova degli strati da 20 m e da 300 m (tests/strati.spec.js). Chiave: veduta: strato da vicino, strato da lontano @ x,z della veduta. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/strati.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
+ "controlli": {
+  "strati_diversi_da_lontano": [
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#110): sui cavalcavia con il tram (San Marco, Chiesanuova, Borgomagno) l'asfalto in quota (strato 3) si sovrappone in pianta alla sede del tram (strati 5 e 5.5, rotaie 6) e passa qualche centimetro sopra: da 20 m copre la sede, da 300 m la sede si vede intera. In cima al San Marco sono 200 punti su 800, il difetto fotografato in #85. Li toglie la pianta come partizione (asfalto in quota senza la sede), #126.",
+    "casi": [
+     "cavalcavia-borgomagno-cima: strato 3 da vicino, strato 5 da lontano @ 83,-1270",
+     "cavalcavia-borgomagno-cima: strato 3 da vicino, strato 5.5 da lontano @ 83,-1270",
+     "cavalcavia-chiesanuova-cima: strato 3 da vicino, strato 5 da lontano @ -1753,-357",
+     "cavalcavia-chiesanuova-cima: strato 3 da vicino, strato 5.5 da lontano @ -1753,-357",
+     "cavalcavia-san-marco-cima: strato 3 da vicino, strato 5 da lontano @ 4554,-1480",
+     "cavalcavia-san-marco-cima: strato 3 da vicino, strato 5.5 da lontano @ 4554,-1480",
+     "cavalcavia-san-marco-cima: strato 3 da vicino, strato 6 da lontano @ 4554,-1480",
+     "cavalcavia-san-marco-rampa: strato 3 da vicino, strato 5.5 da lontano @ 4317,-1381"
+    ]
+   },
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#110): ai piedi della rampa del Cavalcavia della Montà l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta: da 20 m si vede quello a terra, da 300 m quello in quota. Stessa trama, non si nota; lo toglie la pianta come partizione, #126.",
+    "casi": [
+     "cavalcavia-monta-rampa: strato 2 da vicino, strato 3 da lontano @ -2980,-2784"
+    ]
+   }
+  ]
+ }
+}
