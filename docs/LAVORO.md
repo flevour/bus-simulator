@@ -351,7 +351,8 @@ meccanismi dell'issue, con quello che si riesce a riprodurre oggi:
    secondi in tutto. Un caso è una veduta con una coppia di strati diversi su almeno 8 punti (3 m² circa); un caso
    dell'elenco resta finché ne ha 3. Oggi 9 casi in `data/eccezioni/strati.json`, tutti sui cavalcavia: l'asfalto in
    quota copre la sede del tram da vicino in cima a San Marco (200 punti su 800, la foto di #85), Chiesanuova e
-   Borgomagno e sulla rampa di San Marco, e ai piedi della rampa della Montà asfalto a terra e in quota si scambiano.
+   Borgomagno e sulla rampa di San Marco, e ai piedi della rampa del Camerini asfalto a terra e in quota si scambiano
+   (prima dei profili di #84 era la Montà: il caso si è spostato e la prova lo ha detto).
    A terra (capolinea, rotonde, incroci con la sede, ponti) nessun caso. Li toglie la pianta come partizione, #126.
    Chi aggiunge uno strato sceglie il numero sapendo che vince da lontano su tutto quello che ha un numero più basso
    entro mezzo metro di quota.
@@ -375,9 +376,9 @@ aree. Chi rigenera la mappa con `build_map.py` ha il conto riscritto; chi cambia
 lancia `python3 scripts/aree_mappa.py conta src/data/padova-map.json`.
 
 Pianta a terra come partizione, misura di partenza (#110). `scripts/verifica_mappa.py` misura per riquadro da 800 m i
-metri quadri dove asfalto, marciapiede e isola della pianta si sovrappongono (`pianta_sovrapposta_m2`: 14.614 m² tra
-asfalto e marciapiede, 1.687 tra asfalto e isola, 30 tra marciapiede e isola) e il verde che sta sotto di loro
-(`verde_coperto_m2`, 475.208 m²), con i valori di oggi in `data/eccezioni/verifica-mappa.json` e 20 m² di tolleranza.
+metri quadri dove asfalto, marciapiede e isola della pianta si sovrappongono (`pianta_sovrapposta_m2`: 14.599 m² tra
+asfalto e marciapiede, 1.628 tra asfalto e isola, 29 tra marciapiede e isola) e il verde che sta sotto di loro
+(`verde_coperto_m2`, 471.510 m²), con i valori di oggi in `data/eccezioni/verifica-mappa.json` e 20 m² di tolleranza.
 Le carreggiate in quota non entrano: passano sopra le strade a terra, e le guarda la prova degli strati. Chi rigenera
 la mappa riscrive i valori con `--aggiorna`; la partizione vera (sovrapposizione zero, sede del tram come classe a sé,
 asfalto in quota senza la sede) è #126.

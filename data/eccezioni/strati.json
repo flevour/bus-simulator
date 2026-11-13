@@ -16,9 +16,9 @@
     ]
    },
    {
-    "perche": "Elenco di partenza del 13 novembre 2026 (#110): ai piedi della rampa del Cavalcavia della Montà l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta: da 20 m si vede quello a terra, da 300 m quello in quota. Stessa trama, non si nota; lo toglie la pianta come partizione, #126.",
+    "perche": "Elenco del 13 novembre 2026 (#110, sulla mappa con i profili dei cavalcavia di #84): ai piedi della rampa del Cavalcavia Camerini l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero: da 20 m si vede quello a terra, da 300 m quello in quota, su 148 punti su 800. Hanno la stessa trama, quindi il colore non cambia. Prima dei profili di #84 lo stesso caso era ai piedi della rampa della Montà. Lo toglie la pianta come partizione, #126.",
     "casi": [
-     "cavalcavia-monta-rampa: strato 2 da vicino, strato 3 da lontano @ -2980,-2784"
+     "cavalcavia-camerini-rampa: strato 2 da vicino, strato 3 da lontano @ -207,-2319"
     ]
    }
   ]
