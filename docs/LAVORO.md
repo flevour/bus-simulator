@@ -89,6 +89,7 @@ divise per area.
 | `src/main.js` | tutte le aree, ognuna nelle sue funzioni | |
 | `src/tram/tram.js` | `area:tram` | scambi, binari, depositi, cambio cabina e turni: le funzioni sono nelle note del tram qui sotto |
 | `scripts/binari_tram.py`, `scripts/binari_regola.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): `binari_regola.py` rifà le linee, `tram_stesura.py` i depositi; chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
+| `data/cavalcavia.json`, `scripts/profilo_cavalcavia.py` | `area:mappa` (#123, #124, #125) | registro delle strutture e risolutore del profilo ([`cavalcavia.md`](cavalcavia.md), sezione 6): le correzioni per luogo sono righe del registro con il perché; chi attiva una struttura rigenera e aggiorna vedute ed eccezioni |
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -224,6 +225,29 @@ Da sapere prima di toccare questi file:
   cambia anche in `Via` dello script (la prova del gioco gli passa `Terrain.d`, e strade uguali tra dati e gioco dicono
   che coincidono). La quota dei binari nei dati è quella della strada che affiancano, nel gioco `TramTrack.h`: la prova
   legge `paths`, `h` e `stopsDir` di `TramTrack`. `--profilo X Z` stampa i profili che passano da un punto.
+
+#84, profilo dei cavalcavia dal registro (13 novembre). Da sapere:
+
+- le quote dei cavalcavia hanno due strade: le strutture con `profilo` vero in `data/cavalcavia.json` le calcola
+  `scripts/profilo_cavalcavia.py` (programma lineare, `numpy` e `scipy` nel venv), le altre `overpass_heights` con il
+  terreno spianato sotto, come prima. Regola, registro e formato nella mappa in [`cavalcavia.md`](cavalcavia.md),
+  sezione 6;
+- `build_map.py` si ferma se le strutture della rete non sono quelle del registro (`CAVALCAVIA=registro` lo riscrive
+  tenendo i campi a mano), se una rampa con le quote di prima entra in una struttura attiva o le passa a meno di 120 m;
+- `street_surfaces.py`: `quote_arco` e `quota_arco` danno la quota lungo un arco (profilo, zero per gli altri archi
+  delle strutture attive, lineare tra i nodi per il resto); le usano `surfaces`, `decks` e `_tram_heights`.
+  `overpass_heights` salta gli archi delle strutture attive, `terrain_for_game` non spiana sotto di loro;
+- nel gioco: `edgeHeight` legge `e.hs` (da `MAP.edgeH`), `e.decl` segna gli archi delle strutture attive,
+  `Terrain` applica `terrain.via`. Fuori dalla mia area: in `tram.js` `setHeights(fn, esatta)` non fa la media né
+  applica la soglia di 0,25 m dove la quota viene da una struttura attiva (`city.nearProfile`). Oggi i casi dei
+  binari sono quelli di prima (le strutture col tram sono spente): serve a #123;
+- le rampe delle strutture attive sono archi a terra su un rilevato del terreno: hanno marciapiedi, strisce e fermate
+  come le altre strade. Restano in quota le campate e gli ultimi 40 m prima;
+- la mappa pubblicata è quella di `main` con, dalla rigenerazione, `nodeH`, `edgeH`, `cavalcavia`, `terrain`,
+  impalcati e asfalto in quota, e le celle da 200 m entro 200 m dalle strutture attive (147 celle della rete, 25
+  aree). #106 dirà se sostituirla tutta;
+- gli alberi sparsi del gioco cambiano posto in tutta la mappa quando cambia il numero degli archi in quota: le vedute
+  lontane dai cavalcavia cambiano di qualche decina di pixel.
 
 Fatto il 9 e l'11 novembre: corsie e segnaletica dai tag OSM, fermate del tram sui nodi `tram_stop`, dossi e
 attraversamenti rialzati, area ai bordi e linee tagliate, inversioni a U, corsie di servizio dei capolinea, lampioni

@@ -35,7 +35,9 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
    dalle spalle, con il franco sopra quello che passa sotto (**5,00 m** sopra le strade, **6,90 m** sopra la
    ferrovia elettrificata in corrente continua, dal piano del ferro all'intradosso) più lo spessore dell'impalcato.
 6. **Eccezioni scritte.** Dove un vincolo vero obbliga a uscire dalla regola, l'eccezione ha una zona e il suo perché,
-   come in `ECCEZIONI` di `scripts/binari_tram.py`. Oggi non ce ne sono: le scrive #84 dove servono.
+   come in `ECCEZIONI` di `scripts/binari_tram.py`. I casi noti stanno in `data/eccezioni/cavalcavia.json`, le
+   correzioni per luogo (una quota messa a mano, un franco diverso da quello della regola) nel registro
+   `data/cavalcavia.json` (sezione 6).
 
 ## 2. I numeri e le fonti
 
@@ -130,9 +132,10 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
   impalcato: la griglia a 10 m smussa testate e fondo, o il piano del ferro non è il terreno misurato lì. Da
   verificare su ogni cavalcavia prima di fissarne la quota.
 
-## 3. Come sono fatti oggi i cavalcavia del gioco
+## 3. Come sono fatti i cavalcavia che hanno ancora le quote di prima
 
-Le quote vengono da `scripts/street_surfaces.py` (`overpass_heights` per i nodi della rete, `terrain_for_game` e
+Dal 13 novembre 2026 (#84) le strutture attive nel registro hanno il profilo del risolutore (sezione 6). Per le altre
+vale quello che segue. Le quote vengono da `scripts/street_surfaces.py` (`overpass_heights` per i nodi della rete, `terrain_for_game` e
 `adjust_heights` per il terreno); il gioco somma la quota del terreno "via" (`src/world/terrain.js`) e quella della rete
 lungo gli archi (`edgeHeight` in `src/world/city.js`). Da qui vengono quasi tutti i casi della sezione 5:
 
@@ -183,6 +186,11 @@ python3 scripts/verifica_mappa.py --elenco                    # i dati, dentro i
 npx playwright test tests/cavalcavia.spec.js                  # il gioco
 python3 scripts/cavalcavia.py --gioco test-results/cavalcavia-cavalcavia-secondo-la-regola-del-profilo/cavalcavia-gioco.json --elenco
 ```
+
+Con il registro (sezione 6) i cavalcavia sono di due specie. Le strutture con il profilo del risolutore sono dichiarate
+nella mappa (`cavalcavia`: nome e archi, rampe comprese): si misurano tutti i loro archi, anche dove la strada sta a
+terra sul rilevato, e la quota lungo gli archi viene da `edgeH`. Gli altri sono, come prima, i gruppi di archi con un
+nodo in quota. La variante "via" ricostruita dallo script applica anche le celle fissate dalla build (`terrain.via`).
 
 I profili si campionano ogni metro. Le strade si percorrono da ogni piede (nodo a terra del cavalcavia) lungo ogni arco
 del gruppo, prendendo a ogni nodo l'arco più dritto entro 45° (meglio con lo stesso nome e, sul cavalcavia, in quota),
@@ -265,6 +273,70 @@ conca di 1,8 m in 176 m e pendenza del 14,5% a (−361, −2584)), Cavalcavia Mo
 strada 3,2 m sopra il DTM), Via Venezia (2981, −708, linea 10 e SIR2: strada 6,5 m sopra il DTM per 223 m),
 Cavalcavia Pietro Maroncelli (2494, −997, linee 9 e 42), Cavalcavia Montà (−3166, −3008, linea 11), Via Alessandro
 Volta (−1770, 4242, linea 24).
+
+## 6. Il registro e il risolutore (#84)
+
+`data/cavalcavia.json` è il registro delle strutture: una voce per cavalcavia con le sue rampe. La build
+(`scripts/build_map.py`) trova le strutture nella rete e si ferma se non sono quelle del registro; con
+`CAVALCAVIA=registro` davanti al comando riscrive i campi che vengono dalla rete e tiene quelli messi a mano.
+
+* Dalla rete: `id` (la via più lunga dei ponti, con il posto se il nome si ripete), `x`, `z`, `metri`, `ponti` (i due
+  capi di ogni ponte OSM), `scavalca` (ferrovia, vie).
+* A mano, con il perché: `profilo` (vero: il profilo lo calcola il risolutore; falso: restano le quote della sezione
+  3), `punti` (`{x, z, quota}` oppure `{x, z, sopra}`: la quota del profilo in quel punto, assoluta o sopra il
+  terreno), `franchi` (`{x, z, franco}`: metri sopra quello che passa sotto in quel punto, al posto della regola).
+
+Una struttura è fatta dei ponti OSM in quota (`bridge` con `layer` da 1 in su) che scavalcano la ferrovia o una strada
+con il layer più basso, e delle strade che ci arrivano: 300 m lungo la strada del ponte e le rampe di svincolo, 60 m
+per chi si innesta di lato, e oltre finché la strada sta su un rilevato o in trincea (DTM a più di 0,6 m dal piano
+intorno), fino a 1,2 km in più. `layer` dice solo chi sta sopra.
+
+`scripts/profilo_cavalcavia.py` calcola il profilo di tutte le strutture attive insieme, con un programma lineare
+(servono `numpy` e `scipy`). Le incognite sono le quote ogni 4 m lungo gli archi. I vincoli, in ordine di peso:
+
+1. i punti messi a mano e i piedi (i nodi dove la struttura incontra una strada che resta sul terreno) alla loro quota;
+2. pendenza massima e raggi minimi del tipo di strada (sezione 1; il 6% dove un binario affianca la strada), con il
+   margine di un gradino del terreno (5,6 cm), e il franco sopra quello che passa sotto più 0,9 m di impalcato;
+3. carreggiate affiancate alla stessa quota, entro 3 cm;
+4. fuori dai ponti, il DTM: lo scarto si minimizza, oltre 0,44 m costa quaranta volte tanto. Insieme si minimizzano i
+   saliscendi (variazione totale) e le variazioni di pendenza, di più sulle campate.
+
+Sotto un ponte OSM il DTM dice se c'è una campata o un rilevato: dove sta più di 1,5 m sopra il piano intorno la strada
+sta sul rilevato come fuori dai ponti (Via Boves ha 280 m di "ponte" su un terrapieno di 8 m). Il 13 novembre il
+programma delle nove strutture attive (16 km, 4.071 incognite) si risolve in pochi secondi senza violare pendenze,
+raggi o franchi.
+
+Il terreno segue il profilo, perché la quota di ogni cosa nel gioco è terreno più quota sopra il terreno:
+
+* fuori dalle campate le celle attorno alla strada (carreggiata più 12 m) prendono la quota del profilo, nel terreno di
+  base e nella variante "via": la rampa sta su un rilevato liscio, con corsie, marciapiedi e binari sullo stesso piano,
+  e resta un arco a terra;
+* sotto le campate (e sopra i sottopassi in galleria) vale il piano di quello che passa sotto, il 35° percentile del
+  terreno entro 30 m; negli ultimi 40 m prima di una campata il terreno scende dal rilevato a quel piano;
+* entro 90 m dalla struttura la variante "via" non riempie: la chiusura morfologica alzava la strada che passa tra due
+  rilevati fino alla loro quota (Corso Australia sotto il Cavalcavia Chiesanuova: +3,8 m);
+* una cella vicina a più strade prende la quota più bassa, e le celle attorno a una strada fuori dalla struttura
+  restano com'erano.
+
+La quota scritta è il profilo meno la variante "via" campionata come nel gioco, con un punto a ogni incognita e a ogni
+confine di cella. Nella mappa: `cavalcavia` (`id`, `x`, `z`, `archi` di ogni struttura attiva), `edgeH` (`[arco,
+progressive in cm, quote in mm]` per gli archi con più di 5 cm sopra il terreno), `nodeH` come prima, `terrain.via`
+(righe `[j, i0, byte, ...]` di celle fissate dopo chiusura e ponti). Il gioco legge `edgeH` in `edgeHeight`
+(`src/world/city.js`) e `terrain.via` in `Terrain`; i binari che affiancano un arco di una struttura attiva prendono
+la sua quota senza la media di `TramTrack.setHeights`.
+
+Attive dal 13 novembre: Cavalcavia Antonio Grassi, Camerini, Montà, Pietro Maroncelli, i due del Ponte dell'Unità
+d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Spente, con il perché nel registro: quelle
+dove passa il tram e il Cavalcavia Dalmazia (#123), le tangenziali con Mortise e Via Salboro (#124). Una struttura
+attiva non può stare a meno di 120 m da una rampa con le quote di prima: la build si ferma e le nomina. Sulle nove
+attive restano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
+regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto
+tolto dal DTM, e 79 tra onde, pendenze e raccordi dove il terreno non coincide con il profilo (ai piedi e accanto
+alle strade fuori dalla struttura).
+
+Per provare una modifica al risolutore non serve rigenerare la mappa: bastano la rete di `src/data/padova-map.json`,
+il terreno di `street_surfaces.terrain_for_game` e `profilo_cavalcavia.calcola(..., tutte=True)`, poi
+`cavalcavia.rapporto` sulla mappa con le chiavi nuove (una ventina di secondi per tutte le strutture).
 
 ## Fonti
 

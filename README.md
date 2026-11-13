@@ -238,7 +238,7 @@ python3 scripts/filter_osm_nodes.py /tmp/osm-nodes.json data/osm-padova-nodes.js
 # binari e banchine del tram
 curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tram.ql -o /tmp/osm-tram.json https://overpass-api.de/api/interpreter
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
-# orari GTFS e mappa del gioco (servono i pacchetti Python shapely e pyarrow: pip install shapely pyarrow)
+# orari GTFS e mappa del gioco (servono i pacchetti Python shapely, pyarrow, numpy e scipy: pip install shapely pyarrow numpy scipy)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
 python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json data/osm-corridoio.json
 # paline OSM (strato Overture base/infrastructure, scaricato con scripts/overture_layers.py)

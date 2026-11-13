@@ -39,8 +39,9 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   progetto del SIR3), la stesura secondo la regola (`scripts/tram_stesura.py`, oggi per i depositi) e il controllo di
   quanto la rete se ne allontana (`scripts/binari_tram.py`).
 * `docs/cavalcavia.md`: regola del profilo dei cavalcavia (pendenze, raccordi verticali, niente onde, strada e binari
-  alla stessa quota, scarto dal DTM, con le fonti del DM 5 novembre 2001) e il controllo di quanto la mappa se ne
-  allontana (`scripts/cavalcavia.py`), con i cavalcavia peggiori.
+  alla stessa quota, scarto dal DTM, con le fonti del DM 5 novembre 2001), il controllo di quanto la mappa se ne
+  allontana (`scripts/cavalcavia.py`), il registro delle strutture (`data/cavalcavia.json`: quali hanno il profilo
+  calcolato, punti e franchi messi a mano con il perché) e il risolutore (`scripts/profilo_cavalcavia.py`).
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,
@@ -57,8 +58,9 @@ npm run build:single  # dist-single/index.html autosufficiente
 python3 scripts/to_artifact.py dist-single/index.html <uscita>.html   # pagina per un artefatto claude.ai
 ```
 
-Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e binari OSM; servono `shapely` e
-`pyarrow`):
+Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e binari OSM; servono `shapely`,
+`pyarrow`, `numpy` e `scipy`; `CAVALCAVIA=registro` davanti al comando riscrive i campi di `data/cavalcavia.json` che
+vengono dalla rete):
 
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv

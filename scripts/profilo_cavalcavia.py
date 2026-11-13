@@ -1,7 +1,7 @@
 """Profilo dei cavalcavia secondo la regola (docs/cavalcavia.md): registro delle strutture, risolutore, terreno.
 
 Una struttura è un cavalcavia con le sue rampe: i ponti OSM in quota (layer >= 1) che scavalcano la ferrovia o un'altra
-strada, e le strade che ci arrivano fino a FINESTRA metri (le laterali fino a LATERALE). Per ogni struttura il
+strada, e le strade che ci arrivano fino a FINESTRA metri (le laterali fino a LATERALE, e oltre finché stanno su un rilevato). Per ogni struttura il
 risolutore cerca il profilo più liscio dentro i limiti della regola, con le fonti in quest'ordine:
   1. i punti messi a mano nel registro (data/cavalcavia.json), con il perché;
   2. il franco sopra quello che passa sotto (ferrovia, strade), dove `layer` di OSM dice solo chi sta sopra;
@@ -25,8 +25,9 @@ Nella mappa:
   * `terrain.data` con le piattaforme e `terrain.via`, le celle della variante "via" fissate dopo chiusura e ponti.
 
 Il registro (data/cavalcavia.json) ha una voce per struttura: i campi scritti dalla build (`ponti`, `scavalca`, `x`,
-`z`, `metri`) e quelli messi a mano (`punti`, `franchi`, `finestra`), ognuno con il perché. La build si ferma se le
-strutture della rete non sono quelle del registro; `--registro` lo riscrive tenendo i campi messi a mano.
+`z`, `metri`) e quelli messi a mano (`profilo`, `punti`, `franchi`), con il perché. Il profilo si calcola solo per le
+strutture con `profilo` vero; le altre tengono le quote di street_surfaces.overpass_heights. La build si ferma se le
+strutture della rete non sono quelle del registro; con CAVALCAVIA=registro lo riscrive tenendo i campi messi a mano.
 
 Servono numpy e scipy (programmazione lineare, HiGHS).
 """
@@ -65,6 +66,7 @@ SOTTOPASSO = 6.0  # m oltre metà della strada in galleria: lì la strada di sop
 NUCLEO = 14.2     # m: le quattro celle attorno a un punto dell'asse stanno entro questa distanza (10 m per radice di 2)
 CAMPATA_VERA = 1.5  # m: sotto un ponte OSM il DTM sta entro questa quota dal piano intorno, se no lì c'è un rilevato
 ATTORNO = 90.0    # m dagli archi di una struttura: lì la chiusura morfologica non riempie (tra due rilevati)
+VICINE = 120.0    # m: una struttura con il profilo non sta più vicina di così a una con le quote di prima (build_map)
 ACQUA = 12.0      # m da un corso d'acqua: lì la chiusura resta (fossi e canali senza ponte in OSM)
 IN_QUOTA = 0.05   # m: un arco con la quota sopra il terreno oltre questa è in quota (e.elev nel gioco)
 # il terreno del gioco ha gradini di GRADINO metri (un byte per cella): dove la strada sta sul terreno il controllo
