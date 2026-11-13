@@ -1,6 +1,21 @@
 // Traffico: bus automatici, tram e semafori non si bloccano a vicenda.
-import { test, expect, avviaCorsa } from './gioco.js';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { test, expect, avviaCorsa, tempoMassimo } from './gioco.js';
 import { guidaFermate } from './guida.js';
+
+// I casi di un controllo contro l'elenco dei casi noti data/eccezioni/traffico.json (scripts/eccezioni.py, #105): i
+// nuovi, quelli spariti dall'elenco e i gruppi senza il perché. Lo stato di partenza di una corsa è fissato (#122), quindi
+// i casi sono gli stessi a ogni lancio, sul Mac e in CI.
+function controEccezioni(info, controllo, casi, toll = 3) {
+  const fileCasi = info.outputPath('casi.json'), fileEsito = info.outputPath('eccezioni.json');
+  writeFileSync(fileCasi, JSON.stringify({ [controllo]: casi }));
+  const argomenti = ['scripts/eccezioni.py', 'traffico', fileCasi, '--toll', String(toll), '--json', fileEsito, '--comando', '`ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js`'];
+  if (process.env.ECCEZIONI === 'aggiorna') argomenti.push('--aggiorna');
+  let diversi = '';
+  try { execFileSync('python3', argomenti, { encoding: 'utf8' }); } catch (e) { diversi = `${e.stdout || ''}${e.stderr || ''}`; }
+  return { ...JSON.parse(readFileSync(fileEsito, 'utf8'))[controllo], diversi };
+}
 
 // Ogni secondo di gioco: chi è fermo da quanto (bus fuori dalle fermate, tram fuori dalle soste) nel cerchio (cx, cz, r).
 // Si aggancia a __game.sim, che il pilota chiama a ogni passo; window.__fermi() dà i fermi più lunghi.
@@ -33,15 +48,22 @@ function osservaFermi({ cx, cz, r }) {
 // resta fermo più di un ciclo semaforico (60 s) fuori dalle fermate. Col codice del 9 novembre i bus restavano fermi
 // fino a 81 s al rosso dell'incrocio (dove il rosso dura al massimo 29 s), dopo la correzione al massimo 29 s. Con la 3
 // intera (11 novembre) la stessa corsa parte alle 8:27 dal Capolinea Lion, 10 fermate prima di Bembo 149.
-test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo semaforico', async ({ pagina, gioco }) => {
-  test.setTimeout(480_000);
+// La corsa è la stessa a ogni lancio (#122: sereno, semafori, segnali del tram e bus automatici dallo stato di partenza):
+// chi resta fermo oltre i 60 s è un caso con il suo posto, confrontato con l'elenco dei casi noti. Il limite non si
+// alza: un caso nuovo fa fallire la prova, uno noto ha il suo perché e la sua issue in data/eccezioni/traffico.json.
+test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo semaforico', async ({ pagina, gioco }, info) => {
+  tempoMassimo(480);
   const corsa = await avviaCorsa(pagina, { linea: '3', verso: 1, partenza: '08:27' });
   expect(corsa.prima).toMatch(/^Capolinea Lion/);
   await pagina.evaluate(osservaFermi, { cx: 30, cz: -20, r: 380 });
   const esiti = await guidaFermate(pagina, { fermate: 27, traffico: true });
   const fermi = await pagina.evaluate(() => window.__fermi());
   const ultima = esiti[esiti.length - 1];
-  expect(fermi.filter((f) => f.s > 60), `fermi più lunghi: ${JSON.stringify(fermi.slice(0, 6))}`).toEqual([]);
+  const e = controEccezioni(info, 'fermi_oltre_un_ciclo', fermi.filter((f) => f.s > 60).map((f) => `${f.chi} @ ${f.x},${f.z}`));
+  const lunghi = `fermi più lunghi: ${JSON.stringify(fermi.slice(0, 6))}\n${e.diversi}`;
+  expect.soft(e.nuovi, `fermi oltre i 60 s fuori dall'elenco data/eccezioni/traffico.json; ${lunghi}`).toEqual([]);
+  expect.soft(e.spariti, `casi spariti, da togliere dall'elenco data/eccezioni/traffico.json; ${lunghi}`).toEqual([]);
+  expect.soft(e.senza_perche, 'casi dell\'elenco senza il perché').toEqual([]);
   expect(ultima.nome, `fermate: ${esiti.map((e) => `${e.nome} ${e.motivo}`).join(', ')}`).toBe('Garibaldi giardini');
   expect(ultima.arrivato).toBe(true);
   expect(gioco.errori()).toEqual([]);
@@ -81,7 +103,7 @@ function contaIncroci({ punti, sec, sem = true, r = 40 }) {
 // in Via Altinate, 20 minuti di gioco alle 8:15 attorno ai semafori di Riviera Tito Livio, di Riviera dei Ponti Romani
 // con Via Battisti, di Largo Europa e di Piazza Garibaldi (per posizione: gli id dei nodi cambiano con la mappa).
 test('incroci semaforizzati sulla sede: tram e auto mai dentro insieme', async ({ pagina, gioco }) => {
-  test.setTimeout(300_000);
+  tempoMassimo(300);
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });
   const r = await pagina.evaluate(contaIncroci, { punti: [[24, 149], [58, 65], [53, -333], [9, -195]], sec: 1200 });
@@ -139,7 +161,7 @@ function precedenza({ px, pz }) {
 // Leva: passando davanti al tram perde 60 punti, senza tram no; fermo sui binari, il tram aspetta alla barra
 // orizzontale e ha il via libera appena il bus se ne va.
 test('incroci senza semaforo: precedenza al tram, rispettata dai due lati', async ({ pagina, gioco }) => {
-  test.setTimeout(300_000);
+  tempoMassimo(276);
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(() => { window.__game.teleport(900, 500); window.__game.sim(1, 1 / 30, false); });
   const r = await pagina.evaluate(contaIncroci, { punti: [[720, 247], [786, 373], [909, 632], [1020, 816], [1101, 947]], sec: 1200, sem: false, r: 60 });
@@ -192,7 +214,7 @@ function rotonda({ px, pz }) {
 // segue il percorso lungo gli archi, anche in svolta. Poi 20 minuti attorno alle due rotonde, a Corso del Popolo e al
 // Piazzale della Stazione: tram e auto mai dentro insieme.
 test('incroci col tram nelle rotonde e in curva: tram e auto mai dentro insieme', async ({ pagina, gioco }) => {
-  test.setTimeout(300_000);
+  tempoMassimo(294);
   await avviaCorsa(pagina, { linea: '3' });
   const r0 = await pagina.evaluate(rotonda, { px: 368, pz: -945 });
   expect(r0.incrocio).toMatch(/^Viale della Pace/);
@@ -237,7 +259,7 @@ function attesaSegnali({ sec }) {
 // su cui corre il binario: nessuna logica del tram le guardava. Ora sono il segnale del tram: il tram che arriva chiama
 // il verde, i tram automatici col rosso si fermano, chi gioca passando col rosso perde 60 punti.
 test('segnali del tram: verde entro un ciclo, lanterna disegnata uguale allo stato, rosso a Pace penalizzato', async ({ pagina, gioco }) => {
-  test.setTimeout(300_000);
+  tempoMassimo(282);
   // tutti i tram automatici (il giocatore su un bus fermo in Via Altinate, fuori dai binari), 20 minuti
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });

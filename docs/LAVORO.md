@@ -178,6 +178,42 @@ nome, `x`, `z`, `verso` in gradi (0 verso +z, 90 verso +x, come la direzione del
 - cambiano tutte le vedute insieme se cambiano luce, cielo, nebbia, colori dei materiali o l'altezza della telecamera:
   in quel caso si rifanno tutti i riferimenti in un commit a parte.
 
+### Verifiche: stato di partenza e tempi delle prove (#122, 13 novembre)
+
+Tre serie di Verifiche di fila sono finite rosse senza che il gioco fosse cambiato, ogni volta con prove diverse. Le
+cause erano due.
+
+- **La stessa corsa non era la stessa.** Il meteo del menu è "Variabile": `updateWeather` estrae con `Math.random`
+  quando piove o scende la nebbia, e con l'asfalto bagnato chi guida frena prima, quindi bus, tram e semafori si
+  incontrano in un altro ordine. Due pagine nuove davano due corse diverse dalle 8:29 in poi. In più tre cose restavano
+  sulla pagina da una corsa all'altra (ogni worker apre il gioco una volta): `BusSim.rnd` continuava dalla corsa prima
+  (fermate servite, passeggeri, soste dei bus automatici), `TrafficLights.tramCall` sposta il ciclo di un semaforo a
+  ogni passaggio di un tram, e chiamate e via libera di `TramSignals` restavano com'erano. Quindi l'esito dipendeva da
+  quali prove erano passate prima sullo stesso worker.
+- Ora `startMission` rimette tutto allo stato di partenza: `lights.reset(clock)` (cicli della costruzione, `offset0`),
+  `tramSignals.reset()`, e `BusSim.setService` risemina la sua sequenza. `avviaCorsa` mette il sereno (parametro
+  `meteo` per chi vuole pioggia o nebbia). Misura: la corsa della 3 delle 8:27 fino a Garibaldi giardini, con le
+  posizioni di chi guida, dei bus, dei tram e delle auto ogni 30 s di gioco per 36 minuti, è uguale al decimetro da
+  pagina nuova, dopo una corsa in tram, dopo una in bus e dopo 10 minuti di tram agli incroci di Riviera Tito Livio, sul
+  Mac e su Linux in Docker.
+- Chi scrive una prova che dipende dal traffico parte da `avviaCorsa` e non tocca `Math.random`: restano fuori dalla
+  sequenza fissata solo cose che non spostano i mezzi (colori dei passeggeri, suoni, saluti) e quali aree della città
+  sono già arrivate, che dipende dal tempo vero.
+- **I tempi massimi erano a ridosso delle durate.** Sui processori della CI, con due worker, la stessa prova dura fino
+  al 40% in più da una serie all'altra (quattro serie del 13 novembre: incroci semaforizzati da 234 a oltre 300 s con
+  il limite a 300, Tito Livio da 366 a oltre 480 con il limite a 480, i turni dei tram automatici da 234 a oltre 300).
+  Le prove lunghe usano `tempoMassimo(secondi)` di `tests/gioco.js`: tre volte la durata più lunga vista in CI. Chi
+  aggiunge una prova da più di un minuto guarda quanto dura in CI (`gh run view <serie> --log`) e fa lo stesso. Il job
+  `prove` ha 60 minuti (le serie durano da 25 a 31).
+- **Fermi oltre un ciclo: per caso.** Con la corsa fissata la prova di Tito Livio trova sempre lo stesso fermo oltre i
+  60 s: il bus della 22 a (42, 106), in coda dietro un bus della 16 che sosta fino all'orario alla fermata di Riviera dei
+  Ponti Romani (#127). Il limite resta 60 s: il caso sta in `data/eccezioni/traffico.json` con il perché, un altro fermo
+  oltre i 60 s fa fallire la prova, e quando #127 lo toglie va tolto dall'elenco
+  (`ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js`).
+- Per rifare il confronto su Linux: copia del worktree senza `node_modules` in una cartella sotto `/private/tmp`,
+  `docker run --rm --cpus=4 --ipc=host -e CI=1 -v <copia>:/lavoro -w /lavoro mcr.microsoft.com/playwright:v1.65.0-noble`
+  con `npm ci` e poi `npx playwright test`: il setup delle prove compila e serve il gioco dentro il container.
+
 ### Mappa (corsia `mappa`)
 
 Issue: `area:mappa`.
@@ -714,6 +750,11 @@ a `MAST_Y`, a `TRAM.lane` + 0,6 m dal binario. Senza posto per un palo è appesa
 fino a 30 m prima (`city.tramSpans`, 30 lanterne), e senza neanche quello accanto alla sede fuori dalla sagoma. `hd.pole`
 dice dov'è il palo (null se appesa), per `tests/pali.js`. Logica, stati e `drawHeads` non cambiano; le luci (`hd.pos`)
 si spostano col palo. `buildHeads` passa da circa 38 a 100 ms con SwiftShader.
+
+Stato di partenza a ogni corsa (#122, 13 novembre, da `area:verifiche`): `TrafficLights.reset(time)` rimette ogni
+semaforo al ciclo della costruzione (`offset0`) senza fase tram in corso, `TramSignals.reset()` toglie chiamate e via
+libera rimasti, `BusSim.setService` risemina `rnd`; li chiama `startMission`. Chi aggiunge stato a queste classi lo
+rimette lì, altrimenti le prove del traffico tornano a dipendere dalle corse fatte prima sulla stessa pagina.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

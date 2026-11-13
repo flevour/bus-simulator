@@ -1,7 +1,7 @@
 // Tram al capolinea: B cambia solo cabina, il tram resta dov'è (all'anello della stazione riparte senza cambiarla) e
 // parte la corsa successiva del turno dall'altro verso, senza tornare al menu. Dove lo scambio sta oltre le banchine si
 // va in fondo al binario tronco, si cambia cabina e si riparte passando dallo scambio fino alla banchina di partenza.
-import { test, expect, avviaCorsa } from './gioco.js';
+import { test, expect, avviaCorsa, tempoMassimo } from './gioco.js';
 import { guidaFermate, guidaCapolinea } from './guida.js';
 
 // Salta alla fine della corsa: fermate prima del capolinea servite, tram 40 m prima della fine della banchina. Poi
@@ -272,7 +272,7 @@ test('scambio del capolinea girato in Esplorazione', async ({ pagina, gioco }) =
 // lanterna) a più di 6 m/s (mediana; prima 3,8), e la fase tram più corta, un tram da solo, dura al più 12 s (prima
 // 15,5): le altre si allungano anche per un'auto sull'incrocio, per un bus sul binario o per due tram insieme
 test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e con i ritardi, in anticipo all\'andatura normale', async ({ pagina, gioco }) => {
-  test.setTimeout(300_000);
+  tempoMassimo(300);
   await avviaCorsa(pagina, { linea: '24' });
   const r = await pagina.evaluate(() => {
     const g = window.__game, T = g.trams, dt = 1 / 30;

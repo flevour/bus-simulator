@@ -30,6 +30,13 @@ export const test = base.extend({
 });
 export { expect };
 
+// Tempo massimo di una prova lunga: tre volte la durata più lunga vista in CI (secondi). Sui processori della CI, con
+// due worker insieme, la stessa prova dura da una serie all'altra fino al 40% in più (13 novembre, quattro serie: gli
+// incroci semaforizzati da 234 a oltre 300 s, Tito Livio da 366 a oltre 480) e sul Mac la metà: con il limite a ridosso
+// della durata solita tre serie di fila sono finite rosse per il tempo, ogni volta con prove diverse. È solo il tempo
+// che la prova ha per finire: i limiti di merito stanno nelle prove.
+export const tempoMassimo = (secondiInCI) => base.setTimeout(secondiInCI * 3000);
+
 // Sceglie dal menu mezzo e linea (id della scheda: '24', 'SIR1'...), il verso (0 andata, 1 ritorno) e la modalità,
 // poi avvia la corsa. La corsa è quella che il menu propone (la più vicina alle 8:15 nei giorni feriali) o, con
 // `partenza` ('08:36'), quella che parte a quell'ora; senza uscita dal deposito: si parte dal capolinea.

@@ -3,7 +3,7 @@
 // e, con gli scambi nella posizione di partenza (verso l'uscita), si esce sul binario della linea. Entrando dal binario
 // d'arrivo della Guizza con gli scambi come stanno si gira attorno al deposito e si esce su quello di partenza, come
 // con l'anello di ritorno. Le casse non saltano mai.
-import { test, expect, avviaCorsa } from './gioco.js';
+import { test, expect, avviaCorsa, tempoMassimo } from './gioco.js';
 import { guidaFermate } from './guida.js';
 
 // In pagina: tram a `prima` metri dalla porta del deposito sul suo binario (scambio del capolinea `stato`), poi avanti.
@@ -406,7 +406,7 @@ async function giroRimessa(page, { da, min }) {
 }
 
 test('tram automatici: all\'inizio del servizio escono dalla rimessa della Guizza e di Voltabarozzo', async ({ pagina, gioco }) => {
-  test.setTimeout(480_000);
+  tempoMassimo(258);
   await avviaCorsa(pagina, { linea: '24' });
   const r = await giroRimessa(pagina, { da: 5 * 3600 + 10 * 60, min: 40 });
   const testo = JSON.stringify(r);
@@ -422,7 +422,7 @@ test('tram automatici: all\'inizio del servizio escono dalla rimessa della Guizz
 });
 
 test('tram automatici: alla fine del servizio rientrano nella rimessa della Guizza e di Voltabarozzo', async ({ pagina, gioco }) => {
-  test.setTimeout(480_000);
+  tempoMassimo(402);
   await avviaCorsa(pagina, { linea: '24' });
   const r = await giroRimessa(pagina, { da: 23 * 3600, min: 40 });
   const testo = JSON.stringify(r);

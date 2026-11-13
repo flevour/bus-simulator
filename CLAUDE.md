@@ -99,12 +99,18 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   su `main`; il workflow `.github/workflows/verifiche.yml` la ripete in CI. Le prove nuove usano gli aiuti di
   `tests/gioco.js` (gioco aperto una volta per worker, avvio di una corsa dal menu, errori della pagina) e, per
   guidare, il pilota di `tests/guida.js`.
+* **Stesso gioco, stesso esito.** Una corsa avviata con `avviaCorsa` parte sempre dallo stesso stato: sereno
+  (parametro `meteo`), e `startMission` rimette semafori, segnali del tram e sequenze casuali di auto e bus automatici
+  com'erano alla prima corsa, qualunque prova abbia usato la pagina prima. Una prova nuova non dipende da
+  `Math.random`, dall'ordine delle prove o dal tempo vero. Le prove da più di un minuto in CI hanno
+  `tempoMassimo(secondi)` di `tests/gioco.js`, tre volte la durata più lunga vista in CI; i limiti di merito non si
+  allargano per il tempo (nota "Verifiche: stato di partenza e tempi delle prove" in `docs/LAVORO.md`).
 * Rapporto di verifica sulla mappa: `python3 scripts/verifica_mappa.py` sul JSON (dopo ogni rigenerazione) e
   `tests/mappa.spec.js` nel gioco.
 * **Soglie per caso, non per conteggio.** Ogni controllo dà ai suoi casi una chiave stabile (struttura, linea e
   fermata, posto) e li confronta con l'elenco dei casi noti in `data/eccezioni/` (`scripts/eccezioni.py`), in gruppi
   con il perché: `verifica-mappa.json`, `cavalcavia.json` (`scripts/cavalcavia.py`, anche da
-  `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`). Un caso fuori dall'elenco fa fallire il
+  `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`), `traffico.json` (`tests/traffico.spec.js`). Un caso fuori dall'elenco fa fallire il
   controllo anche se il totale non sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione
   l'elenco si riscrive con `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i
   casi nuovi finiscono in un gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un
