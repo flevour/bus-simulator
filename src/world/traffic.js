@@ -1473,18 +1473,34 @@ export class TramSim {
     for (const l of S.lanterns || []) if (l.track === tr.track && l.dir === tr.dir && l.sT - s > -8 && l.sT - s <= 0) return true;
     return false;
   }
-  // dietro al tram fermo, entro 20 m dalla coda, nella sua corsia e nel suo verso c'è un'auto, un bus o il mezzo di chi
-  // gioca: dove il binario corre nella carreggiata (Riviera Tito Livio) il tram che aspetta l'orario tiene fermo il traffico
+  // qualcuno aspetta il tram fermo sul suo binario: un altro tram, un'auto, un bus o il mezzo di chi gioca dietro la coda
+  // nel suo verso (entro 20 m, o fermo entro 50), o fermo entro 70 m davanti al muso e rivolto verso di lui. Dove il
+  // binario corre nella carreggiata il tram che aspetta l'orario tiene fermo il traffico: a Tito Livio i bus dietro di
+  // lui, a Ponti Romani quelli al semaforo 30 m dietro la coda (il bus non entra nell'incrocio senza 15 m di posto oltre);
+  // all'Arcella, la sera, il tram dietro (una corsa che comincia a metà linea) aspettava oltre 90 s
   queued(tr, others) {
-    const q = this.lanePoint(tr.s - tr.L, tr.dir, tr.track);
-    const at = (p) => { const rx = p.x - q.x, rz = p.z - q.z, a = rx * q.fx + rz * q.fz; return a <= 1 && a > -20 && Math.abs(rx * q.fz - rz * q.fx) < 2.2 ? a : null; };
+    const P = tr.track.path(tr.dir), m = P.at(tr.s);
+    // progressiva dal muso lungo il binario e verso (1 lo stesso del tram, -1 l'opposto) di chi ci sta sopra
+    const on = (x, z, h) => {
+      if (Math.abs(x - m.x) > 90 || Math.abs(z - m.z) > 90) return null;
+      const pr = P.projectNear(x, z, 3);
+      if (!pr) return null;
+      const d = P.at(pr.s);
+      return { a: pr.s - tr.s, c: Math.sin(h) * d.dx + Math.cos(h) * d.dz };
+    };
+    const waits = (p, v) => !!p && ((p.c > 0.7 && p.a < 1 - tr.L && p.a > -tr.L - (v < 0.5 ? 50 : 20)) || (p.c < -0.7 && p.a > 0 && p.a < 70 && v < 0.5));
+    for (const t2 of this.trams) {
+      if (t2 === tr || !t2.parts.length || t2.rimessa) continue;
+      const h = this.lanePoint(t2.s, t2.dir, t2.track);
+      if (waits(on(h.x, h.z, Math.atan2(h.fx, h.fz)), t2.v)) return true;
+    }
     for (const o of others) {
       if (!o) continue;
       if (o.isTram) {
-        // il tram di chi gioca: il muso dietro alla coda, e la cassa ancora più indietro
-        const pts = o.trackPoints ? o.trackPoints() : [], a0 = pts[0] && at(pts[0]), a1 = pts[1] && at(pts[1]);
-        if (a0 != null && (a1 == null || a1 < a0)) return true;
-      } else if (at(o) != null && Math.sin(o.h) * q.fx + Math.cos(o.h) * q.fz > 0.7) return true;
+        // il tram di chi gioca: il muso e il verso dai primi due punti sul binario
+        const pts = o.trackPoints ? o.trackPoints() : [];
+        if (pts.length > 1 && waits(on(pts[0].x, pts[0].z, Math.atan2(pts[0].x - pts[1].x, pts[0].z - pts[1].z)), Math.abs(o.v))) return true;
+      } else if (waits(on(o.x, o.z, o.h), Math.abs(o.v || 0))) return true;
     }
     return false;
   }
@@ -1500,7 +1516,7 @@ export class TramSim {
         // riparte finita la sosta, l'anticipo si recupera dopo
         if (tr.hold > 0 && (tr.holdT = (tr.holdT || 0) - dt) <= 0) {
           tr.holdT = 0.5;
-          if (this.queued(tr, others)) { tr.wait = Math.max(0, tr.wait - tr.hold); tr.hold = 0; }
+          if (this.queued(tr, others)) { tr.wait = Math.max(0, tr.wait - tr.hold); tr.hold = 0; tr.cut = true; }
         }
         if (tr.wait <= 0) tr.hold = 0;
       }
@@ -1538,6 +1554,7 @@ export class TramSim {
             if (k === ss.length - 2) early = Math.max(early, times[k + 1] - 15 - clock - ((ss[k + 1] - ss[k]) / 8.5 + 7));
             tr.wait = Math.max(15, !k ? early : this.onCrossing(tr, ss[k]) ? 0 : Math.min(120, early));
             tr.hold = k ? tr.wait - 15 : 0;
+            tr.cut = false;
             tr.k++;
           }
         }

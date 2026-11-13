@@ -484,10 +484,12 @@ sotto il limite e recuperano l'anticipo in fermata: oltre 40 s avanti si fermano
 all'orario (al più un minuto). Dal 12 novembre (#64) anche i tram automatici in anticipo vanno all'andatura normale e
 aspettano in fermata (nota del tram, "Turni e stazione"): la fase tram di Largo Europa dura 8-13 s con un tram (prima
 12-32 s con uno o due). Non nelle fermate dove il tram fermo sta sopra un incrocio: `TramSim.onCrossing` ripete le
-condizioni di `TramSignals.update` per chi è in sosta, e se cambiano lì va cambiato anche lui. Se dietro aspetta il
-traffico (auto, bus o chi gioca, `TramSim.queued`) il tram riparte finita la sosta di 15 s: alla fermata Tito Livio,
-nella carreggiata, i bus restavano fermi fino a 100 s. Un tram fermo a lungo sopra un incrocio col semaforo tiene
-ancora la fase tram agli altri tram dopo `TRAM_HOLD` (#92).
+condizioni di `TramSignals.update` per chi è in sosta, e se cambiano lì va cambiato anche lui. Se qualcuno sul suo
+binario lo aspetta (`TramSim.queued`: auto, bus, chi gioca o un altro tram) il tram riparte finita la sosta di 15 s: a
+Tito Livio e a Ponti Romani, nella carreggiata, i bus restavano fermi fino a 100 s. `queued` dipende da `ahead` e `full`
+di `buses.js`: il bus si ferma al semaforo fino a 50 m dietro la coda del tram (non entra nell'incrocio senza 15 m di
+posto oltre). Un tram fermo a lungo sopra un incrocio col semaforo tiene ancora la fase tram agli altri tram dopo
+`TRAM_HOLD` (#92).
 
 Prove in `tests/traffico.spec.js`: la 3 guidata nel traffico dal pilota (`guidaFermate` con `traffico`) fino a
 Garibaldi giardini, nessuno fermo oltre 60 s da Tito Livio a Piazza Garibaldi; 20 minuti attorno ai semafori di Tito
@@ -712,10 +714,14 @@ Fatto, con quello che serve sapere prima di toccare questi file:
   oltre i 30 s di `TRAM_HOLD`, e il tram dell'altro verso restava alla barra orizzontale (#92). `onCrossing` ripete le
   condizioni di `TramSignals.update` per chi è in sosta (`d > -(len + halfT) && d <= halfT`, lanterna
   `d > -8 && d <= 0`): se cambiano lì, vanno cambiate anche qui.
-  Dove il binario corre nella carreggiata il tram che aspetta l'orario tiene fermo il traffico dietro di sé: alla
-  fermata Tito Livio i bus restavano fermi 70-100 s e la prova di Tito Livio di `tests/traffico.spec.js` falliva. Ora,
-  se entro 20 m dalla coda, nella sua corsia e nel suo verso, c'è un'auto, un bus o il mezzo di chi gioca
-  (`TramSim.queued`), il tram riparte finita la sosta di 15 s (`tr.hold`: i secondi d'attesa oltre la sosta).
+  Dove il binario corre nella carreggiata il tram che aspetta l'orario tiene fermo il traffico: alle fermate Tito Livio
+  e Ponti Romani i bus restavano fermi 70-100 s e la prova di Tito Livio di `tests/traffico.spec.js` falliva;
+  all'Arcella, la sera, un SIR1 aspettava 2 minuti dietro una corsa che comincia a metà linea. Ora il tram riparte
+  finita la sosta di 15 s (`tr.hold`: i secondi d'attesa oltre la sosta; `tr.cut` quando l'attesa è stata tagliata) se
+  sul suo binario qualcuno lo aspetta (`TramSim.queued`, proiettando sul binario entro 3 m): un'auto, un bus, il mezzo
+  di chi gioca o un altro tram dietro la coda nel suo verso (entro 20 m, o fermo entro 50: il bus resta al semaforo
+  prima dell'incrocio finché oltre non ha 15 m di posto, `full` in `buses.js`), o fermo entro 70 m davanti al muso e
+  rivolto verso di lui.
   Alla penultima fermata il tram aspetta anche quanto serve per arrivare al capolinea 15 s prima dell'orario, come
   quando rallentava (`d / 8,5 + 7` s per l'ultima tratta). I turni ci fanno stare al più due tram: arrivando fino a 3
   minuti prima, alle 23:15 alla Guizza ce n'erano tre e il terzo restava oltre i 90 s davanti allo scambio (prova "alla
