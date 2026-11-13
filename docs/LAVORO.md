@@ -209,9 +209,10 @@ rimette visibili i riquadri o come si raggruppano gli edifici lo tenga presente.
   `k + 1 + 0,2·|o|` sono la laterale e non entrano nella retta. A Buonarroti 46 erano metà dei punti, la mediana stava
   tra loro e il bus, girato di 11 gradi, finiva con il fondo nell'edificio d'angolo. Senza incrocio restano come prima:
   dietro la palina c'è un golfo di fermata (Saetta 1). Cambiano 6 paline su 689, tutte con la retta parallela all'asse;
-- i giri guidati del 9 novembre: oggi nessuna linea passa da Via Curtatone e Montanara; in Via Gattamelata, all'incrocio
-  con Via Sberti (13 da Boccaccio), il bus urta perché all'uscita della svolta a sinistra da Via Mafalda di Savoia ha il
-  muso fuori dalla corsia (#77).
+- i giri guidati del 9 novembre: oggi nessuna linea passa da Via Curtatone e Montanara; la 13 da Boccaccio passa Via
+  Sberti senza urti (prima toccava il muro sporgente in (2560, 640)), ma 75 m dopo, in Via Boccaccio (2632, 655), urta
+  l'edificio con il muso 0,4 m fuori dalla corsia e resta bloccata prima della prima fermata. Non è una fermata (la
+  palina è 185 m più avanti): è la guida del pilota (#77).
 
 ### Linee (corsia `capolinea`)
 
