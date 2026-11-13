@@ -127,6 +127,9 @@ export class Terrain {
         }
       }
     }
+    // celle fissate dalla build dopo chiusura e ponti (scripts/profilo_cavalcavia.py: le piattaforme dei cavalcavia e il
+    // piano sotto le campate), in righe [j, i0, byte, byte, ...]
+    for (const r of g.via || []) for (let n = 2; n < r.length; n++) d[r[0] * g.nx + r[1] + n - 2] = r[n];
     this.d = d;
     this.dg = dg;
     // per il culling: di quanto il terreno sale al più per metro (tra celle vicine; nella cella l'interpolazione

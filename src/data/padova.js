@@ -331,7 +331,18 @@ export function buildNetwork() {
   // quote dei cavalcavia: calcolate con la pianta delle strade (stessa regola), altrimenti qui
   if (MAP.nodeH) {
     for (const [i, h] of MAP.nodeH) if (nodes[i]) nodes[i].h = h;
+    // strutture con il profilo calcolato dalla build (scripts/profilo_cavalcavia.py, docs/cavalcavia.md): la quota sopra
+    // il terreno lungo l'arco sta in MAP.edgeH ([arco, progressive in cm, quote in mm], un punto a ogni confine di cella
+    // del terreno: terreno più quota dà il profilo); gli altri loro archi stanno a terra. Fuori da quelle strutture la
+    // quota è lineare tra i nodi
+    const dichiarati = new Set();
+    for (const s of MAP.cavalcavia || []) for (const k of s.archi) if (byK[k]) { dichiarati.add(byK[k]); byK[k].decl = true; }
+    for (const [k, ss, qs] of MAP.edgeH || []) {
+      const e = byK[k];
+      if (e) { e.elev = true; e.hs = { s: ss, q: qs, L: ss[ss.length - 1] || 1 }; e.ha = qs[0] / 1000; e.hb = qs[qs.length - 1] / 1000; }
+    }
     for (const e of edges) {
+      if (dichiarati.has(e)) continue;
       const ha = nodes[e.a].h || 0, hb = nodes[e.b].h || 0;
       if (ha > 0.05 || hb > 0.05) { e.elev = true; e.ha = ha; e.hb = hb; }
     }

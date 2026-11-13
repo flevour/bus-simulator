@@ -393,22 +393,26 @@ export class TramTrack {
   // quota del binario (cavalcavia): campionata ogni 5 m, levigata. Dove i binari sono affiancati stanno sullo stesso
   // impalcato: vale la quota più alta delle due corsie (sul Cavalcavia Borgomagno il binario verso nord è più lontano
   // dalla strada e da solo resterebbe a terra)
-  setHeights(fn) {
+  // fn(x, z, dx, dz): quota della strada in quota che il binario affianca; esatta(): vero se l'ultima quota chiesta viene
+  // dal profilo di una struttura (scripts/profilo_cavalcavia.py), che vale così com'è: niente media e niente soglia, se
+  // no dove il terreno sotto scende (le spalle) il binario si staccherebbe dalla strada
+  setHeights(fn, esatta = () => false) {
     for (const d of [1, -1]) {
-      const P = this.paths[d], O = this.paths[-d], raw = [];
+      const P = this.paths[d], O = this.paths[-d], raw = [], ex = [];
       for (let s = 0; s <= P.len; s += 5) {
         const p = P.at(s);
-        let h = fn(p.x, p.z, p.dx, p.dz);
-        if (this.doubleAt(d, s) > 0.5) {
+        let h = fn(p.x, p.z, p.dx, p.dz), e = esatta();
+        if (!e && this.doubleAt(d, s) > 0.5) {
           const q = O.at(O.project(p.x, p.z).s);
           h = Math.max(h, fn(q.x, q.z, p.dx, p.dz));
         }
         raw.push(h);
+        ex.push(e);
       }
       const sm = raw.map((_, i) => { let a = 0, n = 0; for (let k = -5; k <= 5; k++) { const v = raw[i + k]; if (v != null) { a += v; n++; } } return a / n; });
       // la media smussa i raccordi in basso, ma non abbassa il binario sotto la strada che segue: in cima alle rampe
       // finiva sotto l'impalcato e la sede rossa spariva a pezzi (Cavalcavia Chiesanuova sul SIR2)
-      this.h[d] = sm.map((v, i) => { const w = Math.max(v, raw[i]); return w < 0.25 ? 0 : w; });
+      this.h[d] = sm.map((v, i) => { if (ex[i]) return raw[i]; const w = Math.max(v, raw[i]); return w < 0.25 ? 0 : w; });
     }
   }
   heightAt(dir, s) {

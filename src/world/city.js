@@ -389,11 +389,17 @@ export function makeBuildingMaterial(uniforms, merged = false) {
   return m;
 }
 
-// quota della carreggiata lungo un arco sopraelevato (0 vicino ai nodi)
+// quota della carreggiata sopra il terreno lungo un arco in quota, alla progressiva s: il profilo della struttura
+// (e.hs, da MAP.edgeH: progressive in cm e quote in mm) o, senza, lineare tra i due nodi
 export function edgeHeight(e, s) {
   if (!e.elev) return 0;
-  const t = Math.max(0, Math.min(1, s / e.len));
-  return e.ha + (e.hb - e.ha) * t;
+  const t = Math.max(0, Math.min(1, s / e.len)), p = e.hs;
+  if (!p) return e.ha + (e.hb - e.ha) * t;
+  const S = p.s, Q = p.q, x = t * p.L;
+  let lo = 0, hi = S.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] <= x) lo = m; else hi = m; }
+  const d = S[hi] - S[lo];
+  return (Q[lo] + (d > 0 ? ((Q[hi] - Q[lo]) * (x - S[lo])) / d : 0)) / 1000;
 }
 
 const CENTRO = { x: -150, z: 120 };
@@ -1285,7 +1291,7 @@ export class City {
       this.tramTracks[T.id] = new TramTrack(this.net, { id: T.id, lanes: T.lanes, regola: T.regola, lines: TRAM_LINES.filter((L) => L.id === T.id), over: Object.values(this.tramTracks) });
     }
     const tracks = Object.values(this.tramTracks);
-    for (const T of tracks) T.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz));
+    for (const T of tracks) T.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz), () => this.nearProfile);
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
     const deck = [], piers = [], poles = [], wires = [];
     this.tramPoles = []; // posizioni dei pali della linea aerea (per le prove)
@@ -1868,12 +1874,16 @@ export class City {
   nearElevatedHeight(x, z, dx, dz) {
     const arr = this.segGrid.query(x, z, 18, this._qe || (this._qe = []));
     let h = 0, bd = Infinity;
+    // nearProfile: la strada trovata ha il profilo della sua struttura (la quota è già quella giusta in ogni punto, e
+    // TramTrack.setHeights non la media con quelle vicine)
+    this.nearProfile = false;
     for (const it of arr) {
       const e = it.ref;
-      if (it.kind !== 'road' || !e || !e.elev) continue;
+      // e.decl: arco di una struttura con il profilo, anche dove sta a terra (lì la quota è zero, ed è quella giusta)
+      if (it.kind !== 'road' || !e || !(e.elev || e.decl)) continue;
       if (dx != null && Math.abs(dx * e.dz - dz * e.dx) > 0.7) continue;
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
-      if (r.d < it.hw + 9 && r.d < bd) { bd = r.d; h = edgeHeight(e, r.t * e.len); }
+      if (r.d < it.hw + 9 && r.d < bd) { bd = r.d; h = edgeHeight(e, r.t * e.len); this.nearProfile = !!(e.hs || e.decl); }
     }
     return h;
   }

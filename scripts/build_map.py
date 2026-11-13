@@ -1405,8 +1405,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops), 'con banchina centrale', sum(st[3] for st in tram_stops if len(st) > 3))
 
     # pianta delle strade: quote dei cavalcavia, carreggiate, marciapiedi, isole; edifici ritagliati fuori
-    heights = street_surfaces.overpass_heights(nodes, edges, rails)
     terrain = hfun = None
+    profili, dichiarati, cavalcavia_out, edge_h = {}, set(), [], []
     # binari delle linee nuove del tram (SIR2 e SIR3: data/tram-linee-nuove.json di scripts/tram_linee.py, accanto
     # all'export dei binari): la loro sede è nella pianta delle strade come quella del SIR1, e lungo i loro binari il
     # terreno ha i rilevati che il DTM non ha ancora (terrain_for_game)
@@ -1418,9 +1418,40 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 new_tram.append([round(c, 1) for la, lo in v['percorso'] for c in xz(la, lo)])
         print('binari delle linee nuove nella pianta delle strade:', len(new_tram))
     if dtm_path:
-        terrain, tst, hfun, adjust = street_surfaces.terrain_for_game(json.load(open(dtm_path)), nodes, edges, heights, new_tram)
+        # cavalcavia: le strutture della rete devono essere quelle del registro (data/cavalcavia.json); quelle attive lì
+        # prendono il profilo di scripts/profilo_cavalcavia.py, le altre le quote di overpass_heights con il terreno
+        # spianato sotto. CAVALCAVIA=registro riscrive i campi del registro che vengono dalla rete
+        import profilo_cavalcavia
+        dtm = json.load(open(dtm_path))
+        binari = (tram if tram_lanes else []) + new_tram
+        terreno0 = street_surfaces.terrain_for_game(dtm, nodes, edges, {}, new_tram)[0]
+        pronte = profilo_cavalcavia.strutture_rete(nodes, edges, names, rails, binari, terreno0, dtm)
+        registro = profilo_cavalcavia.carica_registro()
+        voci = profilo_cavalcavia.voci_registro(pronte[0], pronte[4], pronte[2])
+        if os.environ.get('CAVALCAVIA') == 'registro':
+            profilo_cavalcavia.scrivi_registro(registro, voci)
+            registro = profilo_cavalcavia.carica_registro()
+            print('registro dei cavalcavia riscritto:', len(voci), 'strutture')
+        errori = profilo_cavalcavia.confronta_registro(registro, voci)
+        if errori:
+            sys.exit('\n'.join(errori + ['Le strutture della rete non sono quelle di data/cavalcavia.json: si guarda cosa è cambiato e si '
+                                         'rilancia con CAVALCAVIA=registro (i campi messi a mano restano).']))
+        dichiarati = {k for st in profilo_cavalcavia.attive(pronte[4], registro) for k in st['archi']}
+        heights = street_surfaces.overpass_heights(nodes, edges, rails, dichiarati)
+        misti = sorted(n for k in dichiarati for n in edges[k][:2] if heights.get(n, 0) > 0.05)
+        if misti:
+            sys.exit('cavalcavia: una rampa con le quote di prima arriva dentro una struttura con il profilo nuovo, ai nodi '
+                     + ', '.join(f'({nodes[n][0]:.0f}, {nodes[n][1]:.0f})' for n in misti[:8]) + ': si attivano o si spengono insieme nel registro.')
+        terrain, tst, hfun, adjust = street_surfaces.terrain_for_game(dtm, nodes, edges, heights, new_tram, dichiarati)
         heights, tst['nodi_abbassati'] = adjust(heights)
         print('terreno:', tst)
+        ris = profilo_cavalcavia.calcola(nodes, edges, names, rails, binari, terrain, dtm, registro, water, pronte=pronte)
+        terrain, edge_h, cavalcavia_out = ris['terreno'], ris['edgeH'], ris['cavalcavia']
+        profili = {k: (ss, qs) for k, ss, qs in edge_h}
+        heights.update(ris['nodeH'])
+        hfun = profilo_cavalcavia.griglia_via(terrain)
+    else:
+        heights = street_surfaces.overpass_heights(nodes, edges, rails)
     green = json.load(open(green_path, encoding='utf-8')) if green_path else None
     streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
     platforms = json.load(open(osm_stops_path, encoding='utf-8')).get('banchine') if osm_stops_path else None
@@ -1468,7 +1499,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             if back > 0:
                 stalli.append((ns[0], ns[1], back + 1.0))
     surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
-                                                   sorted(bus_left), stalli)
+                                                   sorted(bus_left), stalli, profili, dichiarati)
     print('pianta delle strade:', st)
 
     nodes_flat = []
@@ -1489,6 +1520,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramRegola': tram_lanes, 'tramStops': tram_stops,
         'tramStazione': tram_stazione.zona(staz, xz) if staz else None,
         'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
+        # cavalcavia con il profilo della loro struttura (scripts/profilo_cavalcavia.py): quota sopra il terreno lungo
+        # gli archi in quota [arco, progressive in cm, quote in mm] e archi di ogni struttura
+        'edgeH': edge_h, 'cavalcavia': cavalcavia_out,
         # corsie dai tag OSM: [arco, codice] (lane_code), e frecce a terra [arco, avanti, indietro]
         'lanes': [v for k, lt in sorted(edge_lanes.items()) for v in (k, lane_code(lt))], 'turnLanes': turns,
         'tramLines': [tram_line],

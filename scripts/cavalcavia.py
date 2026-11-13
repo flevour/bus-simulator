@@ -138,6 +138,10 @@ class Via(Griglia10):
                 for j in range(j0, j1 + 1):
                     for i in range(i0, i1 + 1):
                         self.ponti[(i, j)].append((w, ax, az, ah, bx, bz, bh))
+        # celle fissate dopo chiusura e ponti (le piattaforme dei cavalcavia): righe [j, i0, byte, byte, ...]
+        for r in g.get('via', []):
+            for n, v in enumerate(r[2:]):
+                self._c[(r[1] + n, r[0])] = v
 
     def _finestra(self, f, memo, fonte, i, j, lungo_x):
         k = (i, j)
@@ -187,13 +191,22 @@ class Rete:
         self.archi = [E[k:k + 8] for k in range(0, len(E), 8)]
         self.lung = [math.dist(self.nodi[e[0]], self.nodi[e[1]]) for e in self.archi]
         self.H = {i: h for i, h in M.get('nodeH', [])}
+        # quota sopra il terreno lungo gli archi in quota: progressive (cm) e quote (mm); senza, lineare tra i nodi
+        self.EH = {k: (ss, qs) for k, ss, qs in M.get('edgeH', [])} if 'edgeH' in M else None
+        # strutture dichiarate dalla build (scripts/profilo_cavalcavia.py): archi dei cavalcavia con le loro rampe
+        self.strutture = M.get('cavalcavia')
         self.nomi = M['names']
         self.at = defaultdict(list)  # archi carrabili per nodo
         for k, e in enumerate(self.archi):
             if e[2] != 8 and self.lung[k] > 0.05:
                 self.at[e[0]].append(k)
                 self.at[e[1]].append(k)
-        self.in_quota = [k for k, e in enumerate(self.archi) if e[2] != 8 and (self.H.get(e[0], 0) > IN_QUOTA or self.H.get(e[1], 0) > IN_QUOTA)]
+        # archi delle strutture dichiarate: la loro quota è il profilo (EH) o zero; gli altri, lineare tra i nodi
+        self.dichiarati = {k for s in self.strutture or [] for k in s['archi']}
+        self.in_quota = sorted(set(self.EH or ()) | {k for k, e in enumerate(self.archi) if k not in self.dichiarati and e[2] != 8
+                                                    and (self.H.get(e[0], 0) > IN_QUOTA or self.H.get(e[1], 0) > IN_QUOTA)})
+        # archi dove si misura: quelli delle strutture dichiarate e quelli in quota
+        self.misurati = self.dichiarati | set(self.in_quota)
         self.binari = []   # {'id', 'verso', 'pts': [(x, z)], 'quote': quota ogni 5 m sopra il terreno, o None nei dati}
         self.fermate = []  # (x, z, nome) del tram, per dare il nome ai posti
         self.strade = Griglia([(self.nodi[e[0]], self.nodi[e[1]]) for e in self.archi], 20.0)
@@ -204,6 +217,29 @@ class Rete:
 
     def h(self, n):
         return self.H.get(n, 0.0)
+
+    def rel(self, k, t):
+        """Quota sopra il terreno alla frazione t dell'arco k (come edgeHeight nel gioco)."""
+        p = self.EH.get(k) if self.EH else None
+        if not p:
+            if k in self.dichiarati:
+                return 0.0
+            e = self.archi[k]
+            return self.h(e[0]) + (self.h(e[1]) - self.h(e[0])) * t
+        ss, qs = p
+        s = t * self.lung[k] * 100
+        lo, hi = 0, len(ss) - 1
+        if s <= ss[0]:
+            return qs[0] / 1000
+        if s >= ss[hi]:
+            return qs[hi] / 1000
+        while hi - lo > 1:
+            m = (lo + hi) // 2
+            if ss[m] <= s:
+                lo = m
+            else:
+                hi = m
+        return (qs[lo] + (qs[hi] - qs[lo]) * (s - ss[lo]) / ((ss[hi] - ss[lo]) or 1)) / 1000
 
 
 def rete_dati(M=None):
@@ -252,8 +288,7 @@ def strada_accanto(R, p, verso):
     best, h, kb = 1e9, 0.0, None
     for k in R.strade.vicini(p, 30.0):
         e = R.archi[k]
-        ha, hb = R.h(e[0]), R.h(e[1])
-        if max(ha, hb) <= IN_QUOTA or e[2] == 8:
+        if k not in R.misurati or e[2] == 8:
             continue
         (ax, az), (bx, bz) = R.nodi[e[0]], R.nodi[e[1]]
         ux, uz = bx - ax, bz - az
@@ -263,19 +298,22 @@ def strada_accanto(R, p, verso):
         t = max(0.0, min(1.0, ((p[0] - ax) * ux + (p[1] - az) * uz) / (l * l)))
         d = math.hypot(ax + ux * t - p[0], az + uz * t - p[1])
         if d < e[3] / 2 + AFFIANCA and d < best:
-            best, h, kb = d, ha + (hb - ha) * t, k
+            best, h, kb = d, R.rel(k, t), k
     return h, kb
 
 
 # ---------- i cavalcavia ----------
 def cavalcavia(R):
     """Gruppi di archi in quota che si toccano, con un nome (la via più lunga dei ponti, se no degli archi) e il centro."""
+    dichiarate = [{'archi': set(s['archi']), 'nome': s['id'], 'id': s['id'], 'x': s['x'], 'z': s['z'], 'dichiarata': True,
+                   'metri': round(sum(R.lung[k] for k in s['archi']))} for s in R.strutture or []]
     at = defaultdict(list)
-    for k in R.in_quota:
+    liberi = [k for k in R.in_quota if k not in R.dichiarati]
+    for k in liberi:
         for n in R.archi[k][:2]:
             at[n].append(k)
     visti, out = set(), []
-    for k0 in R.in_quota:
+    for k0 in liberi:
         if k0 in visti:
             continue
         gruppo, st = set(), [k0]
@@ -301,9 +339,10 @@ def cavalcavia(R):
         out.append({'archi': gruppo, 'nome': nome, 'x': round(cx), 'z': round(cz), 'metri': round(L)})
     # stesso nome: si distinguono con il posto
     conta = Counter(c['nome'] for c in out)
+    usati = {c['id'] for c in dichiarate}
     for c in out:
-        c['id'] = c['nome'] if conta[c['nome']] == 1 else f"{c['nome']} ({c['x']}, {c['z']})"
-    return out
+        c['id'] = c['nome'] if conta[c['nome']] == 1 and c['nome'] not in usati else f"{c['nome']} ({c['x']}, {c['z']})"
+    return dichiarate + out
 
 
 def prossimo(R, cur, k, gruppo):
@@ -358,7 +397,7 @@ def itinerari(R, C):
     piedi = defaultdict(list)
     for k in G:
         for n in R.archi[k][:2]:
-            if R.h(n) <= IN_QUOTA or len(R.at[n]) == 1:
+            if len(R.at[n]) == 1 or (any(j not in G for j in R.at[n]) if C.get('dichiarata') else R.h(n) <= IN_QUOTA):
                 piedi[n].append(k)
     visti, out = set(), []
     for n0, ks in piedi.items():
@@ -401,18 +440,21 @@ def profilo_strada(R, seq):
     for (a, b), k in zip(zip(seq, seq[1:]), archi_di(R, seq)):
         A, B = R.nodi[a], R.nodi[b]
         L = math.dist(A, B)
-        ha, hb = R.h(a), R.h(b)
         e = R.archi[k]
         n = max(1, round(L / PASSO))
         for i in range(n):
             t = i / n
             x, z = A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t
-            rel = ha + (hb - ha) * t
-            pts.append({'x': x, 'z': z, 'q': R.via.at(x, z) + rel, 'rel': rel, 'tipo': tipo_di(e[2], R.via_di(k)), 'ponte': bool(e[5] & 4), 'arco': k})
+            rel = R.rel(k, t if e[0] == a else 1 - t)
+            # in galleria o in sottopasso (layer negativo) il DTM vede quello che sta sopra, non la strada
+            pts.append({'x': x, 'z': z, 'q': R.via.at(x, z) + rel, 'rel': rel, 'tipo': tipo_di(e[2], R.via_di(k)), 'ponte': bool(e[5] & 4),
+                        'sotto': bool(e[5] & 8 or e[7] < 0), 'arco': k})
     if seq:
         x, z = R.nodi[seq[-1]]
         last = pts[-1] if pts else {'tipo': 'F', 'ponte': False, 'arco': None}
-        pts.append({'x': x, 'z': z, 'q': R.via.at(x, z) + R.h(seq[-1]), 'rel': R.h(seq[-1]), 'tipo': last['tipo'], 'ponte': last['ponte'], 'arco': last['arco']})
+        k = last['arco']
+        rel = R.rel(k, 1.0 if R.archi[k][1] == seq[-1] else 0.0) if k is not None else R.h(seq[-1])
+        pts.append({'x': x, 'z': z, 'q': R.via.at(x, z) + rel, 'rel': rel, 'tipo': last['tipo'], 'ponte': last['ponte'], 'arco': k})
     return pts
 
 
@@ -434,7 +476,8 @@ def profili_binari(R, cav):
             return x, z, strada_accanto(R, (x, z), (dx, dz))
         quota = (lambda s: interp(Q, s / 5.0)) if Q else (lambda s: accanto(s)[2][0])
         # tratti in quota, cercati ogni 5 m
-        su = [s for s in frange(0, L, 5.0) if quota(s) > IN_QUOTA]
+        # con le strutture dichiarate: dove il binario affianca una loro strada, anche a terra
+        su = [s for s in frange(0, L, 5.0) if quota(s) > IN_QUOTA or accanto(s)[2][1] in R.dichiarati]
         if not su:
             continue
         tratti, a, b = [], su[0], su[0]
@@ -488,10 +531,10 @@ def punto(P, cum, s):
 
 
 # ---------- misure ----------
-def campo(pts, gruppo):
+def campo(pts, gruppo, dichiarate=False):
     """Indici del tratto da misurare: dal primo all'ultimo punto in quota del cavalcavia (archi del gruppo), più PIEDE
     metri per parte."""
-    su = [i for i, p in enumerate(pts) if p['rel'] > IN_QUOTA and p['arco'] in gruppo]
+    su = [i for i, p in enumerate(pts) if p['arco'] in gruppo and (dichiarate or p['rel'] > IN_QUOTA)]
     if not su:
         return None
     k = round(PIEDE / PASSO)
@@ -606,7 +649,7 @@ def scarti_dtm(R, pts, i0, i1):
     vede: scarti oltre DTM_TOLL."""
     if not R.dtm:
         return []
-    ponte = [p['ponte'] for p in pts]
+    ponte = [p['ponte'] or p.get('sotto') for p in pts]
     k = round(PONTE_VICINO / PASSO)
     vicino = [any(ponte[max(0, i - k):i + k + 1]) for i in range(len(pts))]
     d = [None] * len(pts)
@@ -636,7 +679,7 @@ def misura(R):
         altrove = lambda caso, pts: pts[caso['i']]['arco'] in altri and pts[caso['i']]['arco'] not in G
         for seq in itinerari(R, C):
             pts = profilo_strada(R, seq)
-            c = campo(pts, G)
+            c = campo(pts, G, bool(C.get('dichiarata')))
             if not c:
                 continue
             for caso in onde(pts, *c) + pendenze(pts, *c) + raccordi(pts, *c) + scarti_dtm(R, pts, *c):
@@ -644,7 +687,7 @@ def misura(R):
                     casi.append(posa(caso, pts, 'strade', R.via_di(pts[caso['i']]['arco']) or 'strada senza nome'))
         for T in binari.get(C['id'], []):
             pts = T['pts']
-            c = campo(pts, G)
+            c = campo(pts, G, bool(C.get('dichiarata')))
             if not c:
                 continue
             for caso in onde(pts, *c) + pendenze(pts, *c) + raccordi(pts, *c) + fuori_quota(pts, *c):

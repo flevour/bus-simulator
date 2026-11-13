@@ -56,11 +56,33 @@ def _smooth(u):
     return u * u * (3 - 2 * u)
 
 
-def overpass_heights(nodes, edges, rails):
+def quote_arco(k, e, heights, profili=None, dichiarati=()):
+    """[(frazione, quota sopra il terreno)] lungo l'arco k: il profilo della struttura (scripts/profilo_cavalcavia.py:
+    progressive in cm e quote in mm) se l'arco ne ha uno, zero per gli altri archi delle strutture con il profilo
+    (`dichiarati`), altrimenti lineare tra le quote dei nodi (overpass_heights)."""
+    p = profili.get(k) if profili else None
+    if p:
+        L = p[0][-1] or 1
+        return [(s / L, q / 1000) for s, q in zip(*p)]
+    if k in dichiarati:
+        return [(0.0, 0.0), (1.0, 0.0)]
+    return [(0.0, heights.get(e[0], 0)), (1.0, heights.get(e[1], 0))]
+
+
+def quota_arco(k, e, t, heights, profili=None, dichiarati=()):
+    pts = quote_arco(k, e, heights, profili, dichiarati)
+    for (t0, h0), (t1, h1) in zip(pts, pts[1:]):
+        if t <= t1:
+            return h0 + (h1 - h0) * ((t - t0) / ((t1 - t0) or 1))
+    return pts[-1][1]
+
+
+def overpass_heights(nodes, edges, rails, salta=frozenset()):
     """Quote dei nodi dei cavalcavia: ponti OSM in quota (layer >= 1) sopra la ferrovia o sopra un'altra strada,
     tutta la catena del ponte, rampe raccordate fino a 130 m che non salgono sulla strada di sotto (su tutti i rami
     con il nome del ponte, almeno H_CLEAR sopra le strade in sottopasso), raccordi al massimo al 10% per le strade che
-    si innestano sulle rampe."""
+    si innestano sulle rampe. salta: archi delle strutture che hanno il profilo di scripts/profilo_cavalcavia.py (i
+    loro ponti qui non contano, e le rampe degli altri non ci entrano)."""
     C = 100
     cells = lambda a, b: [(gx, gz) for gx in range(int(min(a[0], b[0]) // C), int(max(a[0], b[0]) // C) + 1)
                           for gz in range(int(min(a[1], b[1]) // C), int(max(a[1], b[1]) // C) + 1)]
@@ -84,7 +106,7 @@ def overpass_heights(nodes, edges, rails):
         at[e[1]].append(k)
     under, deck = set(), set()
     for k, (a, b, _c, _w, _n, flags, _s, layer) in enumerate(edges):
-        if not (flags & 4 and layer >= 1):
+        if not (flags & 4 and layer >= 1) or k in salta:
             continue
         p, q = nodes[a], nodes[b]
         hit = any(_cross(p, q, r, s) for c in cells(p, q) for r, s in rgrid.get(c, ()))
@@ -103,7 +125,7 @@ def overpass_heights(nodes, edges, rails):
         k = stack.pop()
         for n in edges[k][:2]:
             for j in at[n]:
-                if j not in deck and edges[j][5] & 4 and edges[j][7] >= 1:
+                if j not in deck and edges[j][5] & 4 and edges[j][7] >= 1 and j not in salta:
                     deck.add(j)
                     stack.append(j)
     # Rampe: dalla fine dell'impalcato la quota scende solo lungo la prosecuzione della strada stessa (stessa via, o il
@@ -140,7 +162,7 @@ def overpass_heights(nodes, edges, rails):
         # rami da seguire: (cammino, nodo, arco, metri, metri all'ultimo sottopasso). Dove la strada del ponte si divide
         # in due rami con lo stesso nome si scende su tutti e due (Borgomagno: la corsia dei bus verso Via Codalunga e
         # la rampa verso la stazione); prima si seguiva solo il più dritto e l'altro restava a terra, con un gradino
-        stack = [([(n0, 0.0)], n0, k0, 0.0, 0.0) for k0 in at[n0] if k0 not in deck]
+        stack = [([(n0, 0.0)], n0, k0, 0.0, 0.0) for k0 in at[n0] if k0 not in deck and k0 not in salta]
         while stack:
             path, cur, k, dist, dcross = stack.pop()
             while True:
@@ -157,7 +179,7 @@ def overpass_heights(nodes, edges, rails):
                 path.append((nxt, dist))
                 if dist >= R_RAMP:
                     break
-                outs = [j for j in at[nxt] if j != k and j not in deck]
+                outs = [j for j in at[nxt] if j != k and j not in deck and j not in salta]
                 ground_deg = len(at[nxt])
                 best, bd, same = None, 0.7, []
                 for j in outs:
@@ -209,7 +231,7 @@ def overpass_heights(nodes, edges, rails):
         for j in at[n]:
             o = edges[j][1] if edges[j][0] == n else edges[j][0]
             need = h - MAX_SLOPE * lens[j]
-            if need > heights.get(o, 0) + 0.01 and o not in pinned and not edges[j][5] & 8:
+            if need > heights.get(o, 0) + 0.01 and o not in pinned and not edges[j][5] & 8 and j not in salta:
                 heights[o] = need
                 heapq.heappush(pq, (-need, o))
     out = {}
@@ -221,10 +243,10 @@ def overpass_heights(nodes, edges, rails):
     return out
 
 
-def _tram_heights(pts, nodes, edges, heights):
+def _tram_heights(pts, nodes, edges, heights, profili=None, dichiarati=()):
     """Quota di ogni punto di un binario: quella della strada in quota più vicina e quasi parallela (come
     City.nearElevatedHeight nel gioco)."""
-    up = [e for e in edges if heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05]
+    up = [(k, e) for k, e in enumerate(edges) if max(h for _t, h in quote_arco(k, e, heights, profili, dichiarati)) > 0.05]
     out = []
     for i, p in enumerate(pts):
         q = pts[min(len(pts) - 1, i + 1)] if i < len(pts) - 1 else pts[i]
@@ -233,7 +255,7 @@ def _tram_heights(pts, nodes, edges, heights):
         L = math.hypot(dx, dz) or 1
         dx, dz = dx / L, dz / L
         best, h = 1e9, 0.0
-        for e in up:
+        for k, e in up:
             (ax, az), (bx, bz) = nodes[e[0]], nodes[e[1]]
             ux, uz = bx - ax, bz - az
             l = math.hypot(ux, uz) or 1e-9
@@ -243,27 +265,38 @@ def _tram_heights(pts, nodes, edges, heights):
             d = math.hypot(ax + ux * t - p[0], az + uz * t - p[1])
             if d < e[3] / 2 + 9 and d < best:
                 best = d
-                h = heights.get(e[0], 0) + (heights.get(e[1], 0) - heights.get(e[0], 0)) * t
+                h = quota_arco(k, e, t, heights, profili, dichiarati)
         out.append(h)
     return out
 
 
-def decks(nodes, edges, heights, drive, tram):
+def decks(nodes, edges, heights, drive, tram, profili=None, dichiarati=()):
     """Impalcati in quota come un'area sola: i tratti di strada e di tram da DECK_MIN in su (carreggiata + 1 m, corsie
     del tram + cordolo), uniti e con la fascia tra impalcati vicini riempita."""
     m = DECK_MIN
     parts = []
     for k in drive:
         a, b, _c, wd = edges[k][:4]
-        ha, hb = heights.get(a, 0), heights.get(b, 0)
-        if max(ha, hb) < m:
+        q = quote_arco(k, edges[k], heights, profili, dichiarati)
+        ha, hb = q[0][1], q[-1][1]
+        if max(h for _t, h in q) < m:
             continue
-        t0 = 0.0 if ha >= m else (m - ha) / (hb - ha)
-        t1 = 1.0 if hb >= m else (ha - m) / (ha - hb)
         A, B = nodes[a], nodes[b]
         P = lambda t: (A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t)
-        if t1 - t0 > 1e-3:
-            parts.append(LineString([P(t0), P(t1)]).buffer(wd / 2 + DECK_EDGE, cap_style='flat'))
+        # tratti dell'arco da DECK_MIN in su (lungo il profilo, o tra i due nodi)
+        tratti = []
+        for (ta, qa), (tb, qb) in zip(q, q[1:]):
+            if max(qa, qb) < m or tb - ta < 1e-9:
+                continue
+            t0 = ta if qa >= m else ta + (tb - ta) * (m - qa) / (qb - qa)
+            t1 = tb if qb >= m else ta + (tb - ta) * (qa - m) / (qa - qb)
+            if tratti and t0 - tratti[-1][1] < 1e-6:
+                tratti[-1][1] = t1
+            else:
+                tratti.append([t0, t1])
+        for t0, t1 in tratti:
+            if t1 - t0 > 1e-3:
+                parts.append(LineString([P(t0), P(t1)]).buffer(wd / 2 + DECK_EDGE, cap_style='flat'))
         for n, h in ((a, ha), (b, hb)):
             if h >= m:
                 parts.append(Point(nodes[n]).buffer(wd / 2 + DECK_EDGE, quad_segs=6))
@@ -273,7 +306,7 @@ def decks(nodes, edges, heights, drive, tram):
         for p, q in zip(pts, pts[1:]):
             n = max(1, int(math.dist(p, q) // 5))
             dense += [(p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n) for k in range(1, n + 1)]
-        hs = _tram_heights(dense, nodes, edges, heights)
+        hs = _tram_heights(dense, nodes, edges, heights, profili, dichiarati)
         run = []
         for p, h in zip(dense + [None], hs + [0]):
             if p is not None and h >= m:
@@ -399,14 +432,15 @@ def dbgt_polys(lst):
 
 
 def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None, platforms=None,
-             bus_left=(), stalli=()):
+             bus_left=(), stalli=(), profili=None, dichiarati=()):
     """bus_left: (nodo della svolta, nodo dopo) delle svolte strette a sinistra dei bus; stalli: (nodo d'inizio, nodo
     dopo, metri) dei capolinea dove il bus fermo alla prima fermata sporge dietro l'inizio del percorso (build_map).
     Valgono solo fuori dal DBGT, dove carreggiate e piazzali sono stimati: dentro ci sono quelli misurati."""
-    elev = lambda e: heights.get(e[0], 0) > 0.05 or heights.get(e[1], 0) > 0.05
+    # archi in quota: con il profilo della loro struttura, o con un nodo in quota (overpass_heights)
+    in_quota = {k for k, e in enumerate(edges) if max(h for _t, h in quote_arco(k, e, heights, profili, dichiarati)) > 0.05}
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
     drive = [k for k, e in enumerate(edges) if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3]
-    ground = [k for k in drive if not elev(edges[k])]
+    ground = [k for k in drive if k not in in_quota]
     # carreggiata: ogni tratto allargato (estremi tondi: i giunti delle curve restano pieni)
     pieces = {k: seg(edges[k]).buffer(edges[k][3] / 2, quad_segs=4) for k in drive}
     U = unary_union([pieces[k] for k in ground])
@@ -524,7 +558,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             q = Polygon(flat2b(b[3])) if len(b[3]) >= 6 else Polygon()
             bl.append(q if q.is_valid else q.buffer(0))
         bld = unary_union(bl)
-        upe = unary_union([pieces[k] for k in drive if elev(edges[k])])
+        upe = unary_union([pieces[k] for k in drive if k in in_quota])
         Ut, U2 = U.buffer(1.0), U.buffer(2.0)
         shapely.prepare(Ut)
         sel = [c for c in dbgt_polys(streets.get('carreggiate', [])) if Ut.intersects(c) and (c.area <= 6000 or c.intersection(U2).area >= 0.3 * c.area)]
@@ -646,8 +680,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     bridges = unary_union([pieces[k].buffer(BRIDGE_WALK) for k in ground if edges[k][5] & 4])
     islands = islands.difference(W)  # tra due ponti affiancati c'è l'acqua, non un'isola
     # sotto rampe e impalcati niente isole né marciapiedi (la rampa del cavalcavia attraversava un'isola di prato)
-    D = decks(nodes, edges, heights, drive, tram)
-    up = unary_union([pieces[k] for k in drive if elev(edges[k])])
+    D = decks(nodes, edges, heights, drive, tram, profili, dichiarati)
+    up = unary_union([pieces[k] for k in drive if k in in_quota])
     islands = islands.difference(up).difference(D)
     # la sede del tram nello spartitraffico (Via Aspetti, Via Guizza) e nelle rotonde che il tram attraversa resta
     # libera: l'isola è solo il verde ai lati (prima l'isola rialzata copriva binari e sede rossa)
@@ -755,7 +789,7 @@ def closing(h, r):
     return filt(filt(d, np.minimum, 0), np.minimum, 1)
 
 
-def terrain_for_game(dtm, nodes, edges, heights, tram=None):
+def terrain_for_game(dtm, nodes, edges, heights, tram=None, strutture=()):
     """Griglia delle quote per il gioco (src/world/terrain.js) dalla griglia del DTM (scripts/dtm_grid.py).
 
     * sotto i cavalcavia e le loro rampe (che il gioco alza da sé, quote in `heights`) il terreno si spiana alla quota
@@ -766,6 +800,9 @@ def terrain_for_game(dtm, nodes, edges, heights, tram=None):
     * lungo i binari delle linee nuove del tram (`tram`: spezzate piatte [x0, z0, x1, z1, ...]; il DTM non ha ancora i
       loro terrapieni, quelli del SIR1 invece sì) fuori dalle carreggiate il terreno della variante "via" non sale né
       scende più di TRAM_GRADE: dove serve si alza come per i ponti (rilevati del tram).
+
+    strutture: archi delle strutture con il profilo di scripts/profilo_cavalcavia.py. Sotto di loro il terreno qui non si
+    spiana (lo adatta al profilo quello script), ma accessi dei ponti e rilevati del tram non ci entrano.
     """
     import base64
     import numpy as np
@@ -940,6 +977,8 @@ def terrain_for_game(dtm, nodes, edges, heights, tram=None):
         return out, info
 
     import shapely
+    up = up + [LineString([nodes[edges[k][0]], nodes[edges[k][1]]]).buffer(edges[k][3] / 2 + 8) for k in sorted(strutture)
+               if math.dist(nodes[edges[k][0]], nodes[edges[k][1]]) > 0.05]
     U_up = unary_union(up) if up else Polygon()
     shapely.prepare(U_up)
     # strade sui ponti dei fiumi: la variante "via" riempie l'alveo, ma alle teste la strada poteva salire o scendere di
