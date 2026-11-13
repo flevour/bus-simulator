@@ -5,37 +5,37 @@
 // setHeights) in test-results/<prova>/cavalcavia-gioco.json e lo chiama con --gioco. Le strade le prende dalla mappa,
 // come il gioco: i loro numeri sono quelli dei dati.
 //
-// Fallisce se un numero supera la sua soglia (valori del 12 novembre 2026). Se un numero scende, si abbassa la soglia
-// nello stesso commit. Il rapporto con i casi e i cavalcavia peggiori è allegato al risultato e scritto in
-// test-results/<prova>/rapporto-cavalcavia.json.
+// Le soglie sono per caso, non per conteggio (#105): i casi noti stanno in data/eccezioni/cavalcavia.json ("strade",
+// uguali nei dati e nel gioco, e "binari gioco"), in gruppi con il perché. Fallisce se lo script trova un caso fuori
+// dall'elenco, anche a totale uguale, o se un caso dell'elenco è sparito (va tolto nello stesso commit). Chi cambia le
+// quote dei binari o il terreno riscrive l'elenco con `ECCEZIONI=aggiorna npx playwright test cavalcavia` e scrive il
+// perché dei casi nuovi che restano. Il rapporto con i casi e i cavalcavia peggiori è allegato al risultato e scritto
+// in test-results/<prova>/rapporto-cavalcavia.json.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
-// Prima che i cavalcavia seguano la regola (#84). Binari: la media di setHeights sulle rampe di Chiesanuova, San Marco
-// e Borgomagno (#74); dal 12 novembre (#69) i binari rifatti con la regola passano qualche decimetro più in là sulle
-// rampe: una pendenza e tre tratti fuori quota in più, un'onda e un raccordo in meno
-const SOGLIE = {
-  strade: { onde: 113, pendenze: 228, raccordi: 484, scarti_dtm: 221 },
-  binari: { onde: 17, pendenze: 33, raccordi: 12, fuori_quota: 28 },
-};
-
 test('cavalcavia secondo la regola del profilo', async ({ pagina, gioco }, info) => {
-  const file = info.outputPath('cavalcavia-gioco.json'), soglie = info.outputPath('soglie.json'), rapporto = info.outputPath('rapporto-cavalcavia.json');
+  const file = info.outputPath('cavalcavia-gioco.json'), rapporto = info.outputPath('rapporto-cavalcavia.json');
   writeFileSync(file, JSON.stringify(await pagina.evaluate(profili)));
-  writeFileSync(soglie, JSON.stringify(SOGLIE));
+  const argomenti = ['scripts/cavalcavia.py', '--gioco', file, '--elenco', '--json', rapporto];
+  if (process.env.ECCEZIONI === 'aggiorna') argomenti.push('--aggiorna');
   let testo;
   try {
-    testo = execFileSync('python3', ['scripts/cavalcavia.py', '--gioco', file, '--soglie', soglie, '--elenco', '--json', rapporto], { encoding: 'utf8' });
+    testo = execFileSync('python3', argomenti, { encoding: 'utf8' });
   } catch (e) {
-    // sopra le soglie lo script esce con 1: il rapporto c'è lo stesso, e le soglie le controlla la prova qui sotto
+    // casi diversi dall'elenco: lo script esce con 1 e li nomina; il rapporto c'è lo stesso, e lo controlla la prova
     testo = `${e.stdout || ''}${e.stderr || ''}`;
   }
   console.log(testo);
   info.annotations.push({ type: 'rapporto', description: testo });
   const r = JSON.parse(readFileSync(rapporto, 'utf8'));
   await info.attach('rapporto-cavalcavia.json', { path: rapporto, contentType: 'application/json' });
-  for (const [su, v] of Object.entries(SOGLIE)) for (const [tipo, s] of Object.entries(v)) expect.soft(r.valori[su][tipo], `${tipo} ${su}`).toBeLessThanOrEqual(s);
+  for (const [controllo, e] of Object.entries(r.eccezioni)) {
+    expect.soft(e.nuovi, `${controllo}: casi nuovi, fuori dall'elenco data/eccezioni/cavalcavia.json`).toEqual([]);
+    expect.soft(e.spariti, `${controllo}: casi spariti, da togliere dall'elenco data/eccezioni/cavalcavia.json`).toEqual([]);
+    expect.soft(e.senza_perche, `${controllo}: casi dell'elenco senza il perché`).toEqual([]);
+  }
   expect(gioco.errori()).toEqual([]);
 });
 

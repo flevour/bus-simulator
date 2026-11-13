@@ -21,7 +21,14 @@ Le reti sono due:
 Ogni caso ha il posto (coordinate del gioco, la via o il binario, la fermata del tram vicina) e un peso, quanto è oltre
 la regola; i cavalcavia peggiori sono quelli con la somma dei pesi più alta.
 
-  python3 scripts/cavalcavia.py [--gioco cavalcavia-gioco.json] [--soglie soglie.json] [--elenco] [--json rapporto.json]
+I casi noti stanno in data/eccezioni/cavalcavia.json (scripts/eccezioni.py), uno per riga con la chiave
+"cavalcavia | tipo | via o binario @ x,z" e il perché del gruppo: "strade" (uguali nei dati e nel gioco), "binari dati"
+e "binari gioco". Lo script esce con errore se trova un caso fuori dall'elenco, anche a totale uguale, o se un caso
+dell'elenco è sparito (va tolto). Un caso resta lo stesso se si sposta fino a TOLL metri. Chi cambia quote, terreno o
+binari riscrive l'elenco con --aggiorna (per il gioco: ECCEZIONI=aggiorna npx playwright test cavalcavia) e scrive il
+perché dei casi nuovi che restano.
+
+  python3 scripts/cavalcavia.py [--gioco cavalcavia-gioco.json] [--elenco] [--json rapporto.json] [--aggiorna]
   python3 scripts/cavalcavia.py [--gioco ...] --profilo X Z      # i profili che passano da (X, Z), ogni 5 m
 
 Senza argomenti misura i dati. Solo libreria standard: gira anche nel job delle prove, dove shapely e numpy non ci sono.
@@ -36,6 +43,7 @@ from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from binari_tram import Griglia, raggruppa, xz_da  # noqa: E402
+from eccezioni import Elenco, chiave  # noqa: E402
 
 RADICE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -68,6 +76,8 @@ PONTE_VICINO = 15.0  # m: vicino a un ponte il DTM non dice la quota della strad
 AFFIANCA = 9.0    # m oltre metà carreggiata: il binario affianca la strada (City.nearElevatedHeight)
 PARALLELO = 0.7   # seno massimo dell'angolo tra binario e strada perché siano paralleli (come sopra)
 UNITO = 3         # m: casi più vicini di così sono lo stesso caso
+TOLL = 4.0        # m: un caso dell'elenco delle eccezioni resta lo stesso se si sposta fino a qui (due casi dello stesso
+#                   tipo sulla stessa via stanno ad almeno UNITO + 2 m)
 TIPI = ['onde', 'pendenze', 'raccordi', 'fuori_quota', 'scarti_dtm']
 NOMI = {
     'onde': f'onde (discese e risalite di almeno {ONDA:g} m)'.replace('.', ','),
@@ -697,21 +707,26 @@ def descrivi(c):
     return f"{c['dove'] or c['su']}: {v}, ({c['x']}, {c['z']}){luogo}, peso {c['peso']:g}"
 
 
-def rapporto(R, soglie=None, elenco=False, json_out=None):
-    """Stampa i numeri (con le soglie, se ci sono) e restituisce (valori, misure, sopra)."""
+def chiave_di(c):
+    """La chiave di un caso nell'elenco delle eccezioni: cavalcavia, tipo, via o binario e posto."""
+    return chiave(f"{c['cavalcavia']} | {c['tipo']} | {c['dove']}", c['x'], c['z'])
+
+
+def rapporto(R, elenco=False, json_out=None, aggiorna=False):
+    """Stampa i numeri e li confronta caso per caso con l'elenco delle eccezioni (data/eccezioni/cavalcavia.json).
+    Restituisce (valori, misure, righe degli errori: vuote se i casi sono quelli dell'elenco)."""
     misure = misura(R)
     tot, per = conta(misure)
-    sopra = []
+    comando = 'ECCEZIONI=aggiorna npx playwright test cavalcavia' if R.nome == 'gioco' else 'python3 scripts/cavalcavia.py --aggiorna'
+    E = Elenco('cavalcavia', comando)
+    controllo = {'strade': 'strade', 'binari': f'binari {R.nome}'}
     print(f'Cavalcavia ({R.nome}): {len(misure)}, ' + ', '.join(NOMI[t] for t in TIPI))
     for su in TIPI_DI:
-        riga = []
-        for t in TIPI_DI[su]:
-            s = soglie.get(su, {}).get(t) if soglie else None
-            oltre = s is not None and tot[su][t] > s
-            if oltre:
-                sopra.append(f'{t} {su}')
-            riga.append(f"{'✗ ' if oltre else ''}{t} {tot[su][t]}" + (f' (soglia {s})' if s is not None else ''))
-        print(f'  {su}: ' + ', '.join(riga))
+        E.confronta(controllo[su], [chiave_di(c) for C in misure.values() for c in C['casi'] if c['su'] == su], TOLL, aggiorna)
+        segno, esito = E.segno(controllo[su])
+        print(f'  {segno} {su}: ' + ', '.join(f'{t} {tot[su][t]}' for t in TIPI_DI[su]) + f' ({esito})')
+    if aggiorna:
+        E.scrivi()
     if elenco:
         print('  cavalcavia peggiori (somma dei pesi; strade e binari: onde, pendenze, raccordi, scarti dal DTM o fuori quota):')
         for cid, C in peggiori(misure, 12):
@@ -722,9 +737,9 @@ def rapporto(R, soglie=None, elenco=False, json_out=None):
             for c in sorted(C['casi'], key=lambda c: -c['peso'])[:4]:
                 print('      ' + descrivi(c))
     if json_out:
-        json.dump({'rete': R.nome, 'valori': tot, 'soglie': soglie, 'per_cavalcavia': per, 'cavalcavia': misure},
+        json.dump({'rete': R.nome, 'valori': tot, 'eccezioni': E.esiti, 'per_cavalcavia': per, 'cavalcavia': misure},
                   open(json_out, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-    return tot, misure, sopra
+    return tot, misure, E.errori()
 
 
 def stampa_profili(R, x, z, passo=5):
@@ -751,7 +766,7 @@ def stampa_profili(R, x, z, passo=5):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--gioco', help='file del terreno e dei binari del gioco (tests/cavalcavia.spec.js); senza, i dati')
-    ap.add_argument('--soglie', help='file JSON con le soglie {strade|binari: {tipo: n}}: esce con errore se un numero le supera')
+    ap.add_argument('--aggiorna', action='store_true', help="riscrive l'elenco delle eccezioni dai casi di oggi (i nuovi senza perché)")
     ap.add_argument('--elenco', action='store_true', help='elenca i cavalcavia peggiori')
     ap.add_argument('--json', help='scrive il rapporto completo in questo file')
     ap.add_argument('--profilo', nargs=2, type=float, metavar=('X', 'Z'), help='stampa i profili che passano da questo punto')
@@ -760,10 +775,9 @@ def main():
     if args.profilo:
         stampa_profili(R, *args.profilo)
         return
-    soglie = json.load(open(args.soglie)) if args.soglie else None
-    _, _, sopra = rapporto(R, soglie, args.elenco, args.json)
-    if sopra:
-        print('Sopra la soglia: ' + ', '.join(sopra))
+    _, _, errori = rapporto(R, args.elenco, args.json, args.aggiorna)
+    if errori:
+        print('\n'.join(errori))
         sys.exit(1)
 
 

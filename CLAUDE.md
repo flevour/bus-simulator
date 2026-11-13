@@ -63,7 +63,7 @@ Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e b
 ```bash
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
 python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json data/osm-corridoio.json
-python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore sopra le soglie
+python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore se i casi non sono quelli degli elenchi
 ```
 
 `build_map.py` scrive la mappa in due parti (`scripts/aree_mappa.py`): la rete (nodi, archi, linee, fermate,
@@ -95,8 +95,18 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   `tests/gioco.js` (gioco aperto una volta per worker, avvio di una corsa dal menu, errori della pagina) e, per
   guidare, il pilota di `tests/guida.js`.
 * Rapporto di verifica sulla mappa: `python3 scripts/verifica_mappa.py` sul JSON (dopo ogni rigenerazione) e
-  `tests/mappa.spec.js` nel gioco. Escono con errore sopra le soglie in testa ai due file: se un numero scende, si
-  abbassa la soglia nello stesso commit; se sale per una buona ragione, si alza scrivendo il perché nel commit.
+  `tests/mappa.spec.js` nel gioco.
+* **Soglie per caso, non per conteggio.** Ogni controllo dà ai suoi casi una chiave stabile (struttura, linea e
+  fermata, posto) e li confronta con l'elenco dei casi noti in `data/eccezioni/` (`scripts/eccezioni.py`), in gruppi
+  con il perché: `verifica-mappa.json`, `cavalcavia.json` (`scripts/cavalcavia.py`, anche da
+  `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`). Un caso fuori dall'elenco fa fallire il
+  controllo anche se il totale non sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione
+  l'elenco si riscrive con `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i
+  casi nuovi finiscono in un gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un
+  conteggio.
+* **Niente nomi di luoghi nel codice degli algoritmi.** Una correzione che vale per un solo luogo è una riga in un
+  file di dati in `data/` (zona, valore, perché) che l'algoritmo legge, non un ramo nel codice con una via o delle
+  coordinate.
 * `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
   `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.

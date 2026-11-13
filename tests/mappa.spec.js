@@ -3,55 +3,36 @@
 // tutte le varianti delle linee bus con il bus nella posizione di fermata. Il resto (edifici in carreggiata, fermate
 // lontane dal percorso) lo controlla scripts/verifica_mappa.py sul JSON.
 //
-// La prova fallisce se un numero supera la sua soglia (valori del 9 novembre 2026). Se un numero scende, si abbassa la
-// soglia nello stesso commit. Il rapporto completo, con i casi e le coordinate, è allegato al risultato della prova e
-// scritto in test-results/<prova>/rapporto-mappa.json.
-import { writeFileSync } from 'node:fs';
+// Le soglie sono per caso, non per conteggio (#105): i casi noti stanno in data/eccezioni/mappa-gioco.json, in gruppi
+// con il perché, e la prova li confronta uno per uno con scripts/eccezioni.py. Fallisce se trova un caso fuori
+// dall'elenco, anche a totale uguale, o se un caso dell'elenco è sparito (va tolto nello stesso commit). Chi corregge o
+// sposta dei casi riscrive l'elenco con `ECCEZIONI=aggiorna npx playwright test tests/mappa.spec.js` e scrive il perché dei casi nuovi
+// che restano. Il rapporto completo, con i casi e le coordinate, è allegato al risultato della prova e scritto in
+// test-results/<prova>/rapporto-mappa.json.
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 import { misuraPali } from './pali.js';
 
-// 9 novembre: lampioni e alberi dei viali stanno fuori dall'asfalto vero (City.buildTreesAndLamps); con la corsia
-// mappa sopra il piazzale della stazione fermate con ostacoli 9, fuori strada 5, spostate 11. Corsia capolinea,
-// corridoio del SIR3 fino a Voltabarozzo: una palina in carreggiata, Piovese fr. Park (linee 4, 14, 16) nel golfo sotto
-// il cavalcavia della tangenziale, fuori dall'asfalto ma sotto il nastro di Corso Primo Maggio (arco in quota, che
-// roadInfo conta); con Via Bembo e Via Volta nella rete (gtfs_links di build_map.py) fuori strada 4, spostate 7.
-// 11 novembre, SIR2 da Rubano a Vigonza: la 10 arriva intera a Sarmeola e a Ponte di Brenta, con due fermate dove le
-// ruote del bus fermo escono dall'asfalto (Provvidenza 14, nel golfo accanto alla sede del tram a Chiesanuova, 4,9 m;
-// Capolinea Ponte Brenta, nel piazzale, 1,7 m): fuori strada 6; spostate 6. Gruppo 2 della corsia capolinea (3, 10, 11,
-// 22, 24 e 88 intere): paline in carreggiata 3, Park Bembo e Capolinea Park Bembo della 3 sotto il nastro di Corso
-// Primo Maggio, come Piovese fr. Park; ostacoli 10, la pensilina di Bembo Rotonda via Ponchia (3 verso Lion) all'uscita
-// della rotonda, da sistemare; fuori strada 7, Capolinea Caselle della 10 snodata nel piazzale della rotonda (5,1 m);
-// spostate 3. 12 novembre (#66): nessun edificio sui binari dei depositi del tram, né a meno di 2 m dal loro asse
-// 12 novembre (#16): il bus fermo sulla linea del cordolo nel sistema della palina (stopPose) e lo stallo del
-// capolinea a Caselle: ostacoli 9 (via Ponchia), fuori strada 4 (Caselle e Maroncelli fr.121 della 9 e della 42)
-// 12 novembre (#73): il bus fermo non copre le strisce pedonali, la palina va oltre o prima (allStopPlacements). Sulle
-// strisce erano 205 (linea e palina), 101 paline; restano 8: 7 fermate senza palina allineata, dove il bus sta lungo il
-// percorso (Sorio fr. 96 al bordo della mappa per la 2, la 6 e la 12, Rotonda Pontevigodarzere F.T., Venezia
-// Cavalcavia e Capolinea Ponte Brenta della 10 all'arrivo, Capolinea Mandria via Carnia), e la partenza della 10 snodata
-// dal Capolinea Ponte Brenta, nel piazzale, dove il rimorchio girato dal cordolo tocca le strisce di Via San Marco
-// 12 novembre (#29): ostacoli 0. I muri degli edifici vanno dalla facciata verso l'interno (City.buildTile): centrati
-// sporgevano 0,3 m in strada, e il bus accostato toccava le facciate sul bordo dell'asfalto (Milano 61 sotto i portici,
-// Tommaseo 114). A Buonarroti 46 la linea del cordolo non segue più la laterale dietro la palina (busLine)
-// 13 novembre (#97): pali accanto ai binari (tests/pali.js). Prima nella sagoma del tram 14, in carreggiata 488 (371
-// lanterne del tram, 98 pali della linea aerea sul cordolo della sede); restano 7 pali del tram in carreggiata dove
-// attorno c'è solo asfalto e nessun tirante vicino: nel piazzale della stazione tre lanterne (166, -1053) e il segnale
-// del bivio in (301, -1002), all'incrocio tra la stazione e Via Tommaseo due lanterne del SIR2 (362, -963 e 367, -953), in
-// Via San Marco una lanterna accanto alla banchina della fermata (4722, -1600)
-const SOGLIE = {
-  semafori_in_carreggiata: 2,
-  paline_in_carreggiata: 3,
-  lampioni_in_carreggiata: 0,
-  alberi_in_carreggiata: 0,
-  pensiline_in_carreggiata: 0,
-  fermate_con_ostacoli: 0,
-  fermate_fuori_strada: 4,
-  fermate_spostate: 3,
-  fermate_sulle_strisce: 8,
-  segni_sulla_sede: 0,
-  asfalto_sopra_sede: 0,
-  edifici_sui_binari_dei_depositi: 0,
-  pali_nella_sagoma_del_tram: 0,
-  pali_del_tram_in_carreggiata: 7,
+// La parte fissa della chiave di ogni caso; il posto (x, z del caso) lo aggiunge la prova. Un caso resta lo stesso se
+// si sposta fino a TOLL metri
+const TOLL = 2;
+const fermata = (c) => `linea ${c.linea}, ${c.nome}`;
+const CHIAVI = {
+  semafori_in_carreggiata: () => 'palo del semaforo',
+  paline_in_carreggiata: (c) => `palina ${c.fermata}`,
+  lampioni_in_carreggiata: () => 'lampione',
+  alberi_in_carreggiata: () => 'albero',
+  pensiline_in_carreggiata: () => 'pensilina',
+  fermate_con_ostacoli: fermata,
+  fermate_fuori_strada: fermata,
+  fermate_spostate: fermata,
+  fermate_sulle_strisce: fermata,
+  segni_sulla_sede: () => 'quadrato di 10 m',
+  asfalto_sopra_sede: () => 'quadrato di 10 m',
+  edifici_sui_binari_dei_depositi: (c) => `deposito ${c.deposito}, ${c.cosa}`,
+  pali_nella_sagoma_del_tram: (c) => c.tipo,
+  pali_del_tram_in_carreggiata: (c) => c.tipo,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',
@@ -79,19 +60,37 @@ test('rapporto di verifica sulla mappa', async ({ pagina, gioco }, info) => {
   const pali = await pagina.evaluate(misuraPali);
   Object.assign(r.casi, pali.casi);
   for (const [tipo, d] of Object.entries(pali.distribuzioni)) r.distribuzioni[`pali: ${tipo}`] = d;
-  const valori = Object.fromEntries(Object.keys(SOGLIE).map((k) => [k, r.casi[k].length]));
+  const valori = Object.fromEntries(Object.keys(CHIAVI).map((k) => [k, r.casi[k].length]));
+  // i casi di oggi contro l'elenco delle eccezioni (scripts/eccezioni.py: nuovi, spariti, gruppi senza il perché)
+  const fileCasi = info.outputPath('casi.json'), fileEsito = info.outputPath('eccezioni.json');
+  writeFileSync(fileCasi, JSON.stringify(Object.fromEntries(Object.entries(CHIAVI).map(([k, f]) => [k, r.casi[k].map((c) => `${f(c)} @ ${Math.round(c.x)},${Math.round(c.z)}`)]))));
+  const argomenti = ['scripts/eccezioni.py', 'mappa-gioco', fileCasi, '--toll', String(TOLL), '--json', fileEsito, '--comando', '`ECCEZIONI=aggiorna npx playwright test tests/mappa.spec.js`'];
+  if (process.env.ECCEZIONI === 'aggiorna') argomenti.push('--aggiorna');
+  let diversi = '';
+  try {
+    execFileSync('python3', argomenti, { encoding: 'utf8' });
+  } catch (e) {
+    // casi diversi dall'elenco: lo script esce con 1 e li nomina; l'esito c'è lo stesso, e lo controlla la prova
+    diversi = `${e.stdout || ''}${e.stderr || ''}`;
+  }
+  const eccezioni = JSON.parse(readFileSync(fileEsito, 'utf8'));
+  const uguale = (k) => !eccezioni[k].nuovi.length && !eccezioni[k].spariti.length && !eccezioni[k].senza_perche.length;
   const righe = [
     ...Object.entries(r.distribuzioni).map(([k, d]) => `${k}: ${Object.entries(d).map(([a, n]) => `${n} ${a}`).join(', ')}`),
     `${r.varianti} varianti di linea, ${r.fermate} fermate controllate`,
-    ...Object.keys(SOGLIE).map((k) => `${valori[k] > SOGLIE[k] ? '✗' : '✓'} ${NOMI[k]}: ${valori[k]} (soglia ${SOGLIE[k]})`),
+    ...Object.keys(CHIAVI).map((k) => `${uguale(k) ? '✓' : '✗'} ${NOMI[k]}: ${valori[k]}${uguale(k) ? '' : ` (${eccezioni[k].nuovi.length} nuovi, ${eccezioni[k].spariti.length} spariti dall'elenco)`}`),
+    ...(diversi ? [diversi] : []),
   ];
-  const elenco = Object.keys(SOGLIE).filter((k) => r.casi[k].length).map((k) => `${NOMI[k]}:\n${r.casi[k].slice(0, 30).map((c) => '  ' + Object.entries(c).map(([a, b]) => `${a}=${b}`).join(', ')).join('\n')}`);
-  const json = JSON.stringify({ valori, soglie: SOGLIE, ...r }, null, 1);
+  const json = JSON.stringify({ valori, eccezioni, ...r }, null, 1);
   writeFileSync(info.outputPath('rapporto-mappa.json'), json);
   await info.attach('rapporto-mappa.json', { body: json, contentType: 'application/json' });
   info.annotations.push({ type: 'rapporto', description: righe.join('\n') });
   console.log(['Rapporto di verifica della mappa (nel gioco)', ...righe.map((s) => '  ' + s)].join('\n'));
-  for (const k of Object.keys(SOGLIE)) expect.soft(valori[k], `${NOMI[k]}\n${elenco.join('\n')}`).toBeLessThanOrEqual(SOGLIE[k]);
+  for (const k of Object.keys(CHIAVI)) {
+    expect.soft(eccezioni[k].nuovi, `${NOMI[k]}: casi nuovi, fuori dall'elenco data/eccezioni/mappa-gioco.json\n${diversi}`).toEqual([]);
+    expect.soft(eccezioni[k].spariti, `${NOMI[k]}: casi spariti, da togliere dall'elenco data/eccezioni/mappa-gioco.json\n${diversi}`).toEqual([]);
+    expect.soft(eccezioni[k].senza_perche, `${NOMI[k]}: casi dell'elenco senza il perché`).toEqual([]);
+  }
   expect(gioco.errori()).toEqual([]);
 });
 
@@ -128,7 +127,8 @@ function misura() {
   // userData.segno) e asfalto sopra le corsie rosse, cordoli esclusi. Un caso per quadrato di 10 m. La sede è quella
   // del gioco con la sua quota (city.onSede): i segni a terra sotto un viadotto del tram non contano
   const quadrati = (mappa, x, z, voce) => {
-    const k = Math.floor(x / 10) + ',' + Math.floor(z / 10), c = mappa.get(k) || { x: Math.round(x), z: Math.round(z), via: via(x, z), n: 0 };
+    // il posto del caso è il centro del quadrato: non dipende da quale campione arriva per primo
+    const k = Math.floor(x / 10) + ',' + Math.floor(z / 10), c = mappa.get(k) || { x: Math.floor(x / 10) * 10 + 5, z: Math.floor(z / 10) * 10 + 5, via: via(x, z), n: 0 };
     c.n++;
     if (voce) c.cm = Math.max(c.cm || 0, voce);
     mappa.set(k, c);
@@ -249,7 +249,7 @@ function misura() {
         const voce = { linea: L.id, verso: L.variants[vi].headsign, fermata: st.idx, nome: st.name };
         const chiave = `${L.id}:${st.name}:${Math.round(st.cx)}:${Math.round(st.cz)}`; // stessa palina in più varianti: una volta
         const sp = Math.hypot(st.cx - st.gtfs.x, st.cz - st.gtfs.z);
-        if (sp > 40 && !visti.spostate.has(chiave)) { visti.spostate.add(chiave); casi.fermate_spostate.push({ ...voce, metri: Math.round(sp) }); }
+        if (sp > 40 && !visti.spostate.has(chiave)) { visti.spostate.add(chiave); casi.fermate_spostate.push({ ...voce, metri: Math.round(sp), x: Math.round(st.cx), z: Math.round(st.cz) }); }
         const q = posa(R, st), fx = Math.sin(q.h), fz = Math.cos(q.h);
         city.ensureTiles(q.x, q.z, 40);
         for (const lz of snodato ? CERCHI_SNODATO : CERCHI) {

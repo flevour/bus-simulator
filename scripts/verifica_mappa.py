@@ -19,10 +19,15 @@ Controlla quello che il JSON dice già, senza aprire il gioco (sezione 6.1 di do
 Pali dei semafori, lampioni, alberi, pensiline e paline al posto finale li mette il gioco al caricamento: li controlla
 la prova tests/mappa.spec.js nel browser.
 
-Esce con errore se un numero supera la sua soglia (SOGLIE, fissate sui valori del 9 novembre 2026). Se un numero
-scende, si abbassa la soglia nello stesso commit.
+Le soglie sono per caso, non per conteggio (#105, scripts/eccezioni.py): i casi noti stanno in
+data/eccezioni/verifica-mappa.json (edifici, fermate, marciapiede stretto per riquadro da 800 m) e in
+data/eccezioni/cavalcavia.json, in gruppi con il perché. Esce con errore se trova un caso fuori dall'elenco, anche a
+totale uguale, o se un caso dell'elenco è sparito (va tolto nello stesso commit). I binari del tram hanno soglie a zero
+e le loro zone di eccezione in scripts/binari_tram.py. Dopo una rigenerazione della mappa che corregge o sposta dei
+casi, --aggiorna riscrive i due elenchi: toglie gli spariti e mette i nuovi in un gruppo con il perché vuoto, da
+scrivere prima che il rapporto passi.
 
-  python3 scripts/verifica_mappa.py [src/data/padova-map.json] [--elenco] [--json rapporto.json]
+  python3 scripts/verifica_mappa.py [src/data/padova-map.json] [--elenco] [--json rapporto.json] [--aggiorna]
 
 Serve shapely (come per scripts/street_surfaces.py).
 """
@@ -40,6 +45,7 @@ sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import aree_mappa  # noqa: E402
 import binari_tram  # noqa: E402
 import cavalcavia  # noqa: E402
+from eccezioni import Elenco, chiave  # noqa: E402
 
 BUS_NEAR = 6.0  # m: oltre metà carreggiata, un edificio è "lungo il percorso" fin qui dall'asse
 BUS_HW = 1.3  # m: metà larghezza del bus (2,55 m) e un poco di margine
@@ -48,37 +54,8 @@ STOP_FAR = 40.0  # m: oltre, la fermata non sta sul percorso della sua variante
 WALK_MIN = 1.5  # m: un marciapiede più stretto non è un marciapiede
 H_ELEV = 0.05  # m: nodi in quota (cavalcavia): sotto possono esserci edifici
 
-# valori del 9 novembre 2026 (main dopo le corsie e la segnaletica orizzontale); l'area arrotondata ai 1000 m².
-# Dopo il piazzale della stazione (sensi unici nell'aggancio): fermate spostate da 121 a 33; edifici in carreggiata
-# da 147 a 170 e lungo i bus da 92 a 114 per la linea 2 (Diretto Piazze, prima scartata) nelle vie strette del centro
-# e la 12 che non va più contromano: sovrapposizioni di 0,2-0,9 m tra edifici Overture e carreggiate DBGT, come le
-# altre; fermate lontane da 12 a 13 (Madonna della Salute 85 sulla 22, a 41 m, nella zona fuori area)
-SOGLIE = {
-    # 9 novembre, corsia mappa sopra il piazzale della stazione (area ai bordi, linee tagliate, inversioni a U, corsie
-    # di servizio dei capolinea, rampe del Cavalcavia Borgomagno): edifici in carreggiata da 170 a 167 (lungo i bus da
-    # 114 a 111), fermate lontane da 13 a 2, agganciate nel punto sbagliato da 33 a 11; il marciapiede stretto cresce
-    # con l'area ai bordi (Via Madonna della Salute e altri cinque riquadri: 56.000 m² di marciapiede, 2.200 stretti);
-    # con la sede del tram tolta dai marciapiedi (tutte le linee) da 171.196 a 170.618.
-    # Corsia capolinea, corridoio del SIR3 fino a Voltabarozzo (2,3 km² in più): edifici in carreggiata da 167 a 174 e
-    # lungo i bus da 111 a 117, tutti nell'area nuova (0,2-2 m, edifici Overture contro carreggiate DBGT, nessuno nella
-    # corsia); marciapiede stretto da 170.618 a 175.993 (+5.400 m² su 94.000 nuovi); con il pezzo di Via Bembo tra due
-    # vie dell'area (gtfs_links) la 3 non fa più l'andata e ritorno e Bembo 95 torna al suo posto: agganciate male da 11
-    # a 7.
-    # 11 novembre, corsia capolinea, SIR2 da Rubano a Vigonza e la 25 intera (corridoi di 10,8 km²): edifici in
-    # carreggiata da 174 a 189 e lungo i bus da 117 a 129, tutti nei corridoi nuovi (fino a 1,8 m, lungo i bus fino a
-    # 0,7 m; nessuno nella corsia); marciapiede stretto da 175.993 a 189.949: a Rubano e Vigonza non c'è il DBGT e
-    # valgono le larghezze per tipo di strada
-    # 11 novembre, corsia capolinea, gruppo 2 (3, 10, 11, 22, 24 e 88 intere, 9,6 km² di corridoi nuovi): edifici in
-    # carreggiata da 189 a 200 e lungo i bus da 129 a 140, tutti nei corridoi nuovi (a meno di 120 m dalle celle nuove,
-    # fino a 1,5 m; nessuno nella corsia); marciapiede stretto da 189.651 a 199.867 (+10.200 m² su 737.000 nuovi). Dove
-    # la linea esce dalla mappa il tratto finisce con una fermata a meno di 40 m dal percorso: fermate lontane da 2 a 0
-    'edifici_in_carreggiata': 200,
-    'edifici_in_carreggiata_bus': 140,
-    'edifici_sui_percorsi': 0,
-    'fermate_lontane': 0,
-    'fermate_spostate': 7,
-    'marciapiedi_stretti_m2': 200000,
-}
+TOLL = 3.0  # m: un caso dell'elenco delle eccezioni resta lo stesso se si sposta fino a qui
+
 # binari del tram (scripts/binari_tram.py) sui dati: le linee (#69, scripts/binari_regola.py) e i depositi (#70,
 # scripts/tram_depositi.py) seguono la regola di docs/binari-tram.md; i casi che restano sono nelle eccezioni di
 # binari_tram.py, ognuna col suo perché, e non contano
@@ -89,15 +66,6 @@ SOGLIE_BINARI = {
     'Guizza': {'spigoli': 0, 'raggi': 0, 'interassi': 0, 'scarti_osm': 0},
     'Voltabarozzo': {'spigoli': 0, 'raggi': 0, 'interassi': 0, 'scarti_osm': 0},
 }
-# profilo dei cavalcavia (scripts/cavalcavia.py) sui dati: valori del 12 novembre 2026, prima che i cavalcavia seguano
-# la regola di docs/cavalcavia.md (#84). Impalcati a 7 m sopra il terreno spianato a gradini, rampe che scendono fino a
-# 130 m sopra il terreno e lo spianamento che finisce in un fosso ai piedi (elenco dei peggiori in docs/cavalcavia.md).
-# Binari dal 12 novembre (#69): rifatti con la regola passano qualche decimetro più in là sulle rampe del tram, un
-# raccordo in più sul Cavalcavia San Marco, un'onda in meno a Chiesanuova, due pendenze in meno in tutto (le rampe: #74)
-SOGLIE_CAVALCAVIA = {
-    'strade': {'onde': 113, 'pendenze': 228, 'raccordi': 484, 'scarti_dtm': 221},
-    'binari': {'onde': 19, 'pendenze': 32, 'raccordi': 19, 'fuori_quota': 0},
-}
 NOMI = {
     'edifici_in_carreggiata': 'edifici che invadono la carreggiata',
     'edifici_in_carreggiata_bus': 'edifici che invadono la carreggiata lungo i percorsi dei bus',
@@ -105,6 +73,15 @@ NOMI = {
     'fermate_lontane': f'fermate a più di {STOP_FAR:.0f} m dal percorso',
     'fermate_spostate': 'fermate agganciate nel punto sbagliato del percorso',
     'marciapiedi_stretti_m2': f'marciapiede più stretto di {WALK_MIN:.1f} m (m²)'.replace('.', ','),
+}
+# la chiave di ogni caso nell'elenco delle eccezioni (data/eccezioni/verifica-mappa.json): parte fissa e posto. Gli
+# edifici non hanno un nome stabile (l'indice cambia a ogni rigenerazione): li distingue il posto
+fermata = lambda c: f"linea {c['linea']} verso {c['verso']}, {c['nome']}"
+CHIAVI = {
+    'edifici_in_carreggiata': lambda c: 'edificio lungo i percorsi dei bus' if c['bus'] else 'edificio',
+    'edifici_sui_percorsi': lambda c: 'edificio nella corsia',
+    'fermate_lontane': fermata,
+    'fermate_spostate': fermata,
 }
 
 
@@ -279,11 +256,18 @@ def paline(mappa):
 
 def marciapiedi_stretti(mappa):
     """Area dei marciapiedi più stretti di WALK_MIN: quello che sparisce con un'apertura morfologica di metà larghezza.
-    Si uniscono prima i pezzi dei riquadri, che altrimenti sembrerebbero strisce tagliate al bordo."""
+    Si uniscono prima i pezzi dei riquadri, che altrimenti sembrerebbero strisce tagliate al bordo. Restituisce l'area
+    stretta, quella di tutti i marciapiedi e l'area stretta per riquadro da 800 m (la chiave delle aree della mappa),
+    ogni pezzo nel riquadro del suo baricentro."""
     tutto = unary_union(mappa.marciapiede)
     aperto = tutto.buffer(-WALK_MIN / 2, join_style='mitre').buffer(WALK_MIN / 2, join_style='mitre')
     stretto = tutto.difference(aperto)
-    return round(stretto.area), round(tutto.area)
+    per = defaultdict(float)
+    for g in getattr(stretto, 'geoms', [stretto]):
+        if not g.is_empty:
+            c = g.centroid
+            per[f'riquadro {aree_mappa.key(c.x, c.y)}'] += g.area
+    return round(stretto.area), round(tutto.area), {k: round(v) for k, v in per.items()}
 
 
 def main():
@@ -291,43 +275,59 @@ def main():
     ap.add_argument('mappa', nargs='?', default='src/data/padova-map.json')
     ap.add_argument('--elenco', action='store_true', help='elenca i casi trovati (con le coordinate del gioco)')
     ap.add_argument('--json', help='scrive il rapporto completo in questo file')
+    ap.add_argument('--aggiorna', action='store_true', help="riscrive gli elenchi delle eccezioni dai casi di oggi (i nuovi senza perché)")
     args = ap.parse_args()
     mappa = Mappa(aree_mappa.load(args.mappa))  # la rete con le sue aree
 
     casi = {'edifici_in_carreggiata': edifici_in_carreggiata(mappa)}
     casi['edifici_in_carreggiata_bus'] = lungo_i_percorsi(mappa, casi['edifici_in_carreggiata'])
+    lungo = {c['edificio'] for c in casi['edifici_in_carreggiata_bus']}
+    for c in casi['edifici_in_carreggiata']:
+        c['bus'] = c['edificio'] in lungo
     casi['edifici_sui_percorsi'] = percorsi(mappa)
     casi['fermate_lontane'], casi['fermate_spostate'] = fermate(mappa)
     dove = paline(mappa)
-    stretto, totale = marciapiedi_stretti(mappa)
+    stretto, totale, stretto_per_riquadro = marciapiedi_stretti(mappa)
     valori = {k: len(v) for k, v in casi.items()}
     valori['marciapiedi_stretti_m2'] = stretto
+
+    # caso per caso contro l'elenco delle eccezioni. Gli edifici lungo i percorsi dei bus sono un sottoinsieme di quelli
+    # in carreggiata: stanno nello stesso controllo, con la loro parte fissa della chiave
+    E = Elenco('verifica-mappa', 'python3 scripts/verifica_mappa.py --aggiorna')
+    for k, f in CHIAVI.items():
+        E.confronta(k, [chiave(f(c), c['x'], c['z']) for c in casi[k]], TOLL, args.aggiorna)
+    E.confronta_misura('marciapiedi_stretti_m2', stretto_per_riquadro, args.aggiorna)
+    if args.aggiorna:
+        E.scrivi()
 
     print(f'Rapporto di verifica della mappa ({args.mappa})')
     print(f'  {len(mappa.edifici)} edifici, {len(mappa.asfalto)} pezzi di carreggiata, {len(mappa.marciapiede)} di marciapiede, '
           f'{sum(len(L["variants"]) for L in mappa.M["lines"])} varianti di linea')
     print('  fermate delle linee bus nei dati: ' + ', '.join(f'{n} {k}' for k, n in sorted(dove.items(), key=lambda kv: -kv[1])))
     print(f'  marciapiede: {totale} m² in tutto')
-    sopra = []
     for k, nome in NOMI.items():
-        segno = '✗' if valori[k] > SOGLIE[k] else '✓'
-        print(f'  {segno} {nome}: {valori[k]} (soglia {SOGLIE[k]})')
-        if valori[k] > SOGLIE[k]:
-            sopra.append(k)
+        if k in E.esiti:
+            segno, esito = E.segno(k)
+            print(f'  {segno} {nome}: {valori[k]} ({esito})')
+        else:
+            print(f'    {nome}: {valori[k]}')
         if args.elenco and k in casi and casi[k]:
             for c in sorted(casi[k], key=lambda c: -c.get('metri', 0))[:40]:
                 print('      ' + ', '.join(f'{a}={b}' for a, b in c.items()))
+    errori = E.errori()
     valori_b, casi_b, sopra_b = binari_tram.rapporto(binari_tram.rete_dati(mappa.M), SOGLIE_BINARI, args.elenco)
-    sopra += [f'binari del tram: {k}' for k in sopra_b]
-    valori_c, casi_c, sopra_c = cavalcavia.rapporto(cavalcavia.rete_dati(mappa.M), SOGLIE_CAVALCAVIA, args.elenco)
-    sopra += [f'cavalcavia: {k}' for k in sopra_c]
+    valori_c, casi_c, errori_c = cavalcavia.rapporto(cavalcavia.rete_dati(mappa.M), args.elenco, aggiorna=args.aggiorna)
     if args.json:
-        json.dump({'valori': valori, 'soglie': SOGLIE, 'fermate': dove, 'casi': casi,
+        json.dump({'valori': valori, 'eccezioni': E.esiti, 'fermate': dove, 'casi': casi, 'marciapiedi_stretti_per_riquadro': stretto_per_riquadro,
                    'binari': {'valori': valori_b, 'soglie': SOGLIE_BINARI, 'casi': casi_b},
-                   'cavalcavia': {'valori': valori_c, 'soglie': SOGLIE_CAVALCAVIA, 'casi': casi_c}},
+                   'cavalcavia': {'valori': valori_c, 'casi': casi_c}},
                   open(args.json, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-    if sopra:
-        print(f'Sopra la soglia: {", ".join(NOMI.get(k, k) for k in sopra)}. Con --elenco i casi, con le coordinate del gioco.')
+    if sopra_b:
+        errori.append('Binari del tram sopra la soglia: ' + ', '.join(sopra_b))
+    errori += errori_c
+    if errori:
+        print('\n'.join(errori))
+        print('Con --elenco i casi di oggi, con le coordinate del gioco.')
         sys.exit(1)
 
 

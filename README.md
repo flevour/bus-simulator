@@ -37,9 +37,10 @@ di `tests/` in Chromium headless (WebGL in software):
 `python3 scripts/verifica_mappa.py` (serve `shapely`) controlla il JSON della mappa: edifici in carreggiata e nella
 corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, marciapiedi più stretti di 1,5 m, i
 binari del tram scritti dagli script secondo la stessa regola e il profilo dei cavalcavia nei dati.
-Script e rapporto nel gioco escono con errore quando un numero supera la sua soglia, fissata sui valori del 9
-novembre 2026 (in testa ai due file). Il workflow `.github/workflows/verifiche.yml` lancia build, `npm test` e lo
-script a ogni push su `main`, una serie alla volta.
+Script e rapporto nel gioco confrontano i casi uno per uno con gli elenchi dei casi noti in `data/eccezioni/`, ognuno
+con il suo perché (`scripts/eccezioni.py`): escono con errore se trovano un caso fuori dall'elenco, anche a totale
+uguale, o se un caso dell'elenco è sparito e va tolto. Il workflow `.github/workflows/verifiche.yml` lancia build,
+`npm test` e lo script a ogni push su `main`, una serie alla volta.
 
 ### Pubblicazione su GitHub Pages
 

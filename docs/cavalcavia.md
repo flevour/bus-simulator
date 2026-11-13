@@ -170,9 +170,9 @@ innestano; ha il nome della via più lunga dei suoi ponti, e le coordinate quand
 * **i dati**: strade e quote di `src/data/padova-map.json`, terreno "via" ricostruito dalla griglia della mappa come in
   `src/world/terrain.js` (chiusura morfologica e ponti sui fiumi, solo nelle celle che servono), binari di
   `padova-map.json` (SIR1) e `data/tram-linee-nuove.json` (SIR2 e SIR3) con la quota della strada in quota che
-  affiancano. Li misura `scripts/verifica_mappa.py`, con le soglie in `SOGLIE_CAVALCAVIA`;
+  affiancano. Li misura `scripts/verifica_mappa.py` (o `scripts/cavalcavia.py` da solo, senza shapely);
 * **il gioco**: `tests/cavalcavia.spec.js` scrive il terreno "via" del gioco (`Terrain.d`) e i binari con le quote di
-  `TramTrack.h` e chiama lo script con `--gioco`; le soglie sono nella prova. Le strade vengono dalla mappa in tutti e
+  `TramTrack.h` e chiama lo script con `--gioco`. Le strade vengono dalla mappa in tutti e
   due i casi: i loro numeri coincidono, e il 12 novembre le 11.087 celle del terreno usate dai profili erano uguali a
   quelle del gioco.
 
@@ -207,8 +207,21 @@ tolleranza. Lo stesso posto trovato da più itinerari conta una volta; i casi su
 cavalcavia sono di quello. I cavalcavia peggiori sono quelli con la somma dei pesi più alta. Il rapporto JSON
 (`--json`) ha i casi e i numeri di ogni cavalcavia (`per_cavalcavia`).
 
-Le soglie sono sui totali di strade e binari, valori del 12 novembre: se un numero scende si abbassa la soglia nello
-stesso commit, come per il resto del rapporto della mappa. Non si contano ancora: i franchi sopra strade e ferrovia,
+Le soglie sono per caso, non per conteggio (#105): i casi noti stanno in `data/eccezioni/cavalcavia.json`, una riga per
+caso con la chiave `cavalcavia | tipo | via o binario @ x,z`, in tre controlli (`strade`, uguali nei dati e nel gioco,
+`binari dati`, `binari gioco`) e in gruppi con il perché. Lo script esce con errore se trova un caso fuori dall'elenco,
+anche a totale uguale, o se un caso dell'elenco è sparito; un caso resta lo stesso se si sposta fino a 4 m. Chi
+corregge un cavalcavia riscrive l'elenco nello stesso commit:
+
+```bash
+python3 scripts/cavalcavia.py --aggiorna                                  # strade e binari nei dati
+ECCEZIONI=aggiorna npx playwright test tests/cavalcavia.spec.js           # strade e binari nel gioco
+git diff --stat data/eccezioni/cavalcavia.json                            # le righe tolte sono i casi corretti
+```
+
+I casi spariti escono dall'elenco; quelli nuovi (un caso che si è spostato di più di 4 m, o un difetto nuovo) finiscono
+in fondo al controllo in un gruppo con il perché vuoto, e il controllo non passa finché il perché non c'è: si corregge
+il caso, oppure lo si sposta a mano nel gruppo giusto o si scrive il perché del gruppo nuovo. Non si contano ancora: i franchi sopra strade e ferrovia,
 le pendenze del tram in fermata (4%), lo scarto dagli assi del DBGT (non sono nei dati), la differenza tra salita e
 discesa sulle rampe di svincolo.
 

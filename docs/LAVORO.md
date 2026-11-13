@@ -29,10 +29,10 @@ divise per area.
    interrotta libera il posto da sola. La prima volta (o quando il rebase porta una versione nuova di Playwright):
    `npx playwright install --only-shell chromium`. Chi rigenera la mappa lancia anche
    `python3 scripts/verifica_mappa.py --elenco` (venv con `shapely`). Il rapporto della mappa (`tests/mappa.spec.js` e
-   lo script) ha delle soglie: se un numero scende si abbassa la soglia nello stesso commit, se sale per una buona
-   ragione si alza scrivendo il perché nel commit. Lo stesso controllo gira in CI (workflow Verifiche) a ogni push su
-   `main`, e il gioco va su GitHub Pages solo se finisce verde (nota Verifiche, in fondo): dopo il push si guarda
-   `gh run list --workflow verifiche.yml --limit 3` e, se la serie è rossa, la si ripara subito.
+   lo script) confronta i casi uno per uno con gli elenchi di `data/eccezioni/` (regola 12). Lo stesso controllo gira
+   in CI (workflow Verifiche) a ogni push su `main`, e il gioco va su GitHub Pages solo se finisce verde (nota
+   Verifiche, in fondo): dopo il push si guarda `gh run list --workflow verifiche.yml --limit 3` e, se la serie è
+   rossa, la si ripara subito.
 4. Conflitti nel rebase:
    - `src/data/novita.js` e `IDEE.md`: si tengono le righe di tutti; in `novita.js` la riga nuova va in cima con
      `n` successivo all'ultimo di `main`;
@@ -64,6 +64,14 @@ divise per area.
     Anche gli script propri che aprono il gioco prendono uno dei due posti della macchina, come le serie di prove:
     `const libera = await prendiPosto()` da `tests/posto.js` del worktree (import per percorso assoluto), poi
     `libera()` alla fine; al più tre browser per posto, niente corse in parallelo oltre quelle.
+12. **Soglie per caso, non per conteggio.** Un conteggio lascia passare un difetto che si sposta da un luogo a un altro,
+    e si può alzare. Ogni controllo dà ai suoi casi una chiave stabile (struttura, linea e fermata, posto) e i casi
+    noti stanno in `data/eccezioni/`, in gruppi con il perché (`scripts/eccezioni.py`, nota dell'area Verifiche). Un
+    caso fuori dall'elenco fa fallire il controllo anche a totale uguale; un caso sparito va tolto dall'elenco nello
+    stesso commit; un caso nuovo che deve restare entra in un gruppo con il perché, e lo si scrive anche nel commit.
+13. **Niente nomi di luoghi nel codice degli algoritmi.** Una correzione che vale per un solo luogo è una riga in un
+    file di dati in `data/` (zona, valore, perché) che l'algoritmo legge, non un ramo nel codice con una via o delle
+    coordinate: così chi cambia l'algoritmo vede tutte le correzioni insieme e può toglierle quando non servono più.
 
 ## File condivisi
 
@@ -79,7 +87,8 @@ divise per area.
 | `src/main.js` | tutte le aree, ognuna nelle sue funzioni | |
 | `src/tram/tram.js` | `area:tram` | scambi, binari, depositi, cambio cabina e turni: le funzioni sono nelle note del tram qui sotto |
 | `scripts/binari_tram.py`, `scripts/binari_regola.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): `binari_regola.py` rifà le linee, `tram_stesura.py` i depositi; chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
-| `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `SOGLIE_CAVALCAVIA` in `scripts/verifica_mappa.py` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari abbassa le soglie; usa `binari_tram.Griglia` e `raggruppa` |
+| `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
+| `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
 ## Note per area
 
@@ -110,6 +119,28 @@ Chiusa il 9 novembre 2026. Cosa c'è (dettagli nel README, sezione "Verifiche"):
   `pages.yml` vale dalla serie di verifiche successiva al push che la porta.
 - Se si riapre: pilota più bravo nelle svolte a T e in quelle strette (sbaglia sulle linee 9 e 21) per allargare il
   giro guidato a tutte le linee; casi di prova dalle segnalazioni di chi gioca.
+
+Soglie per caso (#105, 13 novembre). Da sapere:
+
+- `scripts/eccezioni.py` (solo libreria standard) confronta i casi di un controllo con il suo elenco in
+  `data/eccezioni/`: `Elenco(nome).confronta(controllo, chiavi, toll)` dà i casi nuovi, quelli spariti e quelli senza
+  il perché, `confronta_misura` fa lo stesso per i numeri per luogo, `errori()` le righe da stampare. La chiave è
+  `parte fissa @ x,z`: un caso resta lo stesso se ha la stessa parte fissa e si sposta fino a `toll` metri (4 i
+  cavalcavia, 3 lo script della mappa, 2 la prova nel gioco). Il meccanismo ha la sua prova, `tests/eccezioni.spec.js`,
+  che non apre il gioco;
+- gli elenchi: `verifica-mappa.json` (edifici in carreggiata, con "lungo i percorsi dei bus" nella parte fissa; fermate
+  lontane e spostate; marciapiede stretto in m² per riquadro da 800 m, con 20 m² di tolleranza), `cavalcavia.json`
+  (`strade`, uguali nei dati e nel gioco; `binari dati`; `binari gioco`), `mappa-gioco.json` (i 14 controlli di
+  `tests/mappa.spec.js`). I controlli a zero hanno l'elenco vuoto;
+- per riscriverli: `python3 scripts/verifica_mappa.py --aggiorna` (i suoi casi e i cavalcavia nei dati),
+  `python3 scripts/cavalcavia.py --aggiorna` (solo i cavalcavia nei dati, senza shapely),
+  `ECCEZIONI=aggiorna npx playwright test tests/cavalcavia.spec.js tests/mappa.spec.js` (il gioco). Toglie gli spariti e
+  mette i nuovi in un gruppo con il perché vuoto: finché non lo si scrive, o non si spostano i casi nel gruppo giusto,
+  il controllo non passa;
+- i binari del tram (`SOGLIE_BINARI`, `tests/binari-tram.spec.js`) e `tests/linea-aerea.spec.js` hanno soglie a zero,
+  con le zone di eccezione in `binari_tram.py`; resta a conteggio la pendenza dei binari nel gioco (#120);
+- i casi di partenza sono quelli del 13 novembre, uguali sul Mac e in CI (shapely 2.2.0, GEOS 3.14.1). Un'altra versione
+  di shapely può spostare di qualche metro quadro il marciapiede stretto di un riquadro: la tolleranza serve a questo.
 
 ### Mappa (corsia `mappa`)
 

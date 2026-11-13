@@ -1,0 +1,92 @@
+{
+ "cosa": "Casi noti del rapporto di verifica della mappa nel gioco (tests/mappa.spec.js, pali in tests/pali.js). Chiave: parte fissa @ x,z del gioco. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. I controlli senza casi sono a zero. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/mappa.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
+ "controlli": {
+  "semafori_in_carreggiata": [
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): pali dei semafori dentro l'asfalto di 0,1 m in Via Altinate e di 1,4 m in (397, -459). Il posto dei pali lo rifà #109 (semafori, pali e paline posati nella build dallo spazio libero).",
+    "casi": [
+     "palo del semaforo @ 397,-459",
+     "palo del semaforo @ 64,-165"
+    ]
+   }
+  ],
+  "paline_in_carreggiata": [
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): paline sotto il nastro di Corso Primo Maggio, un arco in quota che city.roadInfo conta come carreggiata: a terra sono fuori dall'asfalto. Piovese fr. Park (4, 14, 16) nel golfo sotto il cavalcavia della tangenziale, Park Bembo e Capolinea Park Bembo della 3.",
+    "casi": [
+     "palina Capolinea Park Bembo @ 998,4396",
+     "palina Park Bembo @ 965,4413",
+     "palina Piovese fr. Park @ 2491,3592"
+    ]
+   }
+  ],
+  "lampioni_in_carreggiata": [],
+  "alberi_in_carreggiata": [],
+  "pensiline_in_carreggiata": [],
+  "fermate_con_ostacoli": [],
+  "fermate_fuori_strada": [
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): il bus fermo ha le ruote oltre il cordolo a Provvidenza 14, nel golfo accanto alla sede del tram a Chiesanuova (4,9 m), e al Capolinea Ponte Brenta, nel piazzale (1,7 m). Le segue #40.",
+    "casi": [
+     "linea 10, Capolinea Ponte Brenta @ 5595,-2039",
+     "linea 10, Provvidenza 14 @ -4173,-1229"
+    ]
+   },
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): Roma 35 e Roma 88 della 19, al bordo nord della mappa, con le ruote a 8 m dall'asfalto. Causa non ancora cercata: #119.",
+    "casi": [
+     "linea 19, Roma 35 @ 892,-5033",
+     "linea 19, Roma 88 @ 919,-5022"
+    ]
+   }
+  ],
+  "fermate_spostate": [
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): fermate agganciate al percorso a più di 40 m dalla fermata vera, ai bordi dell'area o su linee tagliate. Le segue #30.",
+    "casi": [
+     "linea 15B, Garibaldi giardini @ 38,-540",
+     "linea 5, Falloppio 69 @ 743,286",
+     "linea 88, Capolinea Albignasego (Momumento) @ -771,6820"
+    ]
+   }
+  ],
+  "fermate_sulle_strisce": [
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): partenza della 10 snodata dal Capolinea Ponte Brenta: nel piazzale il rimorchio girato dal cordolo tocca le strisce di Via San Marco (#73).",
+    "casi": [
+     "linea 10, Capolinea Ponte Brenta @ 5630,-2037"
+    ]
+   },
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): fermate senza palina allineata, dove il bus fermo sta lungo il percorso e copre le strisce: Sorio fr. 96 al bordo della mappa (2, 6 e 12), Rotonda Pontevigodarzere F.T., Venezia Cavalcavia e Capolinea Ponte Brenta della 10 all'arrivo, Capolinea Mandria via Carnia. Le segue #87.",
+    "casi": [
+     "linea 10, Capolinea Ponte Brenta @ 5585,-2043",
+     "linea 10, Venezia Cavalcavia @ 2563,-473",
+     "linea 12, Sorio fr. 96 (Aereoporto) @ -1981,774",
+     "linea 2, Sorio fr. 96 (Aereoporto) @ -1981,774",
+     "linea 22, Capolinea Mandria via Carnia @ -4133,3492",
+     "linea 4, Rotonda Pontevigodarzere F.T. @ 1417,-4608",
+     "linea 6, Sorio fr. 96 (Aereoporto) @ -1981,774"
+    ]
+   }
+  ],
+  "segni_sulla_sede": [],
+  "asfalto_sopra_sede": [],
+  "edifici_sui_binari_dei_depositi": [],
+  "pali_nella_sagoma_del_tram": [],
+  "pali_del_tram_in_carreggiata": [
+   {
+    "perche": "Elenco di partenza del 13 novembre 2026 (#105): pali del tram dove attorno c'è solo asfalto e nessun tirante della linea aerea vicino a cui appendere la lanterna (#97): nel piazzale della stazione tre lanterne e il segnale del bivio in (301, -1002), all'incrocio tra la stazione e Via Tommaseo due lanterne del SIR2, in Via San Marco una lanterna accanto alla banchina della fermata (4722, -1600).",
+    "casi": [
+     "lanterna del tram @ 160,-1047",
+     "lanterna del tram @ 166,-1058",
+     "lanterna del tram @ 172,-1059",
+     "lanterna del tram @ 363,-963",
+     "lanterna del tram @ 367,-953",
+     "lanterna del tram @ 4722,-1600",
+     "segnale dello scambio @ 301,-1002"
+    ]
+   }
+  ]
+ }
+}
