@@ -388,6 +388,8 @@ export class BusSim {
   setService(lines, day, mine = null) {
     this.clear();
     this.crowd.clear();
+    // la stessa sequenza a ogni corsa (fermate servite, passeggeri, soste): prima continuava da quella della corsa prima
+    this.rnd = mulberry32(7);
     this.day = day;
     this.runs = busRuns(lines, day).filter((r) => !mine || r.v !== mine.v || Math.abs(r.t - mine.t) > 120);
     this.lastClock = null;

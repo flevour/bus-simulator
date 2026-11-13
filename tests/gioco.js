@@ -34,8 +34,11 @@ export { expect };
 // poi avvia la corsa. La corsa è quella che il menu propone (la più vicina alle 8:15 nei giorni feriali) o, con
 // `partenza` ('08:36'), quella che parte a quell'ora; senza uscita dal deposito: si parte dal capolinea.
 // Con la mappa divisa in aree (src/data/aree.js) aspetta che quelle attorno al bus siano arrivate e costruite.
-export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 'service', partenza = null }) {
-  const corsa = await page.evaluate(({ linea, tram, verso, modo, partenza }) => {
+// Il meteo è il sereno (`meteo`: 'clear', 'rain', 'fog', 'variable'): quello del menu, "Variabile", estrae con
+// Math.random quando piove o scende la nebbia, e con l'asfalto bagnato la stessa corsa va in un altro modo a ogni lancio.
+// Il resto dello stato di partenza lo fissa startMission: semafori, segnali del tram, sequenze casuali di auto e bus.
+export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 'service', partenza = null, meteo = 'clear' }) {
+  const corsa = await page.evaluate(({ linea, tram, verso, modo, partenza, meteo }) => {
     const g = window.__game, $ = (q) => document.querySelector(q);
     // il menu propone la corsa più vicina a quella scelta prima: senza scelta, quella delle 8:15 (giorno feriale)
     g.settings.departure = 0;
@@ -53,11 +56,12 @@ export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 
     }
     $(`#mode button[data-m="${modo}"]`).click();
     g.settings.fromDepot = false;
+    g.settings.weather = meteo;
     if (g.settings.line.id !== linea) throw new Error(`il menu ha scelto la linea ${g.settings.line.id} invece di ${linea}`);
     g.startMission();
     const m = g.mission;
     return { linea, fermate: m.stops.length, prima: m.stops[0].name, ultima: m.stops[m.stops.length - 1].name, partenza: g.settings.departure };
-  }, { linea, tram, verso, modo, partenza });
+  }, { linea, tram, verso, modo, partenza, meteo });
   // a intervalli e non a ogni fotogramma: le prove spengono il ciclo del gioco (requestAnimationFrame)
   await page.waitForFunction(() => { const g = window.__game; g.city.ensureTiles(g.bus.x, g.bus.z, 650); return g.city.areasReady(g.bus.x, g.bus.z, 650); }, null, { polling: 100, timeout: 120_000 });
   return corsa;

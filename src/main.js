@@ -1323,7 +1323,9 @@ function startMission(resume = null) {
   buses.setService(service ? LINES : [], settings.variant, !bus.isTram && service ? { v: V, t: settings.departure } : null);
   buses.schedule(mission.clock, bus);
   buses.updateParts();
-  lights.time = mission.clock;
+  // semafori e segnali del tram ripartono dallo stesso stato a ogni corsa
+  lights.reset(mission.clock);
+  tramSignals.reset();
   const hour = (settings.departure / 3600) % 24;
   const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
   const count = service ? Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1)) : 0;

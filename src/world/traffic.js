@@ -118,6 +118,7 @@ export class TrafficLights {
     }
     for (const s of this.signals) for (const ap of s.appr) this.placeApproach(s, ap);
     this.greenWave();
+    for (const s of this.signals) s.offset0 = s.offset;
     this.buildMeshes(scene);
     this.time = 0;
     this._c = new THREE.Color();
@@ -428,6 +429,20 @@ export class TrafficLights {
     sig.tramAge = dt;
     sig.tramOpen = true;
     sig.postT = 0;
+  }
+  // inizio di una corsa: l'ora, e ogni semaforo col ciclo che aveva alla costruzione, senza fase tram in corso né verde
+  // dovuto. tramCall sposta il ciclo a ogni passaggio di un tram: senza questo i semafori di una corsa dipendono dalle
+  // corse fatte prima sulla stessa pagina
+  reset(time) {
+    this.time = time;
+    for (const s of this.signals) {
+      s.offset = s.offset0;
+      s.gAge = [0, 0];
+      s.tramT = s.tramAge = s.postT = 0;
+      s.tramOpen = false;
+      s.owed = null;
+      s.vTrams = s._vTrams = null;
+    }
   }
   stateOf(sig, phase) {
     if (sig.tramT > 0) {
@@ -1919,6 +1934,11 @@ export class TramSignals {
   }
   // occ: tram presenti [{ front (s lungo il binario), dir, track (la sede), len, v, dwell, player }]; cars: auto vicine per
   // sapere se l'incrocio è sgombro; player: il bus di chi gioca (per la precedenza al tram)
+  // inizio di una corsa: nessuna chiamata né via libera rimasti dalla corsa prima
+  reset() {
+    for (const x of this.list || []) { x.req = 0; x.call = false; x.state = 'H'; x.after = 0; x.prev.clear(); }
+    for (const l of this.lanterns || []) { l.who = []; l.state = 'H'; l.prev.clear(); }
+  }
   update(dt, occ, traffic, player) {
     this.violations.length = 0;
     this.giveWay.length = 0;
