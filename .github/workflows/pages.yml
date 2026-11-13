@@ -1,10 +1,15 @@
 # Compila il gioco con Vite e lo pubblica su GitHub Pages.
 # Una tantum, nel repository: Settings → Pages → Build and deployment → Source: "GitHub Actions".
 # Pubblica solo da main: l'ambiente github-pages accetta deploy soltanto da quel ramo.
+# Parte quando il workflow Verifiche (verifiche.yml) finisce su main e pubblica il commit che ha verificato, solo se
+# è finito verde: un push con una prova rossa lascia il sito com'era. A mano (Run workflow) pubblica la testa di main
+# senza aspettare le verifiche: serve solo per un'emergenza.
 name: Pubblica su GitHub Pages
 
 on:
-  push:
+  workflow_run:
+    workflows: [Verifiche]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -20,9 +25,14 @@ concurrency:
 
 jobs:
   build:
+    # verifiche rosse o annullate: l'esecuzione resta nell'elenco come saltata e il sito non cambia
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      # il commit verificato, non la testa di main, che intanto può essere andata avanti
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22

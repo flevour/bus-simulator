@@ -9,8 +9,10 @@ Istruzioni di progetto per Claude e per chi contribuisce.
 * Ogni ticket (issue di GitHub) ha il suo worktree herdr, su un ramo locale `ticket/<n>-<nome>` che si ribasa su
   `origin/main` e si pubblica con `git push origin HEAD:main`; a ticket chiuso il worktree si toglie. Regole, porte e
   file condivisi in [`docs/LAVORO.md`](docs/LAVORO.md): leggilo prima di lavorare in un worktree.
-* Ogni push su `main` pubblica il gioco su GitHub Pages (`.github/workflows/pages.yml`):
-  https://flevour.github.io/bus-simulator/. Prima di pushare, `npm run build` deve passare.
+* Il gioco va su GitHub Pages (https://flevour.github.io/bus-simulator/) solo dopo le verifiche: ogni push su `main`
+  fa partire `.github/workflows/verifiche.yml` e, se finisce verde, `.github/workflows/pages.yml` pubblica quel
+  commit. Un push con una prova rossa lascia il sito com'era, quindi prima di pushare `npm run build` e `npm test`
+  devono passare. Tempi e casi particolari nella nota Verifiche di [`docs/LAVORO.md`](docs/LAVORO.md).
 * Il vecchio ramo `claude/padova-bus-simulator` è stato unito in `main` e non si usa più.
 
 ## Lingua

@@ -39,12 +39,14 @@ corsia dei bus, fermate lontane dal percorso o agganciate nel punto sbagliato, m
 binari del tram scritti dagli script secondo la stessa regola e il profilo dei cavalcavia nei dati.
 Script e rapporto nel gioco escono con errore quando un numero supera la sua soglia, fissata sui valori del 9
 novembre 2026 (in testa ai due file). Il workflow `.github/workflows/verifiche.yml` lancia build, `npm test` e lo
-script a ogni push su `main`.
+script a ogni push su `main`, una serie alla volta.
 
 ### Pubblicazione su GitHub Pages
 
 Il workflow `.github/workflows/pages.yml` compila il gioco (`npm run build`) e pubblica `dist/` su GitHub Pages
-a ogni push su `main` (o a mano da *Actions → Pubblica su GitHub Pages → Run workflow*).
+quando le verifiche di un push su `main` finiscono verdi: pubblica il commit verificato, e con una prova rossa il sito
+resta com'era. A mano (*Actions → Pubblica su GitHub Pages → Run workflow*) pubblica la testa di `main` senza aspettare
+le verifiche.
 Va attivato una sola volta: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 I percorsi del build sono relativi (`base: './'`), quindi il gioco funziona anche sotto `/bus-simulator/`.
 
@@ -400,7 +402,7 @@ future potranno averne 4.
 
 ## Sviluppo
 
-* Si lavora su `main` con push continuo: ogni push pubblica su GitHub Pages. Le regole di progetto sono in `CLAUDE.md`.
+* Si lavora su `main` con push continuo: ogni push con le verifiche verdi va su GitHub Pages. Le regole di progetto sono in `CLAUDE.md`.
 * Idee e prossimi passi: [`IDEE.md`](IDEE.md). Specifica del tram guidabile: [`docs/prompt-tram.md`](docs/prompt-tram.md).
   Export della segnaletica reale: [`docs/overpass-segnaletica.md`](docs/overpass-segnaletica.md).
 

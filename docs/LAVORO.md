@@ -31,7 +31,8 @@ divise per area.
    `python3 scripts/verifica_mappa.py --elenco` (venv con `shapely`). Il rapporto della mappa (`tests/mappa.spec.js` e
    lo script) ha delle soglie: se un numero scende si abbassa la soglia nello stesso commit, se sale per una buona
    ragione si alza scrivendo il perché nel commit. Lo stesso controllo gira in CI (workflow Verifiche) a ogni push su
-   `main`.
+   `main`, e il gioco va su GitHub Pages solo se finisce verde (nota Verifiche, in fondo): dopo il push si guarda
+   `gh run list --workflow verifiche.yml --limit 3` e, se la serie è rossa, la si ripara subito.
 4. Conflitti nel rebase:
    - `src/data/novita.js` e `IDEE.md`: si tengono le righe di tutti; in `novita.js` la riga nuova va in cima con
      `n` successivo all'ultimo di `main`;
@@ -97,7 +98,16 @@ Chiusa il 9 novembre 2026. Cosa c'è (dettagli nel README, sezione "Verifiche"):
   gioco una volta; in tutto circa 2 minuti.
 - `scripts/verifica_mappa.py`: rapporto sul JSON della mappa, in pochi secondi.
 - `.github/workflows/verifiche.yml`: build, `npm test` e lo script a ogni push su `main`, con i rapporti come
-  artefatti. Non ferma la pubblicazione su GitHub Pages.
+  artefatti.
+- Pubblicazione dopo le verifiche (#103, 13 novembre): `pages.yml` non parte più dal push ma dalla fine di
+  `verifiche.yml` su `main` (`workflow_run`), e pubblica il commit verificato solo se la serie è finita verde. Se è
+  rossa o annullata l'esecuzione di Pages compare come saltata e il sito resta all'ultimo commit verde. Le verifiche
+  girano una serie alla volta e quella in corso non si annulla più: i push arrivati nel frattempo aspettano in un posto
+  solo, dove resta l'ultimo (gli altri risultano annullati senza essere partiti, e i loro commit sono dentro la serie
+  dopo). Una serie dura da 15 a 27 minuti, quindi un commit arriva a chi gioca tra 20 minuti e un'ora dopo il push. Una
+  prova rossa ferma la pubblicazione di tutti finché un push non la ripara. Per un'emergenza `gh workflow run pages.yml`
+  pubblica la testa di `main` senza aspettare. `workflow_run` usa il file del workflow che sta su `main`: una modifica a
+  `pages.yml` vale dalla serie di verifiche successiva al push che la porta.
 - Se si riapre: pilota più bravo nelle svolte a T e in quelle strette (sbaglia sulle linee 9 e 21) per allargare il
   giro guidato a tutte le linee; casi di prova dalle segnalazioni di chi gioca.
 

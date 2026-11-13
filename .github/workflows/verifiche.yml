@@ -1,5 +1,5 @@
 # Verifiche a ogni push su main: build, prove nel browser (npm test) e rapporto di verifica sulla mappa.
-# Non ferma la pubblicazione su GitHub Pages (pages.yml): dice se l'ultimo push ha rotto qualcosa.
+# Quando finisce verde, pages.yml pubblica su GitHub Pages il commit verificato; se finisce rosso il sito resta com'era.
 name: Verifiche
 
 on:
@@ -10,15 +10,18 @@ on:
 permissions:
   contents: read
 
-# un push nuovo rende inutili le verifiche del precedente
+# Una serie alla volta, e quella in corso finisce sempre: da lei dipende la pubblicazione. Con i push continui, se
+# ogni push annullasse la serie precedente non ne finirebbe quasi nessuna e il sito resterebbe fermo. I push arrivati
+# nel frattempo aspettano in un posto solo: resta l'ultimo, gli altri risultano annullati senza essere partiti.
 concurrency:
   group: verifiche-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   prove:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # le prove durano da 15 a 27 minuti: un limite a 30 le farebbe finire rosse, e senza pubblicazione, per poco
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
