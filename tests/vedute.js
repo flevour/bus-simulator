@@ -3,7 +3,7 @@
 
 // Scena ferma e uguale a ogni lancio, qualunque prova abbia usato la pagina prima: esplorazione (niente auto, bus e
 // tram automatici) sulla linea 24, sereno, luce dell'ora data, tutte le aree della mappa caricate e costruite, niente
-// pedoni, l'acqua dei canali ferma, il mezzo di chi guida nascosto. I semafori ripartono tutti dallo stesso ciclo
+// pedoni, niente colonnine di ricarica, l'acqua dei canali ferma, il mezzo di chi guida nascosto. I semafori ripartono tutti dallo stesso ciclo
 // all'ora data: ogni tram che passa sposta per sempre il ciclo del suo incrocio (TrafficLights.tramCall), e le
 // lanterne cambierebbero con la storia della pagina; finisciVedute rimette i cicli di prima.
 export async function preparaVedute({ ora }) {
@@ -25,6 +25,8 @@ export async function preparaVedute({ ora }) {
   g.walkers.mesh.count = 0;
   g.traffic.target = 0;
   g.traffic.cars.splice(0);
+  // le colonnine di ricarica delle corse in servizio di prima restano ai loro capolinea (Chargers ne tiene sei): via
+  for (const c of g.chargers.list.splice(0)) c.dispose(g.scene);
   g.setCam(1); // visuale esterna: niente specchietti né monitor della porta sopra l'immagine
   g.sim(5, 1 / 30, false); // i segnali del tram lasciano le chiamate dei tram di prima
   const L = g.lights;

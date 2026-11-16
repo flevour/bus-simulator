@@ -223,6 +223,11 @@ cause erano due.
   Le prove lunghe usano `tempoMassimo(secondi)` di `tests/gioco.js`: tre volte la durata più lunga vista in CI. Chi
   aggiunge una prova da più di un minuto guarda quanto dura in CI (`gh run view <serie> --log`) e fa lo stesso. Il job
   `prove` ha 60 minuti (le serie durano da 25 a 31).
+- La prima serie in CI con le prove del traffico verdi (4cb1cb8) è finita rossa per una veduta: al capolinea Stazione
+  sud del SIR3 una colonnina di ricarica lasciata da una corsa in servizio di prima (`Chargers` ne tiene sei nella scena,
+  ai capolinea delle ultime corse). Con le prove che non scadono più i worker non ripartono, e le vedute arrivano su una
+  pagina con più storia. `preparaVedute` ora toglie le colonnine. Chi aggiunge alla scena un oggetto che resta da una
+  corsa all'altra lo toglie lì.
 - **Fermi oltre un ciclo: per caso.** Con la corsa fissata la prova di Tito Livio trova sempre lo stesso fermo oltre i
   60 s: il bus della 22 a (42, 106), in coda dietro un bus della 16 che sosta fino all'orario alla fermata di Riviera dei
   Ponti Romani (#127). Il limite resta 60 s: il caso sta in `data/eccezioni/traffico.json` con il perché, un altro fermo
