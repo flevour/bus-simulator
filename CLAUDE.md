@@ -41,7 +41,9 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
 * `docs/cavalcavia.md`: regola del profilo dei cavalcavia (pendenze, raccordi verticali, niente onde, strada e binari
   alla stessa quota, scarto dal DTM, con le fonti del DM 5 novembre 2001), il controllo di quanto la mappa se ne
   allontana (`scripts/cavalcavia.py`), il registro delle strutture (`data/cavalcavia.json`: quali hanno il profilo
-  calcolato, punti e franchi messi a mano con il perché) e il risolutore (`scripts/profilo_cavalcavia.py`).
+  calcolato, punti e franchi messi a mano con il perché), il risolutore (`scripts/profilo_cavalcavia.py`) e le quote
+  che il gioco legge per arco e per binario senza cercarle (`scripts/quote_rete.py`: `edgeH` e `tramH` nella mappa;
+  profili per struttura in `data/profili-cavalcavia.json`, `scripts/profili_strutture.py`).
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
 * `docs/osm-dati.md`: dati OSM oltre le vie (svolte vietate, linee, parcheggi, uso del suolo, arredo), campi che la
   mappa ne porta per nodo e per arco (`svolte`, `sosta`, `rilevati`, `pendenze`, `fondo`), quanto copre OSM e controlli.
@@ -122,6 +124,9 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   l'elenco si riscrive con `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i
   casi nuovi finiscono in un gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un
   conteggio.
+* **Profili dei cavalcavia dichiarati.** `data/profili-cavalcavia.json` ha la quota lungo archi e binari di ogni
+  struttura; `tests/profili.spec.js` fallisce se la mappa ne ha altri. Chi cambia di proposito le quote di una
+  struttura lancia `python3 scripts/profili_strutture.py --aggiorna` nello stesso commit e la nomina nel messaggio.
 * **Niente nomi di luoghi nel codice degli algoritmi.** Una correzione che vale per un solo luogo è una riga in un
   file di dati in `data/` (zona, valore, perché) che l'algoritmo legge, non un ramo nel codice con una via o delle
   coordinate.
@@ -136,7 +141,7 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   punti delle vedute, con i casi noti in `data/eccezioni/strati.json`; `tests/aree.spec.js` confronta la scena con il
   conto per area della build. Dettagli in `docs/LAVORO.md`, nota #110 della Mappa.
 * `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
-  `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`. Disattiva il loop con
+  `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`, `edgeHeight(e, s)`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.
 * Edifici, marciapiedi, verde e alberi arrivano per aree attorno al bus (`src/data/aree.js`): dopo `startMission`
   `avviaCorsa` di `tests/gioco.js` aspetta `city.areasReady(x, z)`; chi misura tutta la mappa chiama prima

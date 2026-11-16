@@ -1545,9 +1545,13 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'buildings': buildings, 'rails': rails, 'water': water, 'tram': tram, 'tramLanes': tram_lanes, 'tramRegola': tram_lanes, 'tramStops': tram_stops,
         'tramStazione': tram_stazione.zona(staz, xz) if staz else None,
         'nodeH': [[n, h] for n, h in sorted(heights.items())], 'surfaces': surf,
-        # cavalcavia con il profilo della loro struttura (scripts/profilo_cavalcavia.py): quota sopra il terreno lungo
-        # gli archi in quota [arco, progressive in cm, quote in mm] e archi di ogni struttura
+        # quota sopra il terreno lungo gli archi in quota [arco, progressive in cm, quote in mm] (il profilo delle
+        # strutture di scripts/profilo_cavalcavia.py, i due capi per i cavalcavia con le quote di prima) e archi di
+        # ogni struttura con il profilo
         'edgeH': edge_h, 'cavalcavia': cavalcavia_out,
+        # quota dei binari del tram lungo la progressiva [linea, verso, progressive in cm, quote in mm]: sotto, con
+        # scripts/quote_rete.py
+        'tramH': [],
         # corsie dai tag OSM: [arco, codice] (lane_code), e frecce a terra [arco, avanti, indietro]
         'lanes': [v for k, lt in sorted(edge_lanes.items()) for v in (k, lane_code(lt))], 'turnLanes': turns,
         # svolte vietate e obbligate per nodo, sosta per lato, rilevati e trincee, pendenze dichiarate, superficie e
@@ -1557,6 +1561,14 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         **({'terrain': terrain} if terrain else {}),
         **signage,
     }
+    # quote che il gioco legge per arco e per binario, senza cercare (#107): tutti gli archi in quota in edgeH, e i
+    # binari con il profilo della strada che affiancano
+    import quote_rete
+    # (le lunghezze dai nodi come sono scritti nella mappa, arrotondati: così --scrivi di quote_rete dà gli stessi numeri)
+    data['edgeH'] = quote_rete.archi(list(zip(nxs, nzs)), edges, heights, edge_h, dichiarati)
+    if terrain:
+        data['tramH'], tratti = quote_rete.calcola(data, json.load(open(nt_path, encoding='utf-8')) if nt_path and os.path.exists(nt_path) else {'linee': []})
+        print('binari in quota:', ', '.join(f"{lid} {'+1' if d > 0 else '-1'} {sum(b - a for a, b, _k in app):.0f} m" for (lid, d), app in sorted(tratti.items())))
     # la rete in out (nel bundle del gioco), edifici, pianta delle strade e alberi per aree (public/mappa/aree)
     print('aree della mappa:', aree_mappa.write(data, out))
     print(f'inversioni a U sostituite da un giro: {uturns_fixed}')

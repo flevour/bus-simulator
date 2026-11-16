@@ -1,10 +1,10 @@
 """Regola del profilo dei cavalcavia (docs/cavalcavia.md) e controllo di quanto la mappa se ne allontana.
 
-Un cavalcavia è un gruppo di archi della rete in quota (quote dei nodi in `nodeH`, da scripts/street_surfaces.py) che
+Un cavalcavia è un gruppo di archi della rete in quota (`edgeH` nella mappa, da scripts/quote_rete.py) che
 si toccano: impalcato, rampe e raccordi delle strade che ci si innestano. Lo si percorre lungo ogni strada che lo
 attraversa, da terra a terra, e lungo ogni binario del tram che ci sale: la quota del profilo è quella che vede chi
-guida, il terreno della variante "via" (src/world/terrain.js) più la quota della rete (strade: `nodeH` lungo gli archi;
-binari: la quota della strada in quota che affiancano). Per ogni cavalcavia conta:
+guida, il terreno della variante "via" (src/world/terrain.js) più la quota della rete (strade: `edgeH` lungo gli archi;
+binari: `tramH` lungo il binario). Per ogni cavalcavia conta:
   * onde: la quota scende e risale (o sale e riscende) di almeno ONDA m invece di salire, stare in piano e scendere;
   * pendenze oltre il massimo del tipo di strada (o del tram);
   * raccordi verticali sotto il raggio minimo, sui dossi e nelle conche;
@@ -14,9 +14,9 @@ binari: la quota della strada in quota che affiancano). Per ogni cavalcavia cont
 Le reti sono due:
   * i dati (src/data/padova-map.json, data/tram-linee-nuove.json, data/dtm-padova.json): li misura
     scripts/verifica_mappa.py con rete_dati(); il terreno "via" si ricostruisce qui come lo fa il gioco, e i binari
-    hanno la quota della strada in quota che affiancano (_tram_heights di scripts/street_surfaces.py);
-  * il gioco: tests/cavalcavia.spec.js scrive il terreno "via" del gioco e i binari con le loro quote (TramTrack.h, dopo
-    la media di setHeights) e chiama questo script con --gioco. Le strade vengono dalla mappa in tutti e due i casi.
+    hanno la quota scritta dalla build (`tramH`, scripts/quote_rete.py);
+  * il gioco: tests/cavalcavia.spec.js scrive il terreno "via" del gioco e i binari con le loro quote
+    (TramTrack.heightAt ogni 5 m) e chiama questo script con --gioco. Le strade vengono dalla mappa in tutti e due i casi.
 
 Ogni caso ha il posto (coordinate del gioco, la via o il binario, la fermata del tram vicina) e un peso, quanto è oltre
 la regola; i cavalcavia peggiori sono quelli con la somma dei pesi più alta.
@@ -73,7 +73,7 @@ DECK_MIN = 0.6    # m: da qui in su strada e binari stanno su un impalcato (stre
 CORDA_P = 10.0    # m: pendenza su 10 m (come le pendenze dei binari)
 CORDA_R = 20.0    # m: raggio da due corde di 20 m (un gradino di quota del terreno, 5,6 cm, dà più di 3 km)
 PONTE_VICINO = 15.0  # m: vicino a un ponte il DTM non dice la quota della strada (spalle, travi)
-AFFIANCA = 9.0    # m oltre metà carreggiata: il binario affianca la strada (City.nearElevatedHeight)
+AFFIANCA = 9.0    # m oltre metà carreggiata: il binario affianca la strada (arco_accanto)
 PARALLELO = 0.7   # seno massimo dell'angolo tra binario e strada perché siano paralleli (come sopra)
 UNITO = 3         # m: casi più vicini di così sono lo stesso caso
 TOLL = 4.0        # m: un caso dell'elenco delle eccezioni resta lo stesso se si sposta fino a qui (due casi dello stesso
@@ -203,8 +203,10 @@ class Rete:
                 self.at[e[1]].append(k)
         # archi delle strutture dichiarate: la loro quota è il profilo (EH) o zero; gli altri, lineare tra i nodi
         self.dichiarati = {k for s in self.strutture or [] for k in s['archi']}
-        self.in_quota = sorted(set(self.EH or ()) | {k for k, e in enumerate(self.archi) if k not in self.dichiarati and e[2] != 8
-                                                    and (self.H.get(e[0], 0) > IN_QUOTA or self.H.get(e[1], 0) > IN_QUOTA)})
+        # (edgeH ha anche gli archi pedonali in quota, che qui non si misurano)
+        self.in_quota = sorted({k for k in self.EH or () if k in self.dichiarati or self.archi[k][2] != 8}
+                               | {k for k, e in enumerate(self.archi) if k not in self.dichiarati and e[2] != 8
+                                  and (self.H.get(e[0], 0) > IN_QUOTA or self.H.get(e[1], 0) > IN_QUOTA)})
         # archi dove si misura: quelli delle strutture dichiarate e quelli in quota
         self.misurati = self.dichiarati | set(self.in_quota)
         self.binari = []   # {'id', 'verso', 'pts': [(x, z)], 'quote': quota ogni 5 m sopra il terreno, o None nei dati}
@@ -227,7 +229,7 @@ class Rete:
             e = self.archi[k]
             return self.h(e[0]) + (self.h(e[1]) - self.h(e[0])) * t
         ss, qs = p
-        s = t * self.lung[k] * 100
+        s = t * ss[-1]  # come nel gioco: la frazione dell'arco per l'ultima progressiva scritta
         lo, hi = 0, len(ss) - 1
         if s <= ss[0]:
             return qs[0] / 1000
@@ -243,8 +245,8 @@ class Rete:
 
 
 def rete_dati(M=None):
-    """La rete dei dati: strade e quote della mappa, terreno "via" ricostruito, binari con la quota della strada in quota
-    che affiancano (la regola di street_surfaces._tram_heights)."""
+    """La rete dei dati: strade e quote della mappa, terreno "via" ricostruito, binari con la quota scritta dalla build
+    (`tramH`, scripts/quote_rete.py)."""
     M = M or json.load(open(os.path.join(RADICE, 'src/data/padova-map.json')))
     R = Rete('dati', M, Via(M['terrain']), dtm())
     xz = xz_da(M['origin'])
@@ -257,8 +259,11 @@ def rete_dati(M=None):
         for d, v in zip((1, -1), L['versi']):
             tracce.append((L['id'], d, [xz(*p) for p in v['percorso']]))
             R.fermate += [(*xz(f['lat'], f['lon']), f['nome']) for f in v['fermate']]
+    # la quota dei binari è quella scritta dalla build (tramH: progressive in cm, quote in mm, zero fuori dai tratti
+    # scritti); una mappa senza tramH: la quota della strada che affiancano
+    th = {(lid, d): ([c / 100 for c in ss], [q / 1000 for q in qs]) for lid, d, ss, qs in M['tramH']} if 'tramH' in M else None
     for lid, d, P in tracce:
-        R.binari.append({'id': lid, 'verso': d, 'pts': P, 'quote': None})
+        R.binari.append({'id': lid, 'verso': d, 'pts': P, 'quote': None, 'profilo': th.get((lid, d), ([0.0], [0.0])) if th is not None else None})
     return R
 
 
@@ -280,12 +285,12 @@ def dtm():
     return Griglia10(json.load(open(p))) if os.path.exists(p) else None
 
 
-def strada_accanto(R, p, verso):
-    """(quota della rete, arco) della strada in quota più vicina a p e quasi parallela al verso, entro metà carreggiata
-    più AFFIANCA; (0, None) se non c'è."""
+def arco_accanto(R, p, verso):
+    """(arco, frazione lungo l'arco, distanza) della strada misurata (in quota o di una struttura dichiarata) più vicina a
+    p e quasi parallela al verso, entro metà carreggiata più AFFIANCA; (None, 0, 0) se non c'è."""
     L = math.hypot(*verso) or 1
     dx, dz = verso[0] / L, verso[1] / L
-    best, h, kb = 1e9, 0.0, None
+    best, tb, kb = 1e9, 0.0, None
     for k in R.strade.vicini(p, 30.0):
         e = R.archi[k]
         if k not in R.misurati or e[2] == 8:
@@ -298,8 +303,14 @@ def strada_accanto(R, p, verso):
         t = max(0.0, min(1.0, ((p[0] - ax) * ux + (p[1] - az) * uz) / (l * l)))
         d = math.hypot(ax + ux * t - p[0], az + uz * t - p[1])
         if d < e[3] / 2 + AFFIANCA and d < best:
-            best, h, kb = d, R.rel(k, t), k
-    return h, kb
+            best, tb, kb = d, t, k
+    return (kb, tb, best) if kb is not None else (None, 0.0, 0.0)
+
+
+def strada_accanto(R, p, verso):
+    """(quota della rete, arco) della strada in quota che il binario in p affianca; (0, None) se non c'è."""
+    k, t, _d = arco_accanto(R, p, verso)
+    return (R.rel(k, t), k) if k is not None else (0.0, None)
 
 
 # ---------- i cavalcavia ----------
@@ -474,7 +485,13 @@ def profili_binari(R, cav):
         def accanto(s):
             x, z, dx, dz = punto(P, cum, s)
             return x, z, strada_accanto(R, (x, z), (dx, dz))
-        quota = (lambda s: interp(Q, s / 5.0)) if Q else (lambda s: accanto(s)[2][0])
+        prof = B.get('profilo')
+        if Q:
+            quota = lambda s: interp(Q, s / 5.0)
+        elif prof:
+            quota = lambda s: lineare(prof[0], prof[1], s)
+        else:
+            quota = lambda s: accanto(s)[2][0]
         # tratti in quota, cercati ogni 5 m
         # con le strutture dichiarate: dove il binario affianca una loro strada, anche a terra
         su = [s for s in frange(0, L, 5.0) if quota(s) > IN_QUOTA or accanto(s)[2][1] in R.dichiarati]
@@ -490,16 +507,41 @@ def profili_binari(R, cav):
         for a, b in tratti:
             pts = []
             for s in frange(max(0.0, a - MARGINE), min(L, b + MARGINE), PASSO):
-                x, z, (hr, k) = accanto(s)
-                h = quota(s) if Q else hr
+                x, z, dx, dz = punto(P, cum, s)
+                k, tk, _d = arco_accanto(R, (x, z), (dx, dz))
+                hr = R.rel(k, tk) if k is not None else 0.0
+                h = quota(s) if (Q or prof) else hr
                 t = R.via.at(x, z)
+                # la strada: sulle strutture con il profilo la quota assoluta nel punto dell'asse (il terreno sotto il
+                # binario può essere un altro); sui cavalcavia con le quote di prima la quota sopra il terreno
+                ts = t
+                if k in R.dichiarati:
+                    e = R.archi[k]
+                    (ax, az), (bx, bz) = R.nodi[e[0]], R.nodi[e[1]]
+                    ts = R.via.at(ax + (bx - ax) * tk, az + (bz - az) * tk)
                 pts.append({'x': x, 'z': z, 'q': t + h, 'rel': h, 'tipo': 'tram', 'ponte': False,
-                            'strada': t + hr if k is not None else None, 'strada_rel': hr, 'arco': k})
+                            'strada': ts + hr if k is not None else None, 'strada_rel': hr, 'arco': k})
             ks = Counter(p['arco'] for p in pts if p['arco'] in di)
             if not ks:
                 continue
             out[di[ks.most_common(1)[0][0]]].append({'binario': f"{B['id']} verso {'+1' if B['verso'] > 0 else '-1'}", 'pts': pts})
     return out
+
+
+def lineare(ss, qs, s):
+    """Valore in s del profilo (ss crescenti, qs), lineare tra i punti; fuori vale il primo o l'ultimo."""
+    lo, hi = 0, len(ss) - 1
+    if s <= ss[0]:
+        return qs[0]
+    if s >= ss[hi]:
+        return qs[hi]
+    while hi - lo > 1:
+        m = (lo + hi) // 2
+        if ss[m] <= s:
+            lo = m
+        else:
+            hi = m
+    return qs[lo] + (qs[hi] - qs[lo]) * (s - ss[lo]) / ((ss[hi] - ss[lo]) or 1)
 
 
 def frange(a, b, passo):

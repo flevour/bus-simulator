@@ -33,6 +33,10 @@ di `tests/` in Chromium headless (WebGL in software):
 * `cavalcavia.spec.js`: il profilo dei cavalcavia con il terreno e le quote dei binari del gioco, misurato con la
   regola di [`docs/cavalcavia.md`](docs/cavalcavia.md) (onde, pendenze, raccordi verticali, binari fuori quota,
   scarti dal DTM) da `scripts/cavalcavia.py`;
+* `profili.spec.js`: le quote dei cavalcavia lette per arco e per binario. La mappa ha i profili scritti, struttura
+  per struttura, in `data/profili-cavalcavia.json` (`scripts/profili_strutture.py`); il gioco legge quelle quote entro
+  2 cm; un pilota porta il bus sopra ogni cavalcavia dove passa una linea e la quota sotto i due assi è quella del
+  file, senza salti;
 * `vedute.spec.js`: 43 vedute da punti fissi a 2,5 m dal piano della strada (cavalcavia, ponti, capolinea del tram,
   rotonde e incroci con la sede, elenco in `tests/vedute/elenco.json`), con ora e meteo fissi e senza traffico,
   confrontate con le immagini di `tests/vedute/riferimenti/`. Chi cambia una veduta di proposito aggiorna il

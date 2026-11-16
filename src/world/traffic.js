@@ -642,7 +642,6 @@ export class Traffic {
       const g = this.laneGeom(car);
       if (g.s1 - g.s0 < 3) continue;
       car.s = g.s0 + this.rnd() * (g.s1 - g.s0);
-      car.y = e.elev ? edgeHeight(e, car.fwd ? car.s : e.len - car.s) : 0; // quota iniziale (sul cavalcavia o sotto)
       const x = g.sx + g.dx * car.s, z = g.sz + g.dz * car.s;
       const d = Math.hypot(x - bus.x, z - bus.z);
       if (d < minD || d > maxD) continue;
@@ -709,7 +708,15 @@ export class Traffic {
     }
     const len = Math.hypot(p1.x - p0.x, p1.z - p0.z) + Math.hypot(p2.x - p1.x, p2.z - p1.z);
     const cosA = g.dx * g2.dx + g.dz * g2.dz;
-    return { p0, p1, p2, len: Math.max(2, len * 0.92), s0: g2.s0, vmax: cosA > 0.8 ? car.vmax : 5.5, g2 };
+    // quota a fine corsia e all'inizio della corsia dopo: in curva l'auto passa dall'una all'altra (al nodo coincidono)
+    const h0 = edgeHeight(from, g.from.id === from.a ? g.s1 : from.len - g.s1), h1 = edgeHeight(nx.edge, nx.fwd ? g2.s0 : nx.edge.len - g2.s0);
+    return { p0, p1, p2, len: Math.max(2, len * 0.92), s0: g2.s0, vmax: cosA > 0.8 ? car.vmax : 5.5, g2, h0, h1 };
+  }
+  // quota dell'auto sopra il terreno, letta dall'arco su cui è alla sua progressiva; in curva, tra i due archi
+  carHeight(c) {
+    const T = c.turn;
+    if (T) return T.h0 + (T.h1 - T.h0) * Math.max(0, Math.min(1, T.t));
+    return edgeHeight(c.edge, c.fwd ? c.s : c.edge.len - c.s);
   }
   // incroci col tram a meno di 30 m dall'arco: quelli che la sua corsia e le curve ai suoi nodi possono tagliare
   tramXs(e, ts) {
@@ -994,7 +1001,7 @@ export class Traffic {
     const { M, Q, Y, S, P } = this;
     this.cars.forEach((c, i) => {
       Q.setFromAxisAngle(Y, c.h);
-      c.y = this.city.heightAt(c.x, c.z, c.y);
+      c.y = this.carHeight(c);
       M.compose(P.set(c.x, Y_ROAD + c.y, c.z), Q, S);
       this.mesh.setMatrixAt(i, M);
       this.mesh.setColorAt(i, c.color);
@@ -1128,7 +1135,7 @@ export class Walkers {
     const { M, Q, Y, S, P } = this;
     this.list.forEach((p, i) => {
       Q.setFromAxisAngle(Y, Math.atan2(p.e.dx * p.dir, p.e.dz * p.dir));
-      M.compose(P.set(p.x, 0.1 + (p.e.elev && this.city ? this.city.heightAt(p.x, p.z) : 0) + Math.abs(Math.sin(p.ph)) * 0.05, p.z), Q, S.set(p.sc, p.sc, p.sc));
+      M.compose(P.set(p.x, 0.1 + edgeHeight(p.e, p.s) + Math.abs(Math.sin(p.ph)) * 0.05, p.z), Q, S.set(p.sc, p.sc, p.sc));
       this.mesh.setMatrixAt(i, M);
       this.mesh.setColorAt(i, p.col);
     });

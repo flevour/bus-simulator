@@ -16,7 +16,7 @@ from shapely import STRtree
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 from shapely.ops import unary_union
 
-H_DECK, R_RAMP, PSV_DECK = 7.0, 130.0, 0.92  # come markOverpasses in src/data/padova.js
+H_DECK, R_RAMP, PSV_DECK = 7.0, 130.0, 0.92  # impalcato, rampa, corsie riservate ai bus (poco più in basso)
 MAX_SLOPE = 0.10  # pendenza massima di un raccordo verso una rampa
 H_CLEAR = 5.0  # m: quota minima di una rampa sopra una strada in sottopasso (un bus è alto 3,2 m, l'impalcato 0,9)
 SIDEWALK = 3.5  # m: marciapiede attorno alle carreggiate
@@ -244,8 +244,8 @@ def overpass_heights(nodes, edges, rails, salta=frozenset()):
 
 
 def _tram_heights(pts, nodes, edges, heights, profili=None, dichiarati=()):
-    """Quota di ogni punto di un binario: quella della strada in quota più vicina e quasi parallela (come
-    City.nearElevatedHeight nel gioco)."""
+    """Quota di ogni punto di un binario, per gli impalcati della pianta delle strade: quella della strada in quota più
+    vicina e quasi parallela. La quota che il gioco legge la scrive scripts/quote_rete.py (`tramH`)."""
     up = [(k, e) for k, e in enumerate(edges) if max(h for _t, h in quote_arco(k, e, heights, profili, dichiarati)) > 0.05]
     out = []
     for i, p in enumerate(pts):

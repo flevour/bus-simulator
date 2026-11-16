@@ -107,7 +107,9 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
   Venezia). La tolleranza di 0,10 m è una scelta della regola: un gradino più alto si vede tra la corsia e la sede.
   **Inferenza.**
 * Il binario affianca la strada se è quasi parallelo (seno dell'angolo fino a 0,7) ed entro metà carreggiata più 9 m
-  dall'asse, come `City.nearElevatedHeight` nel gioco e `_tram_heights` in `scripts/street_surfaces.py`.
+  dall'asse: lo decide la build (`arco_accanto` in `scripts/cavalcavia.py`, usata da `scripts/quote_rete.py`; per gli
+  impalcati della pianta delle strade `_tram_heights` in `scripts/street_surfaces.py`). Il gioco non lo ricalcola
+  (sezione 7).
 
 ### Quote: DTM, DBGT e franchi
 
@@ -137,7 +139,7 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
 Dal 13 novembre 2026 (#84) le strutture attive nel registro hanno il profilo del risolutore (sezione 6). Per le altre
 vale quello che segue. Le quote vengono da `scripts/street_surfaces.py` (`overpass_heights` per i nodi della rete, `terrain_for_game` e
 `adjust_heights` per il terreno); il gioco somma la quota del terreno "via" (`src/world/terrain.js`) e quella della rete
-lungo gli archi (`edgeHeight` in `src/world/city.js`). Da qui vengono quasi tutti i casi della sezione 5:
+lungo gli archi (`edgeHeight` in `src/data/padova.js`, da `edgeH`). Da qui vengono quasi tutti i casi della sezione 5:
 
 * **Impalcato a 7 m sopra il terreno spianato.** I nodi dei ponti OSM in quota (`layer` ≥ 1 sopra la ferrovia o un'altra
   strada) stanno a 7 m (`H_DECK`) sopra il terreno, che sotto i tratti in quota si spiana al 30° percentile del terreno
@@ -154,9 +156,9 @@ lungo gli archi (`edgeHeight` in `src/world/city.js`). Da qui vengono quasi tutt
   con la rampa.
 * **Rami a quote diverse.** Dove la strada del ponte si divide (Chiesanuova ovest, (−1889, −341)) ogni ramo ha la sua
   rampa, e chi passa dall'uno all'altro va giù e su di 2,6-4,1 m in 80-100 m.
-* **Binari.** `TramTrack.setHeights` (`src/tram/tram.js`) prende la quota della strada che il binario affianca, fa la
-  media su ±25 m e tiene la più alta tra media e strada: sulle rampe il binario resta sopra la strada, fino a 2,9 m a
-  Chiesanuova (−1889, −343).
+* **Binari.** Il binario prende la quota della strada che affianca, con la media su ±25 m e la più alta tra media e
+  strada: sulle rampe resta sopra la strada, fino a 2,9 m a Chiesanuova (−1889, −343). Fino a #107 lo faceva il gioco
+  (`TramTrack.setHeights`), ora la build (`profilo` in `scripts/quote_rete.py`), e solo per questi cavalcavia.
 
 Per #84, i punti fermi che vengono dalla regola: le rampe seguono il rilevato del DTM dove c'è (entro 0,5 m), l'impalcato
 va da spalla a spalla con il franco sopra quello che passa sotto, il terreno sotto l'impalcato è piatto e non scende
@@ -167,15 +169,15 @@ chilometro, e il binario ha la quota della strada sull'impalcato che condivide.
 
 `scripts/cavalcavia.py` misura il profilo di ogni cavalcavia contro la regola. Solo libreria standard di Python, come
 `scripts/binari_tram.py`, da cui prende la griglia dei segmenti. Un cavalcavia è un gruppo di archi della rete in quota
-(`nodeH` oltre 0,05 m, come `e.elev` nel gioco) che si toccano: impalcato, rampe e raccordi delle strade che ci si
+(quota oltre 0,05 m a un capo, come `e.elev` nel gioco) che si toccano: impalcato, rampe e raccordi delle strade che ci si
 innestano; ha il nome della via più lunga dei suoi ponti, e le coordinate quando il nome si ripete. Le reti sono due:
 
 * **i dati**: strade e quote di `src/data/padova-map.json`, terreno "via" ricostruito dalla griglia della mappa come in
   `src/world/terrain.js` (chiusura morfologica e ponti sui fiumi, solo nelle celle che servono), binari di
-  `padova-map.json` (SIR1) e `data/tram-linee-nuove.json` (SIR2 e SIR3) con la quota della strada in quota che
-  affiancano. Li misura `scripts/verifica_mappa.py` (o `scripts/cavalcavia.py` da solo, senza shapely);
+  `padova-map.json` (SIR1) e `data/tram-linee-nuove.json` (SIR2 e SIR3) con la quota scritta dalla build (`tramH`,
+  sezione 7). Li misura `scripts/verifica_mappa.py` (o `scripts/cavalcavia.py` da solo, senza shapely);
 * **il gioco**: `tests/cavalcavia.spec.js` scrive il terreno "via" del gioco (`Terrain.d`) e i binari con le quote di
-  `TramTrack.h` e chiama lo script con `--gioco`. Le strade vengono dalla mappa in tutti e
+  `TramTrack.heightAt` ogni 5 m e chiama lo script con `--gioco`. Le strade vengono dalla mappa in tutti e
   due i casi: i loro numeri coincidono, e il 12 novembre le 11.087 celle del terreno usate dai profili erano uguali a
   quelle del gioco.
 
@@ -322,8 +324,8 @@ La quota scritta è il profilo meno la variante "via" campionata come nel gioco,
 confine di cella. Nella mappa: `cavalcavia` (`id`, `x`, `z`, `archi` di ogni struttura attiva), `edgeH` (`[arco,
 progressive in cm, quote in mm]` per gli archi con più di 5 cm sopra il terreno), `nodeH` come prima, `terrain.via`
 (righe `[j, i0, byte, ...]` di celle fissate dopo chiusura e ponti). Il gioco legge `edgeH` in `edgeHeight`
-(`src/world/city.js`) e `terrain.via` in `Terrain`; i binari che affiancano un arco di una struttura attiva prendono
-la sua quota senza la media di `TramTrack.setHeights`.
+(`src/data/padova.js`) e `terrain.via` in `Terrain`; i binari che affiancano un arco di una struttura attiva prendono
+la quota assoluta della strada, senza media (sezione 7).
 
 Attive dal 13 novembre: Cavalcavia Antonio Grassi, Camerini, Montà, Pietro Maroncelli, i due del Ponte dell'Unità
 d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Spente, con il perché nel registro: quelle
@@ -337,6 +339,67 @@ alle strade fuori dalla struttura).
 Per provare una modifica al risolutore non serve rigenerare la mappa: bastano la rete di `src/data/padova-map.json`,
 il terreno di `street_surfaces.terrain_for_game` e `profilo_cavalcavia.calcola(..., tutte=True)`, poi
 `cavalcavia.rapporto` sulla mappa con le chiavi nuove (una ventina di secondi per tutte le strutture).
+
+## 7. Quote lette per arco e per binario (#107)
+
+Il gioco non ricava le quote per vicinanza. Ogni quota ha un proprietario nella build e il gioco la legge da dove sta
+il mezzo: una strada da (arco, progressiva), un binario da (binario, progressiva).
+
+Nella mappa, da `scripts/quote_rete.py` (solo libreria standard; `build_map.py` lo chiama alla fine):
+
+* `edgeH`, `[arco, progressive in cm, quote in mm]` per ogni arco in quota: il profilo del risolutore per le strutture
+  attive, i due capi dell'arco (le quote di `overpass_heights`) per gli altri cavalcavia. Il lettore è uno solo, cambia
+  chi calcola. Gli archi che non ci sono stanno a terra. `nodeH` resta nella mappa per gli script; il gioco non lo
+  legge più.
+* `tramH`, `[linea, verso, progressive in cm, quote in mm]` per ogni binario: la progressiva è quella lungo il binario
+  dei dati (`tram` nella mappa per il SIR1, `percorso` di `data/tram-linee-nuove.json` per le linee nuove), e fuori dai
+  tratti scritti la quota è zero. L'appartenenza si decide qui: il binario prende la quota dell'arco in quota (o di una
+  struttura attiva) più vicino e quasi parallelo, entro metà carreggiata più 9 m (`arco_accanto`).
+  * Sulle strutture attive la quota assoluta del binario è quella della strada nel punto dell'asse più vicino, e la
+    quota scritta è quella meno il terreno "via" sotto il binario: strada e binario stanno alla stessa quota anche dove
+    il terreno sotto i due non è lo stesso (sotto le campate). Punti ogni metro, nei vertici e a ogni confine di cella
+    del terreno (vicino alle spalle il terreno cambia pendenza di colpo), senza media.
+  * Sui cavalcavia con le quote di prima vale la regola che stava nel gioco: quota della strada ogni 5 m (la più alta
+    dei due binari dove corrono affiancati), media su ±25 m senza scendere sotto la strada, zero sotto 0,25 m. Lì le
+    carreggiate affiancate hanno quote diverse e senza media il binario farebbe un gradino a ogni passaggio dall'una
+    all'altra (fino a 3 m a Chiesanuova). La media sparisce quando la struttura si attiva (#123).
+
+Nel gioco:
+
+* `edgeHeight(e, s)` (`src/data/padova.js`) legge `e.hs`; `TramTrack.heightAt(dir, s)` (`src/tram/tram.js`) legge il
+  profilo del suo binario, portato dalla progressiva dei dati a quella del percorso (`heightProfile`: il percorso
+  segue il binario dei dati punto per punto, e ogni vertice sa a che progressiva dei dati sta).
+* Auto e pedoni leggono la quota dal loro arco alla loro progressiva (`Traffic.carHeight`: in curva da quella di fine
+  corsia a quella d'inizio della corsia dopo); i bus automatici dall'arco del punto della loro corsia (`laneHeight` in
+  `src/world/buses.js`); i tram, di chi guida e automatici, dal binario.
+* Il bus di chi guida non ha un percorso obbligato: `City.quotaSotto` tiene, per ognuno dei due assi, l'arco su cui
+  sta. A ogni passo guarda quell'arco e quelli che lo toccano a un nodo e prende il più vicino al punto, meglio se nella
+  direzione del mezzo. Da un arco a quello dopo la quota è continua, e la strada che passa sotto o sopra senza un nodo
+  in comune non si prende mai: così il bus non sale sull'impalcato passandoci sotto e non cade da una carreggiata
+  all'altra. Solo quando l'asse non è più su nessuno di questi archi (fuori strada, sull'altra carreggiata, dopo un
+  teletrasporto) si cerca per punto (`City.arcoIn`), con la quota di prima.
+* Resta una ricerca per punto per costruire la scena e per le prove: `City.elevHeight` (la strada in quota più alta
+  in un punto). Non ci sono più `City.heightAt(x, z, cur)`, `City.nearElevatedHeight`, `TramTrack.setHeights` e
+  `markOverpasses` (le quote calcolate nel gioco per le mappe senza `nodeH`). I segni della strada sulla sede del tram
+  (`City.onSede`) leggono la quota della sede dal profilo del binario.
+
+`data/profili-cavalcavia.json` ha i profili struttura per struttura: la quota assoluta in centimetri lungo ogni arco e
+lungo i tratti di binario che ci passano, come la vede chi guida. Le strutture sono quelle attive più i gruppi di archi
+in quota degli altri cavalcavia, con i nomi del controllo. `scripts/profili_strutture.py` confronta la mappa con il
+file ed esce con errore, nominandola, se una struttura è cambiata di più di 1 cm; `--aggiorna` riscrive il file, e il
+diff dice quali strutture tocca: vanno nominate nel commit. `tests/profili.spec.js` lancia il confronto, controlla che
+il gioco legga quelle quote (terreno più `edgeHeight` e `heightAt` in ogni punto del file, entro 2 cm) e porta il bus
+con un pilota sopra ogni cavalcavia dove passa una linea: la quota letta sotto i due assi a ogni passo è quella del
+file sull'arco dove sta l'asse, entro 2 cm, senza finire su un arco in quota che non è del percorso. I salti della
+quota che si vede da un passo all'altro sono solo quelli noti (`data/eccezioni/profili-pilota.json`: tre, dove il
+terreno non è uguale su tutta la larghezza della carreggiata, #125 e #124).
+
+```bash
+python3 scripts/quote_rete.py                    # i tratti in quota dei binari
+python3 scripts/quote_rete.py --scrivi           # riscrive edgeH e tramH nella mappa che c'è, senza rigenerarla
+python3 scripts/profili_strutture.py             # la mappa contro data/profili-cavalcavia.json
+python3 scripts/profili_strutture.py --aggiorna  # dopo una modifica voluta alle quote di una struttura
+```
 
 ## Fonti
 

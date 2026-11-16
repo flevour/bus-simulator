@@ -38,13 +38,13 @@ export async function preparaVedute({ ora }) {
 }
 
 // Una veduta: telecamera a 2,5 m dal piano della strada nel punto (x, z), rivolta a `verso` gradi (0 verso +z, 90
-// verso +x, come la direzione del bus). Sopra un cavalcavia vale la strada più alta (city.heightAt); il terreno lo
+// verso +x, come la direzione del bus). Sopra un cavalcavia vale la strada più alta (city.elevHeight); il terreno lo
 // aggiunge il gioco. L'immagine torna in PNG (base64) a metà grandezza, media di 2 x 2 pixel: 640 x 360.
 export function scattaVeduta(v) {
   const g = window.__game, city = g.city, h = (v.verso * Math.PI) / 180;
   g.bus.place(v.x, v.z, h); // sole e ombre seguono il mezzo
   city.streamTiles(v.x, v.z, 0); // riquadri visibili da qui
-  const y = city.heightAt(v.x, v.z) + 2.5;
+  const y = city.elevHeight(v.x, v.z) + 2.5;
   g.veduta = { x: v.x, y, z: v.z, h };
   g.sim(0, 1 / 30, true);
   g.veduta = null;

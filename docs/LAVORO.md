@@ -90,6 +90,7 @@ divise per area.
 | `src/tram/tram.js` | `area:tram` | scambi, binari, depositi, cambio cabina e turni: le funzioni sono nelle note del tram qui sotto |
 | `scripts/binari_tram.py`, `scripts/binari_regola.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): `binari_regola.py` rifà le linee, `tram_stesura.py` i depositi; chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
 | `data/cavalcavia.json`, `scripts/profilo_cavalcavia.py` | `area:mappa` (#123, #124, #125) | registro delle strutture e risolutore del profilo ([`cavalcavia.md`](cavalcavia.md), sezione 6): le correzioni per luogo sono righe del registro con il perché; chi attiva una struttura rigenera e aggiorna vedute ed eccezioni |
+| `scripts/quote_rete.py`, `scripts/profili_strutture.py`, `data/profili-cavalcavia.json`, `tests/profili.spec.js` | `area:mappa`, e chi cambia le quote dei binari (`area:tram`) | quote che il gioco legge per arco e per binario e profili per struttura ([`cavalcavia.md`](cavalcavia.md), sezione 7): chi cambia le quote di una struttura riscrive il file dei profili (`--aggiorna`) e la nomina nel commit |
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
 | `scripts/osm_rete.py`, `data/osm-padova-relazioni.json`, `data/osm-luoghi.json`, `data/osm-arredo.json`, `data/eccezioni/osm-rete.json` | `area:mappa` (#108), poi chi li usa: `area:traffico` (#112, #111, #116) | dati OSM agganciati alla rete per id ([`osm-dati.md`](osm-dati.md)); chi cambia nodi o archi della rete, o riscarica le relazioni, riscrive i campi (`python3 scripts/osm_rete.py --scrivi`) e l'elenco |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
@@ -253,7 +254,7 @@ Da sapere prima di toccare questi file:
 - sede del tram nella pianta delle strade: i binari di `data/tram-linee-nuove.json` entrano in
   `street_surfaces.surfaces` come quelli del SIR1, e la sede di tutte le linee è asfalto, fuori da isole e marciapiedi.
   Nei cavalcavia il terrapieno non si conta due volte (`adjust_heights` in `terrain_for_game`) e il binario non va mai
-  sotto la strada che segue (`TramTrack.setHeights` in `tram.js`); l'asfalto in quota è suddiviso ogni 20 m in
+  sotto la strada che segue (la media delle quote dei binari, da #107 in `scripts/quote_rete.py`); l'asfalto in quota è suddiviso ogni 20 m in
   `buildRoads`. In `tests/mappa.spec.js` `segni_sulla_sede` e `asfalto_sopra_sede` sono a 0;
 - `buildDecks` costruisce gli impalcati in 0,1 s (erano 17 s all'avvio, segnalati da `capolinea`);
 - profilo dei cavalcavia (#83, 12 novembre): regola, fonti e cavalcavia peggiori in [`cavalcavia.md`](cavalcavia.md).
@@ -275,10 +276,8 @@ Da sapere prima di toccare questi file:
 - `street_surfaces.py`: `quote_arco` e `quota_arco` danno la quota lungo un arco (profilo, zero per gli altri archi
   delle strutture attive, lineare tra i nodi per il resto); le usano `surfaces`, `decks` e `_tram_heights`.
   `overpass_heights` salta gli archi delle strutture attive, `terrain_for_game` non spiana sotto di loro;
-- nel gioco: `edgeHeight` legge `e.hs` (da `MAP.edgeH`), `e.decl` segna gli archi delle strutture attive,
-  `Terrain` applica `terrain.via`. Fuori dalla mia area: in `tram.js` `setHeights(fn, esatta)` non fa la media né
-  applica la soglia di 0,25 m dove la quota viene da una struttura attiva (`city.nearProfile`). Oggi i casi dei
-  binari sono quelli di prima (le strutture col tram sono spente): serve a #123;
+- nel gioco: `edgeHeight` legge `e.hs` (da `MAP.edgeH`), `Terrain` applica `terrain.via`. Le quote dei binari sulle
+  strutture attive, senza media, le scrive la build da #107 (nota sotto): serve a #123;
 - le rampe delle strutture attive sono archi a terra su un rilevato del terreno: hanno marciapiedi, strisce e fermate
   come le altre strade. Restano in quota le campate e gli ultimi 40 m prima;
 - la mappa pubblicata è quella di `main` con, dalla rigenerazione, `nodeH`, `edgeH`, `cavalcavia`, `terrain`,
@@ -305,6 +304,43 @@ Da sapere prima di toccare questi file:
 - Overpass: quando `overpass-api.de` risponde 502, `https://maps.mail.ru/osm/tools/overpass/api/interpreter` ha
   risposto; user agent generico.
 
+#107, quote lette per arco e per binario (13 novembre). Regola e formato in [`cavalcavia.md`](cavalcavia.md), sezione
+7. Da sapere:
+
+- il gioco non cerca più le quote per vicinanza. `edgeH` ha tutti gli archi in quota (il profilo per le strutture
+  attive, i due capi per gli altri cavalcavia) e `tramH` il profilo di ogni binario lungo la progressiva dei dati: li
+  scrive `scripts/quote_rete.py`, che `build_map.py` chiama alla fine e che con `--scrivi` li rifà nella mappa che c'è
+  senza rigenerarla. `nodeH` resta nella mappa per gli script, il gioco non lo legge;
+- tolti dal gioco: `City.heightAt(x, z, cur)`, `City.nearElevatedHeight` e `nearProfile`, `TramTrack.setHeights` e
+  `TramTrack.h`, `markOverpasses` e `e.decl` in `padova.js`. `edgeHeight` e `profileAt` stanno in `src/data/padova.js`
+  (`city.js` riesporta `edgeHeight`). Per costruire la scena resta `City.elevHeight(x, z)`;
+- il bus di chi guida: `bus.assi`, due stati `{ e, s, q }` (arco, progressiva, quota) tenuti da `City.quotaSotto` in
+  `step` di `main.js`; `bus.elev = undefined` (dopo un teletrasporto) li azzera e si riparte dalla strada più alta lì
+  sotto. Chi sposta il bus con `bus.place` senza azzerare `bus.elev` lascia gli assi sull'arco di prima: al passo dopo
+  non lo trovano più e lo ricercano con la quota di prima (`City.arcoIn`);
+- fuori dalla mia area. In `tram.js`: `TramTrack.heightAt` legge `hp` (il profilo del binario sulla progressiva del
+  percorso), `ds` è la progressiva dei dati a ogni vertice del percorso, `pathS(dir, D)` porta una progressiva dei
+  dati su quella del percorso, `heights(dir, passo)` dà le quote per le prove; `opts.da` è la progressiva dei dati al
+  primo punto dei binari delle linee nuove (`da` in `NEW_TRAM_LINES`, che li taglia con `polyCut`). I binari non
+  secondo la regola (`regola` falso, oggi nessuno) restano a terra: chi li rimette deve dare a ogni punto la sua
+  progressiva dei dati. In `traffic.js`: `Traffic.carHeight` (quota dell'auto dal suo arco; in curva tra `h0` e `h1`
+  di `turnPath`), i pedoni con `edgeHeight(p.e, p.s)`. In `city.js` i tratti della sede del tram nella griglia
+  (`indexFeatures`) portano in `ref` il profilo del loro binario (`onSede`). `__game.edgeHeight` per le prove;
+- la quota dei binari sui cavalcavia con le quote di prima ha ancora la media che faceva il gioco, ora in
+  `quote_rete.profilo`: a 5 m di passo è uguale a quella di prima entro 2 cm, le vedute non cambiano. Sulle strutture
+  attive il binario prende la quota assoluta della strada, punto per punto. Provato accendendo in memoria Borgomagno,
+  Chiesanuova, San Marco, Via Venezia e Dalmazia: binari fuori quota da 28 a 0, restano onde lievi e pendenze tra 6 e 9,6% (#123);
+- `data/profili-cavalcavia.json`: i profili per struttura. Chi cambia quote, terreno o registro dei cavalcavia lancia
+  `python3 scripts/profili_strutture.py --aggiorna` e nomina nel commit le strutture che il diff tocca; senza, fallisce
+  `tests/profili.spec.js`, che ha anche il pilota sopra gli 11 cavalcavia dove passa una linea (quota letta entro
+  5 mm da quella del file; i tre gradini che si vedono al cambio d'arco, dove il terreno non è uguale su tutta la
+  larghezza, sono in `data/eccezioni/profili-pilota.json`);
+- `scripts/cavalcavia.py` legge le quote come il gioco (`edgeH` per tutti gli archi, la frazione dell'arco per
+  l'ultima progressiva scritta; `tramH` per i binari nei dati): al millimetro cambiano, e il punto peggiore di cinque
+  casi delle strade si è spostato di più di 4 m (elenco aggiornato). I casi dei binari nei dati sono ora quelli del
+  gioco;
+- la mappa è quella di `main` con `edgeH` e `tramH` nuovi: nessuna cella e nessuna area cambiata.
+
 Fatto il 9 e l'11 novembre: corsie e segnaletica dai tag OSM, fermate del tram sui nodi `tram_stop`, dossi e
 attraversamenti rialzati, area ai bordi e linee tagliate, inversioni a U, corsie di servizio dei capolinea, lampioni
 fuori dall'asfalto vero (`buildTreesAndLamps` con `surfaceOff`), sede di SIR2 e SIR3, rotonde attraversate dal tram,
@@ -317,7 +353,7 @@ dossi (`bumpHit`); le soglie di `scripts/verifica_mappa.py` e `tests/mappa.spec.
 `ahead`) i bus automatici lasciano il binario del verso opposto prima di tutto (o vanno su quello del loro verso se la
 carreggiata non basta: da 6.460 a 635 punti di corsia sopra un binario opposto, quasi tutti incroci obliqui) e si
 fermano davanti a un tram che arriva (passavano come direzione dei pezzi del tram la loro quota); in `tram.js` la
-media delle quote del binario non lo porta sotto la strada (`setHeights`); in `city.js` gli alberi dei viali e quelli
+media delle quote del binario non lo porta sotto la strada (`setHeights`, da #107 nella build); in `city.js` gli alberi dei viali e quelli
 sparsi fuori dall'asfalto vero (`buildTreesAndLamps`); in `main.js` il terreno passato a `City` (`{ terrain }`, per
 l'asfalto vicino alla sede del tram).
 

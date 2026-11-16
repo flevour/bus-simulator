@@ -136,13 +136,16 @@ const NEW_TRAM_LINES = NEW_TRAM.linee.map((l) => {
       festivo: v.fes.map(([t, d]) => ({ t: t + (o0 * d) / D, d: (dur * d) / D })),
     };
   });
+  // da: progressiva lungo il percorso dei dati del primo punto di ogni binario (le quote di MAP.tramH sono lì)
+  const da = [];
   const lanes = versi.map(({ path, stops, i0, i1 }) => {
     const s0 = polyS(path, stops[i0].x, stops[i0].z), s1 = polyS(path, stops[i1].x, stops[i1].z);
+    da.push(Math.max(0, s0 - 150));
     return polyCut(path, s0 - 150, s1 + 150);
   });
   const a = variants[0];
   return {
-    id: l.id, color: l.colore, tram: true, building: true, modules: l.moduli, variants, pair: [0, 1], lanes,
+    id: l.id, color: l.colore, tram: true, building: true, modules: l.moduli, variants, pair: [0, 1], lanes, da,
     headsign: `${a.stops[0].name} ↔ ${a.stops[a.stops.length - 1].name}`, name: l.nome,
   };
 });
@@ -291,7 +294,11 @@ export function buildNetwork() {
   const tramStops = (MAP.tramStops || []).map(([x, z, name, central]) => ({ x, z, name, central: !!central }));
   // linee in costruzione: binari OSM per verso; secondo la regola come sono, altrimenti curve raccordate e fuori dagli
   // edifici come quelli del SIR1
-  const tramLines = NEW_TRAM_LINES.map((L) => ({ id: L.id, regola: !!NEW_TRAM.regola, lanes: L.lanes.map((t) => (NEW_TRAM.regola ? t : clearOfBuildings(smoothTrack(t), tramBuildings, [-1.4, 0, 1.4]))) }));
+  const tramLines = NEW_TRAM_LINES.map((L) => ({ id: L.id, regola: !!NEW_TRAM.regola, da: L.da, lanes: L.lanes.map((t) => (NEW_TRAM.regola ? t : clearOfBuildings(smoothTrack(t), tramBuildings, [-1.4, 0, 1.4]))) }));
+  // quota dei binari sopra il terreno lungo la progressiva dei dati (scripts/quote_rete.py): per linea e verso
+  // { s: progressive in cm, q: quote in mm }; dove non c'è scritto niente il binario sta a terra
+  const tramH = {};
+  for (const [id, d, ss, qs] of MAP.tramH || []) (tramH[id] || (tramH[id] = {}))[d] = { s: ss, q: qs };
   const landmarks = Object.fromEntries(Object.entries(LANDMARKS).map(([k, [la, lo]]) => [k, toXZ(la, lo)]));
   const edges = [];
   const E = MAP.edges;
@@ -328,25 +335,17 @@ export function buildNetwork() {
     for (const e of used) e.routes++;
   }
   for (const e of edges) if (e.routes >= 2) e.main = true;
-  // quote dei cavalcavia: calcolate con la pianta delle strade (stessa regola), altrimenti qui
-  if (MAP.nodeH) {
-    for (const [i, h] of MAP.nodeH) if (nodes[i]) nodes[i].h = h;
-    // strutture con il profilo calcolato dalla build (scripts/profilo_cavalcavia.py, docs/cavalcavia.md): la quota sopra
-    // il terreno lungo l'arco sta in MAP.edgeH ([arco, progressive in cm, quote in mm], un punto a ogni confine di cella
-    // del terreno: terreno più quota dà il profilo); gli altri loro archi stanno a terra. Fuori da quelle strutture la
-    // quota è lineare tra i nodi
-    const dichiarati = new Set();
-    for (const s of MAP.cavalcavia || []) for (const k of s.archi) if (byK[k]) { dichiarati.add(byK[k]); byK[k].decl = true; }
-    for (const [k, ss, qs] of MAP.edgeH || []) {
-      const e = byK[k];
-      if (e) { e.elev = true; e.hs = { s: ss, q: qs, L: ss[ss.length - 1] || 1 }; e.ha = qs[0] / 1000; e.hb = qs[qs.length - 1] / 1000; }
-    }
-    for (const e of edges) {
-      if (dichiarati.has(e)) continue;
-      const ha = nodes[e.a].h || 0, hb = nodes[e.b].h || 0;
-      if (ha > 0.05 || hb > 0.05) { e.elev = true; e.ha = ha; e.hb = hb; }
-    }
-  } else markOverpasses(nodes, edges, rails);
+  // quote dei cavalcavia: la quota sopra il terreno lungo ogni arco in quota sta in MAP.edgeH ([arco, progressive in cm,
+  // quote in mm]), scritta dalla build (docs/cavalcavia.md, sezioni 6 e 7): il profilo della struttura con un punto a
+  // ogni confine di cella del terreno (terreno più quota dà il profilo) o, per i cavalcavia con le quote di prima, i due
+  // capi dell'arco. Gli archi che non ci sono stanno a terra. La quota di un nodo è quella dei suoi archi lì
+  for (const [k, ss, qs] of MAP.edgeH || []) {
+    const e = byK[k];
+    if (!e) continue;
+    e.elev = true;
+    e.hs = { s: ss, q: qs, L: ss[ss.length - 1] || 1 };
+    for (const [n, q] of [[nodes[e.a], qs[0]], [nodes[e.b], qs[qs.length - 1]]]) n.h = Math.max(n.h || 0, Math.round(q / 10) / 100);
+  }
   // segnaletica reale dai nodi OSM; null se la mappa è stata generata senza (il gioco la deduce dal tipo di strada)
   const signals = MAP.signals ? MAP.signals.map(([ped, ...ids]) => ({ ped: !!ped, nodes: ids.map((i) => nodes[i]) })) : null;
   const signs = MAP.signs ? new Map() : null; // `${incrocio}:${arco}` -> 0 STOP, 1 dare precedenza
@@ -384,7 +383,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = MAP.edificiBBox || [Infinity, Infinity, -Infinity, -Infinity];
   if (!MAP.edificiBBox) for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramRegola: regola, tramLines, tramStazione: MAP.tramStazione || null, tramScambi: (NEW_TRAM.scambi || []).map(([a, b, c, d]) => [toXZ(a, b), toXZ(c, d)]), surfaces: MAP.surfaces || null, tramStops, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramRegola: regola, tramLines, tramStazione: MAP.tramStazione || null, tramScambi: (NEW_TRAM.scambi || []).map(([a, b, c, d]) => [toXZ(a, b), toXZ(c, d)]), surfaces: MAP.surfaces || null, tramStops, tramH, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m
@@ -444,83 +443,22 @@ export function laneSpan(e, fwd) {
   return offs.length ? [Math.min(...offs) - lay.w / 2, Math.max(...offs) + lay.w / 2] : null;
 }
 
-// ponti stradali sopra la ferrovia o sopra un'altra strada: impalcato in quota con rampe di accesso
-function markOverpasses(nodes, edges, rails) {
-  const crosses = (A, B) => {
-    for (const r of rails) {
-      if (r.tunnel || r.bridge) continue;
-      for (let i = 0; i < r.pts.length - 1; i++) {
-        const c = r.pts[i], d = r.pts[i + 1];
-        const rx = B.x - A.x, rz = B.z - A.z, sx = d.x - c.x, sz = d.z - c.z;
-        const den = rx * sz - rz * sx;
-        if (Math.abs(den) < 1e-9) continue;
-        const t = ((c.x - A.x) * sz - (c.z - A.z) * sx) / den, u = ((c.x - A.x) * rz - (c.z - A.z) * rx) / den;
-        if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return true;
-      }
-    }
-    return false;
-  };
-  // strade di sotto attraversate da un ponte (senza nodi in comune): Corso Tredici Giugno sopra Via Sacro Cuore
-  const C = 100, grid = new Map();
-  for (const f of edges) {
-    if (f.bridge || f.tunnel || f.ped) continue;
-    const A = nodes[f.a], B = nodes[f.b];
-    for (let gx = Math.floor(Math.min(A.x, B.x) / C); gx <= Math.floor(Math.max(A.x, B.x) / C); gx++)
-      for (let gz = Math.floor(Math.min(A.z, B.z) / C); gz <= Math.floor(Math.max(A.z, B.z) / C); gz++) {
-        const k = gx + ',' + gz;
-        if (!grid.has(k)) grid.set(k, []);
-        grid.get(k).push(f);
-      }
-  }
-  const under = new Set();
-  const overRoad = (e) => {
-    const A = nodes[e.a], B = nodes[e.b];
-    let hit = false;
-    for (let gx = Math.floor(Math.min(A.x, B.x) / C); gx <= Math.floor(Math.max(A.x, B.x) / C); gx++)
-      for (let gz = Math.floor(Math.min(A.z, B.z) / C); gz <= Math.floor(Math.max(A.z, B.z) / C); gz++)
-        for (const f of grid.get(gx + ',' + gz) || []) {
-          if (f.layer >= e.layer || f.a === e.a || f.a === e.b || f.b === e.a || f.b === e.b) continue;
-          const c = nodes[f.a], d = nodes[f.b];
-          const rx = B.x - A.x, rz = B.z - A.z, sx = d.x - c.x, sz = d.z - c.z, den = rx * sz - rz * sx;
-          if (Math.abs(den) < 1e-9) continue;
-          const t = ((c.x - A.x) * sz - (c.z - A.z) * sx) / den, u = ((c.x - A.x) * rz - (c.z - A.z) * rx) / den;
-          if (t >= 0 && t <= 1 && u >= 0 && u <= 1) { hit = true; under.add(f.a); under.add(f.b); }
-        }
-    return hit;
-  };
-  const H = 7, R = 130, PSV_DECK = 0.92;
-  const deck = new Set();
-  for (const e of edges) if (e.bridge && e.layer >= 1 && (crosses(nodes[e.a], nodes[e.b]) | overRoad(e))) deck.add(e);
-  // tutto il ponte (catena di tratti con bridge) sta in quota
-  const stack = [...deck];
-  while (stack.length) {
-    const e = stack.pop();
-    for (const nid of [e.a, e.b]) for (const f of nodes[nid].edges) if (f.bridge && f.layer >= 1 && !deck.has(f)) { deck.add(f); stack.push(f); }
-  }
-  const dist = new Map();
-  const queue = [];
-  for (const e of deck) for (const nid of [e.a, e.b]) if (!dist.has(nid)) { dist.set(nid, 0); queue.push(nid); }
-  while (queue.length) {
-    const id = queue.shift();
-    const d0 = dist.get(id);
-    for (const f of nodes[id].edges) {
-      if (deck.has(f)) continue;
-      const o = f.a === id ? f.b : f.a;
-      const d = d0 + f.len;
-      // la rampa non sale sulla strada che passa sotto
-      if (d < R && !under.has(o) && (!dist.has(o) || dist.get(o) > d)) { dist.set(o, d); queue.push(o); }
-    }
-  }
-  // le corsie riservate ai bus in quota (Borgomagno: verso nord, sulla sede del tram) stanno poco più in basso della
-  // strada accanto: il cavalcavia è un corpo unico su due livelli
-  for (const [id, d] of dist) {
-    const u = Math.max(0, Math.min(1, 1 - d / R));
-    nodes[id].h = H * u * u * (3 - 2 * u) * (nodes[id].edges.every((e) => e.psv) ? PSV_DECK : 1);
-  }
-  for (const e of edges) {
-    const ha = nodes[e.a].h || 0, hb = nodes[e.b].h || 0;
-    if (ha > 0.05 || hb > 0.05) { e.elev = true; e.ha = ha; e.hb = hb; }
-  }
+// quota (m) alla progressiva x di un profilo { s: progressive, q: quote in mm }, lineare tra i punti; fuori dal profilo
+// vale il primo o l'ultimo punto
+export function profileAt(p, x) {
+  const S = p.s, Q = p.q;
+  let lo = 0, hi = S.length - 1;
+  if (x <= S[0]) return Q[0] / 1000;
+  if (x >= S[hi]) return Q[hi] / 1000;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] <= x) lo = m; else hi = m; }
+  const d = S[hi] - S[lo];
+  return (Q[lo] + (d > 0 ? ((Q[hi] - Q[lo]) * (x - S[lo])) / d : 0)) / 1000;
+}
+// quota sopra il terreno della carreggiata lungo un arco, alla progressiva s (m dal nodo a): il profilo scritto dalla
+// build (e.hs, da MAP.edgeH); zero sugli archi a terra
+export function edgeHeight(e, s) {
+  const p = e.hs;
+  return p ? profileAt(p, Math.max(0, Math.min(1, s / e.len)) * p.L) : 0;
 }
 
 export function parseHM(s) {

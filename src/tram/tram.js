@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ledTexture } from '../world/textures.js';
-import { TRAM_LINES } from '../data/padova.js';
+import { TRAM_LINES, profileAt } from '../data/padova.js';
 import { RainGlass, WIPER_PARK, wiperPhase } from '../bus/rainglass.js';
 
 // Tram su gomma a guida vincolata (Translohr del SIR1): moduli articolati che seguono la rotaia centrale.
@@ -158,7 +158,8 @@ const sampleV = (P) => {
 };
 export class TramTrack {
   // net: la rete (net.tram, net.tramLanes, net.tramStops: la sede del SIR1). Per le altre linee opts: id, lanes (i binari
-  // OSM dei versi +1 e -1), lines (le linee che ci corrono), over (sedi già posate, per i tratti in comune)
+  // OSM dei versi +1 e -1), da (progressiva dei dati al primo punto di ogni binario), lines (le linee che ci corrono),
+  // over (sedi già posate, per i tratti in comune)
   constructor(net, opts = {}) {
     this.id = opts.id || 'SIR1';
     const raw = opts.lanes || net.tram || [], osm = opts.lanes ? true : net.tramLanes;
@@ -176,9 +177,12 @@ export class TramTrack {
     const ns = sample(C);
     const wN = rampWeights(ns.map((s) => { const p = C.at(s); return (S && S.projectNear(p.x, p.z, NEAR)) || nearOther(p) ? 1 : 0; }), STEP, 25);
     const north = ns.map((s, i) => { const p = C.at(s), o = osm ? 0 : TRAM.lane * wN[i]; return { x: p.x - p.dz * o, z: p.z + p.dx * o }; });
+    // progressiva lungo il binario dei dati di ogni punto, per verso: lì la build ha scritto la quota (net.tramH)
+    const da = opts.da || [0, 0], src = { 1: osm ? ns.map((s) => s + da[0]) : null, '-1': null };
     let south, wS;
     if (S && osm) {
       const ss = sample(S);
+      src[-1] = ss.map((s) => s + da[1]);
       wS = rampWeights(ss.map((s) => { const p = S.at(s); return C.projectNear(p.x, p.z, NEAR) || nearOther(p) ? 1 : 0; }), STEP, 25);
       south = ss.map((s) => { const p = S.at(s); return { x: p.x, z: p.z }; });
     } else if (S) {
@@ -204,10 +208,14 @@ export class TramTrack {
     this.shared = { 1: [], '-1': [] };
     this.switches = [];
     this.paths = {};
+    this.hp = { 1: null, '-1': null }; // quota sopra il terreno lungo ogni binario (heightAt)
+    this.ds = { 1: null, '-1': null }; // progressiva lungo il binario dei dati a ogni vertice del percorso
     for (const [d, pts] of [[1, north], [-1, south]]) {
       // il verso -1 può correre anche sul binario +1 della stessa linea (capolinea ad anello: SIR3 in stazione)
       const hit = snapShared(pts, d > 0 ? others : [...others, { T: this, dir: 1, P: this.paths[1] }], regola), keep = dedupIdx(pts);
       const P = (this.paths[d] = new TrackPath(keep.map((i) => pts[i])));
+      this.ds[d] = src[d] && keep.map((i) => src[d][i]);
+      this.hp[d] = heightProfile(P, this.ds[d], ((net.tramH || {})[this.id] || {})[d]);
       const h = keep.map((i) => hit[i]);
       for (let i = 0; i < h.length;) {
         if (!h[i]) { i++; continue; }
@@ -225,7 +233,6 @@ export class TramTrack {
     }
     // doppio binario lungo ogni percorso (0..1), campionato come i punti
     this.dbl = { 1: resampleW(this.paths[1], north, wN), '-1': resampleW(this.paths[-1], south, wS) };
-    this.h = { 1: null, '-1': null };
     // fermate per verso: dalle fermate reali di tutte le corse. Sul tratto in comune la fermata è quella della sede che
     // c'era già, se ce n'è una a meno di 30 m nello stesso verso: la corsa si ferma alla stessa banchina (shared)
     this.stopsDir = { 1: [], '-1': [] };
@@ -390,37 +397,41 @@ export class TramTrack {
   doubleAt(dir, s) { const P = this.path(dir), w = this.dbl[dir > 0 ? 1 : -1]; return w[Math.min(w.length - 1, P.seg(s))]; }
   wireAt(dir, s) { return !this.gaps[dir > 0 ? 1 : -1].some(([a, b]) => s > a && s < b); }
   gapAhead(dir, s, dist) { return this.gaps[dir > 0 ? 1 : -1].some(([a]) => a - s > 0 && a - s < dist); }
-  // quota del binario (cavalcavia): campionata ogni 5 m, levigata. Dove i binari sono affiancati stanno sullo stesso
-  // impalcato: vale la quota più alta delle due corsie (sul Cavalcavia Borgomagno il binario verso nord è più lontano
-  // dalla strada e da solo resterebbe a terra)
-  // fn(x, z, dx, dz): quota della strada in quota che il binario affianca; esatta(): vero se l'ultima quota chiesta viene
-  // dal profilo di una struttura (scripts/profilo_cavalcavia.py), che vale così com'è: niente media e niente soglia, se
-  // no dove il terreno sotto scende (le spalle) il binario si staccherebbe dalla strada
-  setHeights(fn, esatta = () => false) {
-    for (const d of [1, -1]) {
-      const P = this.paths[d], O = this.paths[-d], raw = [], ex = [];
-      for (let s = 0; s <= P.len; s += 5) {
-        const p = P.at(s);
-        let h = fn(p.x, p.z, p.dx, p.dz), e = esatta();
-        if (!e && this.doubleAt(d, s) > 0.5) {
-          const q = O.at(O.project(p.x, p.z).s);
-          h = Math.max(h, fn(q.x, q.z, p.dx, p.dz));
-        }
-        raw.push(h);
-        ex.push(e);
-      }
-      const sm = raw.map((_, i) => { let a = 0, n = 0; for (let k = -5; k <= 5; k++) { const v = raw[i + k]; if (v != null) { a += v; n++; } } return a / n; });
-      // la media smussa i raccordi in basso, ma non abbassa il binario sotto la strada che segue: in cima alle rampe
-      // finiva sotto l'impalcato e la sede rossa spariva a pezzi (Cavalcavia Chiesanuova sul SIR2)
-      this.h[d] = sm.map((v, i) => { if (ex[i]) return raw[i]; const w = Math.max(v, raw[i]); return w < 0.25 ? 0 : w; });
-    }
-  }
+  // quota del binario sopra il terreno alla progressiva s (cavalcavia): il profilo scritto dalla build per questo
+  // binario (scripts/quote_rete.py: la quota della strada che affianca sull'impalcato), zero dove sta a terra
   heightAt(dir, s) {
-    const h = this.h[dir > 0 ? 1 : -1];
-    if (!h) return 0;
-    const f = Math.max(0, Math.min(h.length - 1, s / 5)), i = Math.floor(f), t = f - i;
-    return h[i] + ((h[Math.min(h.length - 1, i + 1)] ?? h[i]) - h[i]) * t;
+    const p = this.hp[dir > 0 ? 1 : -1];
+    return p ? profileAt(p, s) : 0;
   }
+  // progressiva lungo il percorso del verso dir del punto che nei dati sta alla progressiva D (m); null senza i dati
+  pathS(dir, D) {
+    const d = dir > 0 ? 1 : -1;
+    return this.ds[d] ? dataToPath(this.paths[d], this.ds[d], [D])[0] : null;
+  }
+  // le quote ogni `passo` metri lungo il binario (per le prove)
+  heights(dir, passo = 5) {
+    const out = [], P = this.path(dir);
+    for (let s = 0; s <= P.len; s += passo) out.push(this.heightAt(dir, s));
+    return out;
+  }
+}
+// Le progressive D (m, crescenti) lungo il binario dei dati portate sulla progressiva del percorso P. ds: progressiva
+// dei dati a ogni vertice di P (il percorso segue il binario dei dati, con qualche punto in più o in meno)
+function dataToPath(P, ds, D) {
+  const out = [], n = ds.length;
+  let i = 0;
+  for (const v of D) {
+    while (i < n - 2 && ds[i + 1] < v) i++;
+    const l = ds[i + 1] - ds[i], t = l > 1e-9 ? Math.max(0, Math.min(1, (v - ds[i]) / l)) : 0;
+    out.push(P.cum[i] + (P.cum[i + 1] - P.cum[i]) * t);
+  }
+  return out;
+}
+// Profilo della quota lungo il percorso P: i punti del profilo dei dati q ({ s: progressive in cm lungo il binario dei
+// dati, q: quote in mm }) portati sulla progressiva del percorso. null se il binario sta tutto a terra
+function heightProfile(P, ds, q) {
+  if (!q || !ds || ds.length < 2) return null;
+  return { s: dataToPath(P, ds, q.s.map((c) => c / 100)), q: q.q };
 }
 // ---------- rete dei binari: i bivi tra le linee e gli scambi dei capolinea ----------
 // Nei tratti in comune (TramTrack.shared) il binario di una sede corre sopra quello di una sede già posata, con la stessa

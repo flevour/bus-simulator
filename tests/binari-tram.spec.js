@@ -61,7 +61,7 @@ function binari() {
       return { curve: P(out) };
     }),
     // quote dei binari ogni 5 m, fermate per i nomi dei posti
-    quote: T.h[1] ? { 1: T.h[1].map(r), '-1': T.h[-1].map(r) } : null,
+    quote: { 1: T.heights(1).map(r), '-1': T.heights(-1).map(r) },
     fermate: [1, -1].flatMap((d) => T.stopsDir[d].map((s) => [r(s.x), r(s.z), s.name])),
   }));
   const yards = (city.tramYards || []).map((Y) => ({

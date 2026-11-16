@@ -3,7 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { allStopPlacements } from '../game/routes.js';
-import { LINES, TRAM_LINES, TRAM_DEPOTS, laneLayout, laneSpan, parseBuilding } from '../data/padova.js';
+import { LINES, TRAM_LINES, TRAM_DEPOTS, laneLayout, laneSpan, parseBuilding, edgeHeight, profileAt } from '../data/padova.js';
+export { edgeHeight };
 import { AREA_SIZE, AREA_KEYS, areaData, requestArea, dropArea, areaKeysNear, loadAllAreas } from '../data/aree.js';
 import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, TramNet, TramYard, tramLength } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
@@ -389,19 +390,6 @@ export function makeBuildingMaterial(uniforms, merged = false) {
   return m;
 }
 
-// quota della carreggiata sopra il terreno lungo un arco in quota, alla progressiva s: il profilo della struttura
-// (e.hs, da MAP.edgeH: progressive in cm e quote in mm) o, senza, lineare tra i due nodi
-export function edgeHeight(e, s) {
-  if (!e.elev) return 0;
-  const t = Math.max(0, Math.min(1, s / e.len)), p = e.hs;
-  if (!p) return e.ha + (e.hb - e.ha) * t;
-  const S = p.s, Q = p.q, x = t * p.L;
-  let lo = 0, hi = S.length - 1;
-  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] <= x) lo = m; else hi = m; }
-  const d = S[hi] - S[lo];
-  return (Q[lo] + (d > 0 ? ((Q[hi] - Q[lo]) * (x - S[lo])) / d : 0)) / 1000;
-}
-
 const CENTRO = { x: -150, z: 120 };
 export function zoneOf(x, z) {
   const d = Math.hypot(x - CENTRO.x, (z - CENTRO.z) * 1.15);
@@ -492,8 +480,18 @@ export class City {
     for (const r of rails) if (!r.tunnel) for (let i = 0; i < r.pts.length - 1; i++) this.addSeg(r.pts[i].x, r.pts[i].z, r.pts[i + 1].x, r.pts[i + 1].z, 3.2, 'rail');
     // sede del tram: attorno all'asse dei due binari, o attorno a ogni binario (binari OSM)
     const thw = this.net.tramLanes ? TRAM.lane + 0.3 : TRAM_HW;
-    for (const t of this.net.tram || []) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, thw, 'tram');
-    for (const T of this.net.tramLines || []) for (const t of T.lanes) for (let i = 0; i < t.length - 1; i++) this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, TRAM.lane + 0.3, 'tram');
+    // ogni tratto porta il profilo della quota del suo binario (net.tramH) e la progressiva dei dati al primo capo:
+    // così chi chiede la quota della sede in un punto (onSede) la legge dal binario, senza cercare strade vicine
+    const sede = (t, hw, q, s0) => {
+      for (let i = 0, s = s0; i < t.length - 1; i++) {
+        const l = Math.hypot(t[i + 1].x - t[i].x, t[i + 1].z - t[i].z);
+        this.addSeg(t[i].x, t[i].z, t[i + 1].x, t[i + 1].z, hw, 'tram', q ? { q, s, l } : null);
+        s += l;
+      }
+    };
+    const TH = this.net.tramH || {};
+    (this.net.tram || []).forEach((t, k) => sede(t, thw, this.net.tramLanes && TH.SIR1 ? TH.SIR1[k ? -1 : 1] : null, 0));
+    for (const T of this.net.tramLines || []) T.lanes.forEach((t, k) => sede(t, TRAM.lane + 0.3, TH[T.id] ? TH[T.id][k ? -1 : 1] : null, (T.da || [0, 0])[k]));
     // solo la sede, per i segni della strada (onSede, offTram), e solo le strade in quota, per le quote di carreggiate
     // e impalcati in quota vertice per vertice (elevHeight)
     this.tramGrid = new Grid(40);
@@ -1188,11 +1186,8 @@ export class City {
     return false;
   }
 
-  // quota della strada sotto un punto (cavalcavia), 0 altrove
-  // quota della strada in un punto. Con cur (quota attuale del veicolo) vale, tra le superfici che ci sono lì, quella
-  // più vicina a cur: il piano terra conta solo dove sotto il cavalcavia passa davvero un'altra strada, così sulle
-  // rampe si sale e chi passa sotto resta a terra
-  // come heightAt(x, z) senza cur, cercando solo tra le strade in quota (molto più veloce, per costruire la scena)
+  // quota sopra il terreno della strada in quota più alta in un punto (cavalcavia), 0 altrove: una ricerca per punto,
+  // solo per costruire la scena e per le prove. I mezzi leggono la quota dall'arco o dal binario su cui sono
   elevHeight(x, z) {
     let h = 0;
     for (const it of this.elevGrid.query(x, z, 12, this._qeh || (this._qeh = []))) {
@@ -1201,31 +1196,61 @@ export class City {
     }
     return h;
   }
-  heightAt(x, z, cur = null) {
-    const arr = this.segGrid.query(x, z, 12, this._qh || (this._qh = []));
-    let h = 0, best = Infinity, diff = Infinity, any = false, under = false;
-    for (const it of arr) {
+  // Quota sopra il terreno della strada sotto un punto che si muove (un asse del bus di chi guida), letta dall'arco su
+  // cui il punto sta. st = { e, s, q }: l'arco, la progressiva e la quota dell'ultima volta (st.e null: da cercare);
+  // (hx, hz): la direzione del mezzo. Il punto resta sul suo arco finché è nella sua carreggiata, poi passa a uno che
+  // lo tocca a un nodo: da un arco a
+  // quello dopo la quota è continua, e la strada che passa sotto o sopra senza un nodo in comune non si prende mai. Tra
+  // l'arco di prima e i suoi vicini vale quello nella cui carreggiata il punto sta più dentro, e a un incrocio quello
+  // nella direzione del mezzo (la traversa, anche se il suo asse è più vicino, no). Solo quando il punto non è più su nessuno di questi (fuori strada,
+  // sull'altra carreggiata, dopo un salto) si cerca tra gli archi lì attorno (arcoIn)
+  quotaSotto(st, x, z, hx = 0, hz = 0) {
+    const N = this.net.nodes, e0 = st.e;
+    let best = null, bs = Infinity, bt = 0;
+    const prova = (e) => {
+      const A = N[e.a], tr = (x - A.x) * e.dx + (z - A.z) * e.dz, t = Math.max(0, Math.min(e.len, tr));
+      const d = Math.hypot(x - A.x - e.dx * t, z - A.z - e.dz * t);
+      if (d > e.width / 2 + 1.5) return;
+      // la distanza dall'asse conta in rapporto alla mezza carreggiata (3 al bordo): accanto a una rampa stretta che si
+      // innesta o si stacca, chi sta nella corsia di destra della strada larga è più vicino all'asse della rampa ma sta
+      // sulla strada. Un arco di cui il punto vede solo un capo (oltre la fine, a più di 0,5 m) conta meno di quello su
+      // cui sta (2), uno di traverso alla direzione del mezzo meno ancora (fino a 3); quello di prima un poco di più
+      const sc = (3 * d) / (e.width / 2) + (tr !== t && d > 0.5 ? 2 : 0) + 3 * (1 - Math.abs(e.dx * hx + e.dz * hz)) - (e === e0 ? 0.5 : 0);
+      if (sc < bs) { bs = sc; best = e; bt = t; }
+    };
+    if (e0) {
+      // dentro la carreggiata del suo arco, tra i due capi, il punto resta lì: accanto a una rampa che si innesta le
+      // due carreggiate si sovrappongono, e si cambia arco solo uscendo dalla propria o passando un nodo
+      const A = N[e0.a], tr = (x - A.x) * e0.dx + (z - A.z) * e0.dz;
+      if (tr >= 0 && tr <= e0.len && Math.hypot(x - A.x - e0.dx * tr, z - A.z - e0.dz * tr) <= e0.width / 2) { best = e0; bt = tr; }
+      else {
+        prova(e0);
+        for (const n of [e0.a, e0.b]) for (const f of N[n].edges) if (f !== e0) prova(f);
+      }
+    }
+    if (!best) { const r = this.arcoIn(x, z, e0 ? st.q : null); if (r) { best = r.e; bt = r.s; } }
+    st.e = best; st.s = bt;
+    st.q = best ? edgeHeight(best, bt) : 0;
+    return st.q;
+  }
+  // L'arco sotto un punto di cui non si sa su che arco sta: { e, s } o null fuori strada. Senza cur (quota di prima)
+  // vale la strada più alta (dopo un salto si resta sopra il cavalcavia); con cur quella alla quota più vicina, e chi
+  // era a terra sotto un impalcato dove passa davvero un'altra strada resta a terra
+  arcoIn(x, z, cur = null) {
+    let best = null, bs = Infinity, ground = null, gd = Infinity;
+    for (const it of this.segGrid.query(x, z, 12, this._qh || (this._qh = []))) {
       const e = it.ref;
       if (it.kind !== 'road' || !e) continue;
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
-      if (!e.elev) { if (r.d <= it.hw) under = true; continue; }
+      if (!e.elev) { if (r.d <= it.hw && r.d < gd) { gd = r.d; ground = { e, s: r.t * e.len }; } continue; }
       if (r.d > it.hw + 1.5) continue;
-      const he = edgeHeight(e, r.t * e.len);
-      any = true;
-      if (cur == null) { h = Math.max(h, he); continue; }
-      // un tratto di cui il punto vede solo un capo (oltre la fine o di fianco, a più di 0,5 m) conta meno di quello su
-      // cui sta: dopo un nodo il bus restava per qualche metro alla quota del tratto di prima, o di un ramo che parte
-      // dallo stesso nodo, e poi saltava su quello nuovo
-      const ex = it.bx - it.ax, ez = it.bz - it.az, l2 = ex * ex + ez * ez || 1, tr = ((x - it.ax) * ex + (z - it.az) * ez) / l2;
-      // e tra due carreggiate che si separano da un nodo vince quella su cui sta il mezzo (0,5 per metro di distanza
-      // dall'asse): a Chiesanuova la 10 prendeva la carreggiata che sale e poi cadeva di 2,6 m su quella giusta
-      const sc = Math.abs(he - cur) + 0.5 * r.d + ((tr < 0 || tr > 1) && r.d > 0.5 ? 1 : 0);
-      if (sc < best) { best = sc; diff = Math.abs(he - cur); h = he; }
+      const s = r.t * e.len, he = edgeHeight(e, s);
+      const sc = cur == null ? -he : Math.abs(he - cur) + 0.5 * r.d;
+      if (sc < bs) { bs = sc; best = { e, s, he }; }
     }
-    // sotto un impalcato la strada a terra vince se il mezzo è già giù; al piede di una rampa (meno di 0,5 m sopra) no,
-    // altrimenti il bus restava a terra per i primi metri e poi saltava sulla rampa (Borgomagno, 20-40 cm)
-    if (any && cur != null && under && Math.abs(cur) < diff && diff > 0.5) h = 0;
-    return h;
+    if (!best) return ground;
+    if (cur != null && ground && Math.abs(cur) < Math.abs(best.he - cur) && Math.abs(best.he - cur) > 0.5) return ground;
+    return best;
   }
 
   // ---- acqua e ponti ----
@@ -1288,10 +1313,9 @@ export class City {
     // una sede per linea: quelle in costruzione si appoggiano alle sedi già posate nei tratti in comune
     this.tramTracks = { [track.id]: track };
     for (const T of this.net.tramLines || []) {
-      this.tramTracks[T.id] = new TramTrack(this.net, { id: T.id, lanes: T.lanes, regola: T.regola, lines: TRAM_LINES.filter((L) => L.id === T.id), over: Object.values(this.tramTracks) });
+      this.tramTracks[T.id] = new TramTrack(this.net, { id: T.id, lanes: T.lanes, da: T.da, regola: T.regola, lines: TRAM_LINES.filter((L) => L.id === T.id), over: Object.values(this.tramTracks) });
     }
     const tracks = Object.values(this.tramTracks);
-    for (const T of tracks) T.setHeights((x, z, dx, dz) => this.nearElevatedHeight(x, z, dx, dz), () => this.nearProfile);
     const red = new GeoBuilder(), rail = new GeoBuilder(), kerb = new GeoBuilder();
     const deck = [], piers = [], poles = [], wires = [];
     this.tramPoles = []; // posizioni dei pali della linea aerea (per le prove)
@@ -1868,25 +1892,6 @@ export class City {
     this.group.add(tm, sm, pm);
   }
 
-  // quota della strada in quota più vicina (per il binario del tram che corre accanto al cavalcavia)
-  // quota del cavalcavia che il binario affianca (direzione dx, dz): contano solo le strade in quota quasi parallele;
-  // quelle che lo scavalcano di traverso (Corso Tredici Giugno a Pontevigodarzere) gli passano sopra
-  nearElevatedHeight(x, z, dx, dz) {
-    const arr = this.segGrid.query(x, z, 18, this._qe || (this._qe = []));
-    let h = 0, bd = Infinity;
-    // nearProfile: la strada trovata ha il profilo della sua struttura (la quota è già quella giusta in ogni punto, e
-    // TramTrack.setHeights non la media con quelle vicine)
-    this.nearProfile = false;
-    for (const it of arr) {
-      const e = it.ref;
-      // e.decl: arco di una struttura con il profilo, anche dove sta a terra (lì la quota è zero, ed è quella giusta)
-      if (it.kind !== 'road' || !e || !(e.elev || e.decl)) continue;
-      if (dx != null && Math.abs(dx * e.dz - dz * e.dx) > 0.7) continue;
-      const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
-      if (r.d < it.hw + 9 && r.d < bd) { bd = r.d; h = edgeHeight(e, r.t * e.len); this.nearProfile = !!(e.hs || e.decl); }
-    }
-    return h;
-  }
   // tram: c'è la linea aerea sopra il binario di verso dir alla progressiva s?
   catenaryAt(dir, s) { return !this.tramTrack || this.tramTrack.wireAt(dir, s); }
 
@@ -1902,12 +1907,13 @@ export class City {
   }
   // un segno della strada in (x, z), a quota h sopra il terreno, cade sulla sede del tram (corsie rosse, cordoli e quello
   // che c'è tra i due binari)? Non conta la sede che passa sotto un cavalcavia o sopra la strada su un viadotto: la quota
-  // del binario è quella della strada in quota che affianca (come in buildTramway)
+  // della sede è quella del suo binario in quel punto (il profilo scritto dalla build, come TramTrack.heightAt)
   onSede(x, z, h = 0, margin = 0.1) {
     for (const t of this.tramGrid.query(x, z, 3, this._qts || (this._qts = []))) {
-      if (distToSeg(x, z, t.ax, t.az, t.bx, t.bz).d >= t.hw + margin) continue;
-      const l = Math.hypot(t.bx - t.ax, t.bz - t.az) || 1;
-      if (Math.abs(this.nearElevatedHeight(x, z, (t.bx - t.ax) / l, (t.bz - t.az) / l) - h) < 1.5) return true;
+      const r = distToSeg(x, z, t.ax, t.az, t.bx, t.bz);
+      if (r.d >= t.hw + margin) continue;
+      const b = t.ref, hb = b ? profileAt(b.q, (b.s + b.l * r.t) * 100) : 0;
+      if (Math.abs(hb - h) < 1.5) return true;
     }
     return false;
   }

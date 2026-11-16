@@ -1,8 +1,8 @@
 // Profilo dei cavalcavia come lo vede chi guida, misurato con la regola di docs/cavalcavia.md: onde, pendenze oltre il
 // massimo, raccordi verticali sotto il raggio minimo, binari fuori quota rispetto alla strada sullo stesso impalcato e
 // scarti dal DTM. I numeri e le misure sono quelli di scripts/cavalcavia.py, lo stesso che scripts/verifica_mappa.py usa
-// sui dati: la prova scrive il terreno "via" del gioco e i binari con le loro quote (TramTrack.h, dopo la media di
-// setHeights) in test-results/<prova>/cavalcavia-gioco.json e lo chiama con --gioco. Le strade le prende dalla mappa,
+// sui dati: la prova scrive il terreno "via" del gioco e i binari con le loro quote (TramTrack.heightAt, ogni 5 m) in
+// test-results/<prova>/cavalcavia-gioco.json e lo chiama con --gioco. Le strade le prende dalla mappa,
 // come il gioco: i loro numeri sono quelli dei dati.
 //
 // Le soglie sono per caso, non per conteggio (#105): i casi noti stanno in data/eccezioni/cavalcavia.json ("strade",
@@ -51,7 +51,7 @@ function profili() {
     id: t.id,
     paths: { 1: P(t.paths[1].pts), '-1': P(t.paths[-1].pts) },
     // quote dei binari sopra il terreno, ogni 5 m lungo il binario
-    quote: { 1: (t.h[1] || []).map(r), '-1': (t.h[-1] || []).map(r) },
+    quote: { 1: t.heights(1).map(r), '-1': t.heights(-1).map(r) },
     fermate: [1, -1].flatMap((d) => t.stopsDir[d].map((s) => [r(s.x), r(s.z), s.name])),
   }));
   return { terreno, binari };

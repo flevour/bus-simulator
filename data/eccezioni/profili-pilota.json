@@ -1,0 +1,20 @@
+{
+ "cosa": "Salti della quota del bus trovati dal pilota di tests/profili.spec.js sopra i cavalcavia dove passa una linea: la quota che si vede sotto un asse (terreno sotto l'asse più quota letta dall'arco) cambia in un passo di più di 5 cm più metà dello spazio percorso. Chiave: struttura | salto @ x,z del gioco. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec.",
+ "controlli": {
+  "salti": [
+   {
+    "perche": "Strutture con il profilo del risolutore (#84): la quota letta dall'arco è quella del file, ma vicino alle spalle il terreno non è uguale su tutta la larghezza della carreggiata, e dove l'asse del bus passa da un arco al successivo in curva, a qualche metro dall'asse della strada, la progressiva cambia di un metro o due e la quota che si vede fa un gradino di 0,2-0,4 m. Lungo l'asse il profilo è continuo. È il terreno ai piedi e accanto alle strade di #125.",
+    "casi": [
+     "Cavalcavia Pietro Maroncelli | salto @ 2514,-977",
+     "Via Alessandro Volta | salto @ -1802,4271"
+    ]
+   },
+   {
+    "perche": "Cavalcavia con le quote di prima (rampe della tangenziale, #124): terreno spianato solo attorno all'asse, stesso gradino al passaggio da un arco al successivo.",
+    "casi": [
+     "Corso Tredici Giugno (1182, -3448) | salto @ 1186,-3349"
+    ]
+   }
+  ]
+ }
+}
