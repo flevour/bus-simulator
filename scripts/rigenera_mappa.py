@@ -75,8 +75,8 @@ def controlla_ambiente():
     return errori
 
 
-def confronta(rete, aree, rete_repo, aree_repo):
-    """Righe che dicono in cosa la mappa rigenerata (rete, aree) differisce da quella del repository."""
+def confronta(rete, aree, conto, rete_repo, aree_repo, conto_repo):
+    """Righe che dicono in cosa la mappa rigenerata (rete, aree, conto delle aree) differisce da quella del repository."""
     righe = []
     if not filecmp.cmp(rete, rete_repo, shallow=False):
         a, b = json.load(open(rete, encoding='utf-8')), json.load(open(rete_repo, encoding='utf-8'))
@@ -100,6 +100,8 @@ def confronta(rete, aree, rete_repo, aree_repo):
                 righe.append('rete: %s' % k)
         if not righe:
             righe.append('rete: stessi dati, scritti in modo diverso')
+    if not filecmp.cmp(conto, conto_repo, shallow=False):
+        righe.append('conto delle aree: %s' % os.path.relpath(conto_repo, ROOT))
     nuove, repo = set(os.listdir(aree)), set(os.listdir(aree_repo))
     solo_nuove, solo_repo = sorted(nuove - repo), sorted(repo - nuove)
     diverse = sorted(f for f in nuove & repo
@@ -143,7 +145,8 @@ def main():
         build_map.main(os.path.join('data', 'osm-padova.json'), gtfs, uscita, *[os.path.join('data', f) for f in DATI])
         if not args.controlla:
             return 0
-        righe = confronta(uscita, aree_mappa.aree_dir(uscita), MAPPA, aree_mappa.aree_dir(MAPPA))
+        righe = confronta(uscita, aree_mappa.aree_dir(uscita), aree_mappa.conto_file(uscita),
+                          MAPPA, aree_mappa.aree_dir(MAPPA), aree_mappa.conto_file(MAPPA))
     sys.stdout.flush()
     if righe:
         print('\nLa mappa rigenerata è diversa da quella del repository:', file=sys.stderr)
