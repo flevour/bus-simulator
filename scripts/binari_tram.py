@@ -358,6 +358,7 @@ def rete_gioco(G, M=None):
             'binari': b,
             'comunicazioni': [[tuple(p) for p in t['curve']] for t in T['terminals'] if t and len(t['curve']) > 1],
             'quote': {d: T['quote'][str(d)] for d in (1, -1)} if T.get('quote') else None,
+            'terreno': {d: T['terreno'][str(d)] for d in (1, -1)} if T.get('terreno') else None,
         }
         R.fermate += [tuple(f) for f in T.get('fermate', [])]
     tracks = {T['id']: T for T in G['tracks']}
@@ -542,11 +543,19 @@ def scarti(S, osm):
     return casi
 
 
-def pendenze(P, quote):
-    """Tratti con la pendenza (su 10 m, quote ogni 5 m) oltre PENDENZA."""
+def pendenze(P, quote, terreno=None):
+    """Tratti con la pendenza (su 10 m, quote ogni 5 m) oltre PENDENZA. quote: sopra il terreno. Con `terreno` (la
+    quota del terreno negli stessi punti) la pendenza è quella della quota assoluta, dove il binario è in quota a uno
+    dei due capi della corda: su una struttura con il profilo del risolutore la quota sopra il terreno segue anche il
+    terreno, che alle spalle scende di metri in 40 m, e la sua pendenza non è quella che il tram sale (#123). A terra
+    non si misura, come prima (#88)."""
     T = ricampiona(P, 5.0)
-    n = min(len(T), len(quote))
-    p = [abs(quote[min(n - 1, i + 1)] - quote[max(0, i - 1)]) / 10.0 for i in range(n)]
+    n = min(len(T), len(quote)) if terreno is None else min(len(T), len(quote), len(terreno))
+    q = quote if terreno is None else [a + b for a, b in zip(quote, terreno)]
+    p = []
+    for i in range(n):
+        a, b = max(0, i - 1), min(n - 1, i + 1)
+        p.append(0.0 if terreno is not None and quote[a] <= 0 and quote[b] <= 0 else abs(q[b] - q[a]) / 10.0)
     casi = []
     for i, j in raggruppa([v > PENDENZA for v in p], 1):
         k = max(range(i, j + 1), key=lambda q: p[q])
@@ -622,7 +631,7 @@ def misura(R):
                 for c in curve(S, assoluta=True) + scarti(S, osm):
                     casi.append({**c, 'binario': d})
             if L.get('quote'):
-                casi += [{**c, 'binario': d} for c in pendenze(L['binari'][d], L['quote'][d])]
+                casi += [{**c, 'binario': d} for c in pendenze(L['binari'][d], L['quote'][d], (L.get('terreno') or {}).get(d))]
         # le comunicazioni hanno attorno 10 m del binario della linea, per misurare dove la S si attacca; i primi e gli
         # ultimi CONTESTO metri si misurano con la linea: lì le finestre tagliate dal capo fanno sembrare uno spigolo
         # anche una curva (a Busa di Vigonza il binario prima della S gira con un raggio di 47 m)

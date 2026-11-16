@@ -82,8 +82,13 @@
      "lanterna del tram @ 172,-1059",
      "lanterna del tram @ 363,-963",
      "lanterna del tram @ 367,-953",
-     "lanterna del tram @ 4722,-1600",
      "segnale dello scambio @ 301,-1002"
+    ]
+   },
+   {
+    "perche": "Rampa del Cavalcavia San Marco verso Ippodromo, con il profilo del risolutore (#123): la rampa è una carreggiata a terra e accanto corre Via San Marco a livello strada, attorno al tirante c'è solo asfalto fino a 24 m e i due pali stanno sul bordo della sede. Prima la rampa era in quota e i pali stavano a 5 m dal binario senza controllo (i pali in quota non si misurano). Il posto lo cerca il posatore di #109.",
+    "casi": [
+     "linea aerea @ 4607,-1531"
     ]
    }
   ],
@@ -92,8 +97,6 @@
     "perche": "#109, 16 novembre 2026: lungo Via Venezia, Via San Marco e il Cavalcavia San Marco la corsia della 10 automatica corre da 2,5 a 3 m fuori dall'asfalto, accanto alla sede del SIR2, e passa attraverso i pali della linea aerea e una lanterna del tram che stanno al loro posto. È la corsia a essere sbagliata: #131.",
     "casi": [
      "lanterna del tram @ 3306,-882",
-     "linea aerea @ 2665,-540",
-     "linea aerea @ 2670,-531",
      "linea aerea @ 3274,-864",
      "linea aerea @ 3300,-879",
      "linea aerea @ 4662,-1557"
@@ -114,6 +117,37 @@
     "casi": [
      "lanterna del tram @ 160,-1047"
     ]
+   },
+   {
+    "perche": "Rampe del Chiesanuova e del cavalcavia di Via Venezia, con il profilo del risolutore (#123): ora sono archi a terra su un rilevato e i loro pali della linea aerea si misurano (prima erano in quota, fuori dal controllo). Stanno dov'erano, fuori dall'asfalto accanto alla sede, tranne uno spostato di 17 m sul Chiesanuova; la corsia dei bus automatici della 6 e della 10 lì corre lungo il bordo dell'asfalto accanto al SIR2 e la carrozzeria li tocca, come nei sei casi di Via Venezia e Via San Marco (#131).",
+    "casi": [
+     "linea aerea @ -1456,-422",
+     "linea aerea @ -1458,-431",
+     "linea aerea @ -1483,-417",
+     "linea aerea @ -1484,-425",
+     "linea aerea @ -1544,-403",
+     "linea aerea @ -1546,-412",
+     "linea aerea @ -1573,-396",
+     "linea aerea @ -1603,-390",
+     "linea aerea @ -1690,-368",
+     "linea aerea @ -1720,-362",
+     "linea aerea @ -2049,-343",
+     "linea aerea @ -2079,-343",
+     "linea aerea @ -2109,-346",
+     "linea aerea @ 2691,-554",
+     "linea aerea @ 2696,-545",
+     "linea aerea @ 2718,-568",
+     "linea aerea @ 2722,-560",
+     "linea aerea @ 3138,-800",
+     "linea aerea @ 3143,-792",
+     "linea aerea @ 3164,-814",
+     "linea aerea @ 3169,-806",
+     "linea aerea @ 3191,-829",
+     "linea aerea @ 3195,-820",
+     "linea aerea @ 3217,-843",
+     "linea aerea @ 3222,-835",
+     "linea aerea @ 3248,-849"
+    ]
    }
   ],
   "semafori_senza_lanterna_visibile": [
@@ -132,6 +166,12 @@
     "casi": [
      "semaforo, senza lanterna @ 168,-1042",
      "semaforo, senza lanterna @ 26,-1132"
+    ]
+   },
+   {
+    "perche": "Ai piedi del Cavalcavia Borgomagno verso l'Arcella (#123): la rampa è ora una carreggiata a terra, la linea d'arresto dell'approccio è larga 18 m (rampa, sede del SIR1 e carreggiata accanto in un asfalto solo), a destra c'è la sagoma del tram e a sinistra il bordo è oltre lo sbraccio: il posatore non trova posto e l'approccio resta senza lanterna. Prima il palo stava sotto la rampa, che in pianta non c'era. È il terzo approccio senza posto; lo guarda #109 (lanterna appesa al tirante della linea aerea, o uno sbraccio più lungo).",
+    "casi": [
+     "semaforo, senza lanterna @ 100,-1394"
     ]
    }
   ]

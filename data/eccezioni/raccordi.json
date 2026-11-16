@@ -365,6 +365,7 @@
      "curva, senza nome @ 4157,-1155",
      "curva, senza nome @ 4158,-1162",
      "curva, senza nome @ 4454,-1253",
+     "curva, senza nome @ 4687,-1593",
      "curva, senza nome @ 578,942",
      "curva, senza nome @ 5976,-1932",
      "curva, senza nome @ 5976,-1932",
@@ -619,6 +620,10 @@
      "linea 9, svolta non ammessa, Corso del Popolo > Corso del Popolo @ 128,-796"
     ]
    }
-  ]
+  ],
+  "raccordi_rotti": [],
+  "raccordi_fuori_corsia": [],
+  "raccordi_nella_sede": [],
+  "raccordi_sovrapposti": []
  }
 }

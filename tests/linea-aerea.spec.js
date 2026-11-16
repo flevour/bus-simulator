@@ -4,9 +4,12 @@
 // stanno a 3 m invece che a 3,4 e la sede è più stretta: 9 pali in più sul cordolo della corsia rossa, 5 in meno
 // sull'asfalto. Dal 13 novembre (#97) i pali si cercano fino a 24 m dal binario e il tirante senza agganci si sposta
 // lungo il binario invece di mettere i pali sul cordolo della sede: nessuno sull'asfalto né sul cordolo.
+// Dal 16 novembre (#123) la rampa del Cavalcavia San Marco verso Ippodromo è una carreggiata a terra con Via San Marco
+// accanto a livello strada: attorno a un tirante c'è solo asfalto e un palo sta sul bordo della sede (prima era in
+// quota e non si contava). Il caso è in data/eccezioni/mappa-gioco.json (pali_del_tram_in_carreggiata), di #109.
 import { test, expect } from './gioco.js';
 
-const SOGLIE = { pali_sull_asfalto: 0, pali_sul_cordolo: 0, tiranti_sopra_un_altra_sede: 0 };
+const SOGLIE = { pali_sull_asfalto: 1, pali_sul_cordolo: 0, tiranti_sopra_un_altra_sede: 0 };
 
 test('linea aerea: pali fuori dalla strada, tiranti mai sopra un\'altra sede', async ({ pagina, gioco }) => {
   const r = await pagina.evaluate(() => {

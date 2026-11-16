@@ -10,12 +10,15 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from './gioco.js';
 
-// Linee (#69) e depositi (#70) secondo la regola. Pendenze: le rampe dei cavalcavia Chiesanuova (fino al 18,9%) e San
-// Marco (11%) del SIR2 e del Borgomagno (7,4%) del SIR1 (#74)
+// Linee (#69) e depositi (#70) secondo la regola. Pendenze: fino a #123 le rampe dei cavalcavia Chiesanuova (fino al
+// 18,9%) e San Marco (11%) del SIR2 e del Borgomagno (7,4%) del SIR1 (#74) davano 14 e 4 casi. Con il profilo del
+// risolutore su quei cavalcavia il tram non passa il 6% e la soglia è zero. La pendenza si misura sulla quota assoluta
+// (quota sopra il terreno più terreno): sulle strutture attive la sola quota sopra il terreno segue anche il terreno
+// che scende alle spalle, e dava pendenze fino al 25% che il tram non fa.
 const SOGLIE = {
-  SIR1: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 4 },
+  SIR1: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
   SIR3: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
-  SIR2: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 14 },
+  SIR2: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
   Guizza: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
   Voltabarozzo: { spigoli: 0, raggi: 0, interassi: 0, scarti_osm: 0, pendenze: 0 },
 };
@@ -60,8 +63,10 @@ function binari() {
       t.state = on;
       return { curve: P(out) };
     }),
-    // quote dei binari ogni 5 m, fermate per i nomi dei posti
+    // quote dei binari sopra il terreno ogni 5 m, e il terreno negli stessi punti: la pendenza si misura sulla quota
+    // assoluta (#123); fermate per i nomi dei posti
     quote: { 1: T.heights(1).map(r), '-1': T.heights(-1).map(r) },
+    terreno: Object.fromEntries([1, -1].map((d) => [d, T.heights(d).map((_, i) => { const p = T.path(d).at(i * 5); return r(g.terrain.at(p.x, p.z)); })])),
     fermate: [1, -1].flatMap((d) => T.stopsDir[d].map((s) => [r(s.x), r(s.z), s.name])),
   }));
   const yards = (city.tramYards || []).map((Y) => ({

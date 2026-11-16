@@ -444,6 +444,26 @@ sezione 6. Da sapere:
   il terreno cambia a ogni cella, e con un punto ogni 5 m la misura trovava gradini fino a 0,8 m che il tram non fa;
 - `scripts/profili_strutture.py` salta i tratti di binario rimasti senza punti (un tratto in quota lungo un metro, con
   i capi arrotondati al decimetro);
+- fuori dalla mia area, `tests/binari-tram.spec.js` e `pendenze` di `scripts/binari_tram.py` (area tram): la pendenza
+  dei binari nel gioco si misura sulla quota assoluta (la prova scrive anche il terreno sotto i punti), dove il
+  binario è in quota a un capo della corda. La sola quota sopra il terreno, sulle strutture attive, segue anche il
+  terreno che scende alle spalle e dava pendenze fino al 25%. Con la misura giusta SIR1 e SIR2 hanno zero casi e le
+  soglie a conteggio (4 e 14) sono a zero: a #120 resta da misurare le pendenze sul terreno, fuori dai cavalcavia;
+- arredo (#109): le rampe sono ora archi a terra, quindi i loro pali si misurano e i semafori ai loro piedi cercano
+  posto in un'altra pianta. Posa rifatta con `--tutta` (334 righe, anche lontano: ogni rigenerazione sposta di qualche
+  decimetro i bordi dei marciapiedi). Tre gruppi nuovi in `data/eccezioni/mappa-gioco.json`: 26 pali della linea aerea
+  sulle rampe del Chiesanuova e di Via Venezia nell'ingombro dei bus automatici (stanno dov'erano, #131), due pali sul
+  bordo della sede sulla rampa del San Marco verso Ippodromo (`tests/linea-aerea.spec.js`: `pali_sull_asfalto` a 1) e
+  un approccio senza lanterna ai piedi del Borgomagno verso l'Arcella, dove la linea d'arresto è larga 18 m;
+- raccordi (#112): un caso nuovo in `data/eccezioni/raccordi.json`, una corsia senza uscita per le auto su una strada
+  di servizio di 6 m accanto alla rotonda dell'Ippodromo, nel gruppo dei gomiti;
+- quello che si vede e non è risolto: l'asfalto in quota copre a chiazze la sede del tram su Chiesanuova, Via Venezia,
+  San Marco e Borgomagno. C'era anche prima (#85, #126); dopo #123 alcune chiazze sono sparite e altre sono nuove
+  (rotonda dell'Ippodromo, veduta `rotonda-sir2-ippodromo`). La causa: `City.elevHeight` dà la quota dell'asse e il
+  terreno si somma nel punto, e dove il terreno cambia sulla larghezza della carreggiata l'asfalto in quota si piega;
+  la sede prende la quota assoluta dall'asse (`tramH`). Provato a dare all'asfalto la quota assoluta dell'asse: le
+  chiazze cambiano forma e spunta il marciapiede in quota, quindi va fatto insieme alla pianta come partizione (#126)
+  e per tutto quello che legge `edgeHeight` fuori asse (bus, auto, pedoni);
 - casi rimasti, con il perché in `data/eccezioni/cavalcavia.json`: conche lunghe e basse dove la strada sta sul terreno
   com'è, strade che scendono sotto il cavalcavia, scarti dal DTM dove il franco della regola supera le spalle (#125).
   In cima al Chiesanuova resta una conca di 0,18 m in 137 m tra le due campate: un punto a mano nel registro la
