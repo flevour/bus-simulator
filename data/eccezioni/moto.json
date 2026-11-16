@@ -1,0 +1,9 @@
+{
+ "cosa": "Casi noti della prova del moto (tests/moto.spec.js, regole in tests/moto.js): auto e bus automatici di traverso, salti, imbardata oltre il raggio minimo, inversioni sullo stesso arco. Chiave: chi, cosa @ x,z del gioco dell'asse posteriore dove l'episodio comincia. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/moto.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
+ "controlli": {
+  "di_traverso": [],
+  "salti": [],
+  "imbardata": [],
+  "inversioni": []
+ }
+}
