@@ -3,9 +3,10 @@
  "controlli": {
   "fermi_oltre_un_ciclo": [
    {
-    "perche": "Corsa della 3 delle 8:27 dal Capolinea Lion (#122, 13 novembre 2026): alle 8:57 un bus della 16 in anticipo sosta 60 s alla fermata di Riviera dei Ponti Romani, a (47, 95), dove la corsia è il binario del tram e non si passa; il bus della 22 dietro di lui aspetta 61 s. Non è il semaforo: è la sosta fino all'orario dei bus automatici, #127.",
+    "perche": "Corsa della 3 delle 8:27 dal Capolinea Lion (#122, 13 novembre 2026): alle 8:57 un bus della 16 in anticipo sosta 60 s alla fermata di Riviera dei Ponti Romani, a (47, 95), dove la corsia è il binario del tram e non si passa; il bus della 22 dietro di lui aspetta 61 s. Non è il semaforo: è la sosta fino all'orario dei bus automatici, #127. Con la mappa rigenerata nell'ambiente fissato (#106, 16 novembre 2026) la stessa coda si ferma 3 m più avanti e chi guida, dietro al bus della 22, aspetta 61 s anche lui (prima 60).",
     "casi": [
-     "bus 22 @ 42,106"
+     "bus 22 @ 43,103",
+     "giocatore @ 38,117"
     ]
    }
   ]
