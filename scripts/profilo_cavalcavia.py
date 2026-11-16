@@ -44,7 +44,7 @@ from scipy.sparse import coo_matrix
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from binari_tram import Griglia  # noqa: E402
-from cavalcavia import AFFIANCA, DTM_TOLL, PARALLELO, PENDENZA, PONTE_VICINO, R_CONCA, R_DOSSO, Griglia10, Via, tipo_di  # noqa: E402
+from cavalcavia import AFFIANCA, DTM_TOLL, PARALLELO, PENDENZA, PONTE_VICINO, R_CONCA, R_DOSSO, Griglia10, Via, arco_accanto, punto, tipo_di  # noqa: E402
 
 RADICE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRO = os.path.join(RADICE, 'data/cavalcavia.json')
@@ -66,7 +66,8 @@ SOTTOPASSO = 6.0  # m oltre metà della strada in galleria: lì la strada di sop
 NUCLEO = 14.2     # m: le quattro celle attorno a un punto dell'asse stanno entro questa distanza (10 m per radice di 2)
 CAMPATA_VERA = 1.5  # m: sotto un ponte OSM il DTM sta entro questa quota dal piano intorno, se no lì c'è un rilevato
 ATTORNO = 90.0    # m dagli archi di una struttura: lì la chiusura morfologica non riempie (tra due rilevati)
-VICINE = 120.0    # m: una struttura con il profilo non sta più vicina di così a una con le quote di prima (build_map)
+VICINE = 200.0    # m: fin qui da una struttura con il profilo le celle sotto i cavalcavia con le quote di prima si fissano
+QUOTA_DI_PRIMA = 0.3  # m: da questa quota a un capo un arco fuori dalle strutture è di un cavalcavia con le quote di prima
 ACQUA = 12.0      # m da un corso d'acqua: lì la chiusura resta (fossi e canali senza ponte in OSM)
 IN_QUOTA = 0.05   # m: un arco con la quota sopra il terreno oltre questa è in quota (e.elev nel gioco)
 # il terreno del gioco ha gradini di GRADINO metri (un byte per cella): dove la strada sta sul terreno il controllo
@@ -91,6 +92,10 @@ W_FRANCO = 1.0e5
 W_ACCANTO = 20.0   # carreggiate affiancate a quote diverse (oltre ACCANTO_TOLL)
 ACCANTO = 8.0      # m oltre le due mezze carreggiate: fin qui due archi quasi paralleli sono la stessa piattaforma
 ACCANTO_TOLL = 0.03
+FITTO = 50         # cm tra i punti provati lungo un arco per la quota sopra il terreno (quote_archi)
+FEDELE = 2         # mm: i punti in più che stanno entro questa quota dalla retta tra i vicini non si scrivono
+BINARIO_PASSO = 1.0  # m tra i punti lungo un binario dove si vincola la sua pendenza (come i profili del controllo)
+BINARIO_CORDA = 10.0  # m: la pendenza del binario si vincola su questa corda (CORDA_P del controllo)
 
 
 def carica_registro(path=REGISTRO):
@@ -132,9 +137,11 @@ class Rete:
             self.rotaie += list(zip(pts, pts[1:]))
         self.g_rotaie = Griglia(self.rotaie, 50.0)
         segs = []
+        self.binari = []  # i binari del tram, uno per verso: [(x, z)]
         for t in tram or []:
             pts = [(t[i], t[i + 1]) for i in range(0, len(t) - 1, 2)]
             segs += list(zip(pts, pts[1:]))
+            self.binari.append(pts)
         self.g_tram = Griglia(segs, 20.0)
 
     def nome(self, k):
@@ -425,9 +432,30 @@ class Profili:
         self.campate = {k: [(0.0, R.lung[k], None)] for k in deck}
         self.rilevato = set()  # incognite dei ponti OSM dove il DTM vede un rilevato (piani_campate)
         self.h = None
+        self.lungo_binari = self.punti_binari()
         self.registro = registro
         self.strutture = strutture
         self.violazioni = {}
+
+    def punti_binari(self):
+        """Per ogni binario i punti ogni BINARIO_PASSO metri con la strada della struttura che affiancano: [[(arco,
+        frazione) o None]]. La strada è quella che scripts/quote_rete.py darà al binario (cavalcavia.arco_accanto, qui
+        tra gli archi delle strutture): il binario prende la quota del profilo in quel punto dell'asse."""
+        R = self.R
+        vista = type('Vista', (), {'strade': R.griglia, 'misurati': self.S, 'archi': R.archi, 'nodi': R.nodi})
+        out = []
+        for P in R.binari:
+            cum = [0.0]
+            for a, b in zip(P, P[1:]):
+                cum.append(cum[-1] + math.dist(a, b))
+            riga = []
+            for n in range(int(cum[-1] // BINARIO_PASSO) + 1):
+                x, z, dx, dz = punto(P, cum, n * BINARIO_PASSO)
+                k, t, _d = arco_accanto(vista, (x, z), (dx, dz))
+                riga.append((k, t) if k is not None else None)
+            if any(riga):
+                out.append(riga)
+        return out
 
     def p_max(self, k):
         p = PENDENZA[self.R.tipo(k)]
@@ -549,6 +577,22 @@ class Profili:
                 tv = lp.var(W_VAR)
                 lp.riga([(idx[i + 1], 1), (idx[i], -1), (tv, -1)], 0)
                 lp.riga([(idx[i + 1], -1), (idx[i], 1), (tv, -1)], 0)
+        # pendenza lungo i binari: il binario prende la quota della strada nel punto dell'asse più vicino, e dove la
+        # strada curva o il binario passa da una carreggiata all'altra fa meno metri della strada (all'interno di una
+        # curva la stessa salita sta in un binario più corto). Il limite del tram vale lungo il binario, sulla corda
+        # che misura il controllo
+        self.v_binari = []
+        p = PENDENZA['tram'] - P_MARGINE
+        m = round(BINARIO_CORDA / BINARIO_PASSO)
+        for riga in self.lungo_binari:
+            for n in range(len(riga) - m):
+                if riga[n] is None or riga[n + m] is None:
+                    continue
+                qa, qb = self.a_frazione(*riga[n]), self.a_frazione(*riga[n + m])
+                sl = lp.var(W_PENDENZA)
+                lp.riga([(i, w) for i, w in qb] + [(i, -w) for i, w in qa] + [(sl, -1)], p * BINARIO_CORDA)
+                lp.riga([(i, -w) for i, w in qb] + [(i, w) for i, w in qa] + [(sl, -1)], p * BINARIO_CORDA)
+                self.v_binari.append(sl)
         # raccordi: terne di incognite vicine lungo l'arco, e corde di CORDA metri che passano i nodi
         terne = {}
         for k in sorted(self.S):
@@ -620,6 +664,7 @@ class Profili:
         self.h = x[:N]
         self.violazioni = {
             'pendenze': sum(1 for sl, _k, _i in self.v_pend if x[sl] > 1e-4),
+            'binari': sum(1 for sl in self.v_binari if x[sl] > 1e-4),
             'raccordi': sum(1 for sl, _i, _ks in self.v_racc if x[sl] > 1e-6),
             'franchi': [(round(p[0]), round(p[1]), tipo, round(float(x[sl]), 2)) for sl, _k, _t, tipo, p, _f in self.v_franco if x[sl] > 0.01],
         }
@@ -838,6 +883,7 @@ def adatta_terreno(R, P, T, piano, solo_campate=False):
     g_fuori = Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in fuori] or [((1e9, 1e9), (1e9, 1e9))], 40.0)
     scelta = {}  # cella -> (priorità, distanza, quota, ponte a terra)
     nucleo = {}  # cella -> (quota, campata, ponte a terra): la più bassa tra gli archi che le passano entro NUCLEO
+    asse = {}    # cella -> metri dall'asse più vicino di un arco della struttura che le passa accanto
     for k in sorted(P.campate if solo_campate else P.S):
         e = R.archi[k]
         A, B = R.nodi[e[0]], R.nodi[e[1]]
@@ -873,16 +919,26 @@ def adatta_terreno(R, P, T, piano, solo_campate=False):
                 scelta[c] = (pr, quota, campata_qui, bool(e[5] & 4))
             # (solo dove la cella si proietta dentro l'arco: oltre i capi la quota del nodo non è quella della strada lì)
             if dentro and d <= nuc:
+                asse[c] = min(d, asse.get(c, 1e9))
                 v = nucleo.get(c)
                 # sotto una campata la cella resta "sotto una campata" anche se la quota più bassa è di un'altra strada
                 nucleo[c] = (min(quota, v[0]) if v else quota, campata_qui or bool(v and v[1]), bool(e[5] & 4) if not v or quota < v[0] else v[2])
     for c, v in nucleo.items():
         scelta[c] = (None, *v)
+    # (non salgono mai: la strada di fuori sta sul terreno e si alzerebbe con loro. Scendono al profilo se l'asse della
+    # struttura è più vicino del suo: un rilevato del DTM più alto del profilo spunterebbe dalla carreggiata e dalla
+    # sede del tram, che sopra il terreno si possono alzare e sotto no)
     protette = 0
     for c in list(scelta):
-        if not scelta[c][2] and g_fuori.piu_vicino(T.centro(*c), NUCLEO) is not None:
-            del scelta[c]
-            protette += 1
+        if scelta[c][2]:
+            continue
+        d = g_fuori.piu_vicino(T.centro(*c), NUCLEO)
+        if d is None:
+            continue
+        if asse.get(c, 1e9) < d and T.byte(scelta[c][1]) < T.b[c[1], c[0]]:
+            continue
+        del scelta[c]
+        protette += 1
     for c, (_pr, quota, campata, ponte) in scelta.items():
         b = T.byte(quota)
         T.via[c] = b
@@ -894,10 +950,67 @@ def adatta_terreno(R, P, T, piano, solo_campate=False):
     return set(scelta)
 
 
+def _sfoltisci(ss, qs, fissi, toll):
+    """Toglie i punti che stanno sulla retta tra quello tenuto prima e quello dopo, entro toll; `fissi` restano."""
+    keep = [0]
+    for i in range(1, len(ss) - 1):
+        a, b = keep[-1], i + 1
+        if ss[i] in fissi or any(abs(qs[a] + (qs[b] - qs[a]) * (ss[j] - ss[a]) / ((ss[b] - ss[a]) or 1) - qs[j]) > toll for j in range(a + 1, b)):
+            keep.append(i)
+    keep.append(len(ss) - 1)
+    return [ss[i] for i in keep], [qs[i] for i in keep]
+
+
+def vicine_a_quote_di_prima(nodes, edges, strutture, quote):
+    """Gli id delle strutture con un nodo a meno di VICINE metri da un arco in quota con le quote di prima (`quote`:
+    {nodo: quota} di street_surfaces.overpass_heights, senza gli archi di `strutture`)."""
+    S = {k for s in strutture for k in s['archi']}
+    vecchi = [k for k, e in enumerate(edges) if k not in S and max(quote.get(e[0], 0), quote.get(e[1], 0)) > QUOTA_DI_PRIMA]
+    g = Griglia([(nodes[edges[k][0]], nodes[edges[k][1]]) for k in vecchi] or [((1e9, 1e9), (1e9, 1e9))], 100.0)
+    return {s['id'] for s in strutture if any(g.piu_vicino(nodes[n], VICINE) is not None for k in s['archi'] for n in edges[k][:2])}
+
+
+def tieni_quote_di_prima(R, P, T, prima, quote):
+    """I cavalcavia con le quote di prima (street_surfaces.overpass_heights: quota sopra il terreno spianato sotto di
+    loro) accanto a una struttura con il profilo tengono il loro terreno: le celle attorno ai loro archi, fin dove la
+    quota del terreno conta per chi ci passa (carreggiata più NUCLEO), prendono quelle di `prima`, nel terreno di base e
+    fissate nella variante "via". `prima` è il terreno com'è senza le strutture vicine (build_map lo calcola con quelle
+    strutture spente: lì le loro rampe sono spianate come le altre). Senza, le piattaforme, la chiusura morfologica che
+    cambia attorno alla struttura (raggio di quattro celle) e la spianatura che non c'è più sotto le sue rampe
+    spostavano il terreno sotto il cavalcavia accanto, e con il terreno la sua quota (Corso Irlanda accanto al
+    Cavalcavia San Marco: da -1,8 a +2,2 m). quote: {nodo: quota} di overpass_heights. Restituisce quante celle ha
+    fissato."""
+    vecchi = [k for k, e in enumerate(R.archi) if k not in P.S and R.lung[k] > 0.05 and max(quote.get(e[0], 0), quote.get(e[1], 0)) > QUOTA_DI_PRIMA]
+    if not vecchi or prima is None:
+        return 0
+    g_s = Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in sorted(P.S)], 100.0)
+    via0, base0 = Via(prima), Terreno(prima)
+    celle = set()
+    for k in vecchi:
+        e = R.archi[k]
+        A, B = R.nodi[e[0]], R.nodi[e[1]]
+        L = R.lung[k]
+        if g_s.piu_vicino(A, VICINE) is None and g_s.piu_vicino(B, VICINE) is None:
+            continue
+        w = e[3] / 2 + NUCLEO
+        for c in T.celle(((A[0] + B[0]) / 2, (A[1] + B[1]) / 2), L / 2 + w):
+            x, z = T.centro(*c)
+            t = max(0.0, min(1.0, ((x - A[0]) * (B[0] - A[0]) + (z - A[1]) * (B[1] - A[1])) / (L * L)))
+            if math.hypot(A[0] + (B[0] - A[0]) * t - x, A[1] + (B[1] - A[1]) * t - z) <= w:
+                celle.add(c)
+    for (i, j) in celle:
+        T.b[j, i] = base0.b[j, i]
+        T.via[(i, j)] = via0.cella(i, j)
+    return len(celle)
+
+
 def quote_archi(R, P, T, via):
     """Per ogni arco delle strutture la quota sopra il terreno: profilo meno terreno "via" (campionato come il gioco),
-    un punto a ogni incognita e a ogni confine di cella della griglia. {arco: ([progressive in cm], [quote in mm])}
-    per gli archi in quota (oltre IN_QUOTA in qualche punto)."""
+    un punto a ogni incognita e a ogni confine di cella della griglia, e in mezzo quelli che servono perché terreno più
+    quota dia il profilo entro FEDELE (lungo un arco in diagonale il terreno interpolato tra quattro celle è una
+    parabola, non una retta: sotto le spalle, dove le celle hanno quote molto diverse, tra due incognite si scostava
+    di qualche centimetro). {arco: ([progressive in cm], [quote in mm])} per gli archi in quota (oltre IN_QUOTA in
+    qualche punto)."""
     out = {}
     for k in sorted(P.S):
         e = R.archi[k]
@@ -912,6 +1025,8 @@ def quote_archi(R, P, T, via):
                 t = (o + g * T.step - a) / (b - a)
                 if 0 < t < 1:
                     ss.add(round(t * L * 100))
+        fissi = set(ss)
+        ss |= set(range(0, round(L * 100), FITTO))
         ss = sorted(s for s in ss if 0 <= s <= round(L * 100))
         if ss[-1] != round(L * 100):
             ss.append(round(L * 100))
@@ -921,7 +1036,7 @@ def quote_archi(R, P, T, via):
             x, z = A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t
             qs.append(max(0, round((P.quota(k, t * L) - via.at(x, z)) * 1000)))
         if max(qs) > IN_QUOTA * 1000:
-            out[k] = (ss, qs)
+            out[k] = _sfoltisci(ss, qs, fissi, FEDELE)
     return out
 
 
@@ -989,10 +1104,14 @@ def attive(strutture, registro):
     return [s for s in strutture if reg.get(s['id'], {}).get('profilo')]
 
 
-def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua=None, tutte=False, log=print, pronte=None):
+def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua=None, tutte=False, log=print, pronte=None, quote_di_prima=None,
+            terreno_prima=None):
     """nodes, edges, names, rails: la rete in costruzione; tram: i binari (spezzate piatte); terreno: il dizionario del
     terreno senza le strutture attive (street_surfaces.terrain_for_game); dtm: data/dtm-padova.json; pronte: il
     risultato di strutture_rete, se già calcolato. Con tutte=True il profilo si calcola per ogni struttura.
+    quote_di_prima: {nodo: quota} dei cavalcavia che tengono le quote di street_surfaces.overpass_heights, e
+    terreno_prima: il terreno senza le strutture che stanno accanto a loro (vicine_a_quote_di_prima): sotto quei
+    cavalcavia il terreno resta quello (tieni_quote_di_prima).
     Restituisce {'terreno', 'edgeH', 'nodeH', 'cavalcavia', 'strutture', 'profili', ...}."""
     registro = registro if registro is not None else carica_registro()
     R, deck, incroci, sotto, tutte_le_strutture = pronte or strutture_rete(nodes, edges, names, rails, tram, terreno, dtm)
@@ -1018,6 +1137,7 @@ def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua
     T0 = Terreno(terreno)
     fatte = adatta_terreno(R, P, T0, piano, solo_campate=True)
     non_riempire(R, P, T0, segmenti_acqua, fatte)
+    tieni_quote_di_prima(R, P, T0, terreno_prima, quote_di_prima or {})
     P.nat = Via(T0.scrivi())
 
     def piano_di(k, t):
@@ -1027,11 +1147,12 @@ def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua
     for giro in range(2):
         P.risolvi(piano_di)
         log(f'cavalcavia: {len(strutture)} strutture, {len(S)} archi ({sum(R.lung[k] for k in S) / 1000:.1f} km), {P.N} incognite; '
-            f"oltre la regola: pendenze {P.violazioni['pendenze']}, raccordi {P.violazioni['raccordi']}, franchi {P.violazioni['franchi']}")
+            f"oltre la regola: pendenze {P.violazioni['pendenze']}, pendenze dei binari {P.violazioni['binari']}, raccordi {P.violazioni['raccordi']}, franchi {P.violazioni['franchi']}")
         T = Terreno(terreno)
         fatte = adatta_terreno(R, P, T, piano)
         n = len(fatte)
         aperte = non_riempire(R, P, T, segmenti_acqua, fatte)
+        tenute = tieni_quote_di_prima(R, P, T, terreno_prima, quote_di_prima or {})
         g = T.scrivi()
         P.nat = Via(g)
     via = Via(g)
@@ -1041,7 +1162,8 @@ def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua
         for nd, q in ((R.archi[k][0], qs[0]), (R.archi[k][1], qs[-1])):
             if q > 0:
                 nh[nd] = max(nh.get(nd, 0), round(q / 1000, 2))
-    log(f'cavalcavia: {n} celle del terreno adattate, {aperte} senza riempimento, {len(gallerie)} sottopassi, {len(eh)} archi in quota, '
+    log(f'cavalcavia: {n} celle del terreno adattate, {aperte} senza riempimento, {tenute} tenute sotto i cavalcavia con le quote di prima, '
+        f'{len(gallerie)} sottopassi, {len(eh)} archi in quota, '
         f'{sum(1 for k in eh if not any(k in P.campate for _ in (0,)))} dei quali senza campate')
     cav = [{'id': s['id'], 'x': s['x'], 'z': s['z'], 'archi': sorted(s['archi'])} for s in strutture]
     return {'terreno': g, 'edgeH': [[k, ss, qs] for k, (ss, qs) in sorted(eh.items())], 'nodeH': nh, 'cavalcavia': cav,

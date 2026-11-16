@@ -158,7 +158,9 @@ lungo gli archi (`edgeHeight` in `src/data/padova.js`, da `edgeH`). Da qui vengo
   rampa, e chi passa dall'uno all'altro va giù e su di 2,6-4,1 m in 80-100 m.
 * **Binari.** Il binario prende la quota della strada che affianca, con la media su ±25 m e la più alta tra media e
   strada: sulle rampe resta sopra la strada, fino a 2,9 m a Chiesanuova (−1889, −343). Fino a #107 lo faceva il gioco
-  (`TramTrack.setHeights`), ora la build (`profilo` in `scripts/quote_rete.py`), e solo per questi cavalcavia.
+  (`TramTrack.setHeights`), ora la build (`profilo` in `scripts/quote_rete.py`), e solo per questi cavalcavia. Dal 16
+  novembre (#123) i cavalcavia dove passa il tram hanno tutti il profilo del risolutore e nessun binario li affianca
+  più: la regola resta nella build per una mappa che ne avesse.
 
 Per #84, i punti fermi che vengono dalla regola: le rampe seguono il rilevato del DTM dove c'è (entro 0,5 m), l'impalcato
 va da spalla a spalla con il franco sopra quello che passa sotto, il terreno sotto l'impalcato è piatto e non scende
@@ -177,7 +179,7 @@ innestano; ha il nome della via più lunga dei suoi ponti, e le coordinate quand
   `padova-map.json` (SIR1) e `data/tram-linee-nuove.json` (SIR2 e SIR3) con la quota scritta dalla build (`tramH`,
   sezione 7). Li misura `scripts/verifica_mappa.py` (o `scripts/cavalcavia.py` da solo, senza shapely);
 * **il gioco**: `tests/cavalcavia.spec.js` scrive il terreno "via" del gioco (`Terrain.d`) e i binari con le quote di
-  `TramTrack.heightAt` ogni 5 m e chiama lo script con `--gioco`. Le strade vengono dalla mappa in tutti e
+  `TramTrack.heightAt` ogni metro (ogni 5 m fino a #123) e chiama lo script con `--gioco`. Le strade vengono dalla mappa in tutti e
   due i casi: i loro numeri coincidono, e il 12 novembre le 11.087 celle del terreno usate dai profili erano uguali a
   quelle del gioco.
 
@@ -298,7 +300,11 @@ intorno), fino a 1,2 km in più. `layer` dice solo chi sta sopra.
 
 1. i punti messi a mano e i piedi (i nodi dove la struttura incontra una strada che resta sul terreno) alla loro quota;
 2. pendenza massima e raggi minimi del tipo di strada (sezione 1; il 6% dove un binario affianca la strada), con il
-   margine di un gradino del terreno (5,6 cm), e il franco sopra quello che passa sotto più 0,9 m di impalcato;
+   margine di un gradino del terreno (5,6 cm), e il franco sopra quello che passa sotto più 0,9 m di impalcato. Il 6%
+   del tram vale anche lungo ogni binario, sulla corda di 10 m che misura il controllo (#123): il binario prende la
+   quota della strada nel punto dell'asse più vicino, e all'interno di una curva, o dove passa da una carreggiata
+   all'altra, fa meno metri della strada per la stessa salita (sulla rampa del Borgomagno verso la stazione la strada
+   al 5,4% dava al binario il 7,5%);
 3. carreggiate affiancate alla stessa quota, entro 3 cm;
 4. fuori dai ponti, il DTM: lo scarto si minimizza, oltre 0,44 m costa quaranta volte tanto. Insieme si minimizzano i
    saliscendi (variazione totale) e le variazioni di pendenza, di più sulle campate.
@@ -317,24 +323,45 @@ Il terreno segue il profilo, perché la quota di ogni cosa nel gioco è terreno 
   terreno entro 30 m; negli ultimi 40 m prima di una campata il terreno scende dal rilevato a quel piano;
 * entro 90 m dalla struttura la variante "via" non riempie: la chiusura morfologica alzava la strada che passa tra due
   rilevati fino alla loro quota (Corso Australia sotto il Cavalcavia Chiesanuova: +3,8 m);
-* una cella vicina a più strade prende la quota più bassa, e le celle attorno a una strada fuori dalla struttura
-  restano com'erano.
+* una cella vicina a più strade prende la quota più bassa. Le celle attorno a una strada fuori dalla struttura (entro
+  14 m dal suo asse) non salgono mai: quella strada sta sul terreno e salirebbe con loro. Scendono alla quota del
+  profilo se l'asse della struttura è più vicino del suo (#123): dove il rilevato del DTM è più alto del profilo
+  restava una gobba sotto la carreggiata e sotto la sede del tram, che sopra il terreno si possono alzare e sotto no
+  (alla spalla est del San Marco 0,6 m, e il binario al 9,6%);
+* un cavalcavia con le quote di prima accanto a una struttura attiva (entro 200 m) tiene il suo terreno e le quote dei
+  suoi nodi: `build_map.py` li calcola con quella struttura spenta e `tieni_quote_di_prima` fissa le celle attorno ai
+  suoi archi (carreggiata più 14 m). Senza, le piattaforme, la chiusura morfologica che cambia nel raggio di quattro
+  celle e la spianatura che non c'è più sotto le rampe passate alla struttura gli spostavano il terreno sotto: il
+  viadotto di Corso Irlanda accanto al Cavalcavia San Marco cambiava da −1,8 a +2,2 m. Prima di #123 la build si
+  fermava se una struttura attiva stava a meno di 120 m da un cavalcavia così.
 
 La quota scritta è il profilo meno la variante "via" campionata come nel gioco, con un punto a ogni incognita e a ogni
-confine di cella. Nella mappa: `cavalcavia` (`id`, `x`, `z`, `archi` di ogni struttura attiva), `edgeH` (`[arco,
+confine di cella, più quelli che servono in mezzo perché terreno più quota dia il profilo entro 2 mm (#123: lungo un
+arco in diagonale il terreno interpolato tra quattro celle è una parabola, e sotto le spalle, dove le celle vicine
+hanno quote molto diverse, tra due punti la strada si scostava dal profilo di 1-2 cm, abbastanza per portare un
+binario dal 5,4 al 6%). Nella mappa: `cavalcavia` (`id`, `x`, `z`, `archi` di ogni struttura attiva), `edgeH` (`[arco,
 progressive in cm, quote in mm]` per gli archi con più di 5 cm sopra il terreno), `nodeH` come prima, `terrain.via`
 (righe `[j, i0, byte, ...]` di celle fissate dopo chiusura e ponti). Il gioco legge `edgeH` in `edgeHeight`
 (`src/data/padova.js`) e `terrain.via` in `Terrain`; i binari che affiancano un arco di una struttura attiva prendono
 la quota assoluta della strada, senza media (sezione 7).
 
 Attive dal 13 novembre: Cavalcavia Antonio Grassi, Camerini, Montà, Pietro Maroncelli, i due del Ponte dell'Unità
-d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Spente, con il perché nel registro: quelle
-dove passa il tram e il Cavalcavia Dalmazia (#123), le tangenziali con Mortise e Via Salboro (#124). Una struttura
-attiva non può stare a meno di 120 m da una rampa con le quote di prima: la build si ferma e le nomina. Sulle nove
-attive restano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
+d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Dal 16 novembre (#123) quelle dove passa il
+tram, Cavalcavia Borgomagno, Chiesanuova, San Marco e Via Venezia, e il Cavalcavia Dalmazia, che arriva accanto al
+Borgomagno. Spente, con il perché nel registro: le tangenziali con Mortise e Via Salboro (#124). Una rampa con le
+quote di prima non può entrare in una struttura attiva: la build si ferma e nomina i nodi. Il 13 novembre sulle nove
+attive restavano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
 regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto
 tolto dal DTM, e 79 tra onde, pendenze e raccordi dove il terreno non coincide con il profilo (ai piedi e accanto
 alle strade fuori dalla struttura).
+
+Il 16 novembre (#123), con le quattordici strutture attive (34 km, 8.509 incognite), il programma non viola pendenze,
+pendenze dei binari, raggi o franchi. Sui binari, nei dati e nel gioco: nessuno fuori quota (erano 25 nel gioco),
+nessuna pendenza oltre il 6% (erano 32), nessun raccordo sotto il minimo; restano 16 conche da 0,1 a 0,28 m lunghe da
+90 a 400 m, dove la strada che affiancano sta sul terreno com'è (piazzale della stazione, Via Venezia, Via San Marco)
+e in cima al Chiesanuova (0,18 m in 137 m: il rilevato che il DTM vede tra le due campate). I casi delle strade
+passano da 1.012 a 875; sulle nove strutture di #84 da 132 a 93, per la regola delle celle accanto alle strade fuori
+dalla struttura. Corso Irlanda, accanto al San Marco, resta com'era (8 archi cambiano di al più 11 cm).
 
 Per provare una modifica al risolutore non serve rigenerare la mappa: bastano la rete di `src/data/padova-map.json`,
 il terreno di `street_surfaces.terrain_for_game` e `profilo_cavalcavia.calcola(..., tutte=True)`, poi
@@ -362,7 +389,8 @@ Nella mappa, da `scripts/quote_rete.py` (solo libreria standard; `build_map.py` 
   * Sui cavalcavia con le quote di prima vale la regola che stava nel gioco: quota della strada ogni 5 m (la più alta
     dei due binari dove corrono affiancati), media su ±25 m senza scendere sotto la strada, zero sotto 0,25 m. Lì le
     carreggiate affiancate hanno quote diverse e senza media il binario farebbe un gradino a ogni passaggio dall'una
-    all'altra (fino a 3 m a Chiesanuova). La media sparisce quando la struttura si attiva (#123).
+    all'altra (fino a 3 m a Chiesanuova). Dal 16 novembre (#123) nessun binario affianca un cavalcavia così: Borgomagno,
+    Chiesanuova, San Marco e Via Venezia sono strutture attive.
 
 Nel gioco:
 

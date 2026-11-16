@@ -209,7 +209,7 @@ class Rete:
                                   and (self.H.get(e[0], 0) > IN_QUOTA or self.H.get(e[1], 0) > IN_QUOTA)})
         # archi dove si misura: quelli delle strutture dichiarate e quelli in quota
         self.misurati = self.dichiarati | set(self.in_quota)
-        self.binari = []   # {'id', 'verso', 'pts': [(x, z)], 'quote': quota ogni 5 m sopra il terreno, o None nei dati}
+        self.binari = []   # {'id', 'verso', 'pts': [(x, z)], 'quote': quota sopra il terreno ogni `passo` metri, o None nei dati}
         self.fermate = []  # (x, z, nome) del tram, per dare il nome ai posti
         self.strade = Griglia([(self.nodi[e[0]], self.nodi[e[1]]) for e in self.archi], 20.0)
 
@@ -269,13 +269,14 @@ def rete_dati(M=None):
 
 def rete_gioco(G, M=None):
     """La rete del gioco dal file di tests/cavalcavia.spec.js: terreno "via" del gioco, binari (TramTrack.paths) con le
-    quote ogni 5 m (TramTrack.h). Le strade dalla mappa, come le prende il gioco."""
+    quote ogni `passo` metri (TramTrack.heightAt). Le strade dalla mappa, come le prende il gioco."""
     M = M or json.load(open(os.path.join(RADICE, 'src/data/padova-map.json')))
     T = G['terreno']
     R = Rete('gioco', M, Griglia10(T, T['via']), dtm())
     for B in G['binari']:
         for d in (1, -1):
-            R.binari.append({'id': B['id'], 'verso': d, 'pts': [tuple(p) for p in B['paths'][str(d)]], 'quote': B['quote'][str(d)]})
+            R.binari.append({'id': B['id'], 'verso': d, 'pts': [tuple(p) for p in B['paths'][str(d)]], 'quote': B['quote'][str(d)],
+                             'passo': B.get('passo', 5.0)})
         R.fermate += [tuple(f) for f in B.get('fermate', [])]
     return R
 
@@ -472,7 +473,7 @@ def profilo_strada(R, seq):
 def profili_binari(R, cav):
     """Tratti dei binari in quota (più MARGINE metri per parte), punti ogni PASSO metri con la quota del binario, la
     quota della strada in quota che affianca (se c'è) e il cavalcavia a cui appartengono (quello della strada più
-    vicina). La quota del binario: nel gioco TramTrack.h, ogni 5 m; nei dati quella della strada che affianca."""
+    vicina). La quota del binario: nel gioco TramTrack.heightAt, ogni `passo` metri; nei dati quella della strada che affianca."""
     di = {k: c['id'] for c in cav for k in c['archi']}
     out = defaultdict(list)
     for B in R.binari:
@@ -487,7 +488,7 @@ def profili_binari(R, cav):
             return x, z, strada_accanto(R, (x, z), (dx, dz))
         prof = B.get('profilo')
         if Q:
-            quota = lambda s: interp(Q, s / 5.0)
+            quota = lambda s: interp(Q, s / B.get('passo', 5.0))
         elif prof:
             quota = lambda s: lineare(prof[0], prof[1], s)
         else:

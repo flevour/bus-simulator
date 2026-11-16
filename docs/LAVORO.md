@@ -301,7 +301,9 @@ Da sapere prima di toccare questi file:
   terreno spianato sotto, come prima. Regola, registro e formato nella mappa in [`cavalcavia.md`](cavalcavia.md),
   sezione 6;
 - `build_map.py` si ferma se le strutture della rete non sono quelle del registro (`CAVALCAVIA=registro` lo riscrive
-  tenendo i campi a mano), se una rampa con le quote di prima entra in una struttura attiva o le passa a meno di 120 m;
+  tenendo i campi a mano) o se una rampa con le quote di prima entra in una struttura attiva. Un cavalcavia con le
+  quote di prima accanto a una struttura attiva tiene il suo terreno (#123, nota sotto): fino a #123 la build si
+  fermava se le passava a meno di 120 m;
 - `street_surfaces.py`: `quote_arco` e `quota_arco` danno la quota lungo un arco (profilo, zero per gli altri archi
   delle strutture attive, lineare tra i nodi per il resto); le usano `surfaces`, `decks` e `_tram_heights`.
   `overpass_heights` salta gli archi delle strutture attive, `terrain_for_game` non spiana sotto di loro;
@@ -420,6 +422,32 @@ li mette una volta il posatore e il gioco li legge. Da sapere:
   `tramBld` e le facciate di `buildTramway`; `tramSpans`, `tramPoles`, `panSigns` e `stopPlacements` restano;
 - restano posati al caricamento cartelli stradali, lampioni e alberi sparsi, e lo spazio libero non conosce le
   banchine del tram (#132) né l'ingombro dei bus in svolta (#130, dopo i raccordi di #112).
+
+#123, cavalcavia col tram con il profilo del risolutore (16 novembre). Regola in [`cavalcavia.md`](cavalcavia.md),
+sezione 6. Da sapere:
+
+- attive nel registro Borgomagno, Chiesanuova, San Marco, Via Venezia e Dalmazia: quattordici strutture in tutto.
+  Restano spente le tangenziali con Mortise e Via Salboro (#124);
+- tre cose nuove in `scripts/profilo_cavalcavia.py`, che valgono per tutte le strutture attive. Il 6% del tram è un
+  vincolo anche lungo ogni binario, sulla corda di 10 m (`punti_binari`, `v_binari`): all'interno di una curva il
+  binario fa meno metri della strada che affianca. Le celle accanto a una strada fuori dalla struttura scendono alla
+  quota del profilo se l'asse della struttura è più vicino (non salgono mai): sulle nove strutture di #84 i casi
+  scendono da 132 a 93 e le quote cambiano fino a 73 cm (Grassi, in (1992, −1206)), dove il rilevato del DTM spuntava
+  dalla carreggiata. `edgeH` ha i punti che servono perché terreno più quota dia il profilo entro 2 mm (25 KB in più);
+- una struttura attiva può stare accanto a un cavalcavia con le quote di prima: `build_map.py` calcola terreno e quote
+  dei nodi con quella struttura spenta (`vicine_a_quote_di_prima`) e `tieni_quote_di_prima` fissa le celle sotto il
+  cavalcavia accanto. Oggi vale per il San Marco, la cui rampa ovest corre a 24 m dal viadotto di Corso Irlanda:
+  `scripts/profili_strutture.py` dice che Corso Irlanda cambia in 8 archi, di al più 11 cm. Costa una
+  `terrain_for_game` in più (la rigenerazione arriva a 3,3 GB di memoria: due insieme nella stessa macchina Docker
+  da 8 GB non ci stanno, e una delle due muore con uscita 137 senza scrivere niente);
+- `tests/cavalcavia.spec.js` misura i binari del gioco ogni metro e non ogni 5: sulle strutture attive la quota sopra
+  il terreno cambia a ogni cella, e con un punto ogni 5 m la misura trovava gradini fino a 0,8 m che il tram non fa;
+- `scripts/profili_strutture.py` salta i tratti di binario rimasti senza punti (un tratto in quota lungo un metro, con
+  i capi arrotondati al decimetro);
+- casi rimasti, con il perché in `data/eccezioni/cavalcavia.json`: conche lunghe e basse dove la strada sta sul terreno
+  com'è, strade che scendono sotto il cavalcavia, scarti dal DTM dove il franco della regola supera le spalle (#125).
+  In cima al Chiesanuova resta una conca di 0,18 m in 137 m tra le due campate: un punto a mano nel registro la
+  spostava di 16 m senza toglierla, serve il giro contro le onde di #125.
 
 Fatto il 9 e l'11 novembre: corsie e segnaletica dai tag OSM, fermate del tram sui nodi `tram_stop`, dossi e
 attraversamenti rialzati, area ai bordi e linee tagliate, inversioni a U, corsie di servizio dei capolinea, lampioni

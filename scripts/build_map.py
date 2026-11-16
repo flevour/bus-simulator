@@ -1446,20 +1446,29 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         if misti:
             sys.exit('cavalcavia: una rampa con le quote di prima arriva dentro una struttura con il profilo nuovo, ai nodi '
                      + ', '.join(f'({nodes[n][0]:.0f}, {nodes[n][1]:.0f})' for n in misti[:8]) + ': si attivano o si spengono insieme nel registro.')
-        # e nessuna struttura con il profilo nuovo arriva a meno di VICINE metri da un arco con le quote di prima: lì il
-        # terreno adattato al profilo (piattaforme, niente riempimento) cambierebbe quello spianato sotto l'altro
-        from binari_tram import Griglia as _Griglia
-        vecchi = [k for k, e in enumerate(edges) if k not in dichiarati and max(heights.get(e[0], 0), heights.get(e[1], 0)) > 0.3]
-        gv = _Griglia([(nodes[edges[k][0]], nodes[edges[k][1]]) for k in vecchi] or [((1e9, 1e9), (1e9, 1e9))], 60.0)
-        vicine = sorted({st['id'] for st in profilo_cavalcavia.attive(pronte[4], registro) for k in st['archi']
-                         for n in edges[k][:2] if gv.piu_vicino(nodes[n], profilo_cavalcavia.VICINE) is not None})
+        # un cavalcavia con le quote di prima accanto a una struttura con il profilo nuovo tiene il terreno che ha con
+        # quella struttura spenta (profilo_cavalcavia.tieni_quote_di_prima): qui si calcola quel terreno
+        terreno_prima = None
+        attive = profilo_cavalcavia.attive(pronte[4], registro)
+        vicine = profilo_cavalcavia.vicine_a_quote_di_prima(nodes, edges, attive, heights)
+        quote_prima = {}
         if vicine:
-            sys.exit('cavalcavia: strutture con il profilo nuovo a meno di %g m da una rampa con le quote di prima: %s. Si attivano o si '
-                     'spengono insieme nel registro.' % (profilo_cavalcavia.VICINE, ', '.join(vicine)))
+            lontani = {k for st in attive if st['id'] not in vicine for k in st['archi']}
+            grezze = street_surfaces.overpass_heights(nodes, edges, rails, lontani)
+            terreno_prima, _tst, _hfun, adjust_prima = street_surfaces.terrain_for_game(dtm, nodes, edges, grezze, new_tram, lontani)
+            # (e la quota dei suoi nodi, corretta del riempimento di quel terreno: vale per i nodi che hanno la stessa
+            # quota con la struttura accesa, cioè le rampe che non passano da lei)
+            corrette = adjust_prima(dict(grezze))[0]
+            nodi_dichiarati = {n for k in dichiarati for n in edges[k][:2]}
+            quote_prima = {n: corrette.get(n, 0) for n, q in heights.items() if n not in nodi_dichiarati and grezze.get(n) == q}
+            print('cavalcavia: strutture con il profilo nuovo accanto a un cavalcavia con le quote di prima, che tiene il suo terreno:',
+                  ', '.join(sorted(vicine)))
         terrain, tst, hfun, adjust = street_surfaces.terrain_for_game(dtm, nodes, edges, heights, new_tram, dichiarati)
         heights, tst['nodi_abbassati'] = adjust(heights)
+        heights.update(quote_prima)
         print('terreno:', tst)
-        ris = profilo_cavalcavia.calcola(nodes, edges, names, rails, binari, terrain, dtm, registro, water, pronte=pronte)
+        ris = profilo_cavalcavia.calcola(nodes, edges, names, rails, binari, terrain, dtm, registro, water, pronte=pronte,
+                                         quote_di_prima=heights, terreno_prima=terreno_prima)
         terrain, edge_h, cavalcavia_out = ris['terreno'], ris['edgeH'], ris['cavalcavia']
         profili = {k: (ss, qs) for k, ss, qs in edge_h}
         heights.update(ris['nodeH'])

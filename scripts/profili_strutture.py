@@ -70,7 +70,10 @@ def profili(R=None):
             conta = Counter(di[k] for k in ks if k in di)
             if not conta:
                 continue
-            pts = [s for s in ss if a * 100 - 1 <= s <= b * 100 + 1]
+            # (i capi del tratto sono arrotondati al decimetro: un tratto di un punto solo può restare senza punti)
+            pts = [s for s in ss if a * 100 - 6 <= s <= b * 100 + 6]
+            if not pts:
+                continue
             quote = []
             for s in pts:
                 x, z, _dx, _dz = punto(P, cum, s / 100)
