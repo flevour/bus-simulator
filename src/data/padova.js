@@ -380,10 +380,13 @@ export function buildNetwork() {
     calming.get(e).push({ s: fw ? s : e.len - s, kind, up: fw ? 1 : -1 });
   }
   const expandSeq = (seq) => seq.filter((id, i) => i === 0 || id !== seq[i - 1]);
+  // raccordi di corsia agli incroci, calcolati nella build (scripts/raccordi.py, docs/raccordi.md): il gioco ancora non
+  // li segue (#113). Gli archi sono indici della mappa: valgono per net.edges finché nessun arco è saltato qui sopra
+  const raccordi = MAP.raccordi && edges.length * 8 === E.length ? MAP.raccordi : null;
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = MAP.edificiBBox || [Infinity, Infinity, -Infinity, -Infinity];
   if (!MAP.edificiBBox) for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramRegola: regola, tramLines, tramStazione: MAP.tramStazione || null, tramScambi: (NEW_TRAM.scambi || []).map(([a, b, c, d]) => [toXZ(a, b), toXZ(c, d)]), surfaces: MAP.surfaces || null, tramStops, tramH, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramRegola: regola, tramLines, tramStazione: MAP.tramStazione || null, tramScambi: (NEW_TRAM.scambi || []).map(([a, b, c, d]) => [toXZ(a, b), toXZ(c, d)]), surfaces: MAP.surfaces || null, tramStops, tramH, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null, raccordi };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m

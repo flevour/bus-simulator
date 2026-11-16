@@ -97,6 +97,7 @@ divise per area.
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
 | `scripts/osm_rete.py`, `data/osm-padova-relazioni.json`, `data/osm-luoghi.json`, `data/osm-arredo.json`, `data/eccezioni/osm-rete.json` | `area:mappa` (#108), poi chi li usa: `area:traffico` (#112, #111, #116) | dati OSM agganciati alla rete per id ([`osm-dati.md`](osm-dati.md)); chi cambia nodi o archi della rete, o riscarica le relazioni, riscrive i campi (`python3 scripts/osm_rete.py --scrivi`) e l'elenco |
 | `src/world/posa.js`, `src/data/arredo.js`, `src/data/padova-arredo.json`, `scripts/posa_arredo.mjs`, `scripts/citta_node.mjs` | `area:mappa` (#109, poi #130 e #132); chi cambia mappa, binari o pianta rifà la posa | posa dell'arredo nella build: semafori, linea aerea, lanterne e segnali del tram, paline (nota #109 della Mappa). Il file si riscrive con `npm run posa -- --zona X,Z,R` nello stesso commit della modifica che sposta i pali; `tests/arredo.spec.js` fallisce se non è quello che la posa dà |
+| `scripts/raccordi.py`, `data/eccezioni/raccordi.json`, `tests/raccordi.spec.js` | `area:traffico` (#112), poi chi li usa (#113, #114) | raccordi di corsia agli incroci ([`raccordi.md`](raccordi.md)): la build li calcola dalla rete, dalle corsie, da `svolte` e dalla pianta delle strade, quindi cambiano con ogni rigenerazione che tocca una di queste; chi rigenera rilancia `python3 scripts/raccordi.py` e, se i casi cambiano, `--aggiorna`. `corsie_arco` rifà `laneLayout` di `src/data/padova.js`: le due si cambiano insieme |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -890,6 +891,23 @@ Stato di partenza a ogni corsa (#122, 13 novembre, da `area:verifiche`): `Traffi
 semaforo al ciclo della costruzione (`offset0`) senza fase tram in corso, `TramSignals.reset()` toglie chiamate e via
 libera rimasti, `BusSim.setService` risemina `rnd`; li chiama `startMission`. Chi aggiunge stato a queste classi lo
 rimette lì, altrimenti le prove del traffico tornano a dipendere dalle corse fatte prima sulla stessa pagina.
+
+Raccordi di corsia agli incroci (#112, 16 novembre). Regole, formato e controlli in [`raccordi.md`](raccordi.md). Da
+sapere prima di #113 e #114:
+
+- la build scrive nella rete il campo `raccordi` (`scripts/raccordi.py`, chiamato da `build_map.py` dopo la pianta delle
+  strade); il gioco lo porta in `net.raccordi` e non lo usa. `Traffic.turnPath`, `chooseNext` e `buildLane` dei bus sono
+  come prima;
+- le corsie dei raccordi sono quelle di `laneLayout`. Oggi le auto vanno a `driveOffset` (la corsia più a destra non
+  riservata, che coincide) o, senza corsie OSM sui doppi sensi, a un quarto della carreggiata, che sopra i 7,5 m non è
+  l'asse della corsia disegnata; i bus automatici a `laneLat`. Chi segue i raccordi sta sulle corsie disegnate;
+- un raccordo può scavalcare archi corti (`via` nel formato): chi sceglie il percorso lo sceglie al nodo dove il
+  raccordo comincia e arriva direttamente sull'arco `a`. Dopo un raccordo ce n'è sempre un altro, tranne in fondo alle
+  strade chiuse, al bordo della mappa e nei casi di `auto_senza_uscita`;
+- sul percorso di una linea lo stesso movimento può avere il raccordo delle auto e uno più largo per i soli bus: il bus
+  prende quello con il suo bit;
+- le inversioni sullo stesso arco non hanno raccordo, nemmeno in fondo alle strade chiuse;
+- `window.__game.laneLayout` c'è per `tests/raccordi.spec.js`.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

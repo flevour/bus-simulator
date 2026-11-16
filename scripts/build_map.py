@@ -28,6 +28,7 @@ import street_surfaces  # noqa: E402  (pianta delle strade con Shapely)
 import aree_mappa  # noqa: E402  (rete e aree della mappa)
 import tram_stazione  # noqa: E402  (binari della stazione sugli anelli del piazzale nuovo)
 import osm_rete  # noqa: E402  (svolte, sosta, rilevati, pendenze e fondo dai dati OSM agganciati per id)
+import raccordi  # noqa: E402  (raccordi di corsia agli incroci)
 
 ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
@@ -1557,6 +1558,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         # svolte vietate e obbligate per nodo, sosta per lato, rilevati e trincee, pendenze dichiarate, superficie e
         # illuminazione per arco (docs/osm-dati.md)
         **osm_campi,
+        # raccordi di corsia agli incroci (docs/raccordi.md): sotto, con scripts/raccordi.py
+        'raccordi': None,
         'tramLines': [tram_line],
         **({'terrain': terrain} if terrain else {}),
         **signage,
@@ -1569,6 +1572,12 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     if terrain:
         data['tramH'], tratti = quote_rete.calcola(data, json.load(open(nt_path, encoding='utf-8')) if nt_path and os.path.exists(nt_path) else {'linee': []})
         print('binari in quota:', ', '.join(f"{lid} {'+1' if d > 0 else '-1'} {sum(b - a for a, b, _k in app):.0f} m" for (lid, d), app in sorted(tratti.items())))
+    # raccordi di corsia agli incroci (#112): dalla mappa com'è scritta (nodi arrotondati, corsie, svolte, pianta delle
+    # strade), così python3 scripts/raccordi.py --scrivi sulla mappa che c'è dà lo stesso campo
+    assert raccordi.SNODATI == SNODATI
+    data['raccordi'], _gen, voci_r = raccordi.campo_mappa(data)
+    print(f"raccordi di corsia: {len(raccordi.decodifica(_gen.R, data['raccordi']))} su {len(data['raccordi']['nodi'])} nodi; movimenti "
+          + ', '.join(f'{n} {k}' for k, n in Counter(v['esito'] for v in voci_r if len(v['cat']) == 2).most_common()))
     # la rete in out (nel bundle del gioco), edifici, pianta delle strade e alberi per aree (public/mappa/aree)
     print('aree della mappa:', aree_mappa.write(data, out))
     print(f'inversioni a U sostituite da un giro: {uturns_fixed}')
