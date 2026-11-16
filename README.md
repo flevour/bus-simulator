@@ -226,6 +226,11 @@ uniscono non si incrociano.
   la 4, la 13 e la 17, a ovest per la 21, a sud per la 11). Le linee che escono dalla mappa tengono il tratto più lungo
   di fermate consecutive, la prima e l'ultima a meno di 40 m dal percorso, e il percorso comincia e finisce attorno a
   quelle.
+* **Relazioni, luoghi e arredo OpenStreetMap** (`data/osm-padova-relazioni.json`, `data/osm-luoghi.json`,
+  `data/osm-arredo.json`): svolte vietate e obbligate e percorsi delle linee, parcheggi, uso del suolo, scuole e negozi,
+  barriere, lampioni e alberi. Le svolte si agganciano agli archi della rete per id della via (`scripts/osm_rete.py`) e
+  entrano nella mappa con i tag delle vie letti per arco: sosta per lato, rilevati, pendenze dichiarate, superficie e
+  illuminazione. Formati, copertura e controlli in [`docs/osm-dati.md`](docs/osm-dati.md).
 * **Corridoi fino ai capolinea** (`CORRIDOI_TRAM` e `CORRIDOI_BUS` in `scripts/build_map.py`): celle da 250 m attorno
   ai binari completi delle linee del tram nuove, più una di margine, e le celle toccate dai tracciati GTFS di tutte le
   varianti delle linee del bus scelte, con strade ed edifici. Oggi il SIR3 fino a Voltabarozzo e al deposito, il SIR2 da
@@ -247,6 +252,12 @@ python3 scripts/filter_osm_nodes.py /tmp/osm-nodes.json data/osm-padova-nodes.js
 # binari e banchine del tram
 curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-tram.ql -o /tmp/osm-tram.json https://overpass-api.de/api/interpreter
 python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
+# relazioni (svolte, linee), luoghi (parcheggi, uso del suolo, scuole, negozi) e arredo (barriere, lampioni, alberi);
+# se overpass-api.de è saturo: https://maps.mail.ru/osm/tools/overpass/api/interpreter
+for q in relazioni luoghi arredo; do curl -X POST -A "overpass-client" --data-urlencode data@scripts/overpass-$q.ql -o /tmp/osm-$q.json https://overpass-api.de/api/interpreter; done
+python3 scripts/filter_osm_relazioni.py /tmp/osm-relazioni.json data/osm-padova-relazioni.json
+python3 scripts/filter_osm_luoghi.py /tmp/osm-luoghi.json /tmp/osm-arredo.json data/osm-luoghi.json data/osm-arredo.json
+python3 scripts/osm_rete.py --scrivi   # riscrive nella mappa che c'è svolte, sosta, rilevati, pendenze e fondo, e stampa rapporto e controlli
 # orari GTFS e mappa del gioco (servono i pacchetti Python shapely, pyarrow, numpy e scipy: pip install shapely pyarrow numpy scipy)
 curl -L -o /tmp/biv.zip https://proxy.busone.app/biv/gtfs.zip && mkdir -p /tmp/biv && unzip -o /tmp/biv.zip -d /tmp/biv
 python3 scripts/build_map.py data/osm-padova.json /tmp/biv src/data/padova-map.json data/overture-buildings-padova.parquet data/osm-padova-nodes.json data/osm-padova-tram.json data/misure-strade.json data/dbgt-volumi.json data/dtm-padova.json data/dbgt-verde.json data/dbgt-strade.json data/osm-fermate.json data/osm-corridoio.json

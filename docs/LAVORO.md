@@ -91,6 +91,7 @@ divise per area.
 | `scripts/binari_tram.py`, `scripts/binari_regola.py`, `scripts/tram_stesura.py`, `tests/binari-tram.spec.js`, `SOGLIE_BINARI` in `scripts/verifica_mappa.py` | `area:tram` (#69 le linee, #70 i depositi) | regola, stesura e controllo dei binari del tram ([`binari-tram.md`](binari-tram.md)): `binari_regola.py` rifà le linee, `tram_stesura.py` i depositi; chi rifà i binari abbassa le soglie della sua linea o del suo deposito e aggiunge le eccezioni con il perché |
 | `data/cavalcavia.json`, `scripts/profilo_cavalcavia.py` | `area:mappa` (#123, #124, #125) | registro delle strutture e risolutore del profilo ([`cavalcavia.md`](cavalcavia.md), sezione 6): le correzioni per luogo sono righe del registro con il perché; chi attiva una struttura rigenera e aggiorna vedute ed eccezioni |
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
+| `scripts/osm_rete.py`, `data/osm-padova-relazioni.json`, `data/osm-luoghi.json`, `data/osm-arredo.json`, `data/eccezioni/osm-rete.json` | `area:mappa` (#108), poi chi li usa: `area:traffico` (#112, #111, #116) | dati OSM agganciati alla rete per id ([`osm-dati.md`](osm-dati.md)); chi cambia nodi o archi della rete, o riscarica le relazioni, riscrive i campi (`python3 scripts/osm_rete.py --scrivi`) e l'elenco |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -285,6 +286,24 @@ Da sapere prima di toccare questi file:
   aree). #106 dirà se sostituirla tutta;
 - gli alberi sparsi del gioco cambiano posto in tutta la mappa quando cambia il numero degli archi in quota: le vedute
   lontane dai cavalcavia cambiano di qualche decina di pixel.
+
+#108, dati OSM oltre le vie (13 novembre). Formati, numeri e copertura in [`osm-dati.md`](osm-dati.md). Da sapere:
+
+- `data/osm-padova.json` resta quello del 4 novembre. Relazioni, luoghi e arredo stanno in file accanto, con query e
+  filtro in `scripts/`; si possono riscaricare quando si vuole, le vie no;
+- la rete non porta gli id di OSM: `osm_rete.Aggancio` li ritrova da coordinate dei nodi, classe, nome e senso unico
+  degli archi. `build_map.py` tiene la via vera di ogni arco (`edge_way`) e si ferma se `Aggancio` non dà la stessa.
+  Chi cambia come nascono nodi e archi (`rdp`, nodi tenuti, vie saltate) lo vede lì;
+- nella rete, dopo `turnLanes`: `svolte`, `sosta`, `rilevati`, `pendenze`, `fondo` (80 KB in tutto). Un arco va da `a`
+  a `b` nel verso della via OSM, e destra, sinistra e salita sono riferite a quel verso. Il gioco non li legge ancora;
+- `python3 scripts/osm_rete.py --scrivi` riscrive quei cinque campi nella mappa che c'è e non tocca altro;
+  `scripts/verifica_mappa.py` (e la CI) fallisce se i campi della mappa non sono quelli che danno gli scarichi, quindi
+  chi pubblica una rete con nodi o archi diversi li riscrive nello stesso commit;
+- i casi noti sono in `data/eccezioni/osm-rete.json`: 82 svolte che toccano la rete e non si agganciano (nessuna per
+  vie cambiate dopo lo scarico), una svolta che va dalla parte opposta a quella del suo tipo, 3 passaggi dei percorsi
+  dei bus su una svolta vietata (la 4 al Piazzale Castagnara, la 15B a Largo Europa: #114);
+- Overpass: quando `overpass-api.de` risponde 502, `https://maps.mail.ru/osm/tools/overpass/api/interpreter` ha
+  risposto; user agent generico.
 
 Fatto il 9 e l'11 novembre: corsie e segnaletica dai tag OSM, fermate del tram sui nodi `tram_stop`, dossi e
 attraversamenti rialzati, area ai bordi e linee tagliate, inversioni a U, corsie di servizio dei capolinea, lampioni

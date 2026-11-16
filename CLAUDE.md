@@ -43,6 +43,8 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   allontana (`scripts/cavalcavia.py`), il registro delle strutture (`data/cavalcavia.json`: quali hanno il profilo
   calcolato, punti e franchi messi a mano con il perché) e il risolutore (`scripts/profilo_cavalcavia.py`).
 * `docs/overpass-segnaletica.md`: segnaletica reale da OSM (query, export dal browser, uso nel gioco).
+* `docs/osm-dati.md`: dati OSM oltre le vie (svolte vietate, linee, parcheggi, uso del suolo, arredo), campi che la
+  mappa ne porta per nodo e per arco (`svolte`, `sosta`, `rilevati`, `pendenze`, `fondo`), quanto copre OSM e controlli.
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,
   verifiche, tappe). Le misure di riferimento della sezione 3 valgono dove mancano i dati.
@@ -88,7 +90,11 @@ Il terreno si applica nel vertex shader (`src/world/terrain.js`): i materiali nu
 
 `data/osm-padova-nodes.json` (semafori, STOP, dare precedenza, attraversamenti) viene da `scripts/overpass-nodes.ql`
 filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari e banchine del tram) da
-`scripts/overpass-tram.ql` filtrato con `scripts/filter_osm_tram.py`: i comandi sono nel README. La pianta delle strade
+`scripts/overpass-tram.ql` filtrato con `scripts/filter_osm_tram.py`: i comandi sono nel README. `data/osm-padova-relazioni.json`
+(svolte vietate e obbligate, percorsi delle linee), `data/osm-luoghi.json` e `data/osm-arredo.json` vengono da
+`scripts/overpass-relazioni.ql`, `overpass-luoghi.ql` e `overpass-arredo.ql` con `scripts/filter_osm_relazioni.py` e
+`filter_osm_luoghi.py`. `data/osm-padova.json` non si riscarica: i dati nuovi si agganciano alle sue vie per id
+(`scripts/osm_rete.py`; `--scrivi` riscrive i soli campi OSM nella mappa che c'è, e la build dà gli stessi). La pianta delle strade
 (carreggiate, marciapiedi, isole, edifici ritagliati) la calcola `scripts/street_surfaces.py`.
 
 ## Verifiche
@@ -109,8 +115,9 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   `tests/mappa.spec.js` nel gioco.
 * **Soglie per caso, non per conteggio.** Ogni controllo dà ai suoi casi una chiave stabile (struttura, linea e
   fermata, posto) e li confronta con l'elenco dei casi noti in `data/eccezioni/` (`scripts/eccezioni.py`), in gruppi
-  con il perché: `verifica-mappa.json`, `cavalcavia.json` (`scripts/cavalcavia.py`, anche da
-  `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`), `traffico.json` (`tests/traffico.spec.js`). Un caso fuori dall'elenco fa fallire il
+  con il perché: `verifica-mappa.json`, `osm-rete.json` (`scripts/osm_rete.py`, svolte di OSM), `cavalcavia.json`
+  (`scripts/cavalcavia.py`, anche da `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`),
+  `traffico.json` (`tests/traffico.spec.js`). Un caso fuori dall'elenco fa fallire il
   controllo anche se il totale non sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione
   l'elenco si riscrive con `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i
   casi nuovi finiscono in un gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un

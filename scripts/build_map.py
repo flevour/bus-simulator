@@ -27,6 +27,7 @@ import build_gtfs  # noqa: E402  (riusa lettura GTFS e conversioni)
 import street_surfaces  # noqa: E402  (pianta delle strade con Shapely)
 import aree_mappa  # noqa: E402  (rete e aree della mappa)
 import tram_stazione  # noqa: E402  (binari della stazione sugli anelli del piazzale nuovo)
+import osm_rete  # noqa: E402  (svolte, sosta, rilevati, pendenze e fondo dai dati OSM agganciati per id)
 
 ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
@@ -603,6 +604,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
     edges = []  # a, b, cls, width, name, flags, speed, layer
     edge_walk = []  # per ogni arco: marciapiede misurato a sinistra e a destra (0 = non misurato)
+    edge_way = []  # per ogni arco: id OSM della sua via
     edge_lanes = {}  # arco -> corsie dai tag OSM (lane_tags), nel verso a -> b
     turns = []  # [arco, frecce nel verso a -> b, frecce contro]: sull'ultimo arco della via in ciascun verso
     table_ways = []  # (primo arco, ultimo arco) delle vie rialzate (traffic_calming=table)
@@ -654,6 +656,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                     edge_lanes[len(edges)] = lt
                 edges.append([a, b, cls, we, nm, flags, sp, layer])
                 edge_walk.append((pc[3], pc[4]) if pc else (0.0, 0.0))
+                edge_way.append(w['id'])
         if w['id'] in gtfs_ways:
             gtfs_edges.update(range(first, len(edges)))
         if t.get('traffic_calming') == 'table' and len(edges) > first:
@@ -1522,6 +1525,18 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     tram_line = build_gtfs.load_tram(gtfs_dir, keep=tram_keep)
     if tram_path and tram_lanes:
         print('fermate del tram sui nodi OSM: %d su %d' % snap_tram_stops(tram_path, tram, tram_stops, tram_line))
+    # dati OSM agganciati alla rete per id (scripts/osm_rete.py). L'aggancio è quello che fa lo strumento che scrive i
+    # soli campi nella mappa che c'è, dalla rete e dagli scarichi: qui si confronta con la via vera di ogni arco
+    assert all(osm_rete.CLASSE[k] == v[0] for k, v in DRIVE.items()) and len(osm_rete.CLASSE) == len(DRIVE)
+    osm_vie = [e for e in els if e['type'] == 'way' and 'geometry' in e and e.get('tags', {}).get('highway') in DRIVE]
+    agg = osm_rete.Aggancio(list(zip(nodes_flat[0::2], nodes_flat[1::2])), edges, names, osm_vie)
+    diversi = [k for k, (a, b) in enumerate(zip(agg.arco_via, edge_way)) if a != b]
+    if diversi:
+        sys.exit(f'osm_rete.Aggancio non ritrova la via di {len(diversi)} archi (i primi: {diversi[:10]}): i campi OSM scritti '
+                 'senza rigenerare non sarebbero quelli della build')
+    osm_campi, osm_info = osm_rete.campi(agg, osm_rete.leggi_relazioni(), {e['id'] for e in els if e['type'] == 'way'})
+    print(f"dati OSM per id: svolte {len(osm_campi['svolte'])} (non agganciate {sum(1 for p, _n in osm_info['scarti'].values() if p != osm_rete.FUORI)}), "
+          f"sosta {len(osm_campi['sosta'])} archi, rilevati {len(osm_campi['rilevati'])}, pendenze {len(osm_campi['pendenze'])}")
     data = {
         'source': 'OpenStreetMap contributors (ODbL) + GTFS Busitalia Veneto (BusOne)',
         'origin': [ORIGIN_LAT, ORIGIN_LON], 'ferDate': build_gtfs.FER_DATE, 'fesDate': build_gtfs.FES_DATE,
@@ -1535,6 +1550,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         'edgeH': edge_h, 'cavalcavia': cavalcavia_out,
         # corsie dai tag OSM: [arco, codice] (lane_code), e frecce a terra [arco, avanti, indietro]
         'lanes': [v for k, lt in sorted(edge_lanes.items()) for v in (k, lane_code(lt))], 'turnLanes': turns,
+        # svolte vietate e obbligate per nodo, sosta per lato, rilevati e trincee, pendenze dichiarate, superficie e
+        # illuminazione per arco (docs/osm-dati.md)
+        **osm_campi,
         'tramLines': [tram_line],
         **({'terrain': terrain} if terrain else {}),
         **signage,

@@ -1,0 +1,137 @@
+{
+ "cosa": "Casi noti dei controlli sui dati OSM agganciati alla rete (scripts/osm_rete.py, anche da scripts/verifica_mappa.py): svolte vietate e obbligate che toccano la rete e non si agganciano a un arco, svolte agganciate che non vanno dalla parte che il loro tipo dice, percorsi dei bus che passano da una svolta vietata. La chiave è il motivo o il tipo, la relazione OSM e il nodo della rete. Le svolte che non toccano la rete (fuori dall'area) non sono casi.",
+ "controlli": {
+  "svolte_non_agganciate": [
+   {
+    "perche": "Una delle due vie è negli scarichi ma non nella rete: sta fuori dall'area di gioco (al bordo l'incrocio ha un braccio solo) oppure è una corsia di parcheggio, un passo carraio o una strada di servizio chiusa che la build salta. La svolta riguarda un arco che nel gioco non c'è.",
+    "casi": [
+     "via dello scarico fuori dalla rete, relazione 10788422 @ 3101,3949",
+     "via dello scarico fuori dalla rete, relazione 10788423 @ 3101,3949",
+     "via dello scarico fuori dalla rete, relazione 12150959 @ 3053,-3811",
+     "via dello scarico fuori dalla rete, relazione 12150961 @ 3027,-3811",
+     "via dello scarico fuori dalla rete, relazione 13068986 @ 1237,462",
+     "via dello scarico fuori dalla rete, relazione 14598008 @ -1157,3225",
+     "via dello scarico fuori dalla rete, relazione 16760919 @ 1104,2605",
+     "via dello scarico fuori dalla rete, relazione 17687182 @ -4128,-1192",
+     "via dello scarico fuori dalla rete, relazione 18489929 @ 1123,2617",
+     "via dello scarico fuori dalla rete, relazione 21088238 @ -304,-678",
+     "via dello scarico fuori dalla rete, relazione 21088239 @ -304,-678",
+     "via dello scarico fuori dalla rete, relazione 21107756 @ 1130,-3243",
+     "via dello scarico fuori dalla rete, relazione 21107757 @ 1130,-3243",
+     "via dello scarico fuori dalla rete, relazione 21107758 @ 1134,-3241",
+     "via dello scarico fuori dalla rete, relazione 21107759 @ 1134,-3241",
+     "via dello scarico fuori dalla rete, relazione 21107760 @ 1134,-3249",
+     "via dello scarico fuori dalla rete, relazione 21107762 @ 1134,-3249",
+     "via dello scarico fuori dalla rete, relazione 21799044 @ 4658,-66",
+     "via dello scarico fuori dalla rete, relazione 2203722 @ -2983,5244",
+     "via dello scarico fuori dalla rete, relazione 2424141 @ -4178,4271",
+     "via dello scarico fuori dalla rete, relazione 2897467 @ 3040,-3801",
+     "via dello scarico fuori dalla rete, relazione 3303291 @ 3999,-3601",
+     "via dello scarico fuori dalla rete, relazione 3860491 @ -4306,-3833",
+     "via dello scarico fuori dalla rete, relazione 3860493 @ -3759,-4465",
+     "via dello scarico fuori dalla rete, relazione 3860494 @ -4300,-3947",
+     "via dello scarico fuori dalla rete, relazione 3860495 @ -4306,-3833",
+     "via dello scarico fuori dalla rete, relazione 4227662 @ 3310,-1689",
+     "via dello scarico fuori dalla rete, relazione 7837111 @ 965,1381",
+     "via dello scarico fuori dalla rete, relazione 9786654 @ 1117,547"
+    ]
+   },
+   {
+    "perche": "In OSM alla relazione manca un membro (la via da, la via a o il nodo via): così com'è non dice quale svolta vieta. Si correggono in OSM, non qui.",
+    "casi": [
+     "relazione incompleta in OSM, relazione 10151986 @ 578,-1876",
+     "relazione incompleta in OSM, relazione 10151987 @ 295,-1495",
+     "relazione incompleta in OSM, relazione 11105979 @ 578,-1876",
+     "relazione incompleta in OSM, relazione 11510401 @ 1118,-3194",
+     "relazione incompleta in OSM, relazione 11510402 @ 1100,-3150",
+     "relazione incompleta in OSM, relazione 11510404 @ 1056,-3035",
+     "relazione incompleta in OSM, relazione 11510405 @ 934,-2677",
+     "relazione incompleta in OSM, relazione 11510406 @ 934,-2677",
+     "relazione incompleta in OSM, relazione 11510407 @ 1039,-2975",
+     "relazione incompleta in OSM, relazione 11513703 @ 946,-2683",
+     "relazione incompleta in OSM, relazione 11513704 @ 961,-2754",
+     "relazione incompleta in OSM, relazione 11513705 @ 994,-2862",
+     "relazione incompleta in OSM, relazione 2809990 @ -44,-1051",
+     "relazione incompleta in OSM, relazione 2939570 @ -1077,-214",
+     "relazione incompleta in OSM, relazione 3240440 @ -64,1147",
+     "relazione incompleta in OSM, relazione 3240441 @ 26,1174",
+     "relazione incompleta in OSM, relazione 3529949 @ -7775,-2641",
+     "relazione incompleta in OSM, relazione 4055976 @ 1679,2652",
+     "relazione incompleta in OSM, relazione 9242342 @ 1039,-2975",
+     "relazione incompleta in OSM, relazione 9401181 @ 784,-2276",
+     "relazione incompleta in OSM, relazione 9401182 @ 784,-2276",
+     "relazione incompleta in OSM, relazione 9401183 @ 784,-2276",
+     "relazione incompleta in OSM, relazione 9415414 @ 784,-2276",
+     "relazione incompleta in OSM, relazione 9693238 @ 295,-1495",
+     "relazione incompleta in OSM, relazione 9693242 @ 295,-1495",
+     "relazione incompleta in OSM, relazione 9693244 @ 295,-1495"
+    ]
+   },
+   {
+    "perche": "Una delle due vie non è negli scarichi delle vie: sta fuori dalle aree scaricate (i corridoi delle linee tengono solo le vie delle loro celle) o è di un tipo che lo scarico non ha (track, path, cycleway). Nessuna di queste vie è stata modificata in OSM dopo lo scarico del 4 novembre 2026 (controllato sull'API di OSM il 13 novembre): non sono vie cambiate, sono vie mai scaricate.",
+    "casi": [
+     "via che non è negli scarichi, relazione 12339236 @ 2212,3410",
+     "via che non è negli scarichi, relazione 12339237 @ 2209,3408",
+     "via che non è negli scarichi, relazione 15410800 @ 5690,-2130",
+     "via che non è negli scarichi, relazione 18055108 @ -4698,71",
+     "via che non è negli scarichi, relazione 18055109 @ -4675,101",
+     "via che non è negli scarichi, relazione 18055111 @ -4698,71",
+     "via che non è negli scarichi, relazione 18055113 @ -4675,101",
+     "via che non è negli scarichi, relazione 18902842 @ 6511,-3374",
+     "via che non è negli scarichi, relazione 20041800 @ -64,6394",
+     "via che non è negli scarichi, relazione 20255661 @ -8406,-3130",
+     "via che non è negli scarichi, relazione 20338646 @ 2077,7918",
+     "via che non è negli scarichi, relazione 20596799 @ 5712,-2854",
+     "via che non è negli scarichi, relazione 20600278 @ 5728,-2917",
+     "via che non è negli scarichi, relazione 21822181 @ 5750,-2177",
+     "via che non è negli scarichi, relazione 2864790 @ 1778,-207",
+     "via che non è negli scarichi, relazione 3529963 @ 1584,-4749",
+     "via che non è negli scarichi, relazione 4677444 @ -5745,-638",
+     "via che non è negli scarichi, relazione 4677445 @ -5710,-672",
+     "via che non è negli scarichi, relazione 5617147 @ -2081,5307",
+     "via che non è negli scarichi, relazione 5754844 @ -1345,7210",
+     "via che non è negli scarichi, relazione 8444032 @ 2074,-208"
+    ]
+   },
+   {
+    "perche": "La via da o la via a è a senso unico nel verso opposto a quello della svolta: in OSM la relazione descrive una manovra che il senso unico già vieta (o il senso unico è cambiato dopo la relazione). Nel gioco non aggiunge niente.",
+    "casi": [
+     "via a senso unico nel verso sbagliato, relazione 12417060 @ 3428,-1109",
+     "via a senso unico nel verso sbagliato, relazione 17801532 @ -2174,-358",
+     "via a senso unico nel verso sbagliato, relazione 19921783 @ 498,-865"
+    ]
+   },
+   {
+    "perche": "La via a passa dal nodo via senza finirci, è a doppio senso, e la relazione non dice da quale parte si esce: servirebbe spezzare la via in OSM.",
+    "casi": [
+     "nodo via in mezzo a una via a doppio senso, relazione 12571199 @ -1360,6736",
+     "nodo via in mezzo a una via a doppio senso, relazione 20393092 @ 1912,-686"
+    ]
+   },
+   {
+    "perche": "La via da è un passo carraio di cui la rete tiene solo il pezzo dove passa un tracciato dei bus (le corsie di servizio si tengono a pezzi): il pezzo tenuto non arriva al nodo via.",
+    "casi": [
+     "via che non tocca il nodo via, relazione 10398319 @ -82,-1429"
+    ]
+   }
+  ],
+  "svolte_incoerenti": [
+   {
+    "perche": "Divieto di svolta a sinistra da Via Kennedy (senso unico) a un tratto di Via Antonio Rossi che dal nodo sta 39 gradi a destra: in OSM il membro a è il tratto dalla parte sbagliata dell'incrocio, oppure il tipo doveva essere no_right_turn. L'aggancio segue la relazione com'è; si corregge in OSM.",
+    "casi": [
+     "no_left_turn, relazione 16730934 @ -7010,-2123"
+    ]
+   }
+  ],
+  "percorsi_su_svolta_vietata": [
+   {
+    "perche": "Percorsi che vengono dall'aggancio del tracciato GTFS alla rete e passano da una svolta che OSM vieta anche ai bus (nessun except=psv): la 4 al Piazzale Castagnara esce di lato dove OSM obbliga ad andare diritto, in due nodi, e la 15B a Largo Europa fa l'inversione vietata verso Via Matteotti. Se sbaglia l'aggancio o manca l'eccezione per i bus in OSM lo dice #114, che controlla i percorsi nella build.",
+    "casi": [
+     "linea 15B, relazione 20217325 @ -23,-384",
+     "linea 4, relazione 10389361 @ 1492,-4627",
+     "linea 4, relazione 18902835 @ 1386,-4610"
+    ]
+   }
+  ]
+ }
+}

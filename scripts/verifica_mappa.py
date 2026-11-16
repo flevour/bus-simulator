@@ -16,6 +16,9 @@ Controlla quello che il JSON dice già, senza aprire il gioco (sezione 6.1 di do
   * profilo dei cavalcavia secondo la regola di docs/cavalcavia.md (scripts/cavalcavia.py): onde, pendenze oltre il
     massimo, raccordi verticali sotto il raggio minimo e scarti dal DTM delle strade, le stesse misure e i binari fuori
     quota per i binari che ci salgono. Le quote dei binari come le mette il gioco le misura tests/cavalcavia.spec.js.
+  * dati OSM agganciati alla rete per id (scripts/osm_rete.py, docs/osm-dati.md): i campi svolte, sosta, rilevati,
+    pendenze e fondo della mappa sono quelli che danno gli scarichi; svolte non agganciate, svolte che non vanno dalla
+    parte che dicono, percorsi dei bus su una svolta vietata (data/eccezioni/osm-rete.json).
 Pali dei semafori, lampioni, alberi, pensiline e paline al posto finale li mette il gioco al caricamento: li controlla
 la prova tests/mappa.spec.js nel browser.
 
@@ -46,6 +49,7 @@ sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import aree_mappa  # noqa: E402
 import binari_tram  # noqa: E402
 import cavalcavia  # noqa: E402
+import osm_rete  # noqa: E402
 from eccezioni import Elenco, chiave  # noqa: E402
 
 BUS_NEAR = 6.0  # m: oltre metà carreggiata, un edificio è "lungo il percorso" fin qui dall'asse
@@ -368,8 +372,9 @@ def main():
     errori = E.errori()
     valori_b, casi_b, sopra_b = binari_tram.rapporto(binari_tram.rete_dati(mappa.M), SOGLIE_BINARI, args.elenco)
     valori_c, casi_c, errori_c = cavalcavia.rapporto(cavalcavia.rete_dati(mappa.M), args.elenco, aggiorna=args.aggiorna)
+    valori_o, casi_o, errori_o = osm_rete.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
     if args.json:
-        json.dump({'valori': valori, 'eccezioni': E.esiti, 'fermate': dove, 'casi': casi, 'marciapiedi_stretti_per_riquadro': stretto_per_riquadro,
+        json.dump({'osm': {'valori': valori_o, 'casi': casi_o}, 'valori': valori, 'eccezioni': E.esiti, 'fermate': dove, 'casi': casi, 'marciapiedi_stretti_per_riquadro': stretto_per_riquadro,
                    'pianta_sovrapposta': {'coppie': sovrapposte, 'per_riquadro': pianta_per_riquadro, 'verde_per_riquadro': verde_per_riquadro},
                    'binari': {'valori': valori_b, 'soglie': SOGLIE_BINARI, 'casi': casi_b},
                    'cavalcavia': {'valori': valori_c, 'casi': casi_c}},
@@ -377,6 +382,7 @@ def main():
     if sopra_b:
         errori.append('Binari del tram sopra la soglia: ' + ', '.join(sopra_b))
     errori += errori_c
+    errori += errori_o
     errori += conto_aree(args.mappa)
     if errori:
         print('\n'.join(errori))
