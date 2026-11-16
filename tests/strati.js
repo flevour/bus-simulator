@@ -87,7 +87,7 @@ export function confrontaStrati({ x, z, verso, giu, vicino, lontano, raggio, dy 
   const V3 = g.camera.position.constructor, W = S.target.width, H = S.target.height;
   const h = (verso * Math.PI) / 180, a = (giu * Math.PI) / 180;
   const fx = Math.sin(h) * Math.cos(a), fy = -Math.sin(a), fz = Math.cos(h) * Math.cos(a);
-  const yT = T.at(x, z) + city.heightAt(x, z), Y0 = yT - 60, DY = 120;
+  const yT = T.at(x, z) + city.elevHeight(x, z), Y0 = yT - 60, DY = 120;
   S.quota.value.set(Y0, DY, 0);
   const vista = (dist) => {
     const cam = S.cam.clone();
