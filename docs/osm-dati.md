@@ -133,7 +133,7 @@ Due controlli sulle svolte agganciate, con gli stessi elenchi:
 Per #112: le svolte vietate non dicono tutto. Le obbligate sono il 78%, e vanno lette come "dall'arco `da` tutte le
 altre uscite sono vietate". 673 barriere stanno su un nodo di una via della rete (444 cancelli, 108 dissuasori, 45
 sbarre, 21 blocchi, 16 limitatori d'altezza): un dissuasore in carreggiata chiude la via alle auto quanto un divieto,
-e oggi la rete non lo sa.
+e oggi la rete non lo sa (#128).
 
 ## 6. Parcheggi, uso del suolo, luoghi (per #111 e #116)
 
