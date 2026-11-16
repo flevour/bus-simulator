@@ -3,9 +3,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
 import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
 import { ledTexture } from './textures.js';
-import { TRAM, CATENARY_HEIGHT, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
+import { TRAM, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
-import { driveOffset, laneSpan } from '../data/padova.js';
+import { driveOffset } from '../data/padova.js';
 import { turni } from '../game/turni.js';
 
 // ------------------------------------------------------------------
@@ -37,7 +37,7 @@ const HEAD_H = 1.05;
 
 // punto e direzione (verso l'esterno) a d metri dal centro del nodo n lungo il braccio e, oltre i vertici intermedi;
 // from = estremo dell'arco verso l'incrocio, t = metri da from, end = lunghezza del braccio fino al prossimo incrocio
-function armPoint(nodes, n, e, d) {
+export function armPoint(nodes, n, e, d) {
   let from = n, arc = e, d0 = 0;
   for (let k = 0; k < 60; k++) {
     const o = arc.a === from.id ? 1 : -1, to = nodes[o > 0 ? arc.b : arc.a];
@@ -53,7 +53,7 @@ function armPoint(nodes, n, e, d) {
 }
 
 // strisce pedonali lungo il braccio: metri dal centro del nodo, fino a maxD
-function armCrossings(nodes, n, e, maxD) {
+export function armCrossings(nodes, n, e, maxD) {
   const out = [];
   let from = n, arc = e, d0 = 0;
   for (let k = 0; k < 60 && d0 < maxD; k++) {
@@ -74,7 +74,7 @@ export class TrafficLights {
     this.signals = [];
     this.byKey = new Map(); // `${nodo}:${arco}` -> approccio
     this.stopArcs = new Map(); // `${arco}:${nodo verso cui si va}` -> { ap, t }: arco con la linea d'arresto, a t m dal nodo
-    this.stats = { approcci: 0, lineaOsm: 0, palo: 0, muro: 0, senzaPalo: 0, ripetitrici: 0, sbracci: 0 };
+    this.stats = { approcci: 0, palo: 0, muro: 0, senzaPalo: 0, ripetitrici: 0, sbracci: 0 };
     const rnd = mulberry32(99);
     const rank = (e) => e.cls * 10 - Math.min(e.routes || 0, 9);
     const arms = net.signalArms;
@@ -125,23 +125,16 @@ export class TrafficLights {
     this.update(0);
   }
 
-  // linea d'arresto, pali e lanterne di un approccio
+  // linea d'arresto, pali e lanterne di un approccio, dove li ha messi la build (city.arredo, src/data/arredo.js): la
+  // linea d'arresto a stop metri dal nodo lungo il braccio, il palo a destra (o a sinistra sui sensi unici senza posto
+  // a destra) con l'eventuale sbraccio, la ripetitrice a sinistra. Fino al 16 novembre il posto si cercava qui a ogni
+  // caricamento, tastando il bordo dell'asfalto (#109): la ricerca è in src/world/posa.js
   placeApproach(sig, ap) {
-    const nodes = this.net.nodes, n = ap.node, e = ap.edge, city = this.city;
+    const nodes = this.net.nodes, n = ap.node, e = ap.edge;
     this.stats.approcci++;
-    // linea d'arresto: dove OSM mette il semaforo del braccio, altrimenti 1 m prima delle strisce vicine all'incrocio,
-    // altrimenti appena fuori dall'incrocio. Mai sulle strisce e sempre sull'arco d'arrivo (lì si fermano i veicoli)
-    const trim = n.trim ? n.trim.get(e) : n.joint ? 0 : n.radius * 0.6;
-    const cross = armCrossings(nodes, n, e, sig.ped ? 5 : trim + 14);
-    let s = cross.length ? Math.max(...cross) + 2.7 : sig.ped ? 3.2 : trim + 1.0;
-    // il nodo OSM del semaforo è spesso sull'angolo dell'incrocio, oltre le strisce: vale solo se è più lontano
-    if (ap.info && ap.info.stop > s) { s = ap.info.stop; this.stats.lineaOsm++; }
-    s = Math.max(s, trim + 0.6);
-    for (const c of cross) if (c - 2.2 < s && c + 2.2 > s) s = c + 2.7;
-    // la linea può stare su un arco precedente (bracci con vertici intermedi vicino all'incrocio), non oltre il braccio
-    let p = armPoint(nodes, n, e, s);
-    if (s > p.end - 2) p = armPoint(nodes, n, e, (s = Math.max(Math.min(s, p.end - 2), Math.min(trim + 0.6, p.end - 1))));
-    ap.stop = s;
+    const r = this.city.arredo.semaforo(this, sig, ap);
+    const p = armPoint(nodes, n, e, r.stop);
+    ap.stop = r.stop;
     this.stopArcs.set(`${p.arc.id}:${p.from.id}`, { ap, t: p.t });
     const q = armPoint(nodes, n, e, ap.stop + 12);
     // le lanterne guardano chi arriva, lungo l'asse del braccio alla linea d'arresto (non l'arco del grafo)
@@ -149,89 +142,34 @@ export class TrafficLights {
     const fl = Math.hypot(fx, fz) || 1;
     fx /= fl; fz /= fl;
     ap.face = { x: fx, z: fz };
-    const hw = e.width / 2;
-    const off = (x, z) => (city ? (city.asphRings ? city.surfaceOff(x, z) : city.clearance(x, z, ['road'], 20)) : 1);
-    // bordo dell'asfalto da un lato (side 1 = destra di chi arriva): dall'asse si attraversa la carreggiata fino al
-    // primo punto fuori
-    const edgeAt = (px, pz, side) => {
-      const rx = fz * side, rz = -fx * side;
-      let seen = off(px, pz) < 0;
-      for (let o = 0.2; o <= hw + 16; o += 0.2) {
-        const v = off(px + rx * o, pz + rz * o);
-        if (v < 0) seen = true;
-        else if (seen || o > hw) return o;
-      }
-      return null;
-    };
-    // 0 = libero, 1 = edificio (si può appendere la lanterna al muro), 2 = asfalto, binari o altro
-    const free = (x, z) => {
-      if (!city) return 0;
-      if (off(x, z) < 0.25 || city.clearance(x, z, ['tram', 'rail'], 15) < 0.4) return 2;
-      const arr = city.obstacles.query(x, z, 3, this._oq || (this._oq = []));
-      for (const b of arr) {
-        const dx = x - b.x, dz = z - b.z, u = dx * b.c + dz * b.s, v = -dx * b.s + dz * b.c;
-        if (Math.abs(u) < b.hx + 0.2 && Math.abs(v) < b.hz + 0.2) return b.kind === 'building' ? 1 : 2;
-      }
-      return 0;
-    };
-    // palo appena oltre la linea d'arresto (art. 168: il primo veicolo fermo vede le luci), 0,6 m fuori dall'asfalto;
-    // se lì non c'è posto, poco più avanti o poco prima. Dove il marciapiede è stretto e c'è la facciata (centro
-    // storico) la lanterna va su una mensola a muro
-    const place = (side) => {
-      let wall = null;
-      for (const d of [-0.6, -1.6, -2.8, 0.6, 1.8, 3.2]) {
-        const sp = ap.stop + d;
-        if (sp < 0.5) continue;
-        const a = armPoint(nodes, n, e, sp);
-        const o = edgeAt(a.x, a.z, side);
-        if (o == null) continue;
-        const at = (po) => ({ x: a.x + fz * side * po, z: a.z - fx * side * po, o: po });
-        const P = at(o + 0.6), f = free(P.x, P.z);
-        if (f === 0) return P;
-        if (f === 1 && !wall) { const W = at(o + 0.25); if (free(W.x, W.z) !== 2) wall = { ...W, wall: true }; }
-      }
-      return wall;
-    };
-    const h = n.h || 0;
+    const hw = e.width / 2, h = n.h || 0;
     ap.heads = [];
     ap.poles = [];
-    // a destra; sui sensi unici, se a destra non c'è posto (sede del tram accanto), a sinistra
-    let R = place(1), Rs = 1;
-    if (!R && e.oneway) { R = place(-1); Rs = -1; }
+    const R = r.R;
     if (R) {
       this.stats.palo++;
       if (R.wall) this.stats.muro++;
       ap.pos = { x: R.x, z: R.z };
-      // vie larghe (due o più corsie nel verso) o palo lontano dalle corsie: palo a sbraccio con la lanterna sopra le
-      // corsie di chi arriva
-      const reach = R.o - Rs * (e.oneway ? 0 : hw / 2); // dal palo al centro delle corsie di chi arriva
-      const mast = !R.wall && !sig.ped && e.cls <= 5 && (ap.lanes >= 2 || reach > hw + 3.5) ? Math.min(10, reach) : 0;
-      if (!R.wall) ap.poles.push({ x: R.x, z: R.z, y: h, mast, side: Rs });
-      ap.heads.push({ x: R.x + fx * 0.2, y: h + 0.1 + HEAD_Y + (R.wall ? 0.5 : 0), z: R.z + fz * 0.2, wall: R.wall ? Rs : 0 });
-      if (mast) {
+      if (!R.wall) ap.poles.push({ x: R.x, z: R.z, y: h, mast: R.mast, side: R.side });
+      ap.heads.push({ x: R.x + fx * 0.2, y: h + 0.1 + HEAD_Y + (R.wall ? 0.5 : 0), z: R.z + fz * 0.2, wall: R.wall ? R.side : 0 });
+      // palo a sbraccio: la seconda lanterna sopra le corsie di chi arriva
+      if (R.mast) {
         this.stats.sbracci++;
-        ap.heads.push({ x: R.x - fz * Rs * mast + fx * 0.2, y: h + 0.1 + MAST_Y, z: R.z + fx * Rs * mast + fz * 0.2 });
+        ap.heads.push({ x: R.x - fz * R.side * R.mast + fx * 0.2, y: h + 0.1 + MAST_Y, z: R.z + fx * R.side * R.mast + fz * 0.2 });
       }
     } else {
       this.stats.senzaPalo++;
       ap.pos = { x: p.x + fz * (hw + 1), z: p.z - fx * (hw + 1) };
     }
     // ripetitrice a sinistra, obbligatoria sui sensi unici con due o più corsie (art. 168 c. 3)
-    if (e.oneway && ap.lanes >= 2 && Rs === 1) {
-      const Lp = place(-1);
-      if (Lp) {
-        this.stats.ripetitrici++;
-        if (!Lp.wall) ap.poles.push({ x: Lp.x, z: Lp.z, y: h, mast: 0, side: -1 });
-        ap.heads.push({ x: Lp.x + fx * 0.2, y: h + 0.1 + HEAD_Y + (Lp.wall ? 0.5 : 0), z: Lp.z + fz * 0.2, wall: Lp.wall ? -1 : 0 });
-      }
+    const Lp = r.L;
+    if (Lp) {
+      this.stats.ripetitrici++;
+      if (!Lp.wall) ap.poles.push({ x: Lp.x, z: Lp.z, y: h, mast: 0, side: -1 });
+      ap.heads.push({ x: Lp.x + fx * 0.2, y: h + 0.1 + HEAD_Y + (Lp.wall ? 0.5 : 0), z: Lp.z + fz * 0.2, wall: Lp.wall ? -1 : 0 });
     }
     // linea d'arresto: continua, larga 50 cm, sulle corsie di chi arriva (art. 144)
-    const er = edgeAt(p.x, p.z, 1);
-    const el = e.oneway ? edgeAt(p.x, p.z, -1) : null;
-    // con le corsie di OSM dalla riga che separa i versi (anche quella gialla di una corsia dei bus in controsenso)
-    const span = e.osmLanes ? laneSpan(e, e.b === n.id) : null;
-    const w0 = span && span[0] > -hw ? span[0] + 0.15 : e.oneway ? -((el ?? hw) - 0.3) : 0.15;
-    ap.line = { x: p.x, z: p.z, fx, fz, w0, w1: (er ?? hw) - 0.3, y: h };
+    ap.line = { x: p.x, z: p.z, fx, fz, w0: r.w0, w1: r.w1, y: h };
   }
 
   // onda verde: lungo una via, l'impianto a valle accende il verde quando arriva chi è partito col verde da quello a
@@ -1758,6 +1696,7 @@ export class TramSim {
 const BAND = TRAM.lane + 0.6 + 1.1;
 export class TramSignals {
   constructor(scene, city, lights) {
+    this.city = city;
     this.list = [];
     this.byEdge = new Map();
     this.violations = [];
@@ -1851,13 +1790,9 @@ export class TramSignals {
   // calotta per luce, e il palo accanto con due staffe: chi arriva sull'altro binario vede il retro di una lanterna.
   // Prima la cassa era tutta nera sopra il palo e da dietro sembrava un segnale spento (a Voltabarozzo chi arriva al
   // capolinea l'ha davanti, sopra i binari, da 70 m fino all'attraversamento).
-  // Il palo sta dove starebbe davvero (#97): sul marciapiede, su un'isola o sul verde, fuori dalla sagoma di ogni
-  // binario (City.poleSpot), a destra fino a 14 m e fino a 6 m prima, altrimenti a sinistra oltre l'altro binario. Lontano
-  // dal binario la lanterna sta su uno sbraccio sopra le corsie, alta come le lanterne stradali a sbraccio (MAST_Y),
-  // appena fuori dalla sede. Senza posto per un palo è appesa al tirante della linea aerea; dove non c'è neanche quello
-  // (piazzali tutti asfalto) il palo sta accanto alla sede, fuori dalla sagoma dei binari, e in quota accanto alla sede.
-  // Fino al 13 novembre era sempre lì, a TRAM.lane + 0,68 m dal binario: dove la sede corre tra le corsie delle auto, il
-  // palo stava sulla corsia
+  // Palo, sbraccio o gancio al tirante della linea aerea stanno dove li ha messi la build (city.arredo; la regola è in
+  // Posatore.lanterna, src/world/posa.js): lontano dal binario la lanterna sta su uno sbraccio sopra le corsie, alta
+  // come le lanterne stradali a sbraccio (MAST_Y), appena fuori dalla sede
   buildHeads(scene, city) {
     const n = this.list.length;
     if (!n) return;
@@ -1871,21 +1806,10 @@ export class TramSignals {
     this.heads = [];
     const Y0 = 3.25, DY = 0.36, HH = DY * 3 + 0.1;
     for (const x of this.list) {
-      const T = x.track, s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s), along = [0, -1.5, -3, -4.5, -6];
+      const T = x.track, s = x.sT - (x.halfT + 3), P = T.path(x.dir), p = P.at(s), h = T.heightAt(x.dir, s);
       const ang = Math.atan2(-p.dx, -p.dz), fx = Math.sin(ang), fz = Math.cos(ang), y0 = Y_ROAD + h;
-      let spot = h < 0.5 && city && city.poleSpot ? city.poleSpot(p, 1, { along, max: 14 }) || city.poleSpot(p, -1, { along, max: 12 }) : null;
-      // senza posto per un palo: appesa al tirante della linea aerea più vicino che passa sopra il binario prima
-      // dell'incrocio (fino a 30 m prima), a destra appena fuori dalla sede
-      let hang = null;
-      if (!spot && h < 0.5) for (const sp of (city && city.tramSpans) || []) {
-        const pr = P.projectNear(sp.cx, sp.cz, sp.half), ds = pr ? pr.s - s : 99;
-        if (ds < -30 || ds > 2 || (hang && Math.abs(ds) >= Math.abs(hang.ds))) continue;
-        const q = P.at(pr.s), lx = q.x - q.dz * (TRAM.lane + 0.35), lz = q.z + q.dx * (TRAM.lane + 0.35);
-        if (distToSeg(lx, lz, sp.a.x, sp.a.z, sp.b.x, sp.b.z).d < 0.3) hang = { x: lx, z: lz, ds, y: Y_ROAD + T.heightAt(x.dir, pr.s) + CATENARY_HEIGHT + 0.3 };
-      }
-      // né l'uno né l'altro (piazzali tutti asfalto): accanto alla sede, fuori dalla sagoma dei binari
-      if (!spot && !hang && h < 0.5 && city && city.poleSpot) spot = city.poleSpot(p, 1, { along, max: 4, asfalto: true }) || city.poleSpot(p, -1, { along, max: 8, asfalto: true });
-      if (!spot && !hang) spot = { x: p.x - p.dz * (TRAM.lane + 0.68), z: p.z + p.dx * (TRAM.lane + 0.68), o: TRAM.lane + 0.68, side: 1 };
+      // palo (spot) o gancio al tirante della linea aerea (hang), dove li ha messi la build
+      const { spot, hang } = city.arredo.lanterna(this, x, p, s, h);
       let px, pz, y;
       if (hang) {
         // gancio dal tirante alla cassa

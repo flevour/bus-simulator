@@ -40,7 +40,9 @@ divise per area.
      `n` successivo all'ultimo di `main`;
    - `src/data/padova-map.json` e `public/mappa/aree/` (nei ticket che rigenerano la mappa): si prende la mappa di
      `main` (rete e aree) e si rigenera con `scripts/rigenera_mappa.sh`. La mappa si pubblica intera, come esce dal
-     comando: niente composizioni a mano con le sole celle della zona toccata (nota Verifiche, #106).
+     comando: niente composizioni a mano con le sole celle della zona toccata (nota Verifiche, #106);
+   - `src/data/padova-arredo.json` (posa dell'arredo, #109): si prende quello di `main` e si rifà la posa sulla mappa
+     del rebase (`npm run posa -- --zona X,Z,R` con la zona del proprio ticket, o `--tutta` se la mappa è rigenerata).
 5. Ogni worktree ha il suo `node_modules` (`npm install`): la cache di Vite sta in `node_modules/.vite` e due server
    che la condividono si pestano i piedi.
 6. Porte dal numero dell'issue: dev `5200 + n`, preview `4200 + n` (ticket #46: 5246 e 4246); il checkout principale
@@ -94,6 +96,7 @@ divise per area.
 | `scripts/quote_rete.py`, `scripts/profili_strutture.py`, `data/profili-cavalcavia.json`, `tests/profili.spec.js` | `area:mappa`, e chi cambia le quote dei binari (`area:tram`) | quote che il gioco legge per arco e per binario e profili per struttura ([`cavalcavia.md`](cavalcavia.md), sezione 7): chi cambia le quote di una struttura riscrive il file dei profili (`--aggiorna`) e la nomina nel commit |
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
 | `scripts/osm_rete.py`, `data/osm-padova-relazioni.json`, `data/osm-luoghi.json`, `data/osm-arredo.json`, `data/eccezioni/osm-rete.json` | `area:mappa` (#108), poi chi li usa: `area:traffico` (#112, #111, #116) | dati OSM agganciati alla rete per id ([`osm-dati.md`](osm-dati.md)); chi cambia nodi o archi della rete, o riscarica le relazioni, riscrive i campi (`python3 scripts/osm_rete.py --scrivi`) e l'elenco |
+| `src/world/posa.js`, `src/data/arredo.js`, `src/data/padova-arredo.json`, `scripts/posa_arredo.mjs`, `scripts/citta_node.mjs` | `area:mappa` (#109, poi #130 e #132); chi cambia mappa, binari o pianta rifà la posa | posa dell'arredo nella build: semafori, linea aerea, lanterne e segnali del tram, paline (nota #109 della Mappa). Il file si riscrive con `npm run posa -- --zona X,Z,R` nello stesso commit della modifica che sposta i pali; `tests/arredo.spec.js` fallisce se non è quello che la posa dà |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -365,6 +368,57 @@ Da sapere prima di toccare questi file:
   casi delle strade si è spostato di più di 4 m (elenco aggiornato). I casi dei binari nei dati sono ora quelli del
   gioco;
 - la mappa è quella di `main` con `edgeH` e `tramH` nuovi: nessuna cella e nessuna area cambiata.
+
+#109, arredo posato dalla build (16 novembre). Semafori e ripetitrici, tiranti, mensole e pali della linea aerea,
+lanterne del tram, segnali degli scambi, cartelli del pantografo e paline non si cercano più il posto al caricamento:
+li mette una volta il posatore e il gioco li legge. Da sapere:
+
+- i pezzi. `src/world/posa.js`: `SpazioLibero` (fuori dall'asfalto della pianta, dalla sagoma di tutti i binari, dagli
+  edifici di tutta la mappa) e `Posatore`, con le ricerche che prima stavano in `TrafficLights.placeApproach`,
+  `City.poleSpot`, `spanAnchor` di `City.buildTramway`, `TramSignals.buildHeads` e `City.buildStops`. Il gioco non lo
+  importa. `src/data/arredo.js`: `Arredo`, il lettore, con gli stessi metodi del posatore (`semaforo`, `lineaAerea`,
+  `scambio`, `pantografo`, `lanterna`, `paline`), e `CODICE`, come si scrive e si rilegge ogni tipo.
+  `src/data/padova-arredo.json`: il file, un elemento per riga, nel bundle (221 KB, 80 KB compresso). `City` riceve
+  l'arredo in `opts.arredo` (senza, il lettore) e `TrafficLights` e `TramSignals` usano `city.arredo`;
+- la build. `scripts/posa_arredo.mjs` (`npm run posa`) costruisce la città in Node con i moduli del gioco
+  (`scripts/citta_node.mjs`: Vite per caricarli, un canvas finto per le texture, niente disegno) passando il posatore
+  al posto del lettore, in 6 secondi. L'ordine è quello del gioco: binari (`TramTrack`, `TramYard`, `TramNet` dai
+  dati), pianta, spazio libero, arredo. I binari restano ricavati in JavaScript: per questo la posa non sta in
+  `build_map.py`. Gli edifici dello spazio libero sono tutti quelli di `public/mappa/aree`: prima i semafori vedevano
+  solo quelli già caricati all'avvio, cioè quasi nessuno, e i tiranti quelli di `MAP.edificiTram`;
+- chi cambia mappa, binari o pianta rifà la posa nello stesso commit: `npm run posa` dice quali righe cambiano,
+  `npm run posa -- --zona X,Z,R` (ripetibile) riscrive il file solo se cambiano elementi entro R metri da (X, Z) e
+  altrimenti elenca quelli fuori e si ferma, `--tutta` riscrive comunque (posatore cambiato, mappa rifatta).
+  `scripts/rigenera_mappa.sh` alla fine fa il confronto. `tests/arredo.spec.js` rifà la posa (`--controlla`) e fallisce
+  se non è quella del file, poi controlla che il gioco abbia letto tutto e che i suoi pali stiano dove dice il file;
+- il lettore dà gli elementi nell'ordine in cui il gioco li costruisce e controlla l'ancora di ognuno (il nodo, il
+  punto del binario): se la mappa è cambiata senza rifare la posa il gioco si ferma con un errore, non cerca un posto
+  di ripiego. Chi cambia l'ordine in cui `City`, `TrafficLights` o `TramSignals` costruiscono i loro elementi rifà la
+  posa;
+- cifre: le posizioni disegnate sono al centimetro; la linea d'arresto (`stop`) e le paline, da cui dipende dove si
+  fermano i veicoli, al millesimo di millimetro: con tutte le cifre l'ultima cambiava tra Node 22 su Linux e Node 26
+  su macOS (una linea d'arresto su 528), e il file deve uscire uguale su ogni macchina;
+- cosa cambia rispetto alla ricerca di prima: 25 lanterne a muro dove la facciata sta sul bordo del marciapiede (prima
+  il palo finiva nell'edificio, che al caricamento non c'era); dove a destra non c'è posto il palo va a sinistra anche
+  sulle vie a doppio senso (5 approcci prima senza lanterna); dove il posto libero è prima della linea d'arresto la
+  linea arretra fino a 0,6 m prima del palo (29 approcci). Linea aerea, lanterne del tram, segnali degli scambi e paline
+  stanno dov'erano;
+- controlli, nel rapporto di `tests/mappa.spec.js` (`tests/pali.js`), a zero con i casi in
+  `data/eccezioni/mappa-gioco.json`: `pali_nella_sagoma_del_tram` (0), `pali_del_tram_in_carreggiata` (7, quelli di
+  #97), `pali_nell_ingombro_dei_bus` (12: la carrozzeria dei bus automatici lungo le loro corsie; 6 per la corsia della
+  10 fuori dall'asfalto accanto al SIR2, #131, gli altri per la coda del bus in curva, #130),
+  `semafori_senza_lanterna_visibile` (7: una lanterna sulla linea d'arresto o oltre; restano i bracci di 1-3 m e due
+  approcci senza posto);
+- la rete non ha più `edificiTram` (963 KB): serviva a `clearOfBuildings` per i binari non secondo la regola e ai
+  tiranti. `scripts/aree_mappa.py` lo scrive solo se ci sono binari non secondo la regola;
+- fuori dalla mia area. In `traffic.js`: `TrafficLights.placeApproach` legge l'arredo e ricava dal solo `stop` punto
+  della linea, asse e lanterne (`armPoint` e `armCrossings` sono esportate per il posatore; `stats.lineaOsm` non c'è
+  più); `TramSignals` tiene `this.city` e `buildHeads` legge palo o gancio da `city.arredo.lanterna`. In `routes.js`:
+  `allStopPlacements` la chiama solo il posatore e non dà più nome, linee, pensilina e panchina, che aggiunge
+  `stopDetails` quando il gioco legge le paline (`roof` dice se la pensilina ci sta). In `city.js`: via `poleSpot`,
+  `tramBld` e le facciate di `buildTramway`; `tramSpans`, `tramPoles`, `panSigns` e `stopPlacements` restano;
+- restano posati al caricamento cartelli stradali, lampioni e alberi sparsi, e lo spazio libero non conosce le
+  banchine del tram (#132) né l'ingombro dei bus in svolta (#130, dopo i raccordi di #112).
 
 Fatto il 9 e l'11 novembre: corsie e segnaletica dai tag OSM, fermate del tram sui nodi `tram_stop`, dossi e
 attraversamenti rialzati, area ai bordi e linee tagliate, inversioni a U, corsie di servizio dei capolinea, lampioni
@@ -823,7 +877,8 @@ erano. Dietro prima c'era un rettangolo nero vuoto: a Voltabarozzo chi arriva al
 la lanterna dei tram in partenza vista da dietro (2385, 3519) da 70 m fino all'attraversamento. Le 468 lanterne
 passano da 64.116 a 125.892 triangoli (132 in più per lanterna) e `buildHeads` da circa 27 a 49 ms con SwiftShader.
 
-Pali delle lanterne del tram fuori dalla strada (#97, `area:tram`, 13 novembre): `TramSignals.buildHeads(scene, city)`
+Pali delle lanterne del tram fuori dalla strada (#97, `area:tram`, 13 novembre; da #109 la ricerca gira nella build,
+`Posatore.lanterna` in `src/world/posa.js`, e `buildHeads` legge il risultato): `TramSignals.buildHeads(scene, city)`
 mette il palo con `City.poleSpot` (sul marciapiede, su un'isola o sul verde, fuori dalla sagoma di ogni binario), a
 destra fino a 14 m e fino a 6 m prima, se no a sinistra fino a 12 m; oltre 4 m a destra la lanterna sta su uno sbraccio
 a `MAST_Y`, a `TRAM.lane` + 0,6 m dal binario. Senza posto per un palo è appesa al tirante della linea aerea più vicino
@@ -1302,6 +1357,10 @@ pantografo, semaforo e lampione contro la sagoma del tram (centro sulla sede, o 
 franco della UNI 7156 delle tabelle del SIR3; la cassa in curva va verso l'interno come in `Tram.syncTransform`) su
 linee, S dei capolinea e depositi, e contro l'asfalto della pianta (tranne tra i due binari di una sede). Su `main` erano
 14 nella sagoma e 488 in carreggiata (elenco nel commento dell'issue); ora 0 e 7, spiegati in testa a `mappa.spec.js`.
+
+Da #109 (16 novembre) queste ricerche girano nella build, in `src/world/posa.js` (`Posatore.palo` è `poleSpot`,
+`Posatore.lineaAerea` ha `spanAnchor`), e il gioco legge il risultato: nota #109 della Mappa. Le regole sono rimaste
+quelle scritte qui sotto.
 
 - `City.poleSpot(p, side, { min, max, along, clear, asfalto })`: il posto per un palo accanto al binario, il più vicino
   fuori dall'asfalto di 0,4 m, a più di `clear` da ogni binario di `city.tramLanes` (linee, depositi, S dei capolinea) e

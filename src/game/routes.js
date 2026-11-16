@@ -1,4 +1,4 @@
-import { LINES } from '../data/padova.js';
+import { LINES, STOPS } from '../data/padova.js';
 
 // Costruisce un percorso da una variante GTFS: polilinea sui vertici della rete + fermate reali.
 // Le andate e ritorni nella stessa via senza fermate (A-B-A: tracciato GTFS agganciato male, o linea che esce dalla
@@ -342,6 +342,17 @@ export const ARTICULATED_LINES = new Set(['10']);
 // Bus fermo alla palina (stopPose): carrozzeria da 0,3 m prima della palina fino a 12,7 m dietro, lo snodato 18,5
 const BUS_BACK = 12.7, BUS_BACK_SNODATO = 18.5, BUS_FRONT = 0.3;
 
+// Le paline come le legge il gioco dall'arredo della build (src/data/arredo.js), con quello che viene dalla fermata:
+// nome, linee che la servono, pensilina e panchina (solo dove la pensilina ci sta: roof)
+export function stopDetails(list) {
+  const served = new Map();
+  for (const L of LINES) for (const v of L.variants) for (const st of v.stops) (served.get(st.id) || served.set(st.id, new Set()).get(st.id)).add(L.id);
+  return list.map((p) => {
+    const st = STOPS[p.id];
+    return { ...p, name: st.name, lines: [...served.get(st.id)].sort((a, b) => parseInt(a) - parseInt(b)).slice(0, 6), shelter: p.roof ? st.shelter : 0, bench: p.roof ? st.bench : 0 };
+  });
+}
+
 // Tutte le fermate reali (GTFS) agganciate alla strada più vicina, per la scenografia.
 // Una palina per ogni verso in cui la fermata è servita: ai capolinea la stessa fermata GTFS vale per l'arrivo e per
 // la partenza, spesso su lati o tratti diversi. Prima le partenze (lì si sale), poi le fermate intermedie, poi gli arrivi.
@@ -546,8 +557,8 @@ export function allStopPlacements(net, snap, clear = () => 9, kerb = null) {
       if (k.o0 + k.o1 >= 0 && k.o0 < 6) za = Math.min(za, k.o0);
     }
     out.push({
-      id: st.id, name: st.name, lines: [...served.get(st.id)].sort((p, q) => parseInt(p) - parseInt(q)).slice(0, 6),
-      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, bx: best.cx, bz: best.cz, dx: spot.dx, dz: spot.dz, rx: spot.rx, rz: spot.rz, hw: spot.hw, kerb: spot.kerb, kl: spot.kl, ks: spot.ks, shelter: spot.roof ? st.shelter : 0, bench: spot.roof ? st.bench : 0, zb, za,
+      id: st.id,
+      x: spot.px, z: spot.pz, cx: spot.cx, cz: spot.cz, bx: best.cx, bz: best.cz, dx: spot.dx, dz: spot.dz, rx: spot.rx, rz: spot.rz, hw: spot.hw, kerb: spot.kerb, kl: spot.kl, ks: spot.ks, roof: spot.roof, zb, za,
     });
   }
 }

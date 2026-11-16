@@ -11,7 +11,10 @@ marciapiedi e verde della pianta delle strade, alberi. La rete elenca le aree in
 Per quello che il gioco calcola su tutta la mappa all'avvio la rete ha anche:
 * "edificiBBox": il rettangolo che contiene gli edifici (fuori il gioco ne genera di procedurali);
 * "edificiTram": gli edifici a meno di VICINO_TRAM metri dai binari del tram (SIR1 della mappa e linee di
-  data/tram-linee-nuove.json), per spostare i binari fuori dalle facciate e agganciare i tiranti della linea aerea.
+  data/tram-linee-nuove.json), per spostare i binari fuori dalle facciate (clearOfBuildings in src/data/padova.js).
+  Solo se ci sono binari non secondo la regola (docs/binari-tram.md), che il gioco deve ancora spostare: quelli
+  secondo la regola li prende come sono, e i tiranti della linea aerea li aggancia alle facciate la posa dell'arredo
+  (scripts/posa_arredo.mjs, #109), che legge gli edifici dalle aree. Con tutti i binari secondo la regola non c'è.
 
 Un edificio va nell'area del baricentro dei vertici del contorno, una cella nell'area del suo angolo, un albero in
 quella del suo punto. Dentro un'area l'ordine è quello della mappa intera; rimessa insieme (load, o il gioco) la mappa
@@ -101,6 +104,13 @@ def tram_tracks(data):
     return out
 
 
+def binari_regola(data):
+    """Tutti i binari del tram sono secondo la regola: il gioco li prende come sono, senza gli edifici vicini."""
+    path = os.path.join(ROOT, 'data', 'tram-linee-nuove.json')
+    nuove = json.load(open(path, encoding='utf-8')).get('regola') if os.path.exists(path) else True
+    return bool(data.get('tramRegola')) and bool(nuove)
+
+
 def near_tram(buildings, tracks, r=VICINO_TRAM):
     """Gli edifici con il rettangolo a meno di r metri da un binario (celle da r metri)."""
     C, cells = r, set()
@@ -137,7 +147,8 @@ def split(data):
         xs = [v for b in blds for v in b[3][0::2]]
         zs = [v for b in blds for v in b[3][1::2]]
         rete['edificiBBox'] = [min(xs), min(zs), max(xs), max(zs)]
-        rete['edificiTram'] = near_tram(blds, tram_tracks(data))
+        if not binari_regola(data):
+            rete['edificiTram'] = near_tram(blds, tram_tracks(data))
     S = data.get('surfaces')
     if S:
         T = S['tile']

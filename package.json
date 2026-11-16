@@ -10,6 +10,7 @@
     "build": "vite build",
     "build:single": "vite build --mode single",
     "preview": "vite preview",
+    "posa": "node scripts/posa_arredo.mjs",
     "test": "playwright test"
   },
   "dependencies": {

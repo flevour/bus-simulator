@@ -268,6 +268,10 @@ python3 scripts/osm_rete.py --scrivi   # riscrive nella mappa che c'è svolte, s
 scripts/rigenera_mappa.sh
 # lo stesso in una cartella temporanea, confrontato con la mappa del repository (lo fa anche la CI a ogni push)
 scripts/rigenera_mappa.sh --controlla
+# posa dell'arredo sulla mappa (semafori, linea aerea, lanterne e segnali del tram, paline) in
+# src/data/padova-arredo.json: dopo ogni modifica a mappa, binari o pianta, dichiarando la zona toccata (--tutta dopo
+# una mappa rifatta da capo)
+npm run posa -- --zona X,Z,R
 # paline OSM (strato Overture base/infrastructure, scaricato con scripts/overture_layers.py)
 python3 scripts/osm_stops.py <base-infrastructure.parquet> data/osm-fermate.json
 # terreno: DTM LiDAR a 5 m della Regione (tessere in data/lidar5, scaricate con

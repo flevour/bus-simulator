@@ -8,6 +8,8 @@
 // - dal bordo dell'asfalto (city.surfaceOff, la pianta delle strade), fuori dalla sagoma: è la carreggiata, tranne tra
 //   i due binari di una sede (pali in mezzo), che è asfalto ma senza auto.
 // Non contano i binari a più di 2,5 m di quota dal palo (cavalcavia e viadotti del tram).
+// Con #109, per gli stessi pali e per le paline delle fermate: l'ingombro dei bus automatici lungo le loro corsie, e per i semafori
+// la lanterna visibile dal primo veicolo fermo alla linea d'arresto (in fondo alla funzione).
 // Gira nella pagina: deve bastare a sé stessa (Playwright la passa come testo).
 export function misuraPali() {
   const g = window.__game, city = g.city, tondo = (v) => Math.round(v * 100) / 100;
@@ -93,5 +95,38 @@ export function misuraPali() {
     else if (p.tram && dove === 'in carreggiata') casi.pali_del_tram_in_carreggiata.push({ ...voce, dentro: tondo(-off) });
   }
   if (appese) (distribuzioni['lanterna del tram'] || (distribuzioni['lanterna del tram'] = {}))['appesa al tirante'] = appese;
+
+  // Ingombro dei bus (#109): la carrozzeria di un bus automatico lungo la corsia di ogni variante di ogni linea, con
+  // gli assi sulla corsia come in BusSim.place (davanti a 3,3 m dal centro, dietro a 2,6: in curva la coda taglia verso
+  // l'interno e il muso sporge), lunga 12 m e larga 2,55. Un palo è dentro se il fusto la tocca
+  casi.pali_nell_ingombro_dei_bus = [];
+  const HW = 1.275, META = 6, C = 16, celle = new Map(), cella = (x, z) => Math.floor(x / C) + ',' + Math.floor(z / C);
+  const aTerra = pali.filter((p) => !(p.h > 1.5)).concat(city.stopPlacements.map((st) => ({ tipo: `palina ${st.name}`, x: st.x, z: st.z, r: 0.05 })));
+  for (const p of aTerra) { const k = cella(p.x, p.z); (celle.get(k) || celle.set(k, []).get(k)).push(p); }
+  for (const L of g.lines) for (const v of L.variants) {
+    const P = g.buses.lane(v).P;
+    for (let s = 2.6; s < P.len - 3.3; s += 0.5) {
+      const f = P.at(s + 3.3), r = P.at(s - 2.6), l = Math.hypot(f.x - r.x, f.z - r.z) || 1, ux = (f.x - r.x) / l, uz = (f.z - r.z) / l;
+      const cx = r.x + ux * 2.6, cz = r.z + uz * 2.6, ix = Math.floor(cx / C), iz = Math.floor(cz / C);
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const p of celle.get(ix + a + ',' + (iz + b)) || []) {
+        const dx = p.x - cx, dz = p.z - cz, v = Math.min(META + p.r - Math.abs(dx * ux + dz * uz), HW + p.r - Math.abs(-dx * uz + dz * ux));
+        if (v > (p.bus ?? 0)) { p.bus = v; p.linea = L.id; }
+      }
+    }
+  }
+  for (const p of aTerra) if (p.bus > 0) casi.pali_nell_ingombro_dei_bus.push({ tipo: p.tipo, x: tondo(p.x), z: tondo(p.z), via: via(p.x, p.z), linea: p.linea, dentro: tondo(p.bus) });
+
+  // Lanterne visibili dal primo veicolo fermo (#109, art. 168 del regolamento): ogni approccio di un semaforo ha almeno
+  // una lanterna sulla linea d'arresto o oltre, verso l'incrocio (0,3 m di tolleranza). Un approccio senza lanterne, o
+  // con le lanterne solo prima della linea (alle spalle di chi è fermo), è un caso
+  casi.semafori_senza_lanterna_visibile = [];
+  const visibili = { 'oltre la linea': 0, 'prima della linea': 0, 'senza lanterna': 0 };
+  for (const ap of g.lights.byKey.values()) {
+    const L = ap.line, oltre = ap.heads.length ? Math.max(...ap.heads.map((hd) => -((hd.x - L.x) * L.fx + (hd.z - L.z) * L.fz))) : null;
+    const come = oltre == null ? 'senza lanterna' : oltre < -0.3 ? 'prima della linea' : 'oltre la linea';
+    visibili[come]++;
+    if (come !== 'oltre la linea') casi.semafori_senza_lanterna_visibile.push({ come, x: tondo(L.x), z: tondo(L.z), via: ap.edge.name || '', oltre: oltre == null ? null : tondo(oltre) });
+  }
+  distribuzioni['lanterne dei semafori'] = visibili;
   return { distribuzioni, casi };
 }

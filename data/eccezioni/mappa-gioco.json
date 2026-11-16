@@ -3,10 +3,9 @@
  "controlli": {
   "semafori_in_carreggiata": [
    {
-    "perche": "Elenco di partenza del 13 novembre 2026 (#105): pali dei semafori dentro l'asfalto di 0,1 m in Via Altinate e di 1,4 m in (397, -459). Il posto dei pali lo rifà #109 (semafori, pali e paline posati nella build dallo spazio libero).",
+    "perche": "Palo del semaforo di Via Gozzi in (397, -459): sta 0,7 m fuori dall'asfalto della pianta, sopra il nastro di una via pedonale che city.roadInfo conta come carreggiata. Il palo di Via Altinate (64, -165) non c'è più da #109: con gli edifici di tutta la mappa nello spazio libero la lanterna è a muro.",
     "casi": [
-     "palo del semaforo @ 397,-459",
-     "palo del semaforo @ 64,-165"
+     "palo del semaforo @ 397,-459"
     ]
    }
   ],
@@ -85,6 +84,54 @@
      "lanterna del tram @ 367,-953",
      "lanterna del tram @ 4722,-1600",
      "segnale dello scambio @ 301,-1002"
+    ]
+   }
+  ],
+  "pali_nell_ingombro_dei_bus": [
+   {
+    "perche": "#109, 16 novembre 2026: lungo Via Venezia, Via San Marco e il Cavalcavia San Marco la corsia della 10 automatica corre da 2,5 a 3 m fuori dall'asfalto, accanto alla sede del SIR2, e passa attraverso i pali della linea aerea e una lanterna del tram che stanno al loro posto. È la corsia a essere sbagliata: #131.",
+    "casi": [
+     "lanterna del tram @ 3306,-882",
+     "linea aerea @ 2665,-540",
+     "linea aerea @ 2670,-531",
+     "linea aerea @ 3274,-864",
+     "linea aerea @ 3300,-879",
+     "linea aerea @ 4662,-1557"
+    ]
+   },
+   {
+    "perche": "#109, 16 novembre 2026: in curva la coda del bus automatico taglia l'angolo sopra il cordolo e tocca il palo, che sta da 0,6 a 0,9 m fuori dall'asfalto: semafori di Prato della Valle (linea 3) e di Albignasego (linea 88, palo e ripetitrice), paline di Capolinea Due Palazzi (linea 11) e Gramsci 120 (linea 4). Lo spazio libero non ha ancora l'ingombro dei bus in svolta, che verrà dai raccordi di corsia della build: #130.",
+    "casi": [
+     "palina Capolinea Due Palazzi @ -2018,-3509",
+     "palina Gramsci 120 @ 1592,-4751",
+     "semaforo @ -4,890",
+     "semaforo @ -895,6150",
+     "semaforo @ -895,6150"
+    ]
+   },
+   {
+    "perche": "#109, 16 novembre 2026: lanterna del tram nel piazzale della stazione, uno dei pali del tram che restano in carreggiata perché attorno c'è solo asfalto (elenco pali_del_tram_in_carreggiata): la corsia della 4 le passa a 2,6 m.",
+    "casi": [
+     "lanterna del tram @ 160,-1047"
+    ]
+   }
+  ],
+  "semafori_senza_lanterna_visibile": [
+   {
+    "perche": "#109, 16 novembre 2026: bracci lunghi da 1,3 a 3,1 m tra due incroci che non fanno parte dello stesso impianto (Via Chiabrera, Via Zanon, Albignasego, Rubano) e un braccio di 12 m in (-961, 2392) dove l'unico posto libero è 3,2 m prima della linea: la linea d'arresto non può arretrare davanti al palo senza uscire dal braccio, e la lanterna resta fino a 3,4 m prima della linea.",
+    "casi": [
+     "semaforo, prima della linea @ -575,3159",
+     "semaforo, prima della linea @ -7162,-2143",
+     "semaforo, prima della linea @ -887,6152",
+     "semaforo, prima della linea @ -961,2392",
+     "semaforo, prima della linea @ 1249,-4264"
+    ]
+   },
+   {
+    "perche": "#109, 16 novembre 2026: approcci senza posto per un palo né per una lanterna a muro. Nel piazzale della stazione (168, -1042) attorno alla corsia c'è solo asfalto per 16 m dalle due parti; sulla rampa del Cavalcavia Borgomagno (26, -1132) la corsia riservata corre tra i due binari del tram e ogni posto è nella loro sagoma.",
+    "casi": [
+     "semaforo, senza lanterna @ 168,-1042",
+     "semaforo, senza lanterna @ 26,-1132"
     ]
    }
   ]

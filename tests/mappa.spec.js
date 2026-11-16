@@ -33,6 +33,8 @@ const CHIAVI = {
   edifici_sui_binari_dei_depositi: (c) => `deposito ${c.deposito}, ${c.cosa}`,
   pali_nella_sagoma_del_tram: (c) => c.tipo,
   pali_del_tram_in_carreggiata: (c) => c.tipo,
+  pali_nell_ingombro_dei_bus: (c) => c.tipo,
+  semafori_senza_lanterna_visibile: (c) => `semaforo, ${c.come}`,
 };
 const NOMI = {
   semafori_in_carreggiata: 'pali dei semafori in carreggiata',
@@ -49,6 +51,8 @@ const NOMI = {
   edifici_sui_binari_dei_depositi: 'edifici sopra i binari dei depositi del tram o a meno di 2 m dal loro asse',
   pali_nella_sagoma_del_tram: 'pali (linea aerea, lanterne e segnali del tram, semafori, lampioni) nella sagoma del tram',
   pali_del_tram_in_carreggiata: 'pali del tram (linea aerea, lanterne, segnali degli scambi, cartelli del pantografo) in carreggiata',
+  pali_nell_ingombro_dei_bus: 'pali (linea aerea, lanterne e segnali del tram, semafori, lampioni, paline) nell\'ingombro dei bus automatici lungo le loro corsie',
+  semafori_senza_lanterna_visibile: 'approcci dei semafori senza una lanterna visibile dal primo veicolo fermo alla linea d\'arresto',
 };
 
 test('rapporto di verifica sulla mappa', async ({ pagina, gioco }, info) => {

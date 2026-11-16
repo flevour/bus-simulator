@@ -87,6 +87,18 @@ all'avvio (`src/data/aree.js`). Gli script che leggono la mappa intera usano `ar
 e con i file delle aree `scripts/verifica_mappa.py` (si riscrive da solo con la mappa, o con
 `python3 scripts/aree_mappa.py conta src/data/padova-map.json`).
 
+Semafori e ripetitrici, tiranti e pali della linea aerea, lanterne del tram, segnali degli scambi, cartelli del
+pantografo e paline li posa la build nello spazio libero (fuori da asfalto, sagoma del tram ed edifici) e il gioco li
+legge da `src/data/padova-arredo.json` (`src/data/arredo.js`), senza cercare niente. Il posatore è
+`src/world/posa.js`, fuori dal bundle; lo lancia `scripts/posa_arredo.mjs`, che costruisce la città in Node con i
+moduli del gioco. Chi cambia mappa, binari o pianta delle strade rifà la posa nello stesso commit, dichiarando dove:
+
+```bash
+npm run posa                      # rifà la posa e dice quali elementi cambiano rispetto al file
+npm run posa -- --zona X,Z,R      # riscrive il file se cambiano solo elementi entro R metri da (X, Z); ripetibile
+npm run posa -- --tutta           # riscrive comunque (posatore cambiato, mappa rigenerata)
+```
+
 `data/misure-strade.json` (larghezze misurate di carreggiate e marciapiedi) e `data/dbgt-volumi.json` (altezze degli
 edifici) vengono dal DBGT della Regione del Veneto con `scripts/measure_streets.py` e `scripts/dbgt_volumes.py`;
 `data/dtm-padova.json` (quote del terreno) dal DTM a 5 m della Regione con `scripts/dtm_grid.py`; `data/dbgt-verde.json`
@@ -134,6 +146,10 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
 * **Profili dei cavalcavia dichiarati.** `data/profili-cavalcavia.json` ha la quota lungo archi e binari di ogni
   struttura; `tests/profili.spec.js` fallisce se la mappa ne ha altri. Chi cambia di proposito le quote di una
   struttura lancia `python3 scripts/profili_strutture.py --aggiorna` nello stesso commit e la nomina nel messaggio.
+* **Arredo posato dichiarato.** `tests/arredo.spec.js` rifà la posa e fallisce se non è quella di
+  `src/data/padova-arredo.json`, poi controlla che il gioco abbia letto tutto il file e che i suoi pali stiano lì. I
+  pali nella sagoma del tram, in carreggiata, nell'ingombro dei bus e i semafori senza lanterna visibile dalla linea
+  d'arresto sono casi di `tests/mappa.spec.js` (`tests/pali.js`), con le eccezioni in `data/eccezioni/mappa-gioco.json`.
 * **Niente nomi di luoghi nel codice degli algoritmi.** Una correzione che vale per un solo luogo è una riga in un
   file di dati in `data/` (zona, valore, perché) che l'algoritmo legge, non un ramo nel codice con una via o delle
   coordinate.
