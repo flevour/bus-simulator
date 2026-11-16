@@ -67,10 +67,13 @@ def destra(d):
 
 # ---------------------------------------------------------------- corsie
 
-def corsie_arco(larghezza, senso, codice):
+def corsie_arco(larghezza, senso, codice, sede=None):
     """Corsie di un arco nel verso a -> b, da sinistra a destra: [(verso, dei bus, distanza dall'asse verso destra)].
     È laneLayout di src/data/padova.js, con gli stessi conti nello stesso ordine; codice è quello di MAP.lanes
-    (lane_code di build_map.py) o None se OSM non dice niente."""
+    (lane_code di build_map.py) o None se OSM non dice niente; sede è (sinistra, destra) in metri dove gli stalli
+    stringono la carreggiata (`sedeCorsie` nella mappa, scripts/sosta.py): le corsie stanno lì dentro."""
+    hl, hr = sede if sede else (larghezza / 2, larghezza / 2)
+    larghezza = hl + hr
     bf = bb = 0
     if codice is not None:
         nf, nb, bf, bb = codice & 7, (codice >> 3) & 7, (codice >> 6) & 1, (codice >> 7) & 1
@@ -98,7 +101,7 @@ def corsie_arco(larghezza, senso, codice):
         return []
     lb, rb = lanes[0][1], lanes[-1][1]
     w = larghezza / n if lb and rb else min(larghezza / n, LANE_MAX)
-    x0 = -larghezza / 2 if lb else larghezza / 2 - n * w if rb else (-n * w) / 2
+    x0 = -hl if lb else hr - n * w if rb else min(max((-n * w) / 2, -hl), hr - n * w)
     return [(d, bus, x0 + (i + 0.5) * w) for i, (d, bus) in enumerate(lanes)]
 
 
@@ -118,7 +121,9 @@ class Rete:
             if e[2] != 8 and self.lung[k] >= CORTO:
                 self.attorno[e[0]].append(k)
                 self.attorno[e[1]].append(k)
-        self.layout = [corsie_arco(e[3], 1 if e[5] & 1 else -1 if e[5] & 2 else 0, cod.get(k)) for k, e in enumerate(self.archi)]
+        # dove gli stalli stringono la carreggiata le corsie stanno tra i bordi scritti dalla build (#111)
+        sede = {k: (sx / 100, dx / 100) for k, sx, dx in M.get('sedeCorsie', [])}
+        self.layout = [corsie_arco(e[3], 1 if e[5] & 1 else -1 if e[5] & 2 else 0, cod.get(k), sede.get(k)) for k, e in enumerate(self.archi)]
         self._marcia = {}
 
     def senso(self, k):

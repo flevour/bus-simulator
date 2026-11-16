@@ -88,6 +88,12 @@ function installaPilota({ fermaAlPrimoUrto, traffico }) {
   const scosta = (s, st) => {
     const p = punto(s), q = p.q, dx = svolta(s, 10);
     let base = q.edge && q.edge.oneway ? clamp(q.hw - 2, 0, q.hw / 2) : Math.max(0, Math.min(q.hw / 2, q.hw - 1.5));
+    // dove gli stalli stringono la carreggiata (sede, dalla build) si sta nelle corsie: la fiancata a 30 cm dal bordo
+    // degli stalli di destra, senza passare oltre quelli di sinistra
+    if (q.edge && q.edge.sede) {
+      const av = p.dx * q.edge.dx + p.dz * q.edge.dz > 0, dx_ = q.edge.sede[av ? 1 : 0], sx_ = q.edge.sede[av ? 0 : 1];
+      base = Math.max(Math.min(base, dx_ - 1.6), 1.6 - sx_);
+    }
     if (dx > 0.8) base -= Math.min(1, (dx - 0.8) / 0.6) * (base + 1);
     if (!st) return base;
     const o = s - st.s, k = (st.kl ?? st.kerb ?? st.hw) + (st.ks || 0) * o - 1.6;

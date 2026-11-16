@@ -97,6 +97,7 @@ divise per area.
 | `scripts/cavalcavia.py`, `tests/cavalcavia.spec.js`, `data/eccezioni/cavalcavia.json` | `area:mappa` (#84 i cavalcavia), `area:tram` (#74 le rampe del tram) | regola e controllo del profilo dei cavalcavia ([`cavalcavia.md`](cavalcavia.md)): chi cambia quote, terreno o quote dei binari toglie dall'elenco i casi corretti (`--aggiorna`); usa `binari_tram.Griglia` e `raggruppa` |
 | `scripts/osm_rete.py`, `data/osm-padova-relazioni.json`, `data/osm-luoghi.json`, `data/osm-arredo.json`, `data/eccezioni/osm-rete.json` | `area:mappa` (#108), poi chi li usa: `area:traffico` (#112, #111, #116) | dati OSM agganciati alla rete per id ([`osm-dati.md`](osm-dati.md)); chi cambia nodi o archi della rete, o riscarica le relazioni, riscrive i campi (`python3 scripts/osm_rete.py --scrivi`) e l'elenco |
 | `src/world/posa.js`, `src/data/arredo.js`, `src/data/padova-arredo.json`, `scripts/posa_arredo.mjs`, `scripts/citta_node.mjs` | `area:mappa` (#109, poi #130 e #132); chi cambia mappa, binari o pianta rifà la posa | posa dell'arredo nella build: semafori, linea aerea, lanterne e segnali del tram, paline (nota #109 della Mappa). Il file si riscrive con `npm run posa -- --zona X,Z,R` nello stesso commit della modifica che sposta i pali; `tests/arredo.spec.js` fallisce se non è quello che la posa dà |
+| `scripts/sosta.py`, `data/eccezioni/sosta.json`, `data/eccezioni/sosta-gioco.json`, `tests/sosta.spec.js` | `area:mappa` (#111), poi `area:traffico` (#113) per le zone di fermata | sosta lungo le strade ([`sosta.md`](sosta.md)): stalli per arco e per lato e corsie strette dagli stalli (`stalli`, `sedeCorsie` nella mappa). Chi cambia fermate, corsie, pianta o il modo in cui i bus accostano rigenera e guarda i due controlli; `corsie_arco` di `scripts/raccordi.py` è il conto delle corsie anche per la sosta |
 | `scripts/raccordi.py`, `data/eccezioni/raccordi.json`, `tests/raccordi.spec.js` | `area:traffico` (#112), poi chi li usa (#113, #114) | raccordi di corsia agli incroci ([`raccordi.md`](raccordi.md)): la build li calcola dalla rete, dalle corsie, da `svolte` e dalla pianta delle strade, quindi cambiano con ogni rigenerazione che tocca una di queste; chi rigenera rilancia `python3 scripts/raccordi.py` e, se i casi cambiano, `--aggiorna`. `corsie_arco` rifà `laneLayout` di `src/data/padova.js`: le due si cambiano insieme |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
@@ -484,6 +485,26 @@ fermano davanti a un tram che arriva (passavano come direzione dei pezzi del tra
 media delle quote del binario non lo porta sotto la strada (`setHeights`, da #107 nella build); in `city.js` gli alberi dei viali e quelli
 sparsi fuori dall'asfalto vero (`buildTreesAndLamps`); in `main.js` il terreno passato a `City` (`{ terrain }`, per
 l'asfalto vicino alla sede del tram).
+
+#111, sosta lungo le strade (16 novembre). Regole, formato, fonti e controlli in [`sosta.md`](sosta.md). Da sapere:
+
+- la build scrive `stalli` (file di stalli per arco e per lato) e `sedeCorsie` (i bordi tra cui stanno le corsie dove
+  gli stalli stringono la carreggiata) con `scripts/sosta.py`, dopo la pianta delle strade e prima dei raccordi di
+  corsia, che leggono `sedeCorsie`. Il conto delle corsie in Python è uno solo, `corsie_arco` di `scripts/raccordi.py`:
+  chi cambia `laneLayout` cambia quello;
+- gli archi hanno il flag 512, carreggiata misurata: la sosta dedotta dalla larghezza vale solo lì;
+- la pianta delle strade è cambiata in due punti (`street_surfaces.surfaces`): le aree `parking=street_side` di OSM che
+  toccano la carreggiata sono asfalto (`golfi`), e le fessure fino a 60 cm tra un parcheggio e la carreggiata si
+  chiudono (`CREPA`: il DBGT non dà ai due poligoni lo stesso bordo, e restava una riga di marciapiede in mezzo agli
+  stalli);
+- gli stalli stanno contro il bordo dell'asfalto della pianta: chi cambia la pianta li sposta, e la rigenerazione li
+  rifà. Le zone libere vengono da `stops`, `lines`, `crossings`, dai nodi della rete e dalle vie di servizio di OSM
+  fuori dalla rete: chi sposta una fermata o cambia il percorso di una linea rigenera, e `stalli_alle_fermate` in
+  `scripts/sosta.py` dice se uno stallo è rimasto nella zona;
+- nel gioco le auto ferme sono per area (`City.addSosta`, `fillSosta`), ostacoli di tipo `parked`, che
+  `clearBusRoads` non toglie. `City.setSostaOra` le rifà con l'ora (la chiama `setupWeatherAndTime` di `main.js`);
+- `laneKey` di `buildRoads` ha anche gli scostamenti delle corsie dove c'è `e.sede`: due archi di fila con corsie
+  diverse non stanno nella stessa catena di righe.
 
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
@@ -956,6 +977,33 @@ sapere prima di #113 e #114:
   prende quello con il suo bit;
 - le inversioni sullo stesso arco non hanno raccordo, nemmeno in fondo alle strade chiuse;
 - `window.__game.laneLayout` c'è per `tests/raccordi.spec.js`.
+
+Sosta lungo le strade (#111, 16 novembre), per #113. Dove gli stalli stringono la carreggiata l'arco ha `e.sede`
+(`sedeCorsie` della mappa) e `laneLayout` mette le corsie lì dentro; i raccordi di #112 sono calcolati su quelle corsie.
+Il traffico è stato toccato con il minimo che serve:
+
+- `Traffic.laneGeom`: sugli archi con `e.sede` l'auto sta su `driveOffset` anche senza corsie OSM; sugli altri resta a
+  un quarto della carreggiata. `laneLat` di `buses.js` fa lo stesso per i bus automatici (prende il verso di marcia).
+  Chi segue i raccordi sta già sulle corsie disegnate e non ha bisogno di nessuno dei due;
+- le corsie di due catene di fila possono avere scostamenti diversi (una ha gli stalli, l'altra no): al nodo l'auto
+  cambia scostamento come oggi quando cambia la larghezza. Con un percorso continuo lo scarto sta nel raccordo;
+- la zona di fermata libera dagli stalli è 42 m prima del bus fermo e 32 m dopo la palina, più dei 12 + 12 m
+  dell'art. 151, perché i bus automatici accostano tutti interi con `b.lat` (da 30 m prima con il muso, rientro in
+  18 m), il pilota delle prove da 40 m prima, e la palina posata dal gioco sta fino a una decina di metri da dove la
+  fermata dei dati si proietta sul percorso. Dove passa una linea servono anche 3,50 m per corsia e zone libere più
+  lunghe a incroci, gomiti e cambi di carreggiata, perché `buildLane` smussa la corsia del bus. Un inseguitore che sposta un asse alla volta può entrare in diagonale
+  dopo l'ultima auto: allora `FERMATA_INGRESSO` e `FERMATA_USCITA` di `scripts/sosta.py` tornano a 12 e 12, e
+  `tests/sosta.spec.js` (accosto da 30 m prima a 18 m dopo) va cambiato insieme;
+- `tests/sosta.spec.js` controlla che nessuno stallo stia nella corsia di `laneGeom` né nella carrozzeria dei bus lungo
+  `lane.P`: chi cambia dove passano auto e bus lo aggiorna con il nuovo percorso;
+- un caso noto in `data/eccezioni/sosta-gioco.json`: al Capolinea Mandria il bus della 22 sfiora uno stallo su un arco
+  fuori dal percorso, lungo la strada che `buildLane` aggiunge prima e dopo il capolinea (`lead`, `exit`), che la build
+  non conosce. Va tolto quando i percorsi dei bus vengono dai raccordi;
+- `laneLat` e lo spostamento dal binario del tram (`room` in `buildLane`) hanno preso `e.sede`;
+- `tests/traffico.spec.js`, Porta Trento: le due curve si sono spostate con le corsie più strette. L'attesa a vicenda
+  si prepara con le auto a 0,6 e 0,55 delle curve (erano 0,6 e 0,32) e passa per prima chi va in Via Belfiore;
+- le auto ferme non sono viste dal traffico: stanno fuori dalle corsie per costruzione. Un'auto che esce dalla corsia
+  (sorpasso di un bus fermo, `untangle`) non le evita.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

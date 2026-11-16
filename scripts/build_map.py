@@ -27,6 +27,7 @@ import build_gtfs  # noqa: E402  (riusa lettura GTFS e conversioni)
 import street_surfaces  # noqa: E402  (pianta delle strade con Shapely)
 import aree_mappa  # noqa: E402  (rete e aree della mappa)
 import tram_stazione  # noqa: E402  (binari della stazione sugli anelli del piazzale nuovo)
+import sosta  # noqa: E402  (stalli lungo le strade per arco e per lato, #111)
 import osm_rete  # noqa: E402  (svolte, sosta, rilevati, pendenze e fondo dai dati OSM agganciati per id)
 import raccordi  # noqa: E402  (raccordi di corsia agli incroci)
 
@@ -655,7 +656,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                 lt = lane_tags(t, ow, we)
                 if lt:
                     edge_lanes[len(edges)] = lt
-                edges.append([a, b, cls, we, nm, flags, sp, layer])
+                # 512: carreggiata misurata (DBGT o CTRN), non stimata dalla classe o dalle corsie: la sosta dedotta
+                # dalla larghezza (scripts/sosta.py) vale solo lì
+                edges.append([a, b, cls, we, nm, flags | (512 if pc and pc[2] and cls != 8 else 0), sp, layer])
                 edge_walk.append((pc[3], pc[4]) if pc else (0.0, 0.0))
                 edge_way.append(w['id'])
         if w['id'] in gtfs_ways:
@@ -1522,7 +1525,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             if back > 0:
                 stalli.append((ns[0], ns[1], back + 1.0))
     surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
-                                                   sorted(bus_left), stalli, profili, dichiarati)
+                                                   sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm())
     print('pianta delle strade:', st)
 
     nodes_flat = []
@@ -1581,6 +1584,14 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     if terrain:
         data['tramH'], tratti = quote_rete.calcola(data, json.load(open(nt_path, encoding='utf-8')) if nt_path and os.path.exists(nt_path) else {'linee': []})
         print('binari in quota:', ', '.join(f"{lid} {'+1' if d > 0 else '-1'} {sum(b - a for a, b, _k in app):.0f} m" for (lid, d), app in sorted(tratti.items())))
+    # sosta lungo le strade: file di stalli per arco e per lato [arco, lato, tipo, fonte, d0, d1, s0, quanti] e, dove
+    # stringono la carreggiata, i bordi tra cui stanno le corsie [arco, sinistra, destra] (scripts/sosta.py),
+    # sull'asfalto della pianta appena calcolata
+    assert sosta.SNODATI == SNODATI and sosta.SERVIZIO_FUORI == SKIP_SERVICE
+    data['stalli'], data['sedeCorsie'], _S = sosta.calcola(data, els, streets)
+    data['stalliTipi'] = sosta.tipi()
+    print(f"sosta: {len(data['stalli'])} file, {sum(v[7] for v in data['stalli'])} stalli")
+    print('\n'.join(sosta.riassunto(data['stalli'])))
     # raccordi di corsia agli incroci (#112): dalla mappa com'è scritta (nodi arrotondati, corsie, svolte, pianta delle
     # strade), così python3 scripts/raccordi.py --scrivi sulla mappa che c'è dà lo stesso campo
     assert raccordi.SNODATI == SNODATI

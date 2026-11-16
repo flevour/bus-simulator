@@ -352,17 +352,19 @@ function stallo({ ta, tb }) {
 // #79: negli incroci senza semaforo due auto in svolta che si aspettano a vicenda restavano ferme per sempre (a Porta
 // Trento, in Via Pilade Bronzetti, in Piazzale Mazzini, tra Via Tirana e Via delle Melette). Ora chi aspetta chi si
 // segue fino a tornare al punto di partenza (Traffic.untangle): in un giro di attese tra auto ferme passa chi ha l'auto
-// che aspetta più di lato. A Porta Trento esce prima chi lascia la rotonda verso Via Bezzecca, poi l'altra.
+// che aspetta più di lato. A Porta Trento esce prima chi svolta in Via Belfiore, poi chi lascia la rotonda. (Fino a
+// #111 era il contrario, con le auto a 0,6 e 0,32 delle loro curve: gli stalli di Via Bezzecca e Via Belfiore hanno
+// stretto le corsie e spostato le due curve, che ora si toccano con le auto a 0,6 e 0,55.)
 test('auto in svolta che si aspettano a vicenda: a Porta Trento una passa e l\'altra la segue', async ({ pagina, gioco }) => {
   await avviaCorsa(pagina, { linea: '3' });
-  const r = await pagina.evaluate(stallo, { ta: 0.6, tb: 0.32 });
+  const r = await pagina.evaluate(stallo, { ta: 0.6, tb: 0.55 });
   expect(r.nodo, 'incrocio di Via Bezzecca con Via Belfiore').toBe(true);
   expect(r.prima.a, 'chi va in Via Belfiore ha davanti chi esce dalla rotonda').toBe(true);
   expect(r.prima.b, 'chi esce dalla rotonda ha davanti chi va in Via Belfiore').toBe(true);
   expect(r.prima.d).toBeLessThan(2.5);
   expect(r.fuori, 'secondi per finire le due svolte').not.toBeNull();
   expect(r.fuori).toBeLessThan(10);
-  expect(r.passata).toBe('Via Bezzecca');
+  expect(r.passata).toBe('Via Belfiore');
   expect(gioco.errori()).toEqual([]);
 });
 

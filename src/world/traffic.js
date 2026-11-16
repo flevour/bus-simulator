@@ -509,7 +509,8 @@ export class Traffic {
     const from = car.fwd ? n[e.a] : n[e.b], to = car.fwd ? n[e.b] : n[e.a];
     const dx = car.fwd ? e.dx : -e.dx, dz = car.fwd ? e.dz : -e.dz;
     // sulle vie con le corsie in OSM la corsia più a destra (non quella dei bus), altrimenti un quarto della carreggiata
-    const off = (e.osmLanes && driveOffset(e, car.fwd)) ?? (e.oneway && e.width < 8 ? 0 : e.width / 4);
+    // (anche dove gli stalli stringono la carreggiata, e.sede: lì un quarto della carreggiata finisce sulle auto ferme)
+    const off = ((e.osmLanes || e.sede) && driveOffset(e, car.fwd)) ?? (e.oneway && e.width < 8 ? 0 : e.width / 4);
     const rx = -dz * off, rz = dx * off;
     const s0 = from.radius * 0.8, s1 = e.len - to.radius * 0.8;
     return { from, to, dx, dz, rx, rz, s0, s1, sx: from.x + rx, sz: from.z + rz };

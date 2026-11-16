@@ -327,6 +327,16 @@ export function buildNetwork() {
     if (e) e.osmLanes = { nf: c & 7, nb: (c >> 3) & 7, bf: (c >> 6) & 1, bb: (c >> 7) & 1, ovf: (c >> 8) & 1, ovb: (c >> 9) & 1, mark: (c >> 10) & 3 };
   }
   for (const [k, f, b] of MAP.turnLanes || []) if (byK[k]) byK[k].turn = { f: f ? f.split('|') : null, b: b ? b.split('|') : null };
+  // sosta lungo le strade (scripts/sosta.py): dove gli stalli stringono la carreggiata le corsie stanno tra sede[0]
+  // metri a sinistra e sede[1] a destra dell'asse (verso a -> b); file di stalli per arco e per lato, nel verso a -> b:
+  // lato 0 sinistra, 1 destra; tipo 1 in linea, 2 a spina, 3 a pettine; d0 e d1 bordo verso le corsie e verso il
+  // cordolo, dall'asse; s0 inizio del primo stallo; n stalli, uno ogni passo; prof: profondità dello stallo
+  for (const [k, l, r] of MAP.sedeCorsie || []) if (byK[k]) byK[k].sede = [l / 100, r / 100];
+  const stalli = [];
+  for (const [k, lato, tipo, fonte, d0, d1, s0, n] of MAP.stalli || []) {
+    const e = byK[k], [passo, prof] = MAP.stalliTipi[tipo];
+    if (e) stalli.push({ e, lato, tipo, fonte, d0: d0 / 100, d1: d1 / 100, s0: s0 / 100, n, passo: passo / 100, prof: prof / 100 });
+  }
   const edgeBetween = (a, b) => nodes[a].edges.find((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a));
   // quante linee bus percorrono ogni tratto
   for (const L of LINES) {
@@ -386,7 +396,7 @@ export function buildNetwork() {
   // area coperta dagli edifici OSM (fuori si generano edifici procedurali)
   let bb = MAP.edificiBBox || [Infinity, Infinity, -Infinity, -Infinity];
   if (!MAP.edificiBBox) for (const b of buildings) for (const p of b.pts) bb = [Math.min(bb[0], p.x), Math.min(bb[1], p.z), Math.max(bb[2], p.x), Math.max(bb[3], p.z)];
-  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramRegola: regola, tramLines, tramStazione: MAP.tramStazione || null, tramScambi: (NEW_TRAM.scambi || []).map(([a, b, c, d]) => [toXZ(a, b), toXZ(c, d)]), surfaces: MAP.surfaces || null, tramStops, tramH, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null, raccordi };
+  return { nodes, edges, edgeBetween, expandSeq, water, rails, railway: rails.length ? rails[0].pts : [], buildings, tramBuildings, buildingBBox: bb, areas: !!MAP.aree, landmarks, stops: STOPS, tram, tramLanes: lanes, tramRegola: regola, tramLines, tramStazione: MAP.tramStazione || null, tramScambi: (NEW_TRAM.scambi || []).map(([a, b, c, d]) => [toXZ(a, b), toXZ(c, d)]), surfaces: MAP.surfaces || null, stalli, tramStops, tramH, signals, signalArms, signs, crossings, calming, terrain: MAP.terrain || null, raccordi };
 }
 
 const LANE_MIN = 2.6, BUS_LANE_MIN = 3.0, LANE_MAX = 3.75; // m
@@ -404,7 +414,9 @@ export function laneLayout(e) {
   if (L) ({ nf, nb, bf, bb } = L);
   else if (e.oneway) { nf = e.oneway > 0 ? 1 : 0; nb = e.oneway < 0 ? 1 : 0; }
   else nf = nb = 1;
-  const fits = () => (nf - bf + nb - bb) * LANE_MIN + (bf + bb) * BUS_LANE_MIN <= e.width;
+  // carreggiata per le corsie: tutta, o tra i bordi degli stalli (e.sede, dalla build: lì le corsie ci stanno sempre)
+  const hl = e.sede ? e.sede[0] : e.width / 2, hr = e.sede ? e.sede[1] : e.width / 2, span = hl + hr;
+  const fits = () => (nf - bf + nb - bb) * LANE_MIN + (bf + bb) * BUS_LANE_MIN <= span;
   while (nf + nb > 1 && !fits()) {
     const gf = nf - bf, gb = nb - bb;
     if (gf > 1 || gb > 1) { if (gf >= gb) nf--; else nb--; }
@@ -417,8 +429,9 @@ export function laneLayout(e) {
   // corsie larghe al più 3,75 m, centrate; quelle dei bus stanno contro il cordolo, e l'avanzo resta dall'altra parte
   // (sosta). Con le corsie dei bus da tutte e due le parti riempiono la carreggiata
   const n = lanes.length, lb = n && lanes[0].bus, rb = n && lanes[n - 1].bus;
-  const w = n ? (lb && rb ? e.width / n : Math.min(e.width / n, LANE_MAX)) : 0;
-  const x0 = lb ? -e.width / 2 : rb ? e.width / 2 - n * w : (-n * w) / 2;
+  // (con gli stalli da una parte sola le corsie restano centrate sull'asse finché ci stanno, poi si spostano)
+  const w = n ? (lb && rb ? span / n : Math.min(span / n, LANE_MAX)) : 0;
+  const x0 = lb ? -hl : rb ? hr - n * w : Math.min(Math.max((-n * w) / 2, -hl), hr - n * w);
   lanes.forEach((l, i) => { l.off = x0 + (i + 0.5) * w; });
   const lines = [];
   for (let i = 0; i < n - 1; i++) {

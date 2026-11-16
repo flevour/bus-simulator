@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildNetwork, LINES, TRAM_LINES, fmtHM, toXZ, LANDMARKS, laneLayout } from './data/padova.js';
+import { buildNetwork, LINES, TRAM_LINES, fmtHM, toXZ, LANDMARKS, laneLayout, driveOffset } from './data/padova.js';
 import { loadAreasNear } from './data/aree.js';
 import { Tram, tramRoute, TRAM, TramNet } from './tram/tram.js';
 import { City, zoneOf, edgeHeight } from './world/city.js';
@@ -768,7 +768,7 @@ function teleportTo(x, z, dirHint = null) {
     const hx = dirHint ? dirHint.dx : bus.fx, hz = dirHint ? dirHint.dz : bus.fz;
     if (dx * hx + dz * hz < 0) { dx = -dx; dz = -dz; }
   }
-  const lat = e.oneway ? 0 : e.width / 4;
+  const lat = (e.sede && driveOffset(e, dx * e.dx + dz * e.dz > 0)) ?? (e.oneway ? 0 : e.width / 4);
   placeBusAt(r.cx - dz * lat, r.cz + dx * lat, Math.atan2(dx, dz));
   capture('teleport_used', { vehicle_type: bus.isTram ? 'tram' : 'bus', mission_mode: mission.roam ? 'roam' : mission.free ? 'free' : 'service' });
   hud.toast('🌀 Teletrasporto: ' + (e.name || 'strada senza nome'), 'info');
@@ -1721,6 +1721,7 @@ function setupWeatherAndTime() {
   scene.fog.far = Math.exp(lerp(lerp(Math.log(farClear), Math.log(700), wx.rain), Math.log(140), wx.fog));
   renderer.toneMappingExposure = 1.0 + night * 0.25;
   city.setNight(night, wx.wet);
+  city.setSostaOra(hour);
   traffic && traffic.setNight(night);
   trams && trams.setNight(night);
   buses && buses.setNight(night);

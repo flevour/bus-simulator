@@ -22,6 +22,8 @@ Controlla quello che il JSON dice già, senza aprire il gioco (sezione 6.1 di do
   * raccordi di corsia agli incroci (scripts/raccordi.py, docs/raccordi.md): il campo raccordi della mappa, curva per
     curva (intera, sull'asse delle corsie, sull'asfalto, fuori dalla sede del tram, senza sovrapporsi), corsie da cui
     un'auto non esce e svolte dei percorsi dei bus senza raccordo (data/eccezioni/raccordi.json).
+  * sosta lungo le strade (scripts/sosta.py, docs/sosta.md): gli stalli della mappa sull'asfalto, fuori da corsie,
+    incroci, fermate, passi carrai e sede del tram (data/eccezioni/sosta.json).
 Pali dei semafori, lampioni, alberi, pensiline e paline al posto finale li mette il gioco al caricamento: li controlla
 la prova tests/mappa.spec.js nel browser.
 
@@ -54,6 +56,7 @@ import binari_tram  # noqa: E402
 import cavalcavia  # noqa: E402
 import osm_rete  # noqa: E402
 import raccordi  # noqa: E402
+import sosta  # noqa: E402
 from eccezioni import Elenco, chiave  # noqa: E402
 
 BUS_NEAR = 6.0  # m: oltre metà carreggiata, un edificio è "lungo il percorso" fin qui dall'asse
@@ -378,8 +381,9 @@ def main():
     valori_c, casi_c, errori_c = cavalcavia.rapporto(cavalcavia.rete_dati(mappa.M), args.elenco, aggiorna=args.aggiorna)
     valori_o, casi_o, errori_o = osm_rete.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
     valori_r, casi_r, errori_r = raccordi.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
+    valori_s, casi_s, errori_s = sosta.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
     if args.json:
-        json.dump({'osm': {'valori': valori_o, 'casi': casi_o}, 'raccordi': {'valori': valori_r, 'casi': casi_r}, 'valori': valori, 'eccezioni': E.esiti, 'fermate': dove, 'casi': casi, 'marciapiedi_stretti_per_riquadro': stretto_per_riquadro,
+        json.dump({'osm': {'valori': valori_o, 'casi': casi_o}, 'raccordi': {'valori': valori_r, 'casi': casi_r}, 'sosta': {'valori': valori_s, 'casi': casi_s}, 'valori': valori, 'eccezioni': E.esiti, 'fermate': dove, 'casi': casi, 'marciapiedi_stretti_per_riquadro': stretto_per_riquadro,
                    'pianta_sovrapposta': {'coppie': sovrapposte, 'per_riquadro': pianta_per_riquadro, 'verde_per_riquadro': verde_per_riquadro},
                    'binari': {'valori': valori_b, 'soglie': SOGLIE_BINARI, 'casi': casi_b},
                    'cavalcavia': {'valori': valori_c, 'casi': casi_c}},
@@ -389,6 +393,7 @@ def main():
     errori += errori_c
     errori += errori_o
     errori += errori_r
+    errori += errori_s
     errori += conto_aree(args.mappa)
     if errori:
         print('\n'.join(errori))

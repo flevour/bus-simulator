@@ -235,6 +235,11 @@ uniscono non si incrociano.
   barriere, lampioni e alberi. Le svolte si agganciano agli archi della rete per id della via (`scripts/osm_rete.py`) e
   entrano nella mappa con i tag delle vie letti per arco: sosta per lato, rilevati, pendenze dichiarate, superficie e
   illuminazione. Formati, copertura e controlli in [`docs/osm-dati.md`](docs/osm-dati.md).
+* **Sosta lungo le strade** (`scripts/sosta.py`, nella build): file di stalli in linea, a spina e a pettine per arco e
+  per lato, dai tag OSM delle vie, dalle aree `parking=street_side` di OSM, dai parcheggi del DBGT e dalla larghezza
+  misurata della carreggiata, contro il cordolo vero e fuori da incroci, strisce, fermate e passi carrai. Il gioco ci
+  mette le righe e le auto ferme, e tiene corsie, auto e bus tra gli stalli. Regole, formato e controlli in
+  [`docs/sosta.md`](docs/sosta.md); `python3 scripts/sosta.py --conti` dice quanto copre ogni fonte.
 * **Corridoi fino ai capolinea** (`CORRIDOI_TRAM` e `CORRIDOI_BUS` in `scripts/build_map.py`): celle da 250 m attorno
   ai binari completi delle linee del tram nuove, più una di margine, e le celle toccate dai tracciati GTFS di tutte le
   varianti delle linee del bus scelte, con strade ed edifici. Oggi il SIR3 fino a Voltabarozzo e al deposito, il SIR2 da

@@ -18,6 +18,9 @@ bus (`busBoth`) sotto gli 8 m di carreggiata.
 `tests/raccordi.spec.js` legge il campo nel gioco e controlla che ogni raccordo cominci e finisca sull'asse di una
 corsia di `laneLayout`, entro 3 cm: chi cambia una delle due regole senza l'altra lo vede lì.
 
+Dove gli stalli della sosta stringono la carreggiata (#111, [`sosta.md`](sosta.md)) le corsie stanno tra i bordi di
+`sedeCorsie`, che `corsie_arco` e `laneLayout` leggono allo stesso modo: la build calcola la sosta prima dei raccordi.
+
 Chi può percorrere una corsia: le auto non entrano nelle vie pedonali, nelle corsie riservate (`psv`) e nelle corsie
 dei bus, e non vanno contromano; i bus vanno anche in controsenso dove la via lo ammette.
 

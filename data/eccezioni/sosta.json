@@ -1,0 +1,13 @@
+{
+ "cosa": "Casi noti dei controlli sulla sosta lungo le strade (scripts/sosta.py, anche da scripts/verifica_mappa.py): gli stalli scritti nella mappa (`stalli`) guardati uno per uno contro la rete, la pianta delle strade e i dati di oggi. Devono stare tutti sull'asfalto, fuori dalle corsie (del loro arco e degli altri), dagli incroci e dalle strisce, dalle zone di fermata dei bus, dai passi carrai, dalla sede del tram, e non uno sopra l'altro. La chiave è il motivo, la via e il posto dello stallo. La build li calcola già così: gli elenchi sono vuoti, e un caso compare se cambiano fermate, corsie o pianta senza rifare gli stalli.",
+ "controlli": {
+  "stalli_fuori_asfalto": [],
+  "stalli_sulle_corsie": [],
+  "stalli_agli_incroci": [],
+  "stalli_alle_fermate": [],
+  "stalli_sui_passi_carrai": [],
+  "stalli_sulla_sede_del_tram": [],
+  "stalli_sovrapposti": [],
+  "stalli_su_archi_non_ammessi": []
+ }
+}

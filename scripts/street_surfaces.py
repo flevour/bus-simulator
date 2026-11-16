@@ -30,6 +30,7 @@ BUS_TURN_KERB, BUS_TURN_LEN = 3.0, 20.0
 TRAM_CLEAR = 3.2  # m: dal binario alle facciate
 TRAM_LANE = 2.1  # m: metà della corsia rossa di un binario, con il cordolo
 TILE = 200  # m: riquadri dell'export
+CREPA = 0.3  # m: metà della fessura più larga che si chiude tra un parcheggio e la carreggiata
 DECK_MIN = 0.6  # m: da questa quota in su la strada o il tram stanno su un impalcato (sotto è rampa a raso)
 DECK_EDGE = 1.0  # m: l'impalcato sporge oltre la carreggiata (cordolo e parapetto)
 DECK_JOIN = 4.5  # m: impalcati più vicini del doppio di così diventano un corpo unico (Cavalcavia Borgomagno)
@@ -432,10 +433,12 @@ def dbgt_polys(lst):
 
 
 def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None, platforms=None,
-             bus_left=(), stalli=(), profili=None, dichiarati=()):
+             bus_left=(), stalli=(), profili=None, dichiarati=(), golfi=()):
     """bus_left: (nodo della svolta, nodo dopo) delle svolte strette a sinistra dei bus; stalli: (nodo d'inizio, nodo
     dopo, metri) dei capolinea dove il bus fermo alla prima fermata sporge dietro l'inizio del percorso (build_map).
-    Valgono solo fuori dal DBGT, dove carreggiate e piazzali sono stimati: dentro ci sono quelli misurati."""
+    Valgono solo fuori dal DBGT, dove carreggiate e piazzali sono stimati: dentro ci sono quelli misurati.
+    golfi: poligoni delle aree di sosta lungo la strada di OSM (parking=street_side, scripts/sosta.py): asfalto dove
+    toccano la carreggiata, come i parcheggi del DBGT."""
     # archi in quota: con il profilo della loro struttura, o con un nodo in quota (overpass_heights)
     in_quota = {k for k, e in enumerate(edges) if max(h for _t, h in quote_arco(k, e, heights, profili, dichiarati)) > 0.05}
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
@@ -549,7 +552,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     # carreggiate misurate del DBGT (2007) che toccano una via OSM di oggi: piazze, golfi di fermata, anelli dei
     # capolinea, angoli veri degli incroci. Un poligono grande entra solo se almeno il 30% sta già sulle strade di oggi
     # (una via cambiata o sparita non torna); mai dentro gli edifici di oggi né sotto le rampe dei cavalcavia
-    dbgt_c, dbgt_m = Polygon(), Polygon()
+    dbgt_c, dbgt_m, sosta_a = Polygon(), Polygon(), Polygon()
     if streets:
         import shapely
         flat2b = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
@@ -566,7 +569,12 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         # parcheggio con l'aiuola in mezzo, non un prato dentro l'anello)
         Us = unary_union([U, *sel]).buffer(1.0)
         shapely.prepare(Us)
-        sel += [c for c in dbgt_polys(streets.get('parcheggi', [])) if Us.intersects(c) and c.area <= 8000]
+        park = [c for c in dbgt_polys(streets.get('parcheggi', [])) if Us.intersects(c) and c.area <= 8000]
+        # golfi di sosta di OSM (parking=street_side): il DBGT del 2007 non li ha tutti, e senza asfalto gli stalli
+        # (scripts/sosta.py) non avrebbero dove stare
+        park += [c for c in golfi if Us.intersects(c) and c.area <= 8000]
+        sel += park
+        sosta_a = unary_union(park) if park else Polygon()
         dbgt_c = unary_union(sel).difference(bld).difference(upe.buffer(1.0)).buffer(0) if sel else Polygon()
         Uc = unary_union([U, dbgt_c]).buffer(1.5)
         shapely.prepare(Uc)
@@ -574,7 +582,15 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         # aree pedonali e piazze (A_PED, AC_PED): lastricate, se toccano una strada o un marciapiede di oggi
         psel = [c for c in dbgt_polys(streets.get('pedonali', [])) if Uc.intersects(c)]
         dbgt_m = unary_union(msel + psel).difference(bld).difference(upe).buffer(0) if msel or psel else Polygon()
-    U = unary_union([U, *fillets, dbgt_c]).difference(unary_union([ring_islands, *kept])).buffer(0)
+    U = unary_union([U, *fillets, dbgt_c])
+    # tra un parcheggio e la carreggiata il DBGT lascia fessure di pochi centimetri (i due poligoni non hanno lo stesso
+    # bordo): si chiudono, solo lì, o una fila di stalli a pettine sta a cavallo di una riga di marciapiede
+    if not sosta_a.is_empty:
+        crepe = U.buffer(CREPA, join_style='mitre').buffer(-CREPA, join_style='mitre').difference(U).intersection(sosta_a.buffer(2 * CREPA))
+        if streets:
+            crepe = crepe.difference(bld)
+        U = unary_union([U, *[g for g in _polys(crepe) if g.area > 0.01]])
+    U = U.difference(unary_union([ring_islands, *kept])).buffer(0)
     islands = [ring_islands] if not ring_islands.is_empty else []
     for p in ([U] if isinstance(U, Polygon) else list(U.geoms)):
         for r in p.interiors:

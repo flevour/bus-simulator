@@ -5,6 +5,7 @@ import { mulberry32, distToSeg } from './spatial.js';
 import { ledTexture } from './textures.js';
 import { TrackPath } from '../tram/tram.js';
 import { buildRoute, alignStops, busCan } from '../game/routes.js';
+import { driveOffset } from '../data/padova.js';
 import { scheduleFor, isPeak, Crowd } from '../game/mission.js';
 import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
 
@@ -30,7 +31,8 @@ const PAX_CAP = 70; // passeggeri a bordo al massimo
 const R_PAX = 260; // gente alle fermate solo entro questa distanza dal giocatore
 
 // corsia del bus: sui doppi sensi quella di destra, sui sensi unici stretti il centro
-const laneLat = (e) => (!e ? 1.8 : e.oneway ? (e.width < 8 ? 0 : e.width / 2 - 2) : Math.max(e.width / 4, e.width / 2 - 2.2));
+// (dove gli stalli stringono la carreggiata, e.sede, la corsia più a destra delle corsie della build)
+const laneLat = (e, fwd = true) => (!e ? 1.8 : (e.sede && driveOffset(e, fwd)) ?? (e.oneway ? (e.width < 8 ? 0 : e.width / 2 - 2) : Math.max(e.width / 4, e.width / 2 - 2.2)));
 // prosecuzione più dritta possibile lungo il grafo: avanti (uscita dall'ultima fermata, arrivando da prev) o indietro
 // (strada da cui si arriva al capolinea: prev è il nodo successivo sul percorso)
 function walk(net, from, prev, maxLen, back) {
@@ -72,7 +74,8 @@ function buildLane(net, city, v, tramSignals) {
   for (let i = 0; i < N.length - 1; i++) {
     const dx = N[i + 1].x - N[i].x, dz = N[i + 1].z - N[i].z, len = Math.hypot(dx, dz) || 0.01;
     const e = net.edgeBetween(ids[i], ids[i + 1]);
-    segs.push({ e, dx: dx / len, dz: dz / len, len, lat: laneLat(e), fwd: e ? e.a === ids[i] : true });
+    const fwd = e ? e.a === ids[i] : true;
+    segs.push({ e, dx: dx / len, dz: dz / len, len, lat: laneLat(e, fwd), fwd });
     cum.push(cum[i] + len);
   }
   // estremi dei tratti spostati di lato, uniti nel punto d'incontro delle due rette (smussato dopo)
@@ -135,7 +138,8 @@ function buildLane(net, city, v, tramSignals) {
       if (dx * sx + dz * sz < 0) { if (!opp || r.d < opp.d) opp = o; } else if (!own || r.d < own.d) own = o;
     }
     if ((!opp || opp.d >= opp.hw) && (shared || !own || own.d >= own.hw)) continue;
-    const room = g.e ? g.e.width / 2 - 1.3 : 3, lo = -room - g.lat, hi = room - g.lat;
+    // (a destra non oltre il bordo degli stalli, dove la build li ha messi: e.sede)
+    const room = g.e ? g.e.width / 2 - 1.3 : 3, lo = -room - g.lat, hi = Math.min(room, g.e && g.e.sede ? g.e.sede[g.fwd ? 1 : 0] - 1.45 : room) - g.lat;
     const cost = (sh) => (opp ? 10 * Math.max(0, opp.hw - Math.abs(opp.lat - sh)) : 0) +
       (own && !shared ? Math.max(0, own.hw - Math.abs(own.lat - sh)) : 0) + 0.05 * Math.abs(sh);
     let bestSh = 0, bestC = cost(0);

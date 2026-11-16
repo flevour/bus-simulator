@@ -592,7 +592,7 @@ export class Mission {
       collision_type: hit.kind,
       impact_speed_kmh: Math.round(hit.impact * 3.6),
     });
-    const what = { tram: 'il tram!', bus: 'un autobus!', car: 'un\'auto', building: 'un edificio', shelter: 'una pensilina', tree: 'un albero', pole: 'un palo', wall: 'il parapetto', landmark: 'un monumento!' }[hit.kind] || 'un ostacolo';
+    const what = { tram: 'il tram!', bus: 'un autobus!', car: 'un\'auto', parked: 'un\'auto in sosta', building: 'un edificio', shelter: 'una pensilina', tree: 'un albero', pole: 'un palo', wall: 'il parapetto', landmark: 'un monumento!' }[hit.kind] || 'un ostacolo';
     const pts = -Math.round(Math.min(250, 40 + hit.impact * 25));
     this.addScore(pts, `💥 Hai urtato ${what}`);
   }

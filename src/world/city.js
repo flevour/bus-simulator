@@ -27,6 +27,8 @@ const DEPOT_CLEAR = 2, DEPOT_NEAR = 6, DEPOT_DOOR = 2.8;
 // segno della strada (righe, strisce, frecce, scritte, dossi): il rapporto della mappa conta quelli sopra la sede del
 // tram (tests/mappa.spec.js)
 const segno = (m) => { m.userData.segno = true; return m; };
+// colori delle auto in sosta (quelli più comuni per strada)
+const PARKED_COLORS = ['#c0c0c0', '#26262a', '#f5f5f5', '#8a1c1c', '#1c3d8a', '#6b6b6b', '#d8d0b8', '#9e9e9e', '#f0f0f0', '#4a6fa5', '#2d5a3a', '#b5651d', '#dcdcdc', '#7a7f86'];
 
 export function layer(mat, n) {
   mat.polygonOffset = true;
@@ -621,7 +623,10 @@ export class City {
     const laneKey = (e, from) => {
       const lay = laneLayout(e), fw = from === e.a, ln = painted(e);
       const ls = fw ? lay.lanes : lay.lanes.slice().reverse();
-      return ls.map((l) => (l.d > 0 === fw ? '>' : '<') + (l.bus ? 'b' : '')).join('') + (fw ? ln : ln.slice().reverse()).map((l) => l.kind).join();
+      // (con gli scostamenti: dove gli stalli stringono la carreggiata le corsie di due archi di fila possono non essere
+      // le stesse, e)
+      return ls.map((l) => (l.d > 0 === fw ? '>' : '<') + (l.bus ? 'b' : '')).join('') + (fw ? ln : ln.slice().reverse()).map((l) => l.kind).join() +
+        (e.sede ? '|' + ls.map((l) => ((fw ? l.off : -l.off)).toFixed(2)).join() : '');
     };
     const trimAt = (N, e) => (N.joint ? 0 : N.trim ? N.trim.get(e) : N.radius * 0.6);
     const walkW = (e) => e.width + (e.elev ? 2 : e.service ? 2.4 : SIDEWALK * 2);
@@ -2184,7 +2189,8 @@ export class City {
       for (let s = 0; s <= e.len; s += 2) {
         const x = A.x + e.dx * s, z = A.z + e.dz * s;
         for (const b of this.obstacles.query(x, z, r + 2, q)) {
-          if (b.dead || b.kind === 'car') continue;
+          // (le auto in sosta restano: gli stalli li mette la build fuori dalle corsie, scripts/sosta.py)
+          if (b.dead || b.kind === 'car' || b.kind === 'parked') continue;
           const lx = (x - b.x) * b.c + (z - b.z) * b.s, lz = -(x - b.x) * b.s + (z - b.z) * b.c;
           if (Math.hypot(Math.max(Math.abs(lx) - b.hx, 0), Math.max(Math.abs(lz) - b.hz, 0)) < r) { b.dead = true; removed++; }
         }
@@ -2202,7 +2208,7 @@ export class City {
           if (tile && (Math.abs(x - tile.cx) > T || Math.abs(z - tile.cz) > T)) continue;
           for (const b of this.obstacles.query(x, z, 5, q)) {
             const lx = (x - b.x) * b.c + (z - b.z) * b.s, lz = -(x - b.x) * b.s + (z - b.z) * b.c;
-            if (!b.dead && Math.hypot(Math.max(Math.abs(lx) - b.hx, 0), Math.max(Math.abs(lz) - b.hz, 0)) < 3) { b.dead = true; removed++; }
+            if (!b.dead && b.kind !== 'parked' && Math.hypot(Math.max(Math.abs(lx) - b.hx, 0), Math.max(Math.abs(lz) - b.hz, 0)) < 3) { b.dead = true; removed++; }
           }
         }
       }
@@ -2308,6 +2314,7 @@ export class City {
       A.meshes.push(trunks, crowns);
     }
     for (const m of A.meshes) this.group.add(m);
+    this.addSosta(A);
     const list = d.edifici.map(parseBuilding);
     this.realBuildingCount += list.length;
     A.buildings = list.length;
@@ -2316,8 +2323,120 @@ export class City {
     if (this.busRoadsCleared) this.clearBusRoads({ cx: A.cx, cz: A.cz, half: AREA_SIZE / 2 + 80 });
   }
 
+  // ---- sosta lungo le strade (#111) ----
+  // Gli stalli li calcola la build (scripts/sosta.py, net.stalli): qui si disegnano le righe e si mettono le auto
+  // ferme, area per area come edifici e alberi. Ogni stallo ha un numero fisso tra 0 e 1: è occupato se il numero sta
+  // sotto la quota dell'ora (sostaQuota), quindi le auto sono sempre le stesse e ne arrivano o ne partono poche alla
+  // volta. Le auto sono istanze di una sola geometria e ostacoli per chi guida ('parked').
+  stalliPerArea() {
+    if (this._stalli) return this._stalli;
+    const out = (this._stalli = new Map()), nodes = this.net.nodes;
+    const hash = (a, b, c) => { const v = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return v - Math.floor(v); };
+    for (const f of this.net.stalli || []) {
+      const e = f.e, A = nodes[e.a], sg = f.lato ? 1 : -1;
+      // verso di marcia dal lato della fila: a destra quello dell'arco, a sinistra il contrario (sui sensi unici il loro)
+      const dir = e.oneway || sg, ox = -e.dz * sg, oz = e.dx * sg;
+      for (let i = 0; i < f.n; i++) {
+        const s = f.s0 + (i + 0.5) * f.passo, d = (f.d0 + f.d1) / 2;
+        const x = A.x + e.dx * s + ox * d, z = A.z + e.dz * s + oz * d;
+        const r = hash(e.id, f.lato * 7 + i, 1), nose = hash(e.id, f.lato * 7 + i, 2) < 0.7 ? 1 : -1;
+        // in linea nel verso di marcia; a pettine di traverso, col muso al cordolo (sette su dieci) o alla strada; a
+        // spina a 45 gradi, entrando in avanti
+        const vx = f.tipo === 1 ? dir * e.dx : f.tipo === 3 ? nose * ox : dir * e.dx + ox, vz = f.tipo === 1 ? dir * e.dz : f.tipo === 3 ? nose * oz : dir * e.dz + oz;
+        const key = Math.floor(x / AREA_SIZE) + '_' + Math.floor(z / AREA_SIZE);
+        if (!out.has(key)) out.set(key, []);
+        out.get(key).push({ f, i, x, z, h: Math.atan2(vx, vz), r, c: hash(e.id, f.lato * 7 + i, 3) });
+      }
+    }
+    return out;
+  }
+
+  // parte degli stalli occupata all'ora h (0-24): piena la notte, più libera di giorno quando chi abita è al lavoro
+  sostaQuota(h) {
+    const T = [[0, 0.9], [6, 0.9], [9, 0.62], [17, 0.62], [20, 0.82], [24, 0.9]];
+    for (let i = 1; i < T.length; i++) if (h <= T[i][0]) return T[i - 1][1] + ((T[i][1] - T[i - 1][1]) * (h - T[i - 1][0])) / (T[i][0] - T[i - 1][0]);
+    return 0.9;
+  }
+
+  sostaKit() {
+    if (!this._sostaKit) {
+      const box = (w, hh, l, x, y, z, c) => {
+        const g = new THREE.BoxGeometry(w, hh, l).translate(x, y, z), n = g.attributes.position.count, col = new Float32Array(n * 3), k = new THREE.Color(c);
+        for (let i = 0; i < n; i++) col.set([k.r, k.g, k.b], i * 3);
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        return g;
+      };
+      // carrozzeria, abitacolo, quattro ruote: 72 triangoli (le auto del traffico ne hanno 200)
+      const geo = mergeGeometries([
+        box(1.78, 0.62, 4.2, 0, 0.62, 0, 0xffffff), box(1.6, 0.52, 2.2, 0, 1.19, -0.25, 0x8a949d),
+        ...[-0.8, 0.8].flatMap((x) => [-1.35, 1.35].map((z) => box(0.24, 0.62, 0.62, x, 0.33, z, 0x141414))),
+      ]);
+      this._sostaKit = { geo, mat: new THREE.MeshLambertMaterial({ vertexColors: true }) };
+      this.stalliMat = layer(new THREE.MeshLambertMaterial({ color: 0xe8e8e2 }), 4);
+    }
+    return this._sostaKit;
+  }
+
+  // righe degli stalli dell'area (una volta) e auto ferme per l'ora di adesso
+  addSosta(A) {
+    const list = this.stalliPerArea().get(A.key);
+    if (!list) return;
+    this.sostaKit();
+    const g = new GeoBuilder(), nodes = this.net.nodes, y = Y_ROAD + 0.012, W = 0.12;
+    for (const { f, i, x, z } of list) {
+      const e = f.e, P = nodes[e.a], sg = f.lato ? 1 : -1, ox = -e.dz * sg, oz = e.dx * sg, dir = e.oneway || sg;
+      const at = (s, d) => [P.x + e.dx * s + ox * d, P.z + e.dz * s + oz * d];
+      const s0 = f.s0 + i * f.passo, s1 = s0 + f.passo, k = f.tipo === 2 ? dir * (f.d1 - f.d0) : 0;
+      // riga verso le corsie e riga tra uno stallo e l'altro (di sbieco a spina); l'ultimo stallo chiude la fila
+      const a = at(s0, f.d0), b = at(s1, f.d0);
+      g.ribbon(a[0], a[1], b[0], b[1], W, y);
+      for (const s of i === f.n - 1 ? [s0, s1] : [s0]) { const p = at(s, f.d0), q = at(s + k, f.d1); g.ribbon(p[0], p[1], q[0], q[1], W, y); }
+      void x; void z;
+    }
+    A.stalli = list.length;
+    A.sostaRighe = segno(new THREE.Mesh(g.build(), this.stalliMat));
+    A.sostaRighe.receiveShadow = true;
+    this.group.add(A.sostaRighe);
+    this.fillSosta(A);
+  }
+
+  fillSosta(A) {
+    const list = this.stalliPerArea().get(A.key);
+    if (!list) return;
+    if (A.sostaAuto) { this.disposeMesh(A.sostaAuto); for (const b of A.sostaObs) this.removeObstacle(b); }
+    const q = this.sostaQuota(this.sostaOra ?? 11), here = list.filter((p) => p.r < q), K = this.sostaKit();
+    A.sostaObs = [];
+    A.sostaAuto = null;
+    A.auto = here.length;
+    if (!here.length) return;
+    const mesh = new THREE.InstancedMesh(K.geo, K.mat, here.length);
+    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+    here.forEach((p, i) => {
+      Q.setFromAxisAngle(Y, p.h);
+      mesh.setMatrixAt(i, M.compose(P.set(p.x, Y_ROAD, p.z), Q, S));
+      mesh.setColorAt(i, col.set(PARKED_COLORS[Math.floor(p.c * PARKED_COLORS.length)]));
+      A.sostaObs.push(this.addObstacle(p.x, p.z, 0.89, 2.1, p.h, 'parked'));
+    });
+    mesh.castShadow = true;
+    A.sostaAuto = mesh;
+    this.group.add(mesh);
+  }
+
+  // ora del giorno per la sosta: le auto ferme si rifanno solo quando la quota cambia di almeno due stalli su cento
+  setSostaOra(h) {
+    const q = this.sostaQuota(h);
+    if (this._sostaQ != null && Math.abs(q - this._sostaQ) < 0.02) return;
+    this._sostaQ = q;
+    this.sostaOra = h;
+    if (this.areas) for (const A of this.areas.values()) if (A.added) this.fillSosta(A);
+  }
+
   // area lontana: via mesh, ostacoli e riquadri degli edifici; i dati si riscaricano se torna a servire
   removeArea(A) {
+    if (A.sostaRighe) this.disposeMesh(A.sostaRighe);
+    if (A.sostaAuto) this.disposeMesh(A.sostaAuto);
+    for (const b of A.sostaObs || []) this.removeObstacle(b);
+    Object.assign(A, { sostaRighe: null, sostaAuto: null, sostaObs: [], stalli: 0, auto: 0 });
     for (const m of A.meshes) this.disposeMesh(m);
     for (const b of A.obs) this.removeObstacle(b);
     for (const t of A.tiles) {
@@ -2337,7 +2456,7 @@ export class City {
     o.traverse((m) => {
       if (m.isInstancedMesh) { m.dispose(); return; } // geometrie e materiali degli alberi sono condivisi
       if (m.geometry) m.geometry.dispose();
-      for (const mt of [].concat(m.material || [])) if (![this.bMat, this.rMat, this.walkMat, this.greenMat, this.shedMat, this.shedRoofMat].includes(mt)) mt.dispose();
+      for (const mt of [].concat(m.material || [])) if (![this.bMat, this.rMat, this.walkMat, this.greenMat, this.shedMat, this.shedRoofMat, this.stalliMat].includes(mt)) mt.dispose();
     });
   }
 
