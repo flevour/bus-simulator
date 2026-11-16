@@ -52,7 +52,7 @@ function osservaFermi({ cx, cz, r }) {
 // chi resta fermo oltre i 60 s è un caso con il suo posto, confrontato con l'elenco dei casi noti. Il limite non si
 // alza: un caso nuovo fa fallire la prova, uno noto ha il suo perché e la sua issue in data/eccezioni/traffico.json.
 test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo semaforico', async ({ pagina, gioco }, info) => {
-  tempoMassimo(480);
+  tempoMassimo(630);
   const corsa = await avviaCorsa(pagina, { linea: '3', verso: 1, partenza: '08:27' });
   expect(corsa.prima).toMatch(/^Capolinea Lion/);
   await pagina.evaluate(osservaFermi, { cx: 30, cz: -20, r: 380 });
@@ -103,7 +103,7 @@ function contaIncroci({ punti, sec, sem = true, r = 40 }) {
 // in Via Altinate, 20 minuti di gioco alle 8:15 attorno ai semafori di Riviera Tito Livio, di Riviera dei Ponti Romani
 // con Via Battisti, di Largo Europa e di Piazza Garibaldi (per posizione: gli id dei nodi cambiano con la mappa).
 test('incroci semaforizzati sulla sede: tram e auto mai dentro insieme', async ({ pagina, gioco }) => {
-  tempoMassimo(300);
+  tempoMassimo(366);
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });
   const r = await pagina.evaluate(contaIncroci, { punti: [[24, 149], [58, 65], [53, -333], [9, -195]], sec: 1200 });
@@ -161,7 +161,7 @@ function precedenza({ px, pz }) {
 // Leva: passando davanti al tram perde 60 punti, senza tram no; fermo sui binari, il tram aspetta alla barra
 // orizzontale e ha il via libera appena il bus se ne va.
 test('incroci senza semaforo: precedenza al tram, rispettata dai due lati', async ({ pagina, gioco }) => {
-  tempoMassimo(276);
+  tempoMassimo(354);
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(() => { window.__game.teleport(900, 500); window.__game.sim(1, 1 / 30, false); });
   const r = await pagina.evaluate(contaIncroci, { punti: [[720, 247], [786, 373], [909, 632], [1020, 816], [1101, 947]], sec: 1200, sem: false, r: 60 });
@@ -214,7 +214,7 @@ function rotonda({ px, pz }) {
 // segue il percorso lungo gli archi, anche in svolta. Poi 20 minuti attorno alle due rotonde, a Corso del Popolo e al
 // Piazzale della Stazione: tram e auto mai dentro insieme.
 test('incroci col tram nelle rotonde e in curva: tram e auto mai dentro insieme', async ({ pagina, gioco }) => {
-  tempoMassimo(294);
+  tempoMassimo(390);
   await avviaCorsa(pagina, { linea: '3' });
   const r0 = await pagina.evaluate(rotonda, { px: 368, pz: -945 });
   expect(r0.incrocio).toMatch(/^Viale della Pace/);
@@ -259,7 +259,7 @@ function attesaSegnali({ sec }) {
 // su cui corre il binario: nessuna logica del tram le guardava. Ora sono il segnale del tram: il tram che arriva chiama
 // il verde, i tram automatici col rosso si fermano, chi gioca passando col rosso perde 60 punti.
 test('segnali del tram: verde entro un ciclo, lanterna disegnata uguale allo stato, rosso a Pace penalizzato', async ({ pagina, gioco }) => {
-  tempoMassimo(282);
+  tempoMassimo(414);
   // tutti i tram automatici (il giocatore su un bus fermo in Via Altinate, fuori dai binari), 20 minuti
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });

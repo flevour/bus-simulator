@@ -272,7 +272,7 @@ test('scambio del capolinea girato in Esplorazione', async ({ pagina, gioco }) =
 // lanterna) a più di 6 m/s (mediana; prima 3,8), e la fase tram più corta, un tram da solo, dura al più 12 s (prima
 // 15,5): le altre si allungano anche per un'auto sull'incrocio, per un bus sul binario o per due tram insieme
 test('tram automatici: manovra ai capolinea con lo scambio, turni senza code e con i ritardi, in anticipo all\'andatura normale', async ({ pagina, gioco }) => {
-  tempoMassimo(300);
+  tempoMassimo(444);
   await avviaCorsa(pagina, { linea: '24' });
   const r = await pagina.evaluate(() => {
     const g = window.__game, T = g.trams, dt = 1 / 30;

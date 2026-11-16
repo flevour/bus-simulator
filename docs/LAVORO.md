@@ -222,7 +222,11 @@ cause erano due.
   il limite a 300, Tito Livio da 366 a oltre 480 con il limite a 480, i turni dei tram automatici da 234 a oltre 300).
   Le prove lunghe usano `tempoMassimo(secondi)` di `tests/gioco.js`: tre volte la durata più lunga vista in CI. Chi
   aggiunge una prova da più di un minuto guarda quanto dura in CI (`gh run view <serie> --log`) e fa lo stesso. Il job
-  `prove` ha 60 minuti (le serie durano da 25 a 31).
+  `prove` ha 60 minuti (le serie durano da 21 a 34). Con lo stato di partenza fissato le prove fanno sempre lo stesso
+  lavoro, ma la macchina che tocca in CI conta più del 40%: nelle quattro serie del 16 novembre (4cb1cb8, e9b4f2a,
+  832abd0, bf4f044) Tito Livio dura 630, 300, 540 e 510 s, i turni dei tram 444, 222, 366 e 336 s, i segnali del tram
+  414, 192, 348 e 306 s. I valori di `tempoMassimo` sono i più lunghi di queste serie, quindi il limite è almeno il
+  triplo anche sulla macchina più lenta vista.
 - La prima serie in CI con le prove del traffico verdi (4cb1cb8) è finita rossa per una veduta: al capolinea Stazione
   sud del SIR3 una colonnina di ricarica lasciata da una corsa in servizio di prima (`Chargers` ne tiene sei nella scena,
   ai capolinea delle ultime corse). Con le prove che non scadono più i worker non ripartono, e le vedute arrivano su una
