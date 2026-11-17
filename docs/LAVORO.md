@@ -586,7 +586,14 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   `scripts/citta_node.mjs`). Casi noti in `data/eccezioni/localita.json` (controlli `mappa` e `posa`), vuoto. Job
   `localita` di `verifiche.yml`; in locale `scripts/rigenera_mappa.sh --localita`, che scrive la mappa della prova in
   `.localita/` e rifà la posa fuori da Docker;
-- misure: MISURE.
+- misure (17 novembre). Con il codice di prima la quota di un nodo cambiava 133 aree su 224 (110 oltre 2 km), 849
+  celle delle aree, 10 righe della posa e tutti i 3.911 alberi del gioco; nel caso di #114 (archi, archi dei bus e
+  svolte strette cambiati in 71 posti) 1.694 strati di cella oltre 500 m. Ora, nei due cambi di quota provati e nel
+  caso di #114, niente oltre 200 m tranne una cella di isole a 200-500 m dai percorsi cambiati; la prova in Docker
+  cambia 2 aree, 10 raccordi entro 34 m e 2 righe della posa, e oltre 300 m niente. La pianta ha il 3-6% di vertici
+  in meno e dura circa il 15% in più. Con lo stesso lock macOS dà ora la stessa pianta di Linux (prima 115 celle e
+  20 aree diverse); restano diversi i binari del tram (1 mm) e una decina di raccordi, quindi si rigenera sempre da
+  Docker.
 
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 

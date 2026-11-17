@@ -3,8 +3,9 @@
 scripts/requirements-mappa.txt.
 
 La mappa dipende da tre cose fuori dagli script. Dalla versione delle librerie: con uno shapely diverso cambiano i
-poligoni di un centinaio di aree. Dal sistema: con le stesse librerie macOS dà 115 celle e 20 aree diverse da Linux
-(la libreria matematica non è la stessa), mentre Linux amd64 e arm64 danno gli stessi file. Dal feed GTFS, che cambia
+poligoni di un centinaio di aree. Dal sistema: con le stesse librerie macOS dà binari del tram diversi di un
+millimetro e una decina di raccordi (la libreria matematica non è la stessa; fino a #139 anche 115 celle della pianta e
+20 aree), mentre Linux amd64 e arm64 danno gli stessi file. Dal feed GTFS, che cambia
 ogni giorno. Qui sono fissate tutte e tre: le librerie nel file di lock, il sistema nell'immagine Docker di
 scripts/rigenera_mappa.sh, il feed nella copia data/gtfs-biv.zip (scaricata il 9 novembre 2026). Così la mappa nel
 repository è quella che questo comando produce, su ogni macchina, e una differenza dopo una modifica viene dalla

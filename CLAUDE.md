@@ -89,10 +89,11 @@ python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con er
 
 `scripts/rigenera_mappa.py` chiama `build_map.py` con i dati di `data/` e con il feed GTFS fissato in
 `data/gtfs-biv.zip` (quello vivo cambia ogni giorno), e si ferma se sistema, Python o librerie non sono quelli fissati:
-con uno shapely diverso, o su macOS con lo stesso, la mappa esce diversa in un centinaio di celle. La mappa nel
-repository deve essere quella che questo comando produce, e il job `rigenera` di `.github/workflows/verifiche.yml` lo
-controlla a ogni push: chi cambia uno script o un dato della mappa la rigenera e la pubblica nello stesso commit. Come
-si cambiano le librerie, l'immagine o il feed è in testa a `scripts/rigenera_mappa.py` e a `scripts/rigenera_mappa.sh`.
+con uno shapely diverso la mappa esce diversa in un centinaio di aree, su macOS con lo stesso nei binari del tram e in
+qualche raccordo. La mappa nel repository deve essere quella che questo comando produce, e il job `rigenera` di
+`.github/workflows/verifiche.yml` lo controlla a ogni push: chi cambia uno script o un dato della mappa la rigenera e
+la pubblica nello stesso commit. Come si cambiano le librerie, l'immagine o il feed è in testa a
+`scripts/rigenera_mappa.py` e a `scripts/rigenera_mappa.sh`.
 Alla fine la rigenerazione dice quante aree e celle della pianta sono cambiate e a che distanza dai dati cambiati
 (`scripts/localita.py`): un cambiamento in un posto deve cambiare la mappa solo lì (#139).
 

@@ -364,19 +364,34 @@ def _ring_pts(rings):
     return pts(rings[0]), [pts(h) for h in rings[1:] if len(h) >= 6]
 
 
+def _anelli_dm(p):
+    """Anelli di un poligono al decimetro, piatti (esterno, poi i buchi)."""
+    rings = []
+    for r in [p.exterior, *p.interiors]:
+        c = list(r.coords)[:-1]
+        if len(c) >= 3:
+            rings.append([round(v, 1) for xy in c for v in xy])
+    return rings
+
+
 def _rings(geom):
-    """Poligoni di una geometria come liste di anelli piatti [x0, z0, x1, z1, ...] (esterno, poi i buchi)."""
+    """Poligoni di una geometria come liste di anelli piatti [x0, z0, x1, z1, ...] (esterno, poi i buchi), al decimetro.
+    Arrotondati, due lati a meno di 5 cm possono toccarsi o incrociarsi, e il gioco triangola male un anello non valido
+    (quali triangoli escono dipende dal vertice da cui parte: sul viadotto di Via Boves un pezzo di carreggiata in quota
+    c'era o no a seconda di quello, #139): quei poligoni si portano al decimetro con shapely.set_precision, che li
+    tiene validi."""
     polys = [geom] if isinstance(geom, Polygon) else list(geom.geoms) if hasattr(geom, 'geoms') else []
     out = []
     for p in polys:
         if not isinstance(p, Polygon) or p.is_empty or p.area < 0.5:
             continue
-        rings = []
-        for r in [p.exterior, *p.interiors]:
-            c = list(r.coords)[:-1]
-            if len(c) >= 3:
-                rings.append([round(v, 1) for xy in c for v in xy])
-        if rings:
+        rings = _anelli_dm(p)
+        if rings and len(rings[0]) >= 6 and not Polygon(*_ring_pts(rings)).is_valid:
+            for q in _polys(shapely.set_precision(p, 0.1)):
+                r = _anelli_dm(q) if q.area >= 0.5 else None
+                if r:
+                    out.append(r)
+        elif rings:
             out.append(rings)
     return out
 

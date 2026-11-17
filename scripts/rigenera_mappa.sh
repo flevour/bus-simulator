@@ -1,8 +1,8 @@
 #!/bin/sh
 # Rigenera la mappa nell'ambiente di riferimento: Linux, Python 3.12 e le librerie di scripts/requirements-mappa.txt,
 # dentro l'immagine Docker fissata qui sotto (la stessa del job "rigenera" di .github/workflows/verifiche.yml).
-# Su macOS, con le stesse librerie, la mappa esce diversa in un centinaio di celle (la libreria matematica del sistema
-# non è la stessa): da lì si passa sempre da qui. Gli argomenti sono quelli di scripts/rigenera_mappa.py.
+# Su macOS, con le stesse librerie, la mappa esce diversa nei binari del tram (di un millimetro) e in qualche raccordo
+# (la libreria matematica del sistema non è la stessa): da lì si passa sempre da qui. Gli argomenti sono quelli di scripts/rigenera_mappa.py.
 #
 #   scripts/rigenera_mappa.sh               # riscrive src/data/padova-map.json e public/mappa/aree/
 #   scripts/rigenera_mappa.sh --controlla   # rigenera a parte e confronta con la mappa del repository
