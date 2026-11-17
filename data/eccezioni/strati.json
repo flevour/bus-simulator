@@ -33,6 +33,14 @@
      "cavalcavia-dalmazia-cima: strato 3 da vicino, strato 4 da lontano @ -613,-1327",
      "rotonda-sir2-ippodromo: strato 3 da vicino, strato 5.5 da lontano @ 4654,-1559"
     ]
+   },
+   {
+    "perche": "Vedute nuove sugli svincoli delle tangenziali (#124), sulla mappa con le quote di prima (street_surfaces.overpass_heights): casi che c'erano già, nuovi solo perché i punti sono nuovi. Sui viadotti di Via Boves alla Fornace l'asfalto in quota (strato 3) passa sopra le righe (strato 4): da 20 m le copre, da 300 m si vedono (9 e 13 punti su 800). Ai piedi della rampa di Via del Commercio su Via Boves l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero, come ai piedi del Camerini (8 punti, stessa trama). Si rivedono quando la struttura prende il profilo del risolutore; li toglie la pianta come partizione, #126.",
+    "casi": [
+     "tangenziale-boves-est: strato 3 da vicino, strato 4 da lontano @ 1457,-3332",
+     "tangenziale-boves-fornace: strato 3 da vicino, strato 4 da lontano @ 894,-3594",
+     "tangenziale-commercio-boves: strato 3 da vicino, strato 2 da lontano @ 5349,-2417"
+    ]
    }
   ]
  }
