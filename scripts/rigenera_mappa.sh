@@ -34,3 +34,7 @@ case " $* " in *" --localita "*)
 esac
 echo "Posa dell'arredo sulla mappa rigenerata:"
 node scripts/posa_arredo.mjs || echo "La posa dell'arredo è cambiata: src/data/padova-arredo.json va riscritto nello stesso commit della mappa."
+# La domanda di traffico (scripts/domanda.py, #116) segue la rete e gli edifici: solo libreria standard, lo stesso file
+# sul Mac e in Linux. Se cambia si riscrive qui, e va nello stesso commit della mappa
+echo "Domanda di traffico sulla mappa rigenerata:"
+python3 scripts/domanda.py --controlla || { python3 scripts/domanda.py && echo "src/data/padova-domanda.json riscritto: va nello stesso commit della mappa."; }

@@ -497,7 +497,14 @@ export class Traffic {
     // ripieghi delle auto (cambi di corsia senza posto, raccordi sovrapposti) e uscite di scena in fondo alle strade
     // chiuse: tipo -> quante volte
     this.ripieghi = {};
+    // al più quante auto si simulano (72; le prove che vogliono solo le loro lo mettono a 0) e la domanda di traffico
+    // (#116, src/world/domanda.js): quante ne servono (quante), dove nascono e dove vanno. raggio: il disco attorno a chi
+    // guida dove stanno; centro: per le prove, il centro del disco al posto di chi guida
     this.target = opts.count;
+    this.domanda = opts.domanda || null;
+    this.quante = opts.count;
+    this.raggio = 1500;
+    this.centro = null;
     this.cars = [];
     this.grid = new Grid(30);
     const max = 220;
@@ -609,41 +616,98 @@ export class Traffic {
   // le auto non entrano nelle vie pedonali né nelle corsie riservate ai bus
   allowed(e, fwd) { return !e.ped && !e.psv && (!e.oneway || (e.oneway === 1) === fwd); }
 
+  // un'auto nuova a caso tra minD e maxD metri da chi guida, su un arco e in un verso a caso (senza la domanda di #116:
+  // le prove che non la vogliono)
   spawn(bus, minD = 120, maxD = 1400, cars = this.cars) {
     for (let tries = 0; tries < 12; tries++) {
       const e = this.randomEdgeNear(bus.x, bus.z, minD, maxD);
       if (!e) continue;
       let fwd = e.oneway ? e.oneway === 1 : this.rnd() < 0.5;
       if (this.deadEnd(e, fwd)) { if (e.oneway || this.deadEnd(e, !fwd)) continue; fwd = !fwd; }
-      // la prima svolta, e la corsia più a destra da cui la si fa: l'auto nasce lì, tra l'inizio della corsia e il raccordo
-      const m = this.chooseNext(e, fwd);
-      if (!m) continue;
-      const R = m.racs.reduce((a, b) => (b.cda > a.cda ? b : a)), from = this.net.nodes[fwd ? e.a : e.b];
-      const s0 = (from.radius || 0) * 0.8, s1 = curva(this.net, R).s0 - ASSE - 1;
-      if (s1 - s0 < 3) continue;
-      const car = this.nuovaAuto(e, fwd, s0 + this.rnd() * (s1 - s0), R.cda, [m]);
-      this.estendi(car, 90);
-      this.segui(car);
-      const x = car.x, z = car.z;
-      const d = Math.hypot(x - bus.x, z - bus.z);
-      if (d < minD || d > maxD) continue;
-      if (cars.some((c) => Math.hypot(c.x - x, c.z - z) < 12)) continue;
-      if (this.bigs.some((b) => Math.hypot(b.x - x, b.z - z) < 16)) continue; // non sopra un bus automatico
-      const zone = zoneOf(x, z);
-      car.vmax = (zone === 0 || !e.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
-      car.v = Math.min(car.vmax * 0.7, this.vCurva(car));
-      car.color = new THREE.Color(CAR_COLORS[Math.floor(this.rnd() * CAR_COLORS.length)]);
-      cars.push(car);
-      return car;
+      const car = this.metti(e, fwd, this.rnd(), null, bus, minD, maxD, cars);
+      if (car) return car;
     }
     return null;
   }
+  // un'auto nuova con un viaggio della domanda (#116, src/world/domanda.js) che passa nel disco attorno a c0, a più di
+  // rIn metri: nasce lungo il suo percorso, dove ci sarebbe in quel momento. subito: gli alberi che servono si calcolano
+  // ora (alla partenza della corsa); altrimenti, se l'albero dell'arrivo non è pronto, null (e lo si calcola a pezzi)
+  nasci(c0, rIn, subito = false, cars = this.cars) {
+    const v = this.domanda.campiona(this.rnd, c0.x, c0.z, rIn, subito);
+    if (!v) return null;
+    const e = this.net.edges[v.stato >> 1];
+    return this.metti(e, !(v.stato & 1), v.f, { o: v.o, d: v.d, arrivo: v.arrivo, albero: v.albero }, c0, rIn, this.raggio + 50, cars);
+  }
+  // l'auto sull'arco e nel verso fwd, a frazione f del tratto tra l'inizio della corsia e il primo raccordo, con il viaggio
+  // v (o null); null se non c'è posto (a meno di 12 m da un'altra auto o 16 m da un bus automatico, fuori da minD-maxD)
+  metti(e, fwd, f, v, bus, minD, maxD, cars = this.cars) {
+    // la prima svolta, e la corsia più a destra da cui la si fa: l'auto nasce lì, tra l'inizio della corsia e il raccordo
+    const m = this.chooseNext(e, fwd, null, v);
+    if (!m) return null;
+    const R = m.racs.reduce((a, b) => (b.cda > a.cda ? b : a)), from = this.net.nodes[fwd ? e.a : e.b];
+    const s0 = (from.radius || 0) * 0.8, s1 = curva(this.net, R).s0 - ASSE - 1;
+    if (s1 - s0 < 3) return null;
+    const car = this.nuovaAuto(e, fwd, s0 + f * (s1 - s0), R.cda, [m]);
+    car.viaggio = v;
+    this.estendi(car, 90);
+    this.segui(car);
+    const x = car.x, z = car.z;
+    const d = Math.hypot(x - bus.x, z - bus.z);
+    if (d < minD || d > maxD) return null;
+    if (cars.some((c) => Math.hypot(c.x - x, c.z - z) < 12)) return null;
+    if (this.bigs.some((b) => Math.hypot(b.x - x, b.z - z) < 16)) return null; // non sopra un bus automatico
+    const zone = zoneOf(x, z);
+    car.vmax = (zone === 0 || !e.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
+    car.v = Math.min(car.vmax * 0.7, this.vCurva(car));
+    car.color = new THREE.Color(CAR_COLORS[Math.floor(this.rnd() * CAR_COLORS.length)]);
+    cars.push(car);
+    return car;
+  }
+  // le auto della corsa alla partenza (main.js): con la domanda quante ne dice per l'ora e il posto, nate lungo i loro
+  // viaggi nel disco attorno a chi guida, con gli alberi calcolati subito; senza, target auto a caso
+  popola(bus, clock = 8 * 3600, giorno = 'feriale') {
+    const D = this.domanda;
+    if (!D) { for (let i = 0; i < this.target; i++) this.spawn(bus, 60, 1400); return; }
+    const c0 = this.centro || bus;
+    D.ora(clock, giorno);
+    D.centro(c0.x, c0.z, true);
+    if (D.aggiorna(this.target)) { this.quante = Math.round(D.quante); this.raggio = D.R; }
+    const n = Math.min(this.target, this.quante);
+    for (let k = 0; k < 6 * n && this.cars.length < n; k++) this.nasci(c0, 60, true);
+  }
 
   // il movimento dopo l'arco edge (percorso nel verso fwd); da T (la corsia dove si arriva: { e, fwd, s, corsia }) prima
-  // quelli che non chiedono un cambio di corsia senza posto. null se non ce ne sono (strada chiusa, bordo della mappa)
-  chooseNext(edge, fwd, T = null) {
+  // quelli che non chiedono un cambio di corsia senza posto. null se non ce ne sono (strada chiusa, bordo della mappa).
+  // Con un viaggio v (#116) quello che arriva prima all'arrivo, con i ritardi misurati (Domanda.costo); senza, a caso
+  chooseNext(edge, fwd, T = null, v = null) {
     let opts = this.movimenti(edge, fwd);
     if (!opts.length) return null;
+    if (v && this.domanda) {
+      // l'albero dell'arrivo con i tempi della fascia di adesso; finché quello nuovo non è pronto, il vecchio
+      const D = this.domanda;
+      let A = v.albero && v.albero.fatto ? v.albero : null;
+      if (!A || A.fascia !== D.chiaveTempi) { const B = D.albero(v.arrivo); if (B) A = v.albero = B; }
+      if (A) {
+        const s = 2 * edge.id + (fwd ? 0 : 1), st = (m) => 2 * m.edge.id + (m.fwd ? 0 : 1);
+        const verso = opts.filter((m) => A.T[st(m)] < Infinity);
+        if (verso.length) {
+          let tra = verso;
+          if (T) {
+            const ok = verso.filter((m) => m.racs.some((R) => this.costo(T, R) < 100));
+            // (nell'anello di una rotonda, se da questa corsia non c'è posto per nessuna uscita, si esce alla prima:
+            // sotto)
+            const fuori = edge.roundabout && ok.every((m) => m.edge.roundabout) ? verso.filter((m) => !m.edge.roundabout) : [];
+            if (fuori.length) tra = fuori;
+            else if (ok.length) tra = ok;
+          }
+          let best = tra[0], bc = Infinity;
+          for (const m of tra) { const c = D.costo(s, st(m), A); if (c < bc) { bc = c; best = m; } }
+          return best;
+        }
+        // da qui l'arrivo non si raggiunge (un movimento senza raccordo per l'auto, un ripiego): il viaggio finisce
+        v.perso = true;
+      }
+    }
     // prima chi non è un vicolo cieco, poi chi non è un pozzo (in Via delle Porte Contarine due vicoli ciechi, uno lo è)
     const open = opts.filter((m) => !this.deadEnd(m.edge, m.fwd));
     const back = opts.filter((m) => !this.pit(m.edge, m.fwd));
@@ -729,8 +793,13 @@ export class Traffic {
   estendi(c, fino) {
     const N = this.net.nodes;
     while (c.per.fine < fino && !c.chiusa) {
-      const T = c.coda;
-      const m = c.route.length ? c.route.shift() : this.chooseNext(T.e, T.fwd, T);
+      const T = c.coda, sT = 2 * T.e.id + (T.fwd ? 0 : 1);
+      if (c.viaggio && c.viaggio.perso) c.viaggio = null;
+      // arrivo del viaggio (#116): dove finisce lo stato d'arrivo l'auto, lontano da chi guida, esce di scena (update);
+      // il viaggio dopo comincia da lì
+      if (c.fineViaggio === sT) { c.arriva = c.per.fine + Math.max(0, T.e.len - T.s); c.fineViaggio = null; }
+      if (c.viaggio && c.viaggio.arrivo === sT && !c.route.length) this.cambiaViaggio(c);
+      const m = c.route.length ? c.route.shift() : this.chooseNext(T.e, T.fwd, T, c.viaggio);
       if (!m) {
         const p = c.per.aggiungi(tratto(N, T.e, T.fwd, T.s, Math.max(T.s, T.e.len - 1), T.corsia, T.corsia, R_AUTO));
         this.lineeArresto(c, p);
@@ -741,7 +810,14 @@ export class Traffic {
       // raccordo arriva, tra quelle che non chiedono un cambio di corsia senza posto
       let R, rip = null;
       if (c.route.length) R = this.scegli(T, m, c.route[0]);
-      else {
+      else if (c.viaggio) {
+        // con un viaggio (#116) prima la svolta dopo, verso l'arrivo, poi la corsia per farla: scegliendo prima la corsia
+        // la svolta verso l'arrivo poteva non avere posto per il cambio di corsia, e l'auto girava in un anello vicino
+        if (c.viaggio.arrivo === 2 * m.edge.id + (m.fwd ? 0 : 1)) this.cambiaViaggio(c);
+        const m2 = this.chooseNext(m.edge, m.fwd, null, c.viaggio);
+        if (m2) c.route.push(m2);
+        R = this.scegli(T, m, m2);
+      } else {
         R = this.scegli(T, m, null);
         const m2 = this.chooseNext(m.edge, m.fwd, { e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca, giro: this.giroDopo(T, m) });
         if (m2) c.route.push(m2);
@@ -762,6 +838,14 @@ export class Traffic {
     }
   }
   conta(tipo) { this.ripieghi[tipo] = (this.ripieghi[tipo] || 0) + 1; }
+  // il viaggio di c arriva (il prossimo stato è il suo arrivo): il viaggio dopo parte dalla zona d'arrivo, con una
+  // destinazione per le probabilità dell'ora (#116)
+  cambiaViaggio(c) {
+    const v = c.viaggio;
+    c.fineViaggio = v.arrivo;
+    const n = v.d == null ? null : this.domanda.prossimo(v.d, this.rnd);
+    c.viaggio = n ? { ...n, albero: null } : null;
+  }
   // linee d'arresto dei semafori lungo il percorso: per il tratto di corsia p (verso il nodo p.to), la progressiva della
   // sua linea, anche se cade dentro il raccordo che comincia prima
   lineeArresto(c, p) {
@@ -1060,13 +1144,28 @@ export class Traffic {
   update(dt, bus, ctx) {
     this.bigs = ctx.bigs || [];
     const playerBig = { player: true, v: bus.v, atStop: ctx.busAtStop };
-    // popolazione dinamica attorno al bus
+    // popolazione attorno a chi guida (o al centro messo da una prova). Con la domanda (#116): quante auto e fin dove le
+    // dice l'ora del gioco (ctx.clock, ctx.giorno) per quel posto, e quelle nuove nascono lungo i loro viaggi; i conti
+    // lunghi (alberi) vanno avanti un passo alla volta
+    const c0 = this.centro || bus, D = this.domanda;
+    this.tempo = (this.tempo || 0) + dt;
+    if (D) {
+      if (ctx.clock != null) D.ora(ctx.clock, ctx.giorno);
+      D.centro(c0.x, c0.z);
+      D.passo();
+      D.invecchia(dt);
+      if (D.aggiorna(this.target)) { this.quante = Math.round(D.quante); this.raggio = D.R; }
+    }
+    const lontano = D ? this.raggio + 250 : 1700;
     for (let i = this.cars.length - 1; i >= 0; i--) {
       const c = this.cars[i];
-      if (Math.hypot(c.x - bus.x, c.z - bus.z) > 1700 || c.overlapT > 2.5) this.cars.splice(i, 1);
+      // (le auto sonda delle prove, c.sonda, non escono per la distanza: tests/domanda.js)
+      if ((!c.sonda && Math.hypot(c.x - c0.x, c.z - c0.z) > lontano) || c.overlapT > 2.5) this.cars.splice(i, 1);
     }
     let guard = 0;
-    while (this.cars.length < this.target && guard++ < 6) this.spawn(bus, this.cars.length < this.target * 0.5 ? 60 : 250, 1500);
+    const n = D ? Math.min(this.target, this.quante) : this.target;
+    if (D) while (this.cars.length < n && guard++ < 3) this.nasci(c0, this.cars.length < n * 0.5 ? 60 : Math.min(250, 0.6 * this.raggio));
+    else while (this.cars.length < this.target && guard++ < 6) this.spawn(bus, this.cars.length < this.target * 0.5 ? 60 : 250, 1500);
 
     // griglia per ricerca vicini
     this.grid = new Grid(30);
@@ -1198,6 +1297,19 @@ export class Traffic {
       c.per.taglia(c.q - 2);
       // in fondo a una strada chiusa, lontano da chi guida, l'auto esce di scena (non fa inversione)
       if (c.chiusa && c.far && c.v < 0.3 && c.per.fine - c.q - ASSE < 5) { c.overlapT = 3; this.conta('fuori scena in fondo a una strada chiusa'); }
+      if (D) {
+        // arrivata alla fine del viaggio: lontano da chi guida esce di scena (ha parcheggiato), vicino fa il viaggio dopo
+        if (c.arriva != null && c.q + ASSE >= c.arriva - 4) { if (c.far) { c.overlapT = 3; this.conta('arrivo'); } c.arriva = null; }
+        // ritardi misurati (#116): il tempo che l'auto ha passato sullo stato da cui esce, oltre quello a rete libera
+        if (!c.turn) {
+          const st = 2 * c.edge.id + (c.fwd ? 0 : 1);
+          if (st !== c.st) {
+            if (c.st != null && c.t0 != null) D.segna(c.st, st, this.tempo - c.t0);
+            c.t0 = c.st == null ? null : this.tempo;
+            c.st = st;
+          }
+        }
+      }
     }
     this.untangle();
 

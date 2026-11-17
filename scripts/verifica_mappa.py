@@ -26,6 +26,8 @@ Controlla quello che il JSON dice già, senza aprire il gioco (sezione 6.1 di do
     incroci, fermate, passi carrai e sede del tram (data/eccezioni/sosta.json).
   * percorsi delle linee (scripts/percorsi.py, docs/percorsi.md): per ogni variante salti, archi contromano, inversioni,
     svolte vietate ai bus e svolte senza un raccordo per il mezzo della linea (data/eccezioni/percorsi.json).
+  * domanda di traffico (scripts/domanda.py, docs/domanda.md): src/data/padova-domanda.json è quello che esce dalla
+    mappa e dai dati di oggi.
 Pali dei semafori, lampioni, alberi, pensiline e paline al posto finale li mette il gioco al caricamento: li controlla
 la prova tests/mappa.spec.js nel browser.
 
@@ -56,6 +58,7 @@ sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import aree_mappa  # noqa: E402
 import binari_tram  # noqa: E402
 import cavalcavia  # noqa: E402
+import domanda  # noqa: E402
 import osm_rete  # noqa: E402
 import raccordi  # noqa: E402
 import sosta  # noqa: E402
@@ -400,6 +403,9 @@ def main():
     errori += errori_s
     errori += errori_p
     errori += conto_aree(args.mappa)
+    # la domanda di traffico (scripts/domanda.py, docs/domanda.md) è quella che esce dalla mappa di oggi
+    if os.path.abspath(args.mappa) == os.path.abspath(domanda.MAPPA):
+        errori += domanda.controlla()
     if errori:
         print('\n'.join(errori))
         print('Con --elenco i casi di oggi, con le coordinate del gioco.')

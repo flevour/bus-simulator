@@ -4,6 +4,7 @@ import { loadAreasNear } from './data/aree.js';
 import { Tram, tramRoute, TRAM, TramNet } from './tram/tram.js';
 import { City, zoneOf, edgeHeight } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
+import { Domanda } from './world/domanda.js';
 import { BusSim } from './world/buses.js';
 import { Bus } from './bus/bus.js';
 import { Mission, Transfer, scheduleFor, paceVariant, tripDuration } from './game/mission.js';
@@ -107,7 +108,7 @@ scene.add(rain);
 // ------------------------------------------------------------------
 // Mondo
 // ------------------------------------------------------------------
-let net, city, lights, trams, tramSignals, buses, greet, depot, depotMesh, chargers;
+let net, city, lights, trams, tramSignals, buses, greet, depot, depotMesh, chargers, domanda;
 let terrain = new Terrain(null);
 const hud = new HUD();
 const audio = new Audio();
@@ -125,6 +126,8 @@ function buildWorld() {
   }
   city = new City(scene, net, { terrain });
   lights = new TrafficLights(scene, net, city);
+  // domanda di traffico (#116): i viaggi delle auto, dai dati della build; senza i raccordi della rete non c'è
+  domanda = net.raccordi ? new Domanda(net) : null;
   city.buildSigns();
   // turni del tram (di chi guida e automatici): sosta più breve al capolinea di 3 minuti dove c'è la manovra con lo
   // scambio, di 1 all'anello della stazione
@@ -295,6 +298,8 @@ function readInput(dt) {
 // Stato di gioco
 // ------------------------------------------------------------------
 let bus = null, mission = null, traffic = null, walkers = null, news = null;
+// auto simulate al più attorno a chi guida (#116: la domanda dice quante ne servono, fino a queste)
+const AUTO_SIMULATE = 72;
 let running = false, paused = false;
 let camMode = 0; // 0 cabina, 1 esterna, 2 passeggeri, 3 dall'alto
 const CAM_NAMES = ['Cabina di guida', 'Esterna', 'Passeggeri', 'Dall\'alto'];
@@ -1327,12 +1332,14 @@ function startMission(resume = null) {
   lights.reset(mission.clock);
   tramSignals.reset();
   const hour = (settings.departure / 3600) % 24;
-  const busy = hour < 6 ? 0.3 : hour < 7 ? 0.6 : (hour > 7 && hour < 9.3) || (hour > 17 && hour < 19.5) ? 1.3 : hour < 21 ? 0.9 : 0.4;
-  const count = service ? Math.round(55 * busy * (settings.variant === 'festivo' ? 0.6 : 1)) : 0;
-  traffic = new Traffic(scene, net, city, lights, { count, seed: Math.floor(settings.departure) });
+  // auto: al più AUTO_SIMULATE attorno a chi guida; quante e dove le decide la domanda (#116) dall'ora e dal giorno, e
+  // seguono l'ora anche durante la corsa (#60)
+  const count = service ? AUTO_SIMULATE : 0;
+  if (domanda) domanda.reset();
+  traffic = new Traffic(scene, net, city, lights, { count, seed: Math.floor(settings.departure), domanda });
   traffic.bigs = buses.buses;
   walkers = new Walkers(scene, net, Math.round(140 * (settings.variant === 'festivo' ? 1.2 : 1) * (hour > 21 || hour < 6.5 ? 0.3 : 1)), city);
-  for (let i = 0; i < count; i++) traffic.spawn(bus, 60, 1400);
+  if (count) traffic.popola(bus, mission.clock, settings.variant);
   for (let i = 0; i < walkers.target; i++) walkers.spawn(bus);
   wireMission();
   turno = { corse: 0, score: 0, odo: bus.odometer, depot: !!mission.transfer };
@@ -1923,7 +1930,7 @@ function step(dt) {
   if (!bus.isTram && !mission.free) for (const x of tramSignals.giveWay) if (mission.cooldown('tprec', 5)) mission.addScore(-60, '🚋 Non hai dato la precedenza al tram!');
   city.streamTiles(bus.x, bus.z, 5);
   sorpresa.update(bus, city);
-  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals, trams, bigs: buses.buses });
+  traffic.update(dt, bus, { busAtStop: mission.atStop || bus.doorsAnyOpen, tramSignals, trams, bigs: buses.buses, clock: mission.clock, giorno: settings.variant });
   buses.update(dt, { player: bus, traffic, trams, lights, clock: mission.clock });
   // colleghi da salutare: bus e tram automatici vicini
   greet.update(dt, bus, trams.colleagues(buses.colleagues()));
@@ -2079,7 +2086,7 @@ setTimeout(async () => {
   $('loading').style.display = 'none';
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
-  window.__game = { get hud() { return hud; }, get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get walkers() { return walkers; }, set veduta(v) { veduta = v; }, get tramSignals() { return tramSignals; }, city, net, lights, edgeHeight, laneLayout, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
+  window.__game = { get hud() { return hud; }, get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get domanda() { return domanda; }, get walkers() { return walkers; }, set veduta(v) { veduta = v; }, get tramSignals() { return tramSignals; }, city, net, lights, edgeHeight, laneLayout, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot, tramSwitchAhead,
     pad, mirrorAdj, audio, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();
