@@ -1,0 +1,9 @@
+{
+ "cosa": "Casi noti della prova delle code (tests/code.spec.js, regole in tests/code.js): dieci minuti nelle tre zone della prova del moto con il traffico delle 8:15. sblocchi: auto fatte sparire (sui binari, davanti al tram, davanti a un bus), tram o bus che passano attraverso un bus, bus in coda sorpassati dopo un'attesa; giri_di_attese: Traffic.untangle; incroci_bloccati: auto ferme in coda dentro un incrocio oltre 2 s; fermi: auto, bus o tram fermi oltre 120 s fuori dalle fermate. Chiave: cosa @ x,z del gioco (il nodo dell'incrocio per incroci_bloccati, dove il mezzo si è fermato per i fermi); un caso per posto. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/code.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
+ "controlli": {
+  "sblocchi": [],
+  "giri_di_attese": [],
+  "incroci_bloccati": [],
+  "fermi": []
+ }
+}

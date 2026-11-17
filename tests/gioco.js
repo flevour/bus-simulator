@@ -54,6 +54,9 @@ export async function avviaCorsa(page, { linea, tram = false, verso = 0, modo = 
     const card = $(`.line-card[data-id="${linea}"]`);
     if (!card) throw new Error(`linea ${linea} non presente nel menu`);
     card.click();
+    // anche il verso propone la corsa più vicina a quella scelta prima: col verso di una corsa precedente diverso, la
+    // prima corsa di una pagina nuova partiva alle 8:26 e le altre alle 8:14 (#115)
+    g.settings.departure = 0;
     $(`#direction button[data-d="${verso ? -1 : 1}"]`).click();
     if (partenza) {
       const sel = $('#departure'), i = [...sel.options].findIndex((o) => o.textContent.startsWith(partenza));
