@@ -54,6 +54,11 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   dai tag OSM, dalle aree OSM, dal DBGT e dalla larghezza della carreggiata, formato dei campi `stalli` e `sedeCorsie`
   della mappa, zone libere (incroci, fermate, passi carrai), controlli (`data/eccezioni/sosta.json`,
   `tests/sosta.spec.js`) e campione sulla foto aerea.
+* `docs/percorsi.md`: percorsi delle linee guidabili da un bus (#114): la regola (niente salti, contromano, inversioni,
+  svolte vietate ai bus; ogni svolta con un raccordo per il mezzo della linea), cosa fa la build (tag OSM corretti in
+  `data/osm-correzioni.json`, aggancio per pezzi dove il tracciato esce dalla mappa, riparazione dei passaggi) e il
+  controllo `scripts/percorsi.py`, che `build_map.py` lancia alla fine e che si ferma su un caso fuori da
+  `data/eccezioni/percorsi.json`.
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,
   verifiche, tappe). Le misure di riferimento della sezione 3 valgono dove mancano i dati.
@@ -146,7 +151,8 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   con il perché: `verifica-mappa.json`, `osm-rete.json` (`scripts/osm_rete.py`, svolte di OSM), `cavalcavia.json`
   (`scripts/cavalcavia.py`, anche da `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`),
   `traffico.json` (`tests/traffico.spec.js`), `raccordi.json` (`scripts/raccordi.py`), `sosta.json`
-  (`scripts/sosta.py`) e `sosta-gioco.json` (`tests/sosta.spec.js`). Un caso fuori dall'elenco fa fallire il
+  (`scripts/sosta.py`), `sosta-gioco.json` (`tests/sosta.spec.js`) e `percorsi.json` (`scripts/percorsi.py`,
+  anche alla fine della build). Un caso fuori dall'elenco fa fallire il
   controllo anche se il totale non sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione
   l'elenco si riscrive con `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i
   casi nuovi finiscono in un gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un

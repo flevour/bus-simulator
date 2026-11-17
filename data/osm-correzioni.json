@@ -1,0 +1,11 @@
+{
+ "cosa": "Tag delle vie degli scarichi OSM (data/osm-padova.json, data/osm-corridoio.json) corretti prima della build: scripts/osm_rete.py, correggi, che build_map.py chiama appena letti gli scarichi. Una riga per via: id, nome, i tag che si sostituiscono e il perché, verificato (storia della via su OSM, foto aerea, tracciati GTFS). Gli scarichi delle vie non si rifanno, quindi un tag cambiato male in OSM prima dello scarico si corregge qui. Se la via non c'è più o ha già quei tag la build si ferma: la riga va tolta. Regole in docs/percorsi.md.",
+ "vie": [
+  {
+   "via": 23555665,
+   "nome": "Corso del Popolo",
+   "tag": {"busway": "opposite_lane"},
+   "perche": "Tra Via Trieste e Via Foscolo i bus vanno anche verso nord, sulla corsia in controsenso accanto al tram, come nelle due vie prima e dopo (Corso Garibaldi 61982988 e Corso del Popolo 363479333, busway=opposite_lane). In OSM questa via ha avuto busway=opposite_lane dal 2011 alla versione 37 (16 ottobre 2025); la 38 (19 dicembre 2025) l'ha cambiato in busway=yes, che non è un valore del tag, e lanes da 2 a 1. I tracciati GTFS delle 31 varianti dirette alla stazione passano di qui verso nord: senza la correzione il loro percorso andava contromano su 100 m (#114)."
+  }
+ ]
+}

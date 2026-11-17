@@ -1,5 +1,5 @@
 {
- "cosa": "Casi noti dei controlli sui dati OSM agganciati alla rete (scripts/osm_rete.py, anche da scripts/verifica_mappa.py): svolte vietate e obbligate che toccano la rete e non si agganciano a un arco, svolte agganciate che non vanno dalla parte che il loro tipo dice, percorsi dei bus che passano da una svolta vietata. La chiave è il motivo o il tipo, la relazione OSM e il nodo della rete. Le svolte che non toccano la rete (fuori dall'area) non sono casi.",
+ "cosa": "Casi noti dei controlli sui dati OSM agganciati alla rete (scripts/osm_rete.py, anche da scripts/verifica_mappa.py): svolte vietate e obbligate che toccano la rete e non si agganciano a un arco, svolte agganciate che non vanno dalla parte che il loro tipo dice. I percorsi dei bus su una svolta vietata sono in percorsi.json (scripts/percorsi.py). La chiave è il motivo o il tipo, la relazione OSM e il nodo della rete. Le svolte che non toccano la rete (fuori dall'area) non sono casi.",
  "controlli": {
   "svolte_non_agganciate": [
    {
@@ -120,16 +120,6 @@
     "perche": "Divieto di svolta a sinistra da Via Kennedy (senso unico) a un tratto di Via Antonio Rossi che dal nodo sta 39 gradi a destra: in OSM il membro a è il tratto dalla parte sbagliata dell'incrocio, oppure il tipo doveva essere no_right_turn. L'aggancio segue la relazione com'è; si corregge in OSM.",
     "casi": [
      "no_left_turn, relazione 16730934 @ -7010,-2123"
-    ]
-   }
-  ],
-  "percorsi_su_svolta_vietata": [
-   {
-    "perche": "Percorsi che vengono dall'aggancio del tracciato GTFS alla rete e passano da una svolta che OSM vieta anche ai bus (nessun except=psv): la 4 al Piazzale Castagnara esce di lato dove OSM obbliga ad andare diritto, in due nodi, e la 15B a Largo Europa fa l'inversione vietata verso Via Matteotti. Se sbaglia l'aggancio o manca l'eccezione per i bus in OSM lo dice #114, che controlla i percorsi nella build.",
-    "casi": [
-     "linea 15B, relazione 20217325 @ -23,-384",
-     "linea 4, relazione 10389361 @ 1492,-4627",
-     "linea 4, relazione 18902835 @ 1386,-4610"
     ]
    }
   ]

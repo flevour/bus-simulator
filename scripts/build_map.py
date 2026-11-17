@@ -71,6 +71,15 @@ CORRIDOI_TRAM = ('SIR3', 'SIR2')
 CORRIDOI_BUS = ('25', '24', '3', '22', '10', '11', '88')
 SNODATI = ('10',)  # linee con lo snodato da 18 m (ARTICULATED_LINES in src/game/routes.js)
 SVOLTA_STRETTA = 60.0  # gradi: da qui una svolta a sinistra dei bus è stretta (street_surfaces.BUS_TURN_KERB)
+# percorsi delle linee (docs/percorsi.md): un percorso agganciato che si allontana dal tracciato GTFS più di GIRO_SCARTO
+# metri per GIRO_LUNGO metri di fila fa un giro che il bus vero non fa (il tracciato passa dove la mappa non ha strade);
+# allora si aggancia per pezzi, separati da tratti di almeno BUCO metri senza strade
+GIRO_SCARTO, GIRO_LUNGO, BUCO = 40.0, 200.0, 100.0
+# riparazione dei passaggi che un bus non può fare (ripara): finestre fino a RIPARA_NODI nodi prima e dopo, giri tolti
+# fino a RIPARA_GIRO nodi, al più RIPARA_IN_PIU metri di percorso in più; le fermate non si allontanano dal percorso
+# più di FERMATA_VICINA metri (o di FERMATA_PEGGIO in più di prima, se ci stavano già più lontane)
+RIPARA_NODI, RIPARA_GIRO, RIPARA_IN_PIU = 8, 80, 300.0
+FERMATA_VICINA, FERMATA_PEGGIO = 20.0, 5.0
 TRAM_NUOVE = __file__.rsplit('/', 2)[0] + '/data/tram-linee-nuove.json'
 FOCUS_CELLE = set()  # (ix, iz) delle celle, riempito da main()
 WATER_W ={'brenta': 70, 'bacchiglione': 38, 'piovego': 26, 'scaricatore': 34, 'roncajette': 30, 'tronco maestro': 22, 'naviglio': 14}
@@ -546,6 +555,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     if corridor_path:
         els += [e for e in json.load(open(corridor_path, encoding='utf-8'))['elements'] if e['type'] == 'way']
+    # tag delle vie corretti dove lo scarico è sbagliato (data/osm-correzioni.json, docs/percorsi.md)
+    print('vie con i tag corretti (data/osm-correzioni.json):', osm_rete.correggi(els))
     # larghezze misurate di carreggiate e marciapiedi (scripts/measure_streets.py), per via OSM
     measures = json.load(open(measures_path, encoding='utf-8'))['vie'] if measures_path else {}
     gt = build_gtfs.load(gtfs_dir, full=CORRIDOI_BUS)
@@ -676,6 +687,23 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         print(f'archi con la carreggiata misurata: {n_meas} su {len(edges)}')
     print(f'corsie dai tag OSM: {len(edge_lanes)} archi, con la corsia dei bus {sum(1 for v in edge_lanes.values() if v[2] or v[3])}, '
           f'sorpasso vietato {sum(1 for v in edge_lanes.values() if v[4] or v[5])}, frecce {len(turns)}')
+    # nodi come si scrivono nella mappa, al decimetro
+    nodes_flat = []
+    for x, z in nodes:
+        nodes_flat += [round(x, 1), round(z, 1)]
+    # dati OSM agganciati alla rete per id (scripts/osm_rete.py). L'aggancio è quello che fa lo strumento che scrive i
+    # soli campi nella mappa che c'è, dalla rete e dagli scarichi: qui si confronta con la via vera di ogni arco. Le
+    # svolte servono già all'aggancio delle linee (ripara, sotto)
+    assert all(osm_rete.CLASSE[k] == v[0] for k, v in DRIVE.items()) and len(osm_rete.CLASSE) == len(DRIVE)
+    osm_vie = [e for e in els if e['type'] == 'way' and 'geometry' in e and e.get('tags', {}).get('highway') in DRIVE]
+    agg = osm_rete.Aggancio(list(zip(nodes_flat[0::2], nodes_flat[1::2])), edges, names, osm_vie)
+    diversi = [k for k, (a, b) in enumerate(zip(agg.arco_via, edge_way)) if a != b]
+    if diversi:
+        sys.exit(f'osm_rete.Aggancio non ritrova la via di {len(diversi)} archi (i primi: {diversi[:10]}): i campi OSM scritti '
+                 'senza rigenerare non sarebbero quelli della build')
+    osm_campi, osm_info = osm_rete.campi(agg, osm_rete.leggi_relazioni(), {e['id'] for e in els if e['type'] == 'way'})
+    print(f"dati OSM per id: svolte {len(osm_campi['svolte'])} (non agganciate {sum(1 for p, _n in osm_info['scarti'].values() if p != osm_rete.FUORI)}), "
+          f"sosta {len(osm_campi['sosta'])} archi, rilevati {len(osm_campi['rilevati'])}, pendenze {len(osm_campi['pendenze'])}")
 
     signage = osm_signage(sign_els, ped_gap, way_geo, node_id, nodes, edges) if nodes_path else {}
     # vie rialzate: una rampa (tipo 4) a ciascuna estremità, che sale nel verso da a verso b (il gioco la tiene fuori
@@ -1092,6 +1120,181 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             i += 1
         return out, n
 
+    # ---------------- percorsi che un bus può guidare (docs/percorsi.md, #114) ----------------
+    primo = {}  # (nodo, nodo) -> il primo arco tra i due, come edgeBetween di src/data/padova.js
+    grado = Counter()  # archi di ogni nodo: con uno solo il nodo è al bordo della mappa (cutStart, cutEnd in src/main.js)
+    for k, e in enumerate(edges):
+        primo.setdefault((e[0], e[1]), k)
+        primo.setdefault((e[1], e[0]), k)
+        grado[e[0]] += 1
+        grado[e[1]] += 1
+    vieta_bus = defaultdict(list)  # (nodo, arco da) -> [(arco a, tipo)]: le svolte di OSM che valgono anche per i bus
+    for sv in osm_campi['svolte']:
+        if len(sv) == 5 and not sv[4] & osm_rete.ECCETTO_BUS:  # quelle che passano da una via no, come in raccordi.py
+            vieta_bus[(sv[0], sv[1])].append((sv[2], sv[3]))
+
+    def svolta_ok(p, u, w):
+        """Il bus arrivato in u da p può proseguire verso w: niente inversione sullo stesso arco, niente svolta che OSM
+        vieta ai bus (una vietata, o un'altra dove è obbligata). p o w None: si parte o si finisce in u."""
+        if p is None or w is None:
+            return True
+        da, a = primo[(p, u)], primo[(u, w)]
+        return p != w and not any((v == a) if t < osm_rete.OBBLIGO else (v != a) for v, t in vieta_bus.get((u, da), ()))
+
+    def passi_male(seq):
+        """Passaggi del percorso che un bus non può fare, come (primo indice, ultimo indice) in seq: un arco contromano
+        fuori dalle corsie dei bus in controsenso, o pedonale, è (i, i + 1); un'inversione sullo stesso arco o una svolta
+        vietata in i è (i - 1, i + 1). I salti (due nodi senza un arco tra loro) non si contano qui."""
+        out = []
+        for i in range(len(seq) - 1):
+            k = primo.get((seq[i], seq[i + 1]))
+            if k is None:
+                continue
+            if not bus_ok(k, seq[i]):
+                out.append((i, i + 1))
+            if i and (seq[i - 1], seq[i]) in primo and not svolta_ok(seq[i - 1], seq[i], seq[i + 1]):
+                out.append((i - 1, i + 1))
+        return out
+
+    def salti(seq):
+        return sum(1 for a, b in zip(seq, seq[1:]) if a != b and (a, b) not in primo)
+
+    def giro(seq, shape):
+        """I metri di fila, i più lunghi, in cui il percorso seq sta a più di GIRO_SCARTO dal tracciato shape (lat, lon):
+        dove la mappa non ha la strada del tracciato l'aggancio ne trova un'altra, anche lontana."""
+        sh = [xz(la, lo) for la, lo in shape]
+        C = 50.0
+        grid = defaultdict(list)
+        for i, (p, q) in enumerate(zip(sh, sh[1:])):
+            for gx in range(math.floor(min(p[0], q[0]) / C), math.floor(max(p[0], q[0]) / C) + 1):
+                for gz in range(math.floor(min(p[1], q[1]) / C), math.floor(max(p[1], q[1]) / C) + 1):
+                    grid[(gx, gz)].append(i)
+
+        def vicino(x, z):
+            for gx in range(math.floor((x - GIRO_SCARTO) / C), math.floor((x + GIRO_SCARTO) / C) + 1):
+                for gz in range(math.floor((z - GIRO_SCARTO) / C), math.floor((z + GIRO_SCARTO) / C) + 1):
+                    for i in grid.get((gx, gz), ()):
+                        (ax, az), (bx, bz) = sh[i], sh[i + 1]
+                        dx, dz = bx - ax, bz - az
+                        t = max(0.0, min(1.0, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz or 1e-9)))
+                        if math.hypot(x - ax - dx * t, z - az - dz * t) <= GIRO_SCARTO:
+                            return True
+            return False
+        run = best = 0.0
+        for a, b in zip(seq, seq[1:]):
+            (ax, az), (bx, bz) = nodes[a], nodes[b]
+            L = math.hypot(bx - ax, bz - az)
+            m = max(1, int(L // 10))
+            for i in range(m):
+                t = (i + 0.5) / m
+                if vicino(ax + (bx - ax) * t, az + (bz - az) * t):
+                    run = 0.0
+                else:
+                    run += L / m
+                    best = max(best, run)
+        return best
+
+    def lontane(seq, stops):
+        """Distanza di ogni fermata (punti, in ordine) dal percorso, con le fermate sui tratti in ordine e la somma delle
+        distanze più piccola (come cut_path)."""
+        S = len(seq) - 1
+        if S < 1 or not stops:
+            return [0.0] * len(stops)
+        D = [[seg_dist(p, seq[i], seq[i + 1])[0] for i in range(S)] for p in stops]
+        cost, back = D[0][:], []
+        for row in D[1:]:
+            best, arg, b, new = 1e18, 0, [], []
+            for i in range(S):
+                if cost[i] < best:
+                    best, arg = cost[i], i
+                b.append(arg)
+                new.append(best + row[i])
+            back.append(b)
+            cost = new
+        idx = [min(range(S), key=cost.__getitem__)]
+        for b in reversed(back):
+            idx.append(b[idx[-1]])
+        return [row[i] for row, i in zip(D, reversed(idx))]
+
+    def via_bus(src, prev, dst, nxt, limite):
+        """Il cammino del bus [src, ..., dst] che costa meno (i costi dell'aggancio), senza contromano, inversioni e
+        svolte vietate, arrivando in src da prev e ripartendo da dst verso nxt (None: si parte o si finisce lì), entro
+        limite; None se non c'è. Con src uguale a dst e la svolta prev, src, nxt ammessa è [src]."""
+        dist, par, pq = {(src, prev): 0.0}, {}, [(0.0, src, prev)]
+        while pq:
+            d, u, p = heapq.heappop(pq)
+            if d > dist.get((u, p), 1e18) or d > limite:
+                continue
+            if u == dst and (nxt is None or ((u, nxt) in primo and svolta_ok(p, u, nxt))):
+                path, st = [u], (u, p)
+                while st in par:
+                    st = par[st]
+                    path.append(st[0])
+                return path[::-1]
+            for w, c, k in adj[u]:
+                if not bus_ok(k, u) or (p is not None and not svolta_ok(p, u, w)):
+                    continue
+                if d + c < dist.get((w, u), 1e18):
+                    dist[(w, u)] = d + c
+                    par[(w, u)] = (u, p)
+                    heapq.heappush(pq, (d + c, w, u))
+        return None
+
+    def ripara(seq, stops):
+        """Toglie dal percorso i passaggi che un bus non può fare (passi_male), uno alla volta. Per ognuno prova: un giro
+        attorno al passaggio che torna nello stesso nodo, tolto; un pezzo attorno al passaggio (fino a RIPARA_NODI nodi
+        prima e dopo) sostituito dal cammino del bus tra i suoi capi (via_bus); il pezzo in testa o in coda tolto, se il
+        percorso non comincia o finisce al bordo della mappa. Vale il cambio che aggiunge meno metri (al più
+        RIPARA_IN_PIU), lascia meno passaggi sbagliati di prima e non allontana le fermate (stops, punti in ordine) dal
+        percorso. I passaggi senza un cambio che vada restano, e li conta scripts/percorsi.py. Restituisce (percorso,
+        passaggi tolti): il percorso di prima, se non c'era niente da togliere."""
+        orig = seq
+        seq = [n for i, n in enumerate(seq) if i == 0 or n != seq[i - 1]]
+        if not passi_male(seq):
+            return orig, 0
+        lun = lambda s: sum(math.dist(nodes[a], nodes[b]) for a, b in zip(s, s[1:]))
+        prima = lontane(seq, stops)
+        tolti, restano = 0, set()
+        while True:
+            male = [m for m in passi_male(seq) if tuple(seq[m[0]:m[1] + 1]) not in restano]
+            if not male:
+                return seq, tolti
+            p, q = male[0]
+            n, L0, nm = len(seq), lun(seq), len(passi_male(seq))
+            prove = []
+            for a in range(p, max(-1, p - RIPARA_GIRO), -1):
+                for b in range(q, min(n, q + RIPARA_GIRO)):
+                    if seq[a] == seq[b]:
+                        prove.append(seq[:a + 1] + seq[b + 1:])
+            for a in range(p, max(-1, p - RIPARA_NODI), -1):
+                for b in range(q, min(n, q + RIPARA_NODI)):
+                    via = via_bus(seq[a], seq[a - 1] if a else None, seq[b], seq[b + 1] if b + 1 < n else None,
+                                  2.5 * (lun(seq[a:b + 1]) + RIPARA_IN_PIU))
+                    if via:
+                        prove.append(seq[:a] + via + seq[b + 1:])
+            if grado[seq[0]] > 1:
+                prove += [seq[b:] for b in range(q, min(n - 1, q + RIPARA_NODI)) if grado[seq[b]] > 1]
+            if grado[seq[-1]] > 1:
+                prove += [seq[:a + 1] for a in range(p, max(0, p - RIPARA_NODI), -1) if grado[seq[a]] > 1]
+            # prima i cambi che lasciano il percorso cominciare e finire dov'era (il capolinea nel suo golfo), dal più corto;
+            # poi i tagli di testa o coda, dal più piccolo
+            scelta = None
+            for _capi, _ord, s in sorted({(capi, -extra if capi else extra, tuple(s)) for s in prove if len(s) > 1
+                                          for capi, extra in [(s[0] != seq[0] or s[-1] != seq[-1], lun(s) - L0)]}):
+                extra = lun(s) - L0
+                if extra > RIPARA_IN_PIU:
+                    continue
+                if len(passi_male(s)) >= nm:
+                    continue
+                if all(d1 <= max(d0, FERMATA_VICINA) + FERMATA_PEGGIO for d0, d1 in zip(prima, lontane(s, stops))):
+                    scelta = list(s)
+                    break
+            if scelta is None:
+                restano.add(tuple(seq[p:q + 1]))
+                continue
+            seq = scelta
+            tolti += 1
+
     if osm_stops_path:
         osm_st = json.load(open(osm_stops_path, encoding='utf-8'))
         print('fermate spostate sulla palina OSM:', snap_stops_to_osm(gt['stops'], osm_st['fermate']))
@@ -1153,19 +1356,27 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     lines_out = []
     failed = 0
     uturns_fixed = 0
+    n_riparati = 0
     for line in gt['lines']:
         variants = []
         for v in line['variants']:
             r = variant_path(v, v['shape_pts'])
             # controllo: lunghezza agganciata vs lunghezza del tracciato GTFS. Un tracciato che esce dall'area e ci
             # rientra si aggancia con un giro dentro l'area al posto del pezzo fuori (la 22 da Torre, con il capolinea
-            # in un corridoio e Via Madonna del Rosario fuori): allora si aggancia il pezzo dentro l'area con più fermate
-            if r and r[2] > 1.5 * max(1, r[3]):
-                pieces = area_pieces(v['shape_pts'])
+            # in un corridoio e Via Madonna del Rosario fuori): allora si aggancia il pezzo dentro l'area con più fermate.
+            # Lo stesso, con i pezzi separati da almeno BUCO metri senza strade, se il percorso salta da un nodo a un
+            # altro senza strada o fa un giro lontano dal tracciato anche senza allungarsi tanto (#114): la 4 verso
+            # Cadoneghe, dove la rotonda a nord del Piazzale Castagnara non è negli scarichi, girava per 550 m nel
+            # quartiere, contromano e con le svolte vietate
+            lungo = r and r[2] > 1.5 * max(1, r[3])
+            g0 = giro(r[0], v['shape_pts']) if r and not lungo else 0.0
+            if lungo or (r and (salti(r[0]) or g0 > GIRO_LUNGO)):
+                pieces = area_pieces(v['shape_pts'], 300.0 if lungo else BUCO)
                 if len(pieces) > 1:
                     n_st = [stops_near(p, [gt['stops'][si][:2] for si in v['stops']]) for p in pieces]
-                    r2 = variant_path(v, pieces[n_st.index(max(n_st))])
-                    if r2 and r2[2] <= 1.5 * max(1, r2[3]):
+                    pezzo = pieces[n_st.index(max(n_st))]
+                    r2 = variant_path(v, pezzo)
+                    if r2 and r2[2] <= 1.5 * max(1, r2[3]) and (lungo or not salti(r2[0]) and giro(r2[0], pezzo) <= max(GIRO_LUNGO, g0)):
                         print(f'  {line["id"]} {v["headsign"]}: esce dall\'area e rientra, agganciato il pezzo con {max(n_st)} fermate di {len(pieces)}')
                         r = r2
             if not r:
@@ -1223,6 +1434,11 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             # percorso delle linee tagliate solo attorno al tratto tenuto: prima della prima fermata il giro fuori
             # dall'area spostava tutte le fermate (il gioco le cerca entro 2,5 km di percorso dalla precedente)
             v2['nodes'] = cut_path(seq, nodes, [gt['stops'][si][:2] for si in v2['stops']]) if trimmed else seq
+            # niente contromano, inversioni e svolte vietate ai bus dove si può (#114): il resto lo conta percorsi.py
+            v2['nodes'], n_rip = ripara(v2['nodes'], [gt['stops'][si][:2] for si in v2['stops']])
+            if n_rip:
+                n_riparati += n_rip
+                print(f'  {line["id"]} {v2["headsign"]}: {n_rip} passaggi che un bus non può fare tolti dal percorso')
             variants.append(v2)
         if variants:
             lines_out.append({'id': line['id'], 'color': line['color'], 'variants': variants})
@@ -1528,9 +1744,6 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
                                                    sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm())
     print('pianta delle strade:', st)
 
-    nodes_flat = []
-    for x, z in nodes:
-        nodes_flat += [round(x, 1), round(z, 1)]
     # le fermate del tram valgono solo dove c'è la rete stradale (l'export OSM finisce prima di Guizza)
     nxs, nzs = nodes_flat[0::2], nodes_flat[1::2]
     bx0, bx1, bz0, bz1 = min(nxs) + 80, max(nxs) - 80, min(nzs) + 80, max(nzs) - 80
@@ -1538,18 +1751,6 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     tram_line = build_gtfs.load_tram(gtfs_dir, keep=tram_keep)
     if tram_path and tram_lanes:
         print('fermate del tram sui nodi OSM: %d su %d' % snap_tram_stops(tram_path, tram, tram_stops, tram_line))
-    # dati OSM agganciati alla rete per id (scripts/osm_rete.py). L'aggancio è quello che fa lo strumento che scrive i
-    # soli campi nella mappa che c'è, dalla rete e dagli scarichi: qui si confronta con la via vera di ogni arco
-    assert all(osm_rete.CLASSE[k] == v[0] for k, v in DRIVE.items()) and len(osm_rete.CLASSE) == len(DRIVE)
-    osm_vie = [e for e in els if e['type'] == 'way' and 'geometry' in e and e.get('tags', {}).get('highway') in DRIVE]
-    agg = osm_rete.Aggancio(list(zip(nodes_flat[0::2], nodes_flat[1::2])), edges, names, osm_vie)
-    diversi = [k for k, (a, b) in enumerate(zip(agg.arco_via, edge_way)) if a != b]
-    if diversi:
-        sys.exit(f'osm_rete.Aggancio non ritrova la via di {len(diversi)} archi (i primi: {diversi[:10]}): i campi OSM scritti '
-                 'senza rigenerare non sarebbero quelli della build')
-    osm_campi, osm_info = osm_rete.campi(agg, osm_rete.leggi_relazioni(), {e['id'] for e in els if e['type'] == 'way'})
-    print(f"dati OSM per id: svolte {len(osm_campi['svolte'])} (non agganciate {sum(1 for p, _n in osm_info['scarti'].values() if p != osm_rete.FUORI)}), "
-          f"sosta {len(osm_campi['sosta'])} archi, rilevati {len(osm_campi['rilevati'])}, pendenze {len(osm_campi['pendenze'])}")
     data = {
         'source': 'OpenStreetMap contributors (ODbL) + GTFS Busitalia Veneto (BusOne)',
         'origin': [ORIGIN_LAT, ORIGIN_LON], 'ferDate': build_gtfs.FER_DATE, 'fesDate': build_gtfs.FES_DATE,
@@ -1601,7 +1802,15 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     # la rete in out (nel bundle del gioco), edifici, pianta delle strade e alberi per aree (public/mappa/aree)
     print('aree della mappa:', aree_mappa.write(data, out))
     print(f'inversioni a U sostituite da un giro: {uturns_fixed}')
+    print(f'passaggi che un bus non può fare tolti dai percorsi: {n_riparati}')
     print(f'nodi {len(nodes)} archi {len(edges)} edifici {len(buildings)} binari {len(rails)} acque {len(water)} linee {len(lines_out)} varianti non agganciate {failed}')
+    # percorsi delle linee (#114, docs/percorsi.md): ogni variante guidabile da un bus, caso per caso contro
+    # data/eccezioni/percorsi.json. Un caso nuovo ferma la build; la mappa è già scritta, per guardarlo
+    import percorsi
+    _vp, _cp, errori_p = percorsi.rapporto(data)
+    if errori_p:
+        sys.exit('\n'.join(errori_p + ['La mappa è scritta: python3 scripts/percorsi.py --elenco dà i casi uno per uno '
+                                       '(docs/percorsi.md); poi npm run posa.']))
 
 
 BUS_MIN_2, BUS_MIN_1, BUS_MIN_RING = 7.5, 5.5, 7.0  # m: carreggiata minima sui percorsi dei bus (doppio senso, senso unico, rotatoria)

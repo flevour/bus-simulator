@@ -99,6 +99,7 @@ divise per area.
 | `src/world/posa.js`, `src/data/arredo.js`, `src/data/padova-arredo.json`, `scripts/posa_arredo.mjs`, `scripts/citta_node.mjs` | `area:mappa` (#109, poi #130 e #132); chi cambia mappa, binari o pianta rifà la posa | posa dell'arredo nella build: semafori, linea aerea, lanterne e segnali del tram, paline (nota #109 della Mappa). Il file si riscrive con `npm run posa -- --zona X,Z,R` nello stesso commit della modifica che sposta i pali; `tests/arredo.spec.js` fallisce se non è quello che la posa dà |
 | `scripts/sosta.py`, `data/eccezioni/sosta.json`, `data/eccezioni/sosta-gioco.json`, `tests/sosta.spec.js` | `area:mappa` (#111), poi `area:traffico` (#113) per le zone di fermata | sosta lungo le strade ([`sosta.md`](sosta.md)): stalli per arco e per lato e corsie strette dagli stalli (`stalli`, `sedeCorsie` nella mappa). Chi cambia fermate, corsie, pianta o il modo in cui i bus accostano rigenera e guarda i due controlli; `corsie_arco` di `scripts/raccordi.py` è il conto delle corsie anche per la sosta |
 | `scripts/raccordi.py`, `data/eccezioni/raccordi.json`, `tests/raccordi.spec.js` | `area:traffico` (#112), poi chi li usa (#113, #114) | raccordi di corsia agli incroci ([`raccordi.md`](raccordi.md)): la build li calcola dalla rete, dalle corsie, da `svolte` e dalla pianta delle strade, quindi cambiano con ogni rigenerazione che tocca una di queste; chi rigenera rilancia `python3 scripts/raccordi.py` e, se i casi cambiano, `--aggiorna`. `corsie_arco` rifà `laneLayout` di `src/data/padova.js`: le due si cambiano insieme |
+| `scripts/percorsi.py`, `data/eccezioni/percorsi.json`, `data/osm-correzioni.json`; in `scripts/build_map.py` `ripara`, `giro`, `via_bus` | `area:linee` (#114), e chi rigenera la mappa | percorsi delle linee guidabili ([`percorsi.md`](percorsi.md)): la build li controlla alla fine e si ferma su un caso nuovo; chi cambia rete, svolte, corsie, pianta o raccordi guarda i casi con `python3 scripts/percorsi.py --elenco` e, se restano, li mette nell'elenco con il perché (`--aggiorna`). Un tag OSM sbagliato si corregge con una riga di `data/osm-correzioni.json`, non nel codice |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -266,8 +267,8 @@ Da sapere prima di toccare questi file:
   `turnLanes` e `calming` (dossi). I dati delle svolte (`turnLanes`) sono di `mappa`, le fasi dei semafori
   (`TrafficLights`) di `traffico`;
 - strumenti di `build_map.py` per i bordi dell'area e i percorsi: `FOCUS_BORDI`, `cut_path`, `no_uturns`,
-  `gtfs_cover`. `drop_spurs` toglie già nei dati i tratti A-B-A senza fermata, `buildRoute` (`src/game/routes.js`)
-  quelli rimasti, in gioco;
+  `gtfs_cover`. `drop_spurs` toglie già nei dati i tratti A-B-A senza fermata, `ripara` (#114) i contromano, le
+  inversioni e le svolte vietate ai bus rimasti, e `buildRoute` (`src/game/routes.js`) non ne trova più;
 - `match()` collega i pezzi di un tracciato GTFS con il cammino minimo nella rete: dove manca una via fa un giro lungo
   (la 22 verso Mandria girava per 5 km prima che l'area si allargasse). Quando il tracciato esce dall'area e rientra,
   meglio un salto o il taglio "tratto in città" che un giro;
@@ -767,6 +768,29 @@ parcheggio del Capolinea Plebiscito, con la 24 contro un edificio (#25).
 
 Funzioni di altre aree cambiate da #16: `stopPose` (vedi sopra, `area:mappa` per le fermate) e la `scosta` del
 pilota (`area:verifiche`).
+
+#114, percorsi delle linee controllati nella build (16 novembre). Regola, cosa fa la build e controllo in
+[`percorsi.md`](percorsi.md). Da sapere:
+
+- `scripts/percorsi.py` controlla ogni variante: salti, archi contromano fuori dalle corsie dei bus in controsenso,
+  inversioni sullo stesso arco, svolte che OSM vieta anche ai bus, svolte senza un raccordo per il mezzo della linea.
+  Lo lancia `build_map.py` alla fine, con la mappa già scritta, e si ferma su un caso fuori da
+  `data/eccezioni/percorsi.json` o su uno dell'elenco sparito: `scripts/rigenera_mappa.sh` esce allora prima della
+  posa dell'arredo, e il job `rigenera` è rosso. Lo lancia anche `scripts/verifica_mappa.py`;
+- i controlli dei percorsi che stavano altrove sono qui: `bus_senza_raccordo` di `scripts/raccordi.py` (in
+  `percorsi.py` è `senza_raccordo`, per variante e non per linea) e `percorsi_su_svolta_vietata` di
+  `scripts/osm_rete.py`. Il gruppo "solo auto" e "senza curva" (#134) ora sta in `percorsi.json`;
+- in `build_map.py`: `osm_rete.correggi` subito dopo la lettura degli scarichi (`data/osm-correzioni.json`); l'aggancio
+  OSM per id (`agg`, `osm_campi`) si fa prima dell'aggancio delle linee, perché la riparazione usa le svolte; l'aggancio
+  per pezzi parte anche per i salti e per i giri lontani dal tracciato (`giro`, `GIRO_SCARTO`, `GIRO_LUNGO`, `BUCO`);
+  `ripara` dopo `cut_path`. I percorsi senza niente da riparare escono uguali;
+- quello che cambia nei percorsi: il controsenso dei bus in Corso del Popolo (31 varianti, nessun nodo diverso, cambia
+  il flag di tre archi); la 4 tra Pontevigodarzere e Cadoneghe è tagliata alla rotonda che non c'è (cinque varianti);
+  la 19 non salta più 440 m a nord di Pontevigodarzere (tre varianti, una fermata in meno); la 22 entra nel golfo del
+  capolinea di Mandria dall'ingresso; al Capolinea Plebiscito la 16 e la 24 fanno il giro attorno al palazzetto come i
+  sensi unici, senza avanti e indietro; la 15B a Largo Europa non fa due volte il giro dell'isolato; la 11B finisce
+  23 m prima, prima della carreggiata contromano verso la rotonda di Via Montà; la 12 e la 6 (sette varianti) partono
+  95 m prima in Via Sorio, dove l'aggancio per pezzi ha tolto il giro di #36 dal tracciato agganciato.
 
 ### Traffico (corsia `traffico`)
 

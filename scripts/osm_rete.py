@@ -26,18 +26,43 @@ CLASSE = {'trunk': 0, 'trunk_link': 0, 'primary': 1, 'primary_link': 1, 'seconda
           'tertiary': 3, 'tertiary_link': 3, 'unclassified': 4, 'residential': 5, 'living_street': 6, 'service': 7,
           'pedestrian': 8}
 CAMPI = 8  # numeri per arco in `edges`: a, b, classe, larghezza, nome, flag, velocità, livello
+CORREZIONI = os.path.join(RADICE, 'data', 'osm-correzioni.json')
+
+
+def correggi(elementi, percorso=CORREZIONI):
+    """Corregge i tag delle vie degli scarichi con data/osm-correzioni.json, una riga per via con il perché: dove lo
+    scarico ha un tag sbagliato (OSM cambiato male, e gli scarichi delle vie non si rifanno). La build e chi legge gli
+    scarichi qui (leggi_vie) vedono le stesse vie. Si ferma se una via dell'elenco non c'è o ha già i tag della
+    correzione: allora la riga va tolta. Restituisce gli id delle vie corrette."""
+    righe = json.load(open(percorso, encoding='utf-8'))['vie'] if os.path.exists(percorso) else []
+    per = {r['via']: r for r in righe}
+    fatte = []
+    for e in elementi:
+        r = per.get(e['id']) if e['type'] == 'way' else None
+        if r is None:
+            continue
+        t = e.setdefault('tags', {})
+        if all(t.get(k) == v for k, v in r['tag'].items()):
+            sys.exit(f"data/osm-correzioni.json: la via {e['id']} ha già {r['tag']}: la correzione non serve più, va tolta")
+        t.update(r['tag'])
+        fatte.append(e['id'])
+    manca = sorted(set(per) - set(fatte))
+    if manca:
+        sys.exit(f'data/osm-correzioni.json: vie che non sono negli scarichi: {manca}')
+    return fatte
 
 
 def leggi_vie(percorsi=VIE):
-    """(vie carrabili degli scarichi, nell'ordine in cui le legge la build; id di tutte le vie degli scarichi)."""
-    out, note = [], set()
+    """(vie carrabili degli scarichi, nell'ordine in cui le legge la build; id di tutte le vie degli scarichi), con le
+    correzioni di data/osm-correzioni.json."""
+    out, note, tutte = [], set(), []
     for p in percorsi:
-        for e in json.load(open(p, encoding='utf-8'))['elements']:
-            if e['type'] != 'way':
-                continue
-            note.add(e['id'])
-            if 'geometry' in e and e.get('tags', {}).get('highway') in CLASSE:
-                out.append(e)
+        tutte += [e for e in json.load(open(p, encoding='utf-8'))['elements'] if e['type'] == 'way']
+    correggi(tutte)
+    for e in tutte:
+        note.add(e['id'])
+        if 'geometry' in e and e.get('tags', {}).get('highway') in CLASSE:
+            out.append(e)
     return out, note
 
 
@@ -412,39 +437,12 @@ def incoerenti(A, voci, ids):
     return out
 
 
-def percorsi_vietati(A, M, voci, ids):
-    """Varianti delle linee dei bus che passano da una svolta vietata, o che dove la svolta è obbligata ne fanno
-    un'altra. Non contano le svolte da cui i bus sono esclusi (except=psv|bus) e quelle che passano da una via."""
-    tra, per = defaultdict(list), defaultdict(list)
-    for k, e in enumerate(A.archi):
-        tra[(e[0], e[1])].append(k)
-        tra[(e[1], e[0])].append(k)
-    for v, rid in zip(voci, ids):
-        if len(v) == 5 and not v[4] & ECCETTO_BUS:
-            per[(v[0], v[1])].append((v, rid))
-    out, visti = [], set()
-    for l in M['lines']:
-        for va in l['variants']:
-            ns = va['nodes']
-            for a, b, c in zip(ns, ns[1:], ns[2:]):
-                for k in tra.get((a, b), ()):
-                    for v, rid in per.get((b, k), ()):
-                        esce = tra.get((b, c), ())
-                        vietata = (v[2] not in esce) if OBBLIGO <= v[3] < OBBLIGO + 3 else (v[2] in esce)
-                        if vietata and esce and (l['id'], rid) not in visti:
-                            visti.add((l['id'], rid))
-                            out.append({'linea': l['id'], 'variante': va['headsign'], 'relazione': rid, 'tipo': SVOLTE[v[3]],
-                                        'da': M['names'][A.archi[v[1]][4]], 'verso': M['names'][A.archi[esce[0]][4]],
-                                        'a_orario': bool(v[4] & A_ORARIO), 'x': A.nodi[b][0], 'z': A.nodi[b][1]})
-    return out
-
-
 def rapporto(M, elenco=False, aggiorna=False):
     """Controlli sui dati OSM agganciati alla rete, caso per caso contro data/eccezioni/osm-rete.json:
     * i campi della mappa sono quelli che danno gli scarichi di oggi (chi cambia rete o scarichi li riscrive);
     * svolte che toccano la rete e non si agganciano, con il perché nella chiave;
-    * svolte agganciate che non vanno dalla parte che dicono;
-    * percorsi dei bus che passano da una svolta vietata.
+    * svolte agganciate che non vanno dalla parte che dicono.
+    I percorsi dei bus che passano da una svolta vietata li controlla scripts/percorsi.py.
     Restituisce (valori, casi, righe degli errori)."""
     from eccezioni import Elenco, chiave
     c, info, A = campi_mappa(M)
@@ -456,11 +454,9 @@ def rapporto(M, elenco=False, aggiorna=False):
         'svolte_non_agganciate': [{'perche': p, 'relazione': rid, 'x': A.nodi[n][0], 'z': A.nodi[n][1]}
                                   for rid, (p, n) in sorted(info['scarti'].items()) if p != FUORI],
         'svolte_incoerenti': incoerenti(A, c['svolte'], info['id']),
-        'percorsi_su_svolta_vietata': percorsi_vietati(A, M, c['svolte'], info['id']),
     }
     fissa = {'svolte_non_agganciate': lambda k: f"{k['perche']}, relazione {k['relazione']}",
-             'svolte_incoerenti': lambda k: f"{k['tipo']}, relazione {k['relazione']}",
-             'percorsi_su_svolta_vietata': lambda k: f"linea {k['linea']}, relazione {k['relazione']}"}
+             'svolte_incoerenti': lambda k: f"{k['tipo']}, relazione {k['relazione']}"}
     E = Elenco(ELENCO, COMANDO)
     print(f"Dati OSM agganciati alla rete: {len(c['svolte'])} svolte ({len(info['per_nodi'])} dai nodi accanto), "
           f"sosta su {len(c['sosta'])} archi, rilevati e trincee {len(c['rilevati'])}, pendenze {len(c['pendenze'])}")

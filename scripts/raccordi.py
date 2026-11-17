@@ -908,43 +908,6 @@ def senza_uscita(G, voci):
     return out
 
 
-def percorsi_bus(G, voci):
-    """Svolte dei percorsi delle linee senza un raccordo per il loro mezzo (snodato per le linee di SNODATI, bus da
-    12 m per le altre): una per linea, nodo e coppia di archi."""
-    R = G.R
-    tra = {}
-    for k, e in enumerate(R.archi):
-        if R.lung[k] >= CORTO:
-            tra.setdefault((e[0], e[1]), k)
-            tra.setdefault((e[1], e[0]), k)
-    catene = defaultdict(list)  # primo arco -> [(archi, maschera)]
-    for v in voci:
-        catene[v['cat'][0][0]].append(([c[0] for c in v['cat']], v['classi']))
-    out, visti = [], set()
-    for l in G.M['lines']:
-        bit = SNODATO if l['id'] in SNODATI else BUS12
-        for va in l['variants']:
-            ns = va['nodes']
-            archi = [tra.get(p) for p in zip(ns, ns[1:])]
-            servita = [False] * (len(archi) - 1)
-            for i, k in enumerate(archi):
-                for cat, m in catene.get(k, ()):
-                    if m & bit and archi[i:i + len(cat)] == cat:
-                        for j in range(i, i + len(cat) - 1):
-                            servita[j] = True
-            for i, ok in enumerate(servita):
-                da, a, n = archi[i], archi[i + 1], ns[i + 1]
-                if ok or da is None or a is None or (l['id'], n, da, a) in visti:
-                    continue
-                visti.add((l['id'], n, da, a))
-                g = next((g for g in G.mov.get(n, ()) if g['kin'][0] == da and g['kout'][0] == a), None)
-                perche = ('inversione' if da == a else 'svolta non ammessa' if g is None else 'solo auto'
-                          if any(m & AUTO and c[:2] == [da, a] for c, m in catene.get(da, ())) else 'senza curva')
-                out.append({'linea': l['id'], 'variante': va['headsign'], 'perche': perche, 'da': R.nomi[R.archi[da][4]] or 'senza nome',
-                            'a': R.nomi[R.archi[a][4]] or 'senza nome', 'gradi': round(math.degrees(g['th'])) if g else 180, 'x': R.nodi[n][0], 'z': R.nodi[n][1]})
-    return out
-
-
 def rapporto(M, elenco=False, aggiorna=False):
     """Controlli sui raccordi della mappa, caso per caso contro data/eccezioni/raccordi.json, e i numeri del rapporto.
     Restituisce (valori, casi, righe degli errori)."""
@@ -959,10 +922,8 @@ def rapporto(M, elenco=False, aggiorna=False):
     casi.update(controlla(G, campo))
     su = senza_uscita(G, voci)
     casi['auto_senza_uscita'] = su['curva'] + su['divieto'] + su['corsia']
-    casi['bus_senza_raccordo'] = percorsi_bus(G, voci)
     fissa = {k: (lambda c: f"{c['cosa']}, {c['da']} > {c['a']}") for k in casi if k.startswith('raccordi_')}
     fissa['auto_senza_uscita'] = lambda c: f"{c['perche']}, {c['via']}"
-    fissa['bus_senza_raccordo'] = lambda c: f"linea {c['linea']}, {c['perche']}, {c['da']} > {c['a']}"
     valori = {k: len(v) for k, v in casi.items()}
     valori.update({'raccordi': len(voci), 'nodi': len(campo['nodi']), 'scavalcano': sum(1 for v in voci if len(v['cat']) > 2),
                    'byte': len(json.dumps(campo, separators=(',', ':'))),

@@ -3,7 +3,8 @@
 A ogni nodo della rete la build scrive da quale corsia a quale corsia si passa, con quale curva, con quale raggio e
 quali mezzi ci passano. Dove non c'è un raccordo non si passa. Li calcola `scripts/raccordi.py`, che `build_map.py`
 chiama dopo la pianta delle strade; stanno nel campo `raccordi` della rete (`src/data/padova-map.json`). Il gioco li
-porta in `net.raccordi` e ancora non li segue: lo farà #113, e #114 li userà per controllare i percorsi delle linee.
+porta in `net.raccordi` e ancora non li segue: lo farà #113. `scripts/percorsi.py` (#114) li usa per controllare i
+percorsi delle linee ([percorsi.md](percorsi.md)).
 
 Numeri del 16 novembre 2026, sulla mappa di `main`. Si ristampano con `python3 scripts/raccordi.py`.
 
@@ -125,7 +126,9 @@ mappa e lo controlla raccordo per raccordo, con i casi noti in `data/eccezioni/r
 | `raccordi_nella_sede` | la curva entra nella sede del tram dove le due vie non la toccano |
 | `raccordi_sovrapposti` | su una corsia un raccordo che arriva finisce oltre il punto da cui ne parte un altro |
 | `auto_senza_uscita` | corsie da cui un'auto non esce, per le curve, per le corsie o per le svolte vietate |
-| `bus_senza_raccordo` | svolte dei percorsi delle linee senza un raccordo per il loro mezzo (snodato per la 10) |
+
+Le svolte dei percorsi delle linee senza un raccordo per il loro mezzo (lo snodato per la 10) le conta
+`scripts/percorsi.py`, variante per variante, con gli altri controlli dei percorsi ([percorsi.md](percorsi.md)).
 
 `--elenco` stampa i casi, `--aggiorna` riscrive l'elenco, `--scrivi` ricalcola il campo nella mappa che c'è. Il campo
 pubblicato è quello che esce da `scripts/rigenera_mappa.sh`: su macOS le curve al limite escono diverse, come la
@@ -153,13 +156,8 @@ Corsie da cui un'auto non esce: 3.664.
 | corsia: l'uscita ha nel verso giusto solo corsie dei bus | 6 | sì |
 | divieto: le svolte di OSM non lasciano uscite | 1 | sì |
 
-Svolte dei percorsi delle linee senza un raccordo per il loro mezzo: 215 su 7.187.
-
-| Perché | Svolte | Di chi è |
-|---|---|---|
-| solo auto: il raccordo c'è, con il raggio sotto quello del bus | 126 | #134 |
-| senza curva: nessuna curva, nemmeno per le auto | 18 | #134 |
-| svolta non ammessa: contromano o vietata anche ai bus | 66 | #114 |
-| inversione sullo stesso arco | 5 | #114 |
+Svolte dei percorsi delle linee senza un raccordo per il loro mezzo: in [percorsi.md](percorsi.md), sezione 4. Il 16
+novembre, prima di #114, erano 215 su 7.187 contate per linea: 126 con il solo raccordo delle auto e 18 senza curva
+(#134), 66 svolte non ammesse e 5 inversioni dei percorsi (#114).
 
 Raccordi con la corsia fuori dall'asfalto della pianta: 99 nodi (#133). Gli altri controlli della sezione 5 sono a zero.

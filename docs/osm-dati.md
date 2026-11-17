@@ -21,7 +21,9 @@ o 504: si riprova, anche su un altro server pubblico (`https://maps.mail.ru/osm/
 risposto quando `overpass-api.de` era saturo), con un user agent generico.
 
 I tag delle vie (`parking:*`, `embankment`, `cutting`, `incline`, `surface`, `smoothness`, `lit`) si leggono dagli
-scarichi delle vie.
+scarichi delle vie. Dove lo scarico ha un tag sbagliato lo corregge una riga di `data/osm-correzioni.json`, con il
+perché (`osm_rete.correggi`, che la build e `leggi_vie` chiamano appena letti gli scarichi: [percorsi.md](percorsi.md),
+sezione 2).
 
 ## 2. Aggancio alla rete
 
@@ -121,14 +123,16 @@ Le 82 non agganciate, caso per caso in `data/eccezioni/osm-rete.json`:
 | 2 | la via a passa dal nodo via senza finirci, a doppio senso: OSM non dice da quale parte si esce |
 | 1 | della via da (un passo carraio) la rete tiene solo il pezzo dove passa il bus |
 
-Due controlli sulle svolte agganciate, con gli stessi elenchi:
+Due controlli sulle svolte agganciate:
 
 - coerenza con la geometria: una svolta a sinistra deve andare a sinistra di almeno 10 gradi, una a destra a destra, un
   "diritto" entro 70 gradi, un'inversione oltre 110. Su 533 svolte in un nodo ne esce una, un errore in OSM (il membro
   "a" è dalla parte sbagliata dell'incrocio);
-- percorsi dei bus: 3 passaggi su una svolta che OSM vieta anche ai bus. La 4 al Piazzale Castagnara, in due nodi, esce
-  di lato dove c'è l'obbligo di andare diritto; la 15B a Largo Europa fa l'inversione vietata verso Via Matteotti. Sono
-  di #114.
+- percorsi dei bus su una svolta che OSM vieta anche ai bus: li conta `scripts/percorsi.py`, con gli altri controlli dei
+  percorsi delle linee ([percorsi.md](percorsi.md)). Il 13 novembre erano 3 passaggi: la 4 al Piazzale Castagnara, in
+  due nodi, usciva di lato dove c'è l'obbligo di andare diritto, perché l'aggancio girava nel quartiere al posto della
+  rotonda che non è negli scarichi; la 15B a Largo Europa faceva l'inversione vietata verso Via Matteotti, per un giro
+  dell'isolato fatto due volte. Corretti dall'aggancio in #114.
 
 Per #112: le svolte vietate non dicono tutto. Le obbligate sono il 78%, e vanno lette come "dall'arco `da` tutte le
 altre uscite sono vietate". 673 barriere stanno su un nodo di una via della rete (444 cancelli, 108 dissuasori, 45
@@ -199,6 +203,7 @@ vecchia o l'aggancio ha preso un'altra via (per la 88 e la 19 il gioco ha più v
 
 - i cinque campi della mappa sono quelli che danno gli scarichi: chi cambia la rete o riscarica le relazioni li
   riscrive con `--scrivi`, o rigenera;
-- `svolte_non_agganciate`, `svolte_incoerenti`, `percorsi_su_svolta_vietata` (sezione 5).
+- `svolte_non_agganciate`, `svolte_incoerenti` (sezione 5). I percorsi dei bus su una svolta vietata li controlla
+  `scripts/percorsi.py` ([percorsi.md](percorsi.md)).
 
 `python3 scripts/osm_rete.py --aggiorna` riscrive l'elenco dai casi di oggi, `--elenco` li stampa.
