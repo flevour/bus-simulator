@@ -1096,16 +1096,17 @@ non c'era). Da sapere:
   (`tests/elettrico.spec.js`). Se non c'è spazio per spostarsi di lato, aspetta;
 - `tests/pali.js` (area Mappa, #109): l'ingombro dei bus automatici è messo come il nuovo `BusSim.place` (asse
   posteriore sulla corsia, direzione della corsia lì). In `data/eccezioni/mappa-gioco.json`, `pali_nell_ingombro_dei_bus`:
-  spariscono i cinque casi della coda che tagliava l'angolo (Prato della Valle, Due Palazzi, Gramsci 120, Albignasego)
-  e dieci dei pali sulle rampe del Chiesanuova e di Via Venezia; arrivano quattro casi del muso che in curva esce oltre
-  il cordolo (#130), sette di bus su curve di ripiego (#135, #114, #134), quattro della 10 sul Cavalcavia San Marco
-  fuori dall'asfalto (#131), la lanterna del tram in mezzo alla rotonda Rosetta Gagliardi e un palo della rampa del
-  Chiesanuova;
+  rispetto a `main` dopo #114 spariscono i casi della coda che tagliava l'angolo (Prato della Valle, Due Palazzi,
+  Albignasego), 16 dei 26 pali sulle rampe del Chiesanuova e di Via Venezia e uno di Via Venezia; arrivano quattro casi
+  del muso che in curva esce oltre il cordolo (#130), sei di bus su curve di ripiego (#135, #114, #134), quattro della
+  10 sul Cavalcavia San Marco fuori dall'asfalto (#131), la lanterna del tram in mezzo alla rotonda Rosetta Gagliardi
+  e un palo della rampa del Chiesanuova. La palina del Capolinea Plebiscito, che #114 aveva messo tra le code in
+  curva, è il bus al primo punto della corsia della 16 con la coda che sporge sopra la palina: gruppo a parte;
 - `tests/sosta.spec.js` (#111): le corsie delle auto sono quelle di `laneLayout` (o la corsia sola di `corsie()`), la
-  carrozzeria dei bus è messa come `BusSim.place`. In `data/eccezioni/sosta-gioco.json` sparisce il caso del Capolinea
-  Mandria e arrivano cinque stalli subito dopo una svolta (linee 3, 6, 11 e 11B): con l'asse posteriore ancora nel
-  raccordo il muso esce verso l'esterno della curva, fino a 1,2 m dentro lo stallo. Li toglie `scripts/sosta.py` quando
-  conosce l'ingombro dei bus in svolta (#130);
+  carrozzeria dei bus è messa come `BusSim.place`. In `data/eccezioni/sosta-gioco.json` (il caso del Capolinea Mandria
+  l'hanno tolto i percorsi di #114) arrivano cinque stalli subito dopo una svolta (linee 3, 6, 11 e 11B): con l'asse
+  posteriore ancora nel raccordo il muso esce verso l'esterno della curva, fino a 1,2 m dentro lo stallo. Li toglie
+  `scripts/sosta.py` quando conosce l'ingombro dei bus in svolta (#130);
 - `tests/profili.spec.js` (area Mappa): il pilota sta nelle corsie dove gli stalli stringono la carreggiata (`e.sede`),
   come quello di `tests/guida.js` dopo #111. Sul Cavalcavia Montà, a un quarto della carreggiata, il fianco del bus
   passava fino a 44 cm sopra le auto in sosta: in una serie completa il pilota si è fermato lì, da sola la prova
@@ -1136,8 +1137,9 @@ non c'era). Da sapere:
   Belfiore non ha un raccordo delle auto: ora cerca le due auto all'incrocio di Via Gattamelata con Via Tartini, dove
   due raccordi delle auto si incrociano a 1,5 m (`stallo` in `tests/traffico.spec.js`);
 - la prova del moto (`tests/moto.spec.js`, regole in `tests/moto.js`) era rossa su `main` prima della modifica: numeri
-  di prima e dopo nell'issue #113. Restano 100 posti, tutti bus su ripieghi: 60 raccordi delle auto (#134), 31 corsie
-  che non si legano tra svolte vicine (#135), 9 curve del gioco dove la rete non ha la svolta (#114 e #134). Le auto
+  di prima e dopo nell'issue #113. Restano 99 posti, tutti bus su ripieghi: 60 raccordi delle auto (#134), 31 corsie
+  che non si legano tra svolte vicine (#135), 8 curve del gioco dove la rete non ha la svolta (#114 e #134; con i
+  percorsi corretti di #114 è sparita quella vicino al Capolinea Mandria). Le auto
   non hanno casi. `tempoMassimo(300)` è provvisorio: in locale la prova dura 1,3 minuti.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)

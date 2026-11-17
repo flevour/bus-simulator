@@ -1,14 +1,6 @@
 {
  "cosa": "Casi noti delle prove del traffico (tests/traffico.spec.js). Chiave: chi @ x,z del gioco, dove è rimasto fermo. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
-  "fermi_oltre_un_ciclo": [
-   {
-    "perche": "Corsa della 3 delle 8:27 dal Capolinea Lion (#122, 13 novembre 2026): alle 8:57 un bus della 16 in anticipo sosta 60 s alla fermata di Riviera dei Ponti Romani, a (47, 95), dove la corsia è il binario del tram e non si passa; il bus della 22 dietro di lui aspetta 61 s, e chi guida dietro al bus della 22 anche lui. Non è il semaforo: è la sosta fino all'orario dei bus automatici, #127. Tolto il 16 novembre con l'arredo posato dalla build (#109), che aveva cambiato l'incontro; torna con l'inseguitore di percorso (#113), che cambia la sequenza delle auto e l'andatura dei bus automatici.",
-    "casi": [
-     "bus 22 @ 44,103",
-     "giocatore @ 38,117"
-    ]
-   }
-  ]
+  "fermi_oltre_un_ciclo": []
  }
 }

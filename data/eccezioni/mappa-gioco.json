@@ -92,54 +92,59 @@
      "lanterna del tram @ 3306,-882",
      "linea aerea @ 3274,-864",
      "linea aerea @ 3300,-879",
-     "linea aerea @ 4662,-1557"
-    ]
-   },
-   {
-    "perche": "#109, 16 novembre 2026: in curva la coda del bus automatico taglia l'angolo sopra il cordolo e tocca il palo, che sta fuori dall'asfalto: semafori di Prato della Valle (linea 3) e di Albignasego (linea 88, palo e ripetitrice), palina di Capolinea Due Palazzi (linea 11). #114, 17 novembre: la palina del Capolinea Plebiscito, 0,18 m dentro l'ingombro della 16, che ora arriva al capolinea dal giro attorno al palazzetto come vogliono i sensi unici e svolta sull'angolo dove sta la palina (prima ci arrivava contromano dalla corsia accanto); la palina di Gramsci 120 non c'è più perché la 4 non ci passa. Lo spazio libero non ha ancora l'ingombro dei bus in svolta, che verrà dai raccordi di corsia della build: #130.",
-    "casi": [
-     "palina Capolinea Due Palazzi @ -2018,-3509",
-     "palina Capolinea Plebiscito @ 1677,-3010",
-     "semaforo @ -4,890",
-     "semaforo @ -895,6150",
-     "semaforo @ -895,6150"
-    ]
-   },
-   {
-    "perche": "#109, 16 novembre 2026: lanterna del tram nel piazzale della stazione, uno dei pali del tram che restano in carreggiata perché attorno c'è solo asfalto (elenco pali_del_tram_in_carreggiata): la corsia della 4 le passa a 2,6 m.",
-    "casi": [
-     "lanterna del tram @ 160,-1047"
+     "linea aerea @ 4268,-1354",
+     "linea aerea @ 4322,-1381",
+     "linea aerea @ 4635,-1543",
+     "linea aerea @ 4657,-1564"
     ]
    },
    {
     "perche": "Rampe del Chiesanuova e del cavalcavia di Via Venezia, con il profilo del risolutore (#123): ora sono archi a terra su un rilevato e i loro pali della linea aerea si misurano (prima erano in quota, fuori dal controllo). Stanno dov'erano, fuori dall'asfalto accanto alla sede, tranne uno spostato di 17 m sul Chiesanuova; la corsia dei bus automatici della 6 e della 10 lì corre lungo il bordo dell'asfalto accanto al SIR2 e la carrozzeria li tocca, come nei sei casi di Via Venezia e Via San Marco (#131).",
     "casi": [
-     "linea aerea @ -1456,-422",
      "linea aerea @ -1458,-431",
-     "linea aerea @ -1483,-417",
-     "linea aerea @ -1484,-425",
-     "linea aerea @ -1544,-403",
-     "linea aerea @ -1546,-412",
-     "linea aerea @ -1573,-396",
-     "linea aerea @ -1603,-390",
-     "linea aerea @ -1690,-368",
-     "linea aerea @ -1720,-362",
-     "linea aerea @ -2049,-343",
+     "linea aerea @ -1899,-341",
      "linea aerea @ -2079,-343",
      "linea aerea @ -2109,-346",
      "linea aerea @ 2691,-554",
-     "linea aerea @ 2696,-545",
      "linea aerea @ 2718,-568",
-     "linea aerea @ 2722,-560",
-     "linea aerea @ 3138,-800",
      "linea aerea @ 3143,-792",
-     "linea aerea @ 3164,-814",
      "linea aerea @ 3169,-806",
-     "linea aerea @ 3191,-829",
      "linea aerea @ 3195,-820",
-     "linea aerea @ 3217,-843",
      "linea aerea @ 3222,-835",
      "linea aerea @ 3248,-849"
+    ]
+   },
+   {
+    "perche": "#114, 17 novembre 2026: la corsia della 16 comincia (avvicinamento, lead di buildLane in src/world/buses.js) 19 m prima della prima fermata, quasi in fondo a una strada senza nome larga 5,5 m. Col bus all'inizio della corsia la coda sporge 3,4 m dietro l'asse posteriore fin sopra la palina, che sta 0,9 m fuori dall'asfalto. Non è la coda che taglia l'angolo in curva: il bus è ancora fermo dritto al primo punto del percorso.",
+    "casi": [
+     "palina Capolinea Plebiscito @ 1677,-3010"
+    ]
+   },
+   {
+    "perche": "#109, 16 novembre 2026: lanterne del tram che restano in carreggiata perché attorno c'è solo asfalto (elenco pali_del_tram_in_carreggiata): nel piazzale della stazione la corsia della 4 le passa a 2,6 m; da #113 anche nella rotonda Rosetta Gagliardi, dove il raccordo della 7 le passa sopra col muso.",
+    "casi": [
+     "lanterna del tram @ 160,-1047",
+     "lanterna del tram @ 367,-953"
+    ]
+   },
+   {
+    "perche": "#113, 16 novembre 2026: il bus automatico sta su una curva di ripiego dell'inseguitore (src/world/inseguitore.js), con il raggio sotto il suo minimo, dove la build non ha il raccordo per lui: corsie che non si legano tra svolte vicine (#135, Albignasego con la 88, Via Chiesanuova e Via San Marco con la 10, la 6 a (916, 659)) o svolta senza raccordo (#114 e #134, capolinea di Mandria con la 22). La sagoma passa sul semaforo, sul palo della linea aerea o sulla palina: spariscono con il raccordo giusto.",
+    "casi": [
+     "linea aerea @ -2254,-355",
+     "linea aerea @ 5608,-2072",
+     "linea aerea @ 916,659",
+     "semaforo @ -897,6141",
+     "semaforo @ -903,6141",
+     "semaforo @ -905,6159"
+    ]
+   },
+   {
+    "perche": "#113, 16 novembre 2026: il bus automatico è messo come un mezzo vero (asse posteriore sul raccordo, direzione della tangente) e in curva il muso esce verso l'esterno, oltre il cordolo: tocca il palo che sta da 0,25 a 0,6 m fuori dall'asfalto (Via Tommaseo con la 3, Via della Provvidenza con la 10, ad Albignasego un semaforo con la 88 e la palina del capolinea con la 3). Prima, con i due assi sulla corsia, era la coda a tagliare l'angolo verso l'interno, con altri pali (Prato della Valle, Due Palazzi, Gramsci 120). L'ingombro dei bus come vincolo della posa è #130.",
+    "casi": [
+     "linea aerea @ -5082,-1480",
+     "linea aerea @ 1084,-583",
+     "palina Capolinea Albignasego @ -792,6792",
+     "semaforo @ -903,6162"
     ]
    }
   ],

@@ -1,7 +1,18 @@
 {
- "cosa": "Casi noti della prova sulla sosta nel gioco (tests/sosta.spec.js): stalli della mappa, occupati o no, che stanno dove passano i mezzi automatici. `stalli_nella_corsia_delle_auto`: l'auto ferma tocca la corsia che Traffic.laneGeom dà alle auto sul suo arco. `stalli_nell_ingombro_dei_bus`: tocca la carrozzeria di un bus automatico lungo la corsia di una variante (12 m per 2,55, come in tests/pali.js), compreso l'accosto al marciapiede da 30 m prima della fermata a 18 m dopo. La chiave è cosa passa lì, la via e il posto dello stallo. Un caso nuovo si corregge nella build (scripts/sosta.py: zone libere, larghezza che serve alle corsie), non qui.",
+ "cosa": "Casi noti della prova sulla sosta nel gioco (tests/sosta.spec.js): stalli della mappa, occupati o no, che stanno dove passano i mezzi automatici. `stalli_nella_corsia_delle_auto`: l'auto ferma tocca una corsia delle auto del suo arco (quelle di laneLayout che l'inseguitore di #113 segue). `stalli_nell_ingombro_dei_bus`: tocca la carrozzeria di un bus automatico lungo la corsia di una variante (12 m per 2,55, messa come BusSim.place e in tests/pali.js), compreso l'accosto al marciapiede da 30 m prima della fermata a 18 m dopo. La chiave è cosa passa lì, la via e il posto dello stallo. Un caso nuovo si corregge nella build (scripts/sosta.py: zone libere, larghezza che serve alle corsie), non qui.",
  "controlli": {
   "stalli_nella_corsia_delle_auto": [],
-  "stalli_nell_ingombro_dei_bus": []
+  "stalli_nell_ingombro_dei_bus": [
+   {
+    "perche": "Muso del bus alla fine di una svolta (#130): con l'asse posteriore ancora sul raccordo del bus (raggio da 8,3 a 15 m) il muso, 8,6 m più avanti, esce verso l'esterno della curva e passa sopra il primo stallo della via in cui il bus entra, fino a 1,2 m dentro. In Via Todesco, Via Achille De Giovanni e Via Pelosa (sensi unici) lo stallo è a sinistra dopo una svolta a destra, in Via Alessandro Manzoni a destra dopo una svolta a sinistra. Prima di #113 la carrozzeria aveva i due assi sulla corsia e il muso non usciva. scripts/sosta.py tiene gli stalli fuori dagli incroci ma non fuori dall'ingombro dei bus in svolta: è lo spazio libero di #130, che serve anche alla sosta.",
+    "casi": [
+     "linea 11, Via Todesco @ 458,1647",
+     "linea 11B, Via Achille De Giovanni @ 1227,1915",
+     "linea 11B, Via Achille De Giovanni @ 1231,1912",
+     "linea 3, Via Alessandro Manzoni @ 377,1290",
+     "linea 6, Via Pelosa @ -2846,-46"
+    ]
+   }
+  ]
  }
 }
