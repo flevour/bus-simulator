@@ -26,9 +26,15 @@ test('moto di auto e bus automatici: mai di traverso, senza salti, imbardata ent
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(osservaMoto, {});
   const r = await pagina.evaluate(giraZone, { zone: ZONE, sec: 200 });
-  const casi = Object.fromEntries(Object.values(CONTROLLI).map((c) => [c, []]));
-  for (const c of r.casi) casi[CONTROLLI[c.tipo]].push(c.chiave);
-  console.log(`moto: ${r.mezzi} passi di mezzi, ${r.km} km; casi ${JSON.stringify(r.conti)}; peggio ${JSON.stringify(r.peggio)}`);
+  // un caso per posto: gli episodi con la stessa parte fissa entro 3 m (bus diversi alla stessa svolta) sono uno
+  const casi = Object.fromEntries(Object.values(CONTROLLI).map((c) => [c, []])), posti = [];
+  for (const c of r.casi) {
+    const [fissa, posto] = c.chiave.split(' @ '), [x, z] = posto.split(',').map(Number);
+    if (posti.some((p) => p.fissa === fissa && Math.hypot(p.x - x, p.z - z) <= 3)) continue;
+    posti.push({ fissa, x, z });
+    casi[CONTROLLI[c.tipo]].push(c.chiave);
+  }
+  console.log(`moto: ${r.mezzi} passi di mezzi, ${r.km} km; episodi ${JSON.stringify(r.conti)} in ${posti.length} posti; peggio ${JSON.stringify(r.peggio)}`);
   writeFileSync(info.outputPath('moto.json'), JSON.stringify(r, null, 1));
   const { esiti, diversi } = controEccezioni(info, casi);
   expect(r.mezzi, 'passi di mezzi guardati').toBeGreaterThan(100000);

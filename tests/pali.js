@@ -96,9 +96,10 @@ export function misuraPali() {
   }
   if (appese) (distribuzioni['lanterna del tram'] || (distribuzioni['lanterna del tram'] = {}))['appesa al tirante'] = appese;
 
-  // Ingombro dei bus (#109): la carrozzeria di un bus automatico lungo la corsia di ogni variante di ogni linea, con
-  // gli assi sulla corsia come in BusSim.place (davanti a 3,3 m dal centro, dietro a 2,6: in curva la coda taglia verso
-  // l'interno e il muso sporge), lunga 12 m e larga 2,55. Un palo è dentro se il fusto la tocca
+  // Ingombro dei bus (#109): la carrozzeria di un bus automatico lungo la corsia di ogni variante di ogni linea, messa
+  // come in BusSim.place (da #113: il centro dell'asse posteriore sulla corsia, 2,6 m dietro al centro, con la
+  // direzione della corsia lì; in curva il muso esce verso l'esterno), lunga 12 m e larga 2,55. Un palo è dentro se il
+  // fusto la tocca
   casi.pali_nell_ingombro_dei_bus = [];
   const HW = 1.275, META = 6, C = 16, celle = new Map(), cella = (x, z) => Math.floor(x / C) + ',' + Math.floor(z / C);
   const aTerra = pali.filter((p) => !(p.h > 1.5)).concat(city.stopPlacements.map((st) => ({ tipo: `palina ${st.name}`, x: st.x, z: st.z, r: 0.05 })));
@@ -106,7 +107,7 @@ export function misuraPali() {
   for (const L of g.lines) for (const v of L.variants) {
     const P = g.buses.lane(v).P;
     for (let s = 2.6; s < P.len - 3.3; s += 0.5) {
-      const f = P.at(s + 3.3), r = P.at(s - 2.6), l = Math.hypot(f.x - r.x, f.z - r.z) || 1, ux = (f.x - r.x) / l, uz = (f.z - r.z) / l;
+      const r = P.at(s - 2.6), l = Math.hypot(r.dx, r.dz) || 1, ux = r.dx / l, uz = r.dz / l;
       const cx = r.x + ux * 2.6, cz = r.z + uz * 2.6, ix = Math.floor(cx / C), iz = Math.floor(cz / C);
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const p of celle.get(ix + a + ',' + (iz + b)) || []) {
         const dx = p.x - cx, dz = p.z - cz, v = Math.min(META + p.r - Math.abs(dx * ux + dz * uz), HW + p.r - Math.abs(-dx * uz + dz * ux));

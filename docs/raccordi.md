@@ -3,8 +3,8 @@
 A ogni nodo della rete la build scrive da quale corsia a quale corsia si passa, con quale curva, con quale raggio e
 quali mezzi ci passano. Dove non c'è un raccordo non si passa. Li calcola `scripts/raccordi.py`, che `build_map.py`
 chiama dopo la pianta delle strade; stanno nel campo `raccordi` della rete (`src/data/padova-map.json`). Il gioco li
-porta in `net.raccordi` e ancora non li segue: lo farà #113. `scripts/percorsi.py` (#114) li usa per controllare i
-percorsi delle linee ([percorsi.md](percorsi.md)).
+porta in `net.raccordi` e auto e bus automatici li seguono con l'inseguitore di percorso (`src/world/inseguitore.js`,
+#113, sezione 7). `scripts/percorsi.py` (#114) li usa per controllare i percorsi delle linee ([percorsi.md](percorsi.md)).
 
 Numeri del 16 novembre 2026, sulla mappa di `main`. Si ristampano con `python3 scripts/raccordi.py`.
 
@@ -161,3 +161,30 @@ novembre, prima di #114, erano 215 su 7.187 contate per linea: 126 con il solo r
 (#134), 66 svolte non ammesse e 5 inversioni dei percorsi (#114).
 
 Raccordi con la corsia fuori dall'asfalto della pianta: 99 nodi (#133). Gli altri controlli della sezione 5 sono a zero.
+
+## 7. Nel gioco: l'inseguitore di percorso (#113)
+
+Auto (`Traffic` di `src/world/traffic.js`) e bus automatici (`BusSim` di `src/world/buses.js`) seguono lo stesso
+percorso, fatto con `src/world/inseguitore.js`: tratti di corsia sugli assi di `corsie(e, fwd)` (le corsie di questa
+sezione 1, da `laneLayout`) e raccordi. Il centro dell'asse posteriore sta sul percorso alla sua progressiva, la
+direzione è la tangente: nei raccordi il mezzo gira con il loro raggio.
+
+- `Raccordi` (uno per rete, `raccordiDi(net)`) decodifica le voci di un nodo alla prima richiesta; `curva(net, R)` dà
+  i tratti della curva (archi e rette) e le progressive dei capi sui due archi (`s0` su `da`, `s1` su `a`). Un raccordo
+  di raggio zero tra due corsie appena piegate (sotto il grado) diventa un arco di 30 m con al più mezzo metro di
+  tangente, che resta sulle due rette: lo spigolo, da fermi, sarebbe un colpo di sterzo.
+- Le auto scelgono il movimento tra quelli con il bit delle auto (`Traffic.movimenti`), e il raccordo dalla corsia
+  dove sono guardando anche la svolta dopo: meno cambi di corsia, sempre con il posto per farli. Il cambio di corsia
+  è un tratto del percorso (una cicloide, curva zero ai capi) lungo quanto serve a stare entro metà del raggio minimo.
+- I bus prendono per ogni svolta del loro percorso un raccordo con il loro bit (`percorsoBus`), prima quelli diretti,
+  poi quelli che scavalcano archi corti; le corsie si scelgono su tutto il percorso insieme.
+- Dove il raccordo per il mezzo non c'è, un ripiego dichiarato, contato e scritto sul pezzo (`p.ripiego`): il
+  raccordo delle auto per un bus (`raccordo delle auto`, raggio sotto gli 8,3 m, #134), una curva del gioco tra le due
+  rette di corsia (`curva`, `curva stretta`, `esse`, `inversione`, #114 e #134), e una curva del gioco quando due
+  raccordi vicini partono e arrivano su corsie diverse senza posto per cambiarla (`raccordi sovrapposti`, `cambio di
+  corsia senza posto`). `BusSim.ripieghi` e `Traffic.ripieghi` li contano; la prova del moto (`tests/moto.spec.js`)
+  li mette nella chiave dei casi, e `data/eccezioni/moto.json` li tiene con il perché.
+- Gli spostamenti di lato che non sono cambi di corsia (sorpasso, fuori dalla sede del tram, accosto alle fermate) sono
+  uno scostamento (`scosta`) che cambia al più di K metri per metro, con la curva entro metà del raggio minimo; dentro
+  un raccordo con il raggio sotto il doppio del minimo più 4 m resta fermo, e prima ci si torna in tempo.
+

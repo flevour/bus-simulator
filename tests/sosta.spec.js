@@ -2,8 +2,9 @@
 // mappa scripts/verifica_mappa.py; qui si guarda il gioco, che li legge:
 // - la scena ha le righe di tutti gli stalli della mappa e un'auto ferma, con il suo ostacolo, in quelli occupati
 //   all'ora della prova, né più né meno;
-// - nessuno stallo, occupato o no, sta dove passano i mezzi automatici: la corsia delle auto (Traffic.laneGeom) e la
-//   carrozzeria dei bus lungo le corsie di tutte le varianti (come in tests/pali.js), con l'accosto alle fermate.
+// - nessuno stallo, occupato o no, sta dove passano i mezzi automatici: le corsie delle auto (quelle di laneLayout che
+//   l'inseguitore di #113 segue) e la carrozzeria dei bus lungo le corsie di tutte le varianti (come in tests/pali.js),
+//   con l'accosto alle fermate.
 // Soglie per caso (#105): i casi noti stanno in data/eccezioni/sosta-gioco.json, che nasce vuoto. Un caso nuovo si
 // corregge nella build (zone libere, larghezza che serve alle corsie); se deve restare va nell'elenco con il perché:
 // `ECCEZIONI=aggiorna npx playwright test tests/sosta.spec.js`.
@@ -80,25 +81,34 @@ function misuraSosta() {
     casi[k].push({ cosa, via: p.f.e.name || 'via senza nome', x: tondo(p.x), z: tondo(p.z), dentro: tondo(dentro) });
   };
 
-  // corsia delle auto: l'asse che dà Traffic.laneGeom nei versi in cui le auto percorrono l'arco, largo un'auto
+  // corsie delle auto: gli assi delle corsie di laneLayout (non quelle dei bus) nei versi in cui le auto percorrono
+  // l'arco, o la corsia sola dove in quel verso non ce ne sono (corsie() di src/world/inseguitore.js), larghe un'auto
+  const corsieAuto = (e, fwd) => {
+    const mie = g.laneLayout(e).lanes.filter((l) => l.d === (fwd ? 1 : -1));
+    if (mie.length) return mie.filter((l) => !l.bus).map((l) => l.off);
+    const o = e.oneway ? (e.width < 8 ? 0 : e.width / 2 - 2) : e.width / 4;
+    return [fwd ? o : -o]; // verso a -> b
+  };
   for (const c of cerchi) {
     const e = c.p.f.e, A = net.nodes[e.a], d = (c.x - A.x) * -e.dz + (c.z - A.z) * e.dx; // a destra dell'asse, verso a -> b
     for (const fwd of [true, false]) {
       if (e.psv || (e.oneway && (e.oneway > 0) !== fwd)) continue;
-      const q = g.traffic.laneGeom({ edge: e, fwd, s: 0 }), off = (q.rx * -e.dz + q.rz * e.dx);
-      const dentro = R + R - Math.abs(d - off);
-      if (dentro > 0.05) caso('stalli_nella_corsia_delle_auto', c.p, 'auto', dentro);
+      for (const off of corsieAuto(e, fwd)) {
+        const dentro = R + R - Math.abs(d - off);
+        if (dentro > 0.05) caso('stalli_nella_corsia_delle_auto', c.p, 'auto', dentro);
+      }
     }
   }
 
   // ingombro dei bus automatici (come in tests/pali.js): la carrozzeria lungo la corsia di ogni variante, 12 m per
-  // 2,55; attorno alle fermate anche accostata al marciapiede, da 30 m prima con il muso a 18 m dopo (BusSim.update)
+  // 2,55, messa come BusSim.place (asse posteriore sulla corsia, con la direzione della corsia lì); attorno alle fermate
+  // anche accostata al marciapiede, da 30 m prima con il muso a 18 m dopo (BusSim.update)
   const HW = 1.275, META = 6, C = 16, celle = new Map(), cella = (x, z) => Math.floor(x / C) + ',' + Math.floor(z / C);
   for (const c of cerchi) { const k = cella(c.x, c.z); (celle.get(k) || celle.set(k, []).get(k)).push(c); }
   for (const L of g.lines) for (const v of L.variants) {
     const lane = g.buses.lane(v), P = lane.P;
     for (let s = 2.6; s < P.len - 3.3; s += 0.5) {
-      const f = P.at(s + 3.3), r = P.at(s - 2.6), l = Math.hypot(f.x - r.x, f.z - r.z) || 1, ux = (f.x - r.x) / l, uz = (f.z - r.z) / l;
+      const r = P.at(s - 2.6), l = Math.hypot(r.dx, r.dz) || 1, ux = r.dx / l, uz = r.dz / l;
       const cx = r.x + ux * 2.6, cz = r.z + uz * 2.6, ix = Math.floor(cx / C), iz = Math.floor(cz / C), muso = s + META;
       let extra = 0;
       for (const st of lane.stops) if (muso > st.fs - 30 && muso < st.fs + 18) extra = Math.max(extra, st.extra || 0);

@@ -5,7 +5,7 @@ import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
 import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
-import { driveOffset } from '../data/padova.js';
+import { raccordiDi, curva, Curva, Percorso, posa, punto, scosta, corsie, costoCambio, tratto, ripiego, AUTO, raggioMinimo } from './inseguitore.js';
 import { turni } from '../game/turni.js';
 
 // ------------------------------------------------------------------
@@ -447,6 +447,17 @@ export class TrafficLights {
 // Auto
 // ------------------------------------------------------------------
 const AHEAD = 50; // m di percorso davanti al muso in cui le auto guardano i binari degli incroci col tram
+// Le auto seguono corsie e raccordi della build (src/world/inseguitore.js, #113): l'asse posteriore sta sul percorso,
+// ASSE metri dietro al centro, e la direzione è la tangente
+const ASSE = 1.35;
+const R_AUTO = raggioMinimo(AUTO);
+// scostamento di lato (sorpasso, fuori dalla sede del tram): al più K_LAT metri per metro, con la curva entro metà del
+// raggio minimo
+const K_LAT = 0.15, A_LAT = 1 / (2 * R_AUTO);
+// curve: accelerazione laterale (√(ALAT · r) nel raccordo: 3,4 m/s nelle rotonde piccole, 6,7 m/s con 15 m di raggio;
+// con 2 m/s² la rotonda di Via Bembo con Via Marinelli smaltiva troppo poco e la coda arrivava oltre 150 s) e frenata
+// prima della curva (m/s²)
+const ALAT = 3, FRENO = 2;
 const CAR_COLORS = ['#c0c0c0', '#202020', '#f5f5f5', '#8a1c1c', '#1c3d8a', '#3a3a3a', '#6b6b6b', '#d8d0b8', '#2d5a3a', '#b5651d', '#e6c229', '#4a6fa5', '#9e9e9e', '#f0f0f0'];
 
 function carGeometry() {
@@ -473,6 +484,10 @@ export class Traffic {
     this.city = city;
     this.lights = lights;
     this.rnd = mulberry32(opts.seed || 42);
+    this.rac = raccordiDi(net);
+    // ripieghi delle auto (cambi di corsia senza posto, raccordi sovrapposti) e uscite di scena in fondo alle strade
+    // chiuse: tipo -> quante volte
+    this.ripieghi = {};
     this.target = opts.count;
     this.cars = [];
     this.grid = new Grid(30);
@@ -504,16 +519,14 @@ export class Traffic {
     this.lightMat.color.setScalar(0.35 + f * 0.65);
   }
 
-  laneGeom(car) {
-    const e = car.edge, n = this.net.nodes;
-    const from = car.fwd ? n[e.a] : n[e.b], to = car.fwd ? n[e.b] : n[e.a];
-    const dx = car.fwd ? e.dx : -e.dx, dz = car.fwd ? e.dz : -e.dz;
-    // sulle vie con le corsie in OSM la corsia più a destra (non quella dei bus), altrimenti un quarto della carreggiata
-    // (anche dove gli stalli stringono la carreggiata, e.sede: lì un quarto della carreggiata finisce sulle auto ferme)
-    const off = ((e.osmLanes || e.sede) && driveOffset(e, car.fwd)) ?? (e.oneway && e.width < 8 ? 0 : e.width / 4);
-    const rx = -dz * off, rz = dx * off;
-    const s0 = from.radius * 0.8, s1 = e.len - to.radius * 0.8;
-    return { from, to, dx, dz, rx, rz, s0, s1, sx: from.x + rx, sz: from.z + rz };
+  // auto nuova, non ancora in scena, all'inizio del suo percorso: il centro dell'asse posteriore a s metri dal nodo di
+  // partenza dell'arco e (verso fwd), sulla corsia data; route: i movimenti già scelti
+  nuovaAuto(e, fwd, s, corsia, route) {
+    return {
+      car: true, edge: e, fwd, s: s + ASSE, v: 0, turn: null, id: Math.random(),
+      per: new Percorso(), q: 0, lat: 0, pend: 0, coda: { e, fwd, s, corsia }, route, ev: [], chiusa: false,
+      blocked: 0, pass: 0, passT: 0, honkCd: 0,
+    };
   }
 
   // tratto carrabile a caso vicino al bus (ricerca spaziale: la città è molto grande)
@@ -523,45 +536,61 @@ export class Traffic {
     const cand = arr.filter((it) => it.kind === 'road' && it.ref && !it.ref.ped && !it.ref.psv && (!it.ref.service || this.rnd() < 0.15));
     return cand.length ? cand[Math.floor(this.rnd() * cand.length)].ref : null;
   }
-  // vicolo cieco per le auto: percorrendo l'arco nel verso fwd si raggiungono meno di 12 archi (senza tornare indietro
-  // sullo stesso). Le auto non ci nascono e ci entrano solo se non c'è altro: in Piazza Garibaldi uno spezzone di 5 m
-  // sopra i binari, che porta solo alla corsia dei bus, e in Via Morgagni due spezzoni che portano solo l'uno nell'altro
-  // tenevano un'auto a fare inversioni sulla sede. Lo è anche l'arco da cui non si torna nella rete (pit)
+  // movimenti delle auto da chi percorre l'arco e nel verso fwd, al nodo dove arriva: i raccordi della build con le auto
+  // (docs/raccordi.md), per arco d'uscita e archi corti scavalcati: { edge, fwd, node, racs }. Vuoto in fondo alle strade
+  // chiuse e al bordo della mappa (non ci sono inversioni sullo stesso arco)
+  movimenti(e, fwd) {
+    const memo = this._mov || (this._mov = new Map()), key = fwd ? e.id : -1 - e.id;
+    let out = memo.get(key);
+    if (out) return out;
+    const per = new Map();
+    for (const R of this.rac.at(fwd ? e.b : e.a)) {
+      if (R.da !== e || !(R.classi & AUTO)) continue;
+      const k = R.via.length ? `${R.a.id}:${R.via.map((x) => x.id).join(',')}` : R.a.id;
+      let m = per.get(k);
+      if (!m) per.set(k, (m = { edge: R.a, fwd: R.fout, node: this.net.nodes[R.m], racs: [] }));
+      m.racs.push(R);
+    }
+    out = [...per.values()];
+    memo.set(key, out);
+    return out;
+  }
+  // vicolo cieco per le auto: percorrendo l'arco nel verso fwd, con i movimenti dei raccordi, si raggiungono meno di 12
+  // archi. Le auto non ci nascono e ci entrano solo se non c'è altro: in Piazza Garibaldi uno spezzone di 5 m sopra i
+  // binari, che porta solo alla corsia dei bus, e in Via Morgagni due spezzoni che portano solo l'uno nell'altro tenevano
+  // un'auto a fare inversioni sulla sede. Lo è anche l'arco da cui non si torna nella rete (pit)
   deadEnd(e, fwd) {
     const memo = this._dead || (this._dead = new Map()), key = fwd ? e.id : -1 - e.id;
     if (memo.has(key)) return memo.get(key);
     const seen = new Set([key]), queue = [[e, fwd]];
     while (queue.length && seen.size < 12) {
-      const [a, f] = queue.shift(), n = this.net.nodes[f ? a.b : a.a];
-      for (const x of n.edges) {
-        const xf = x.a === n.id, k = xf ? x.id : -1 - x.id;
-        if (x !== a && this.allowed(x, xf) && !seen.has(k)) { seen.add(k); queue.push([x, xf]); }
+      const [a, f] = queue.shift();
+      for (const m of this.movimenti(a, f)) {
+        const k = m.fwd ? m.edge.id : -1 - m.edge.id;
+        if (!seen.has(k)) { seen.add(k); queue.push([m.edge, m.fwd]); }
       }
     }
     const dead = seen.size < 12 || this.pit(e, fwd);
     memo.set(key, dead);
     return dead;
   }
-  // pozzo: dall'arco nel verso fwd, con le sole mosse lecite (le svolte permesse e l'inversione a U in fondo a una
-  // strada a doppio senso senza altre uscite), si raggiungono meno di 200 archi nel loro verso. Accanto a Corso Esperanto
-  // (2785, 3300) un anello di strade di servizio a senso unico ne raggiunge 17, con le uscite a senso unico fino al bordo
-  // dell'area: le auto ci entravano, le uscite erano vicoli ciechi e giravano nell'anello per sempre, con la coda ferma
-  // sulla strada d'ingresso. Nella mappa i pozzi hanno al più 35 archi, gli altri ne raggiungono più di 44.000. Chi
-  // raggiunge un arco che non è un pozzo non lo è; gli archi raggiunti da un pozzo lo sono tutti
+  // pozzo: dall'arco nel verso fwd, con i movimenti dei raccordi, si raggiungono meno di 200 archi nel loro verso.
+  // Accanto a Corso Esperanto (2785, 3300) un anello di strade di servizio a senso unico ne raggiunge 17, con le uscite a
+  // senso unico fino al bordo dell'area: le auto ci entravano, le uscite erano vicoli ciechi e giravano nell'anello per
+  // sempre, con la coda ferma sulla strada d'ingresso. Gli altri archi ne raggiungono decine di migliaia. Chi raggiunge
+  // un arco che non è un pozzo non lo è; gli archi raggiunti da un pozzo lo sono tutti
   pit(e, fwd) {
     const memo = this._pit || (this._pit = new Map()), key = fwd ? e.id : -1 - e.id;
     if (memo.has(key)) return memo.get(key);
     const seen = new Set([key]), queue = [[e, fwd]];
     let out = false;
     while (queue.length && !out) {
-      const [a, f] = queue.shift(), n = this.net.nodes[f ? a.b : a.a];
-      const next = n.edges.filter((x) => x !== a && this.allowed(x, x.a === n.id)).map((x) => [x, x.a === n.id]);
-      if (!next.length && this.allowed(a, !f)) next.push([a, !f]);
-      for (const [x, xf] of next) {
-        const k = xf ? x.id : -1 - x.id;
+      const [a, f] = queue.shift();
+      for (const m of this.movimenti(a, f)) {
+        const k = m.fwd ? m.edge.id : -1 - m.edge.id;
         if (seen.has(k)) continue;
         if (memo.get(k) === false || seen.size >= 200) { out = true; break; }
-        seen.add(k); queue.push([x, xf]);
+        seen.add(k); queue.push([m.edge, m.fwd]);
       }
     }
     if (out) memo.set(key, false);
@@ -577,85 +606,186 @@ export class Traffic {
       if (!e) continue;
       let fwd = e.oneway ? e.oneway === 1 : this.rnd() < 0.5;
       if (this.deadEnd(e, fwd)) { if (e.oneway || this.deadEnd(e, !fwd)) continue; fwd = !fwd; }
-      const car = { car: true, edge: e, fwd, s: 0, v: 0, turn: null, id: Math.random() };
-      const g = this.laneGeom(car);
-      if (g.s1 - g.s0 < 3) continue;
-      car.s = g.s0 + this.rnd() * (g.s1 - g.s0);
-      const x = g.sx + g.dx * car.s, z = g.sz + g.dz * car.s;
+      // la prima svolta, e la corsia più a destra da cui la si fa: l'auto nasce lì, tra l'inizio della corsia e il raccordo
+      const m = this.chooseNext(e, fwd);
+      if (!m) continue;
+      const R = m.racs.reduce((a, b) => (b.cda > a.cda ? b : a)), from = this.net.nodes[fwd ? e.a : e.b];
+      const s0 = (from.radius || 0) * 0.8, s1 = curva(this.net, R).s0 - ASSE - 1;
+      if (s1 - s0 < 3) continue;
+      const car = this.nuovaAuto(e, fwd, s0 + this.rnd() * (s1 - s0), R.cda, [m]);
+      this.estendi(car, 90);
+      this.segui(car);
+      const x = car.x, z = car.z;
       const d = Math.hypot(x - bus.x, z - bus.z);
       if (d < minD || d > maxD) continue;
       if (cars.some((c) => Math.hypot(c.x - x, c.z - z) < 12)) continue;
       if (this.bigs.some((b) => Math.hypot(b.x - x, b.z - z) < 16)) continue; // non sopra un bus automatico
-      car.x = x; car.z = z; car.h = Math.atan2(g.dx, g.dz);
       const zone = zoneOf(x, z);
       car.vmax = (zone === 0 || !e.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
-      car.v = car.vmax * 0.7;
+      car.v = Math.min(car.vmax * 0.7, this.vCurva(car));
       car.color = new THREE.Color(CAR_COLORS[Math.floor(this.rnd() * CAR_COLORS.length)]);
-      car.blocked = 0; car.pass = 0; car.passT = 0; car.honkCd = 0; car.latOff = 0; car.route = [];
       cars.push(car);
       return car;
     }
     return null;
   }
 
-  // l'arco dopo edge (percorso nel verso fwd)
-  chooseNext(edge, fwd) {
-    const to = fwd ? this.net.nodes[edge.b] : this.net.nodes[edge.a];
-    let opts = to.edges.filter((e) => e !== edge && this.allowed(e, e.a === to.id));
+  // il movimento dopo l'arco edge (percorso nel verso fwd); da T (la corsia dove si arriva: { e, fwd, s, corsia }) prima
+  // quelli che non chiedono un cambio di corsia senza posto. null se non ce ne sono (strada chiusa, bordo della mappa)
+  chooseNext(edge, fwd, T = null) {
+    let opts = this.movimenti(edge, fwd);
+    if (!opts.length) return null;
     // prima chi non è un vicolo cieco, poi chi non è un pozzo (in Via delle Porte Contarine due vicoli ciechi, uno lo è)
-    const open = opts.filter((e) => !this.deadEnd(e, e.a === to.id));
-    const back = opts.filter((e) => !this.pit(e, e.a === to.id));
+    const open = opts.filter((m) => !this.deadEnd(m.edge, m.fwd));
+    const back = opts.filter((m) => !this.pit(m.edge, m.fwd));
     if (open.length) opts = open;
     else if (back.length) opts = back;
-    if (!opts.length) opts = to.edges.filter((e) => !e.ped && !e.psv);
-    if (!opts.length) opts = [edge];
+    if (T) {
+      const ok = opts.filter((m) => m.racs.some((R) => this.costo(T, R) < 100));
+      if (ok.length) opts = ok;
+    }
     // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio
-    const w = opts.map((e) => (e.main ? 4 : e.service ? 0.08 : e.cls === 6 ? 0.3 : 1));
+    const w = opts.map((m) => (m.edge.main ? 4 : m.edge.service ? 0.08 : m.edge.cls === 6 ? 0.3 : 1));
     let r = this.rnd() * w.reduce((a, b) => a + b, 0), k = 0;
     while (k < opts.length - 1 && (r -= w[k]) > 0) k++;
-    const e = opts[k];
-    return { edge: e, fwd: e.a === to.id, node: to };
+    return opts[k];
   }
-
-  // il percorso si sceglie in anticipo (calledAhead e covers guardano oltre il prossimo arco): car.route[i] è l'arco
-  // i + 1 dopo quello su cui si è (in svolta: dopo quello su cui si entra)
-  routeAt(car, i) {
-    const r = car.route;
-    while (r.length <= i) { const p = r.length ? r[r.length - 1] : car.turn ? car.turn.next : car; r.push(this.chooseNext(p.edge, p.fwd)); }
-    return r[i];
-  }
-
-  startTurn(car, g) {
-    const nx = car.route.shift() || this.chooseNext(car.edge, car.fwd);
-    car.turn = { ...this.turnPath(car, g, nx), t: 0, next: nx };
-  }
-  // curva da fine corsia (g, sull'arco from) all'inizio della corsia del prossimo arco (nx): quadratica p0-p1-p2
-  turnPath(car, g, nx, from = car.edge) {
-    const g2 = this.laneGeom({ edge: nx.edge, fwd: nx.fwd, s: 0 });
-    const p0 = { x: g.sx + g.dx * g.s1, z: g.sz + g.dz * g.s1 };
-    const p2 = { x: g2.sx + g2.dx * g2.s0, z: g2.sz + g2.dz * g2.s0 };
-    // intersezione delle due rette di corsia
-    const den = g.dx * g2.dz - g.dz * g2.dx;
-    let p1;
-    if (Math.abs(den) > 0.15) {
-      const t = ((p2.x - p0.x) * g2.dz - (p2.z - p0.z) * g2.dx) / den;
-      p1 = { x: p0.x + g.dx * t, z: p0.z + g.dz * t };
-      if (t < 0 || t > 40) p1 = { x: (p0.x + p2.x) / 2, z: (p0.z + p2.z) / 2 };
-    } else {
-      // inversione a U o rettilineo
-      p1 = nx.edge === from ? { x: nx.node.x + g.dx * 6, z: nx.node.z + g.dz * 6 } : { x: (p0.x + p2.x) / 2, z: (p0.z + p2.z) / 2 };
+  // costo di prendere il raccordo R dalla corsia dove si è (T): cambi di corsia, e 100 se non c'è posto per farli
+  costo(T, R) { return costoCambio(T.e, T.fwd, T.corsia, R.cda, curva(this.net, R).s0 - T.s, R_AUTO); }
+  // il raccordo del movimento m dalla corsia dove si è (T), guardando anche la svolta dopo (m2): meno cambi di corsia,
+  // tutti con posto
+  scegli(T, m, m2) {
+    let best = null, bc = Infinity;
+    for (const R of m.racs) {
+      let c = this.costo(T, R);
+      if (m2) {
+        const T2 = { e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca };
+        c += Math.min(...m2.racs.map((R2) => this.costo(T2, R2)));
+      }
+      if (c < bc) { bc = c; best = R; }
     }
-    const len = Math.hypot(p1.x - p0.x, p1.z - p0.z) + Math.hypot(p2.x - p1.x, p2.z - p1.z);
-    const cosA = g.dx * g2.dx + g.dz * g2.dz;
-    // quota a fine corsia e all'inizio della corsia dopo: in curva l'auto passa dall'una all'altra (al nodo coincidono)
-    const h0 = edgeHeight(from, g.from.id === from.a ? g.s1 : from.len - g.s1), h1 = edgeHeight(nx.edge, nx.fwd ? g2.s0 : nx.edge.len - g2.s0);
-    return { p0, p1, p2, len: Math.max(2, len * 0.92), s0: g2.s0, vmax: cosA > 0.8 ? car.vmax : 5.5, g2, h0, h1 };
+    return best;
   }
-  // quota dell'auto sopra il terreno, letta dall'arco su cui è alla sua progressiva; in curva, tra i due archi
+  // allunga il percorso dell'auto fino a q = fino: dalla corsia dove finisce (c.coda) il movimento già scelto o uno
+  // nuovo, poi il tratto di corsia fino al suo raccordo (con il cambio di corsia, se serve) e il raccordo. Il percorso si
+  // sceglie in anticipo (calledAhead e covers guardano lungo il percorso) e una svolta più avanti: la corsia del raccordo
+  // si sceglie anche per quella dopo. In fondo a una strada chiusa il percorso finisce (c.chiusa)
+  estendi(c, fino) {
+    const N = this.net.nodes;
+    while (c.per.fine < fino && !c.chiusa) {
+      const T = c.coda;
+      const m = c.route.length ? c.route.shift() : this.chooseNext(T.e, T.fwd, T);
+      if (!m) {
+        const p = c.per.aggiungi(tratto(N, T.e, T.fwd, T.s, Math.max(T.s, T.e.len - 1), T.corsia, T.corsia, R_AUTO));
+        this.lineeArresto(c, p);
+        c.chiusa = true;
+        break;
+      }
+      // la corsia del raccordo guarda anche la svolta dopo; se non è ancora scelta, la si sceglie dalla corsia dove il
+      // raccordo arriva, tra quelle che non chiedono un cambio di corsia senza posto
+      let R, rip = null;
+      if (c.route.length) R = this.scegli(T, m, c.route[0]);
+      else {
+        R = this.scegli(T, m, null);
+        const m2 = this.chooseNext(m.edge, m.fwd, { e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca });
+        if (m2) c.route.push(m2);
+      }
+      const L = curva(this.net, R).s0 - T.s;
+      // il raccordo comincia prima di dove si è, o da una corsia che non si fa in tempo a prendere: una curva del gioco
+      // dalla corsia e dal punto dove si è (src/world/inseguitore.js), contata
+      if (L < -0.05 || costoCambio(T.e, T.fwd, T.corsia, R.cda, L, R_AUTO) >= 100) {
+        rip = L < -0.05 ? 'raccordi sovrapposti' : 'cambio di corsia senza posto';
+        this.conta(rip);
+        R = ripiego(this.net, T.e, T.fwd, T.corsia, T.s, R.a, R.fout, R.ca, R.n, R.m);
+      }
+      const p = c.per.aggiungi(tratto(N, T.e, T.fwd, T.s, Math.max(T.s, R.g.s0), T.corsia, R.cda, R_AUTO, (t) => this.conta(t)));
+      this.lineeArresto(c, p);
+      const k = c.per.aggiungi(new Curva(this.net, R, R_AUTO));
+      if (rip) k.ripiego = rip;
+      c.coda = { e: m.edge, fwd: m.fwd, s: R.g.s1, corsia: R.ca };
+    }
+  }
+  conta(tipo) { this.ripieghi[tipo] = (this.ripieghi[tipo] || 0) + 1; }
+  // linee d'arresto dei semafori lungo il percorso: per il tratto di corsia p (verso il nodo p.to), la progressiva della
+  // sua linea, anche se cade dentro il raccordo che comincia prima
+  lineeArresto(c, p) {
+    const sl = this.lights.stopOn(p.e, p.to);
+    if (!sl) return;
+    const s = p.e.len - sl.t;
+    if (s >= p.sa - 0.5) c.ev.push({ q: p.q0 + (s - p.sa), sl });
+  }
+  // mette l'auto sul percorso (posa) e aggiorna dove sta: arco, verso e progressiva del centro sulla corsia; in un
+  // raccordo c.turn dice su quale arco si esce e quanto manca (rest). Entrando nella corsia di un arco nuovo l'auto
+  // sceglie la sua andatura
+  segui(c) {
+    const p = posa(c.per, c, ASSE);
+    c.pz = p;
+    if (p.tipo === 'corsia') {
+      c.turn = null;
+      if (c.edge !== p.e && c.vmax) {
+        const zone = zoneOf(c.x, c.z);
+        c.vmax = (zone === 0 || !p.e.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
+      }
+      c.edge = p.e; c.fwd = p.fwd; c.s = p.sa + (c.q - p.q0) + ASSE;
+    } else {
+      const R = p.R;
+      if (!c.turn || c.turn.pz !== p) c.turn = { next: { edge: R.a, fwd: R.fout, node: this.net.nodes[R.m] }, len: p.len, pz: p, rest: 0 };
+      c.turn.rest = p.q0 + p.len - c.q;
+      if (R.da) { c.edge = R.da; c.fwd = R.fin; c.s = p.g.s0 + (c.q - p.q0) + ASSE; }
+    }
+  }
+  // velocità per le curve davanti: nel raccordo √(ALAT · r), prima la frenata fin lì (FRENO)
+  vCurva(c) {
+    let v = Infinity;
+    const P = c.per.pezzi;
+    for (let i = c.per.indice(c.q); i < P.length; i++) {
+      const p = P[i], D = p.q0 - c.q;
+      if (D > 60) break;
+      if (p.tipo !== 'raccordo' || !p.g.r || p.g.ang < 0.05) continue;
+      const vc = Math.sqrt(ALAT * p.g.r);
+      v = Math.min(v, D <= 0 ? vc : Math.sqrt(vc * vc + 2 * FRENO * D));
+    }
+    return v;
+  }
+  // quota dell'auto sopra il terreno: dall'arco su cui è alla sua progressiva; nel raccordo, tra i due archi
   carHeight(c) {
-    const T = c.turn;
-    if (T) return T.h0 + (T.h1 - T.h0) * Math.max(0, Math.min(1, T.t));
+    const p = c.pz;
+    if (p && p.tipo === 'raccordo') return p.quota(c.q + ASSE - p.q0);
     return edgeHeight(c.edge, c.fwd ? c.s : c.edge.len - c.s);
+  }
+  // un'auto per le prove, sull'arco e (verso fwd) col centro a s metri dal nodo di partenza, che seguirà gli archi dati
+  // ([{ edge }], anche quelli che un raccordo scavalca) e poi quelli che sceglie
+  nuova(e, fwd, s, archi = []) {
+    const route = [];
+    let cur = [e, fwd], k = 0;
+    while (k < archi.length) {
+      const m = this.movimenti(cur[0], cur[1]).find((m) => [...m.racs[0].via, m.edge].every((x, j) => archi[k + j] && archi[k + j].edge === x));
+      if (!m) break;
+      route.push(m);
+      k += m.racs[0].via.length + 1;
+      cur = [m.edge, m.fwd];
+    }
+    const cs = corsie(e, fwd), corsia = route.length ? this.scegli({ e, fwd, s: s - ASSE, corsia: cs.length - 1 }, route[0], route[1]).cda : cs.length - 1;
+    const c = this.nuovaAuto(e, fwd, s - ASSE, corsia, route);
+    c.vmax = 9; c.color = new THREE.Color(CAR_COLORS[0]);
+    this.estendi(c, 90);
+    this.segui(c);
+    return c;
+  }
+  // un'auto ferma nel raccordo delle auto da da ad a, che comincia al nodo n, a frazione t della curva; per le prove
+  // (allunga falso: senza il percorso dopo, solo per sapere dove sta)
+  inCurva(da, a, n, t, allunga = true) {
+    const R = this.rac.at(n).find((R) => R.da === da && R.a === a && R.classi & AUTO);
+    if (!R) return null;
+    const g = curva(this.net, R), c = this.nuovaAuto(da, R.fin, g.s0 - 5, R.cda, []);
+    c.per.aggiungi(tratto(this.net.nodes, da, R.fin, g.s0 - 5, g.s0, R.cda, R.cda, R_AUTO));
+    const p = c.per.aggiungi(new Curva(this.net, R, R_AUTO));
+    c.coda = { e: R.a, fwd: R.fout, s: g.s1, corsia: R.ca };
+    c.q = p.q0 + p.len * t;
+    c.vmax = 9; c.color = new THREE.Color(CAR_COLORS[0]);
+    if (allunga) this.estendi(c, c.q + 90);
+    this.segui(c);
+    return c;
   }
   // incroci col tram a meno di 30 m dall'arco: quelli che la sua corsia e le curve ai suoi nodi possono tagliare
   tramXs(e, ts) {
@@ -666,48 +796,35 @@ export class Traffic {
       return Math.hypot(x.px - A.x - e.dx * t, x.pz - A.z - e.dz * t) < 30;
     }));
   }
-  // il percorso dell'auto da d0 a d1 m davanti al centro, lungo gli archi e non in linea retta: il resto della corsia (o
-  // della curva in cui si trova), poi curva e corsia di ogni arco scelto in anticipo (routeAt). fn(d, x, z, dx, dz, xs)
-  // per un punto ogni 1,5 m dei tratti con incroci col tram vicini (xs); true per fermarsi, e lo restituisce. Nella
+  // il percorso dell'auto da d0 a d1 m davanti al centro, lungo corsie e raccordi (non in linea retta). fn(d, x, z, dx,
+  // dz, xs) per un punto ogni 1,5 m dei pezzi con incroci col tram vicini (xs); true per fermarsi, e lo restituisce. Nella
   // rotonda Rosetta Gagliardi i pezzi sono corti e curvi: 20 m in linea retta dopo la prossima svolta finivano fuori
   // dalla rotonda e non vedevano i binari di Viale della Pace, due archi più avanti
   along(car, d0, d1, ts, fn) {
-    const q = this._q || (this._q = {});
-    let d = 0, prev, g;
-    // un tratto lungo L che inizia a d m dal centro; pt(u) mette in q punto e direzione a u m dal suo inizio
-    const piece = (L, xs, pt) => {
-      const a = Math.max(0, d0 - d), b = Math.min(L, d1 - d);
-      if (xs.length && b >= a) for (let u = a; ; u = Math.min(b, u + 1.5)) {
-        pt(u);
-        if (fn(d + u, q.x, q.z, q.dx, q.dz, xs)) return true;
+    const q = this._q || (this._q = {}), per = car.per, qc = car.q + ASSE;
+    this.estendi(car, qc + d1 + 2);
+    const P = per.pezzi;
+    for (let i = per.indice(qc + d0); i < P.length; i++) {
+      const p = P[i], a = Math.max(p.q0, qc + d0), b = Math.min(p.q0 + p.len, qc + d1);
+      if (p.q0 > qc + d1) break;
+      if (b < a) continue;
+      const xs = this.pezzoXs(p, ts);
+      if (!xs.length) continue;
+      for (let u = a; ; u = Math.min(b, u + 1.5)) {
+        p.at(u - p.q0, q);
+        if (fn(u - qc, q.x, q.z, q.dx, q.dz, xs)) return true;
         if (u >= b) break;
       }
-      d += L;
-      return false;
-    };
-    const curve = (T, t0) => (u) => {
-      const t = t0 + u / T.len, w = 1 - t, { p0, p1, p2 } = T;
-      q.x = w * w * p0.x + 2 * w * t * p1.x + t * t * p2.x; q.z = w * w * p0.z + 2 * w * t * p1.z + t * t * p2.z;
-      q.dx = w * (p1.x - p0.x) + t * (p2.x - p1.x); q.dz = w * (p1.z - p0.z) + t * (p2.z - p1.z);
-    };
-    const lane = (g, x0, z0) => (u) => { q.x = x0 + g.dx * u; q.z = z0 + g.dz * u; q.dx = g.dx; q.dz = g.dz; };
-    const both = (a, b) => (!a.length ? b : !b.length ? a : [...new Set([...a, ...b])]);
-    if (car.turn) {
-      const T = car.turn;
-      if (piece((1 - T.t) * T.len, T.xs || (T.xs = both(this.tramXs(car.edge, ts), this.tramXs(T.next.edge, ts))), curve(T, T.t))) return true;
-      prev = T.next; g = T.g2;
-      if (piece(Math.max(0, g.s1 - g.s0), this.tramXs(prev.edge, ts), lane(g, g.sx + g.dx * g.s0, g.sz + g.dz * g.s0))) return true;
-    } else {
-      prev = car; g = this.laneGeom(car);
-      if (piece(Math.max(0, g.s1 - car.s), this.tramXs(car.edge, ts), lane(g, car.x, car.z))) return true;
-    }
-    for (let i = 0; d < d1; i++) {
-      const nx = this.routeAt(car, i), T = nx.path || (nx.path = this.turnPath(car, g, nx, prev.edge));
-      if (piece(T.len, nx.xs || (nx.xs = both(this.tramXs(prev.edge, ts), this.tramXs(nx.edge, ts))), curve(T, 0))) return true;
-      prev = nx; g = T.g2;
-      if (d < d1 && piece(Math.max(0, g.s1 - g.s0), this.tramXs(nx.edge, ts), lane(g, g.sx + g.dx * g.s0, g.sz + g.dz * g.s0))) return true;
     }
     return false;
+  }
+  // incroci col tram vicini a un pezzo del percorso: quelli della sua corsia, o degli archi del raccordo
+  pezzoXs(p, ts) {
+    if (p.xs) return p.xs;
+    if (p.tipo === 'corsia') return (p.xs = this.tramXs(p.e, ts));
+    const R = p.R, tutti = new Set();
+    for (const e of [R.da, ...R.via, R.a]) if (e) for (const x of this.tramXs(e, ts)) tutti.add(x);
+    return (p.xs = [...tutti]);
   }
   // metri dal muso al primo punto del percorso (AHEAD m lungo gli archi, anche in svolta) che taglia i binari di un
   // incrocio chiamato da un tram, o all'inizio dei primi binari se appena dopo c'è chi è fermo e l'auto non ci starebbe
@@ -740,17 +857,21 @@ export class Traffic {
     return hit;
   }
 
-  // la strada OSM e il tracciato GTFS del tram non sempre combaciano: un'auto che invaderebbe la sede si sposta di lato
-  // (lx, lz: verso sinistra) quanto basta per lasciare libero il binario, al massimo 3 m
-  tramShift(c, x, z, lx, lz) {
-    const e = c.edge, q = this._qt || (this._qt = []);
+  // l'arco ha la sede del tram a meno di 3 m dalla carreggiata (in memoria sull'arco)
+  vicinoTram(e) {
     if (e.nearTram === undefined) {
+      const A = this.net.nodes[e.a], q = this._qt || (this._qt = []);
       e.nearTram = false;
-      const A = this.net.nodes[e.a];
       for (let s = 0; s <= e.len + 8 && !e.nearTram; s += 8)
         e.nearTram = this.city.segGrid.query(A.x + e.dx * Math.min(s, e.len), A.z + e.dz * Math.min(s, e.len), e.width / 2 + TRAM_HW + 3, q).some((it) => it.kind === 'tram');
     }
-    if (!e.nearTram) return 0;
+    return e.nearTram;
+  }
+  // la strada OSM e il tracciato GTFS del tram non sempre combaciano: un'auto che invaderebbe la sede si sposta di lato
+  // (lx, lz: verso sinistra) quanto basta per lasciare libero il binario, al massimo 3 m
+  tramShift(c, x, z, lx, lz) {
+    const q = this._qt || (this._qt = []);
+    if (!this.vicinoTram(c.edge)) return 0;
     let best = null;
     for (const it of this.city.segGrid.query(x, z, TRAM_HW + 3, q)) {
       if (it.kind !== 'tram') continue;
@@ -789,7 +910,8 @@ export class Traffic {
       const fx = Math.sin(c.h), fz = Math.cos(c.h);
       c.far = Math.hypot(c.x - bus.x, c.z - bus.z) > 60; // il tram fermo dietro un'auto incastrata la fa sparire solo lontano
       let gap = 80, leadV = Infinity; // leadV: velocità di chi c'è davanti (nessuno: Infinity)
-      let v0 = c.turn ? c.turn.vmax : c.vmax;
+      // andatura: quella dell'auto, e nelle curve quella del raggio del raccordo, con la frenata prima
+      const v0 = Math.min(c.vmax, this.vCurva(c));
       // auto davanti
       let lead = null, through = false;
       this.grid.query(c.x + fx * 15, c.z + fz * 15, 18, near);
@@ -803,7 +925,7 @@ export class Traffic {
           if (cosH < -0.3) continue;
           // e tra due auto che svoltano verso lo stesso arco passa chi ha meno curva da fare (a Lion, entrando in Via
           // Mascagni da Via Sant'Andrea e dalla traversa, ognuna aveva l'altra davanti e restavano ferme per sempre)
-          if (c.turn && o.turn && o.turn.next.edge === c.turn.next.edge && (1 - c.turn.t) * c.turn.len < (1 - o.turn.t) * o.turn.len) continue;
+          if (c.turn && o.turn && o.turn.next.edge === c.turn.next.edge && c.turn.rest < o.turn.rest) continue;
           // chi esce da un giro di attese (sotto) passa davanti all'auto che aspettava, finché non l'ha superata
           if (o === c.through) { through = true; continue; }
           if (fwd - 4.4 < gap) { gap = fwd - 4.4; leadV = o.v; lead = o; }
@@ -836,29 +958,27 @@ export class Traffic {
         const lim = p.tram && p.tram.v < 0.3 ? 1.4 : Math.cos(p.h - c.h) > -0.3 ? 2.6 : 1.6;
         if (fwd > 0 && fwd < 40 && lat < lim && fwd - 4.4 < gap) { gap = fwd - 4.4; leadV = 0; }
       }
-      // semaforo a fine arco
-      const g = this.laneGeom(c);
       // incrocio con la sede del tram chiamato da un tram, o con la coda oltre: ci si ferma prima. Chi nell'incrocio
       // in fondo all'arco taglierebbe i binari di un incrocio chiamato si ferma alla linea (o a fine arco), anche col
       // verde: col verde lungo il binario (fase tram) chi svoltava, o andava dritto dove il binario curva (Via Belludi),
       // passava davanti al tram. Anche in svolta: nella rotonda i pezzi sono corti e un'auto passa quasi tutto il tempo
       // nelle curve, e da una curva entrava nell'altra fino ai binari
       if (ctx.tramSignals) {
-        if (!c.turn) gap = Math.min(gap, ctx.tramSignals.carGap(c, g, gap, leadV));
+        if (!c.turn) gap = Math.min(gap, ctx.tramSignals.carGap(c, { s1: c.pz.sb + ASSE }, gap, leadV));
         // (3 m prima dei binari; chi c'è già sopra va avanti e li libera)
         const d = this.calledAhead(c, ctx.tramSignals);
         if (d > 0.5 && d < Infinity) gap = Math.min(gap, Math.max(0, d - 3));
       }
-      if (!c.turn) {
-        const to = g.to;
-        const sl = this.lights.stopOn(c.edge, to);
-        if (sl) {
-          // muso (2,1 m davanti al centro dell'auto) alla linea d'arresto, anche prima dell'arco che entra nell'incrocio
-          const ap = sl.ap, st = this.lights.stateOf(ap.node.signal, ap.phase);
-          const dist = c.edge.len - sl.t - c.s - 2.3;
-          if (dist > -0.3 && (st === 'R' || (st === 'Y' && dist > c.v * 1.2))) gap = Math.min(gap, dist + 1.2); // IDM: ci si ferma 2 m prima
-        }
+      // semaforo: la prossima linea d'arresto lungo il percorso, col muso (2,1 m davanti al centro dell'auto), anche
+      // prima dell'arco che entra nell'incrocio e anche se il raccordo comincia prima della linea
+      while (c.ev.length && c.ev[0].q - (c.q + ASSE) - 2.3 < -0.3) c.ev.shift();
+      if (c.ev.length) {
+        const { sl, q } = c.ev[0], ap = sl.ap, st = this.lights.stateOf(ap.node.signal, ap.phase);
+        const dist = q - (c.q + ASSE) - 2.3;
+        if (dist < 120 && (st === 'R' || (st === 'Y' && dist > c.v * 1.2))) gap = Math.min(gap, dist + 1.2); // IDM: ci si ferma 2 m prima
       }
+      // in fondo a una strada chiusa ci si ferma prima della fine del percorso
+      if (c.chiusa) gap = Math.min(gap, c.per.fine - c.q - ASSE - 3);
       // IDM
       const aMax = 1.6, bComf = 2.5;
       const sStar = 2 + c.v * 1.3 + (c.v * c.v) / (2 * Math.sqrt(aMax * bComf));
@@ -883,56 +1003,33 @@ export class Traffic {
         if (c.blocked > (blocker.atStop ? 1.5 : blocker.player ? 5 : 12)) { c.passT = 9; c.blocked = 0; }
       } else c.blocked = Math.max(0, c.blocked - dt);
       if (c.passT > 0) c.passT -= dt;
-      const latTarget = c.passT > 1.5 ? 1 : 0;
-      c.latOff += (latTarget * 3.2 - c.latOff) * Math.min(1, dt * 1.2);
-
-      // avanzamento
-      let move = c.v * dt;
-      if (!c.turn) {
-        c.s += move;
-        if (c.s >= g.s1) {
-          this.startTurn(c, g);
-          c.turn.t = Math.min(1, (c.s - g.s1) / c.turn.len);
+      // di lato, a destra: il sorpasso a sinistra (3,2 m) e, sulle corsie, fuori dalla sede del tram dove la strada OSM
+      // e il binario non combaciano (guardando anche 6 m avanti, per spostarsi prima)
+      let bers = c.passT > 1.5 ? -3.2 : 0;
+      if (!c.turn && this.vicinoTram(c.edge)) {
+        // (ricalcolato ogni metro di strada)
+        if (c.viaTram == null || Math.abs(c.q - c.viaTramQ) > 1 || c.viaTramB !== bers) {
+          const Q = this._qs || (this._qs = {});
+          let via = 0;
+          for (const d of [0, 6]) {
+            punto(c.per, c.q + ASSE + d, Q);
+            const t = this.tramShift(c, Q.x + Q.nx * bers, Q.z + Q.nz * bers, -Q.nx, -Q.nz);
+            if (Math.abs(t) > Math.abs(via)) via = t;
+          }
+          c.viaTram = via; c.viaTramQ = c.q; c.viaTramB = bers;
         }
-      } else {
-        c.turn.t += move / c.turn.len;
-        if (c.turn.t >= 1) {
-          c.edge = c.turn.next.edge;
-          c.fwd = c.turn.next.fwd;
-          c.s = c.turn.s0 + (c.turn.t - 1) * c.turn.len;
-          c.turn = null;
-          const zone = zoneOf(c.x, c.z);
-          c.vmax = (zone === 0 || !c.edge.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
-        }
-      }
-      // posizione
-      let x, z, h;
-      if (!c.turn) {
-        const g2 = this.laneGeom(c);
-        x = g2.sx + g2.dx * c.s;
-        z = g2.sz + g2.dz * c.s;
-        h = Math.atan2(g2.dx, g2.dz);
-        // spostamento laterale per sorpasso (verso sinistra)
-        x += g2.dz * c.latOff;
-        z += -g2.dx * c.latOff;
-        // fuori dalla sede del tram
-        const ts = this.tramShift(c, x, z, g2.dz, -g2.dx);
-        c.tramOff = (c.tramOff || 0) + (ts - (c.tramOff || 0)) * Math.min(1, dt * 3);
-        x += g2.dz * c.tramOff;
-        z += -g2.dx * c.tramOff;
-      } else {
-        const { p0, p1, p2, t } = c.turn;
-        const u = 1 - t;
-        x = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x;
-        z = u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z;
-        const tx = 2 * u * (p1.x - p0.x) + 2 * t * (p2.x - p1.x), tz = 2 * u * (p1.z - p0.z) + 2 * t * (p2.z - p1.z);
-        h = Math.atan2(tx, tz);
-      }
-      c.x = x; c.z = z;
-      let dh = h - c.h;
-      while (dh > Math.PI) dh -= 2 * Math.PI;
-      while (dh < -Math.PI) dh += 2 * Math.PI;
-      c.h += dh * Math.min(1, dt * 10);
+        bers -= c.viaTram;
+      } else c.viaTram = null;
+      // avanzamento lungo il percorso (src/world/inseguitore.js): l'asse posteriore sul percorso, la direzione è la
+      // tangente, lo scostamento cambia al più di K_LAT metri per metro
+      const q0 = c.q;
+      c.q = Math.min(c.q + c.v * dt, Math.max(c.q, c.per.fine - ASSE - 0.5));
+      this.estendi(c, c.q + 90);
+      scosta(c.per, c, bers, c.q - q0, A_LAT, K_LAT);
+      this.segui(c);
+      c.per.taglia(c.q - 2);
+      // in fondo a una strada chiusa, lontano da chi guida, l'auto esce di scena (non fa inversione)
+      if (c.chiusa && c.far && c.v < 0.3 && c.per.fine - c.q - ASSE < 5) { c.overlapT = 3; this.conta('fuori scena in fondo a una strada chiusa'); }
     }
     this.untangle();
 
@@ -960,13 +1057,16 @@ export class Traffic {
   // Porta Trento chi da Via Bezzecca svolta in Via Belfiore e chi dalla rotonda esce in Via Bezzecca hanno le curve che
   // si toccano a 2 m, e ognuna ha l'altra davanti. Passa chi ha l'auto che aspetta più di lato, cioè meno in mezzo alla
   // sua strada, tra quelle che non sono ferme anche per altro: nella rotonda del SIR3 vicino a Via Falloppio tre auto si
-  // aspettavano in giro, e una era ferma anche prima dei binari perché oltre c'era un'altra delle tre
+  // aspettavano in giro, e una era ferma anche prima dei binari perché oltre c'era un'altra delle tre. Il giro si segue
+  // fino a 30 auto: dal 16 novembre (#113) le auto fanno le rotonde piccole sui raccordi, con il raggio vero e più
+  // piano, e nella rotonda di Via Bembo con Via Marinelli l'anello si riempiva con un giro di 10 auto (si seguivano al
+  // più 9)
   untangle() {
     for (const c of this.cars) {
       if (!c.lead || c.halt < 1) continue;
       const ring = [c];
       for (let o = c.lead; o !== c; o = o.lead) {
-        if (!o || o.halt < 1 || ring.length > 8 || ring.includes(o)) { ring.length = 0; break; }
+        if (!o || o.halt < 1 || ring.length > 29 || ring.includes(o)) { ring.length = 0; break; }
         ring.push(o);
       }
       let best = null, side = -1;

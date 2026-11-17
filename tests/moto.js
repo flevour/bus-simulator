@@ -7,9 +7,12 @@
 //   - imbardata: il mezzo gira più di quanto gli permette il raggio minimo per la strada che ha fatto (v / raggio
 //     minimo, con il 10% e 3 millesimi di radiante a passo di margine), anche da fermo;
 //   - inversione: il mezzo lascia un arco e il successivo è lo stesso arco nell'altro verso.
-// Un caso è un episodio: comincia al primo passo fuori regola e finisce dopo un secondo senza; la chiave è chi, cosa e
-// il posto dove comincia ("auto di traverso @ x,z"). Non importa nulla da Playwright: la usano la prova
-// (tests/moto.spec.js) e gli script di confronto prima e dopo.
+// Un caso è un episodio: comincia al primo passo fuori regola e finisce dopo un secondo senza; la chiave è chi (auto o
+// bus), cosa e il posto dove comincia ("auto di traverso @ x,z"). Dove il mezzo è su un ripiego dell'inseguitore
+// (src/world/inseguitore.js: una svolta senza il raccordo della build per lui, un cambio di corsia senza posto), la
+// chiave lo dice tra parentesi ("bus imbardata (raccordo delle auto) @ x,z"): sono i casi che l'elenco tiene con il
+// perché, finché #134 e #114 non danno a quelle svolte il loro raccordo. Non importa nulla da Playwright: la usano la
+// prova (tests/moto.spec.js) e gli script di confronto prima e dopo.
 
 // in pagina: comincia a guardare. window.__moto.fine() smette e dà casi, conti e valori peggiori
 export function osservaMoto({ dt = 1 / 30 } = {}) {
@@ -20,23 +23,33 @@ export function osservaMoto({ dt = 1 / 30 } = {}) {
   const peggio = { traverso: 0, salto: 0, imbardata: 0 };
   let passi = 0, mezzi = 0, metri = 0;
   const NOMI = { traverso: 'di traverso', salto: 'salto', imbardata: 'imbardata', inversione: 'inversione' };
-  // l'arco su cui il mezzo sta in corsia (null in curva, tra un arco e l'altro)
+  // l'arco su cui il mezzo sta in corsia (null in curva, tra un arco e l'altro): delle auto c.edge fuori da c.turn,
+  // dei bus il tratto del percorso dei nodi sotto il centro
   const arco = (o, auto) => {
-    if (o.arco) return o.arco();
     if (auto) return o.turn ? null : { id: o.edge.id, f: o.fwd };
     const L = o.L, k = L.segOf[L.P.seg(Math.max(0, Math.min(L.P.len, o.s)))], sg = L.segs[k];
     return sg && sg.e ? { id: sg.e.id, f: sg.fwd } : null;
   };
+  // il ripiego su cui sta l'asse posteriore del mezzo, o che ha appena lasciato (un metro e mezzo), se ce n'è uno
+  const ripiego = (o) => {
+    const per = o.per || (o.L && o.L.per);
+    if (!per || o.q == null) return null;
+    const i = per.indice(o.q), p = per.pezzi[i], prima = per.pezzi[i - 1];
+    if (p && p.ripiego) return p.ripiego;
+    return prima && prima.ripiego && o.q - (prima.q0 + prima.len) < 1.5 ? prima.ripiego : null;
+  };
   const caso = (o, chi, tipo, x, z, quanto) => {
     const k = `${tipo}`, m = aperti.get(o) || aperti.set(o, {}).get(o), ep = m[k];
     if (ep && g.mission.clock - ep.t < 1) { ep.t = g.mission.clock; ep.c.quanto = Math.max(ep.c.quanto, quanto); return; }
-    const c = { chiave: `${chi} ${NOMI[tipo]} @ ${Math.round(x)},${Math.round(z)}`, tipo, quanto, ora: g.mission.clock };
+    const rip = ripiego(o);
+    // window.__motoInfo(mezzo), se c'è, allega al caso lo stato del mezzo (per chi cerca la causa)
+    const c = { chiave: `${chi} ${NOMI[tipo]}${rip ? ` (${rip})` : ''} @ ${Math.round(x)},${Math.round(z)}`, tipo, quanto, ora: g.mission.clock, linea: o.run ? o.run.L.id : null, info: window.__motoInfo ? window.__motoInfo(o) : undefined };
     m[k] = { t: g.mission.clock, c };
     casi.push(c);
     conti[tipo]++;
   };
   const guarda = (o, auto) => {
-    const chi = auto ? 'auto' : `bus ${o.run.L.id}`, a = auto ? 'auto' : 'bus';
+    const chi = auto ? 'auto' : 'bus', a = chi;
     const h = o.h, rx = o.x - Math.sin(h) * ASSE[a], rz = o.z - Math.cos(h) * ASSE[a];
     const p = prima.get(o);
     const ar = arco(o, auto);

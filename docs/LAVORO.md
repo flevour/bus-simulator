@@ -100,6 +100,7 @@ divise per area.
 | `scripts/sosta.py`, `data/eccezioni/sosta.json`, `data/eccezioni/sosta-gioco.json`, `tests/sosta.spec.js` | `area:mappa` (#111), poi `area:traffico` (#113) per le zone di fermata | sosta lungo le strade ([`sosta.md`](sosta.md)): stalli per arco e per lato e corsie strette dagli stalli (`stalli`, `sedeCorsie` nella mappa). Chi cambia fermate, corsie, pianta o il modo in cui i bus accostano rigenera e guarda i due controlli; `corsie_arco` di `scripts/raccordi.py` è il conto delle corsie anche per la sosta |
 | `scripts/raccordi.py`, `data/eccezioni/raccordi.json`, `tests/raccordi.spec.js` | `area:traffico` (#112), poi chi li usa (#113, #114) | raccordi di corsia agli incroci ([`raccordi.md`](raccordi.md)): la build li calcola dalla rete, dalle corsie, da `svolte` e dalla pianta delle strade, quindi cambiano con ogni rigenerazione che tocca una di queste; chi rigenera rilancia `python3 scripts/raccordi.py` e, se i casi cambiano, `--aggiorna`. `corsie_arco` rifà `laneLayout` di `src/data/padova.js`: le due si cambiano insieme |
 | `scripts/percorsi.py`, `data/eccezioni/percorsi.json`, `data/osm-correzioni.json`; in `scripts/build_map.py` `ripara`, `giro`, `via_bus` | `area:linee` (#114), e chi rigenera la mappa | percorsi delle linee guidabili ([`percorsi.md`](percorsi.md)): la build li controlla alla fine e si ferma su un caso nuovo; chi cambia rete, svolte, corsie, pianta o raccordi guarda i casi con `python3 scripts/percorsi.py --elenco` e, se restano, li mette nell'elenco con il perché (`--aggiorna`). Un tag OSM sbagliato si corregge con una riga di `data/osm-correzioni.json`, non nel codice |
+| `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7) e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -357,7 +358,7 @@ Da sapere prima di toccare questi file:
   primo punto dei binari delle linee nuove (`da` in `NEW_TRAM_LINES`, che li taglia con `polyCut`). I binari non
   secondo la regola (`regola` falso, oggi nessuno) restano a terra: chi li rimette deve dare a ogni punto la sua
   progressiva dei dati. In `traffic.js`: `Traffic.carHeight` (quota dell'auto dal suo arco; in curva tra `h0` e `h1`
-  di `turnPath`), i pedoni con `edgeHeight(p.e, p.s)`. In `city.js` i tratti della sede del tram nella griglia
+  di `turnPath`, da #113 tra le quote dei due capi del raccordo, `Curva.quota` di `inseguitore.js`), i pedoni con `edgeHeight(p.e, p.s)`. In `city.js` i tratti della sede del tram nella griglia
   (`indexFeatures`) portano in `ref` il profilo del loro binario (`onSede`). `__game.edgeHeight` per le prove;
 - la quota dei binari sui cavalcavia con le quote di prima ha ancora la media che faceva il gioco, ora in
   `quote_rete.profilo`: a 5 m di passo è uguale a quella di prima entro 2 cm, le vedute non cambiano. Sulle strutture
@@ -908,7 +909,7 @@ Avogadro (2116 s). Con le auto normali, in 4 giri, nessuno. Come funziona ora:
 - `Traffic.update`: ogni auto ricorda chi aspetta (`lead`: l'auto davanti, se basta da sola a tenerla ferma, cioè a
   meno di 2 m, dove l'IDM da fermi non riparte), se a fermarla c'è solo lei (`alone`: non anche un semaforo, un bus, un
   tram o la regola dei binari) e da quanti secondi è ferma (`halt`);
-- `Traffic.untangle`, dopo il passo di tutte: da ogni auto ferma da almeno 1 s segue `lead` (al più 9 auto, tutte
+- `Traffic.untangle`, dopo il passo di tutte: da ogni auto ferma da almeno 1 s segue `lead` (al più 9 auto, da #113 30, tutte
   ferme); se torna all'auto di partenza è un giro di attese e nessuna ripartirebbe. Tra le auto del giro con `alone`
   passa chi ha l'auto che aspetta più di lato, cioè meno in mezzo alla sua strada: la ignora (`through`) finché non è
   uscita dalla fascia davanti, poi `through` torna `null`. L'altra la segue. Con `alone` non si sceglie chi starebbe
@@ -1022,8 +1023,7 @@ Raccordi di corsia agli incroci (#112, 16 novembre). Regole, formato e controlli
 sapere prima di #113 e #114:
 
 - la build scrive nella rete il campo `raccordi` (`scripts/raccordi.py`, chiamato da `build_map.py` dopo la pianta delle
-  strade); il gioco lo porta in `net.raccordi` e non lo usa. `Traffic.turnPath`, `chooseNext` e `buildLane` dei bus sono
-  come prima;
+  strade); il gioco lo porta in `net.raccordi` (da #113 lo seguono auto e bus automatici, nota sotto);
 - le corsie dei raccordi sono quelle di `laneLayout`. Oggi le auto vanno a `driveOffset` (la corsia più a destra non
   riservata, che coincide) o, senza corsie OSM sui doppi sensi, a un quarto della carreggiata, che sopra i 7,5 m non è
   l'asse della corsia disegnata; i bus automatici a `laneLat`. Chi segue i raccordi sta sulle corsie disegnate;
@@ -1051,16 +1051,81 @@ Il traffico è stato toccato con il minimo che serve:
   lunghe a incroci, gomiti e cambi di carreggiata, perché `buildLane` smussa la corsia del bus. Un inseguitore che sposta un asse alla volta può entrare in diagonale
   dopo l'ultima auto: allora `FERMATA_INGRESSO` e `FERMATA_USCITA` di `scripts/sosta.py` tornano a 12 e 12, e
   `tests/sosta.spec.js` (accosto da 30 m prima a 18 m dopo) va cambiato insieme;
-- `tests/sosta.spec.js` controlla che nessuno stallo stia nella corsia di `laneGeom` né nella carrozzeria dei bus lungo
-  `lane.P`: chi cambia dove passano auto e bus lo aggiorna con il nuovo percorso;
-- un caso noto in `data/eccezioni/sosta-gioco.json`: al Capolinea Mandria il bus della 22 sfiora uno stallo su un arco
+- `tests/sosta.spec.js` controlla che nessuno stallo stia nelle corsie delle auto né nella carrozzeria dei bus lungo
+  `lane.P`: chi cambia dove passano auto e bus lo aggiorna con il nuovo percorso (con #113: sotto);
+- un caso noto in `data/eccezioni/sosta-gioco.json`: al Capolinea Mandria il bus della 22 sfiorava uno stallo su un arco
   fuori dal percorso, lungo la strada che `buildLane` aggiunge prima e dopo il capolinea (`lead`, `exit`), che la build
-  non conosce. Va tolto quando i percorsi dei bus vengono dai raccordi;
+  non conosce. Tolto con #113;
 - `laneLat` e lo spostamento dal binario del tram (`room` in `buildLane`) hanno preso `e.sede`;
 - `tests/traffico.spec.js`, Porta Trento: le due curve si sono spostate con le corsie più strette. L'attesa a vicenda
   si prepara con le auto a 0,6 e 0,55 delle curve (erano 0,6 e 0,32) e passa per prima chi va in Via Belfiore;
 - le auto ferme non sono viste dal traffico: stanno fuori dalle corsie per costruzione. Un'auto che esce dalla corsia
   (sorpasso di un bus fermo, `untangle`) non le evita.
+
+Inseguitore di percorso (#113, 16 novembre). Auto e bus automatici seguono lo stesso percorso continuo, fatto degli assi
+delle corsie di `laneLayout` e dei raccordi della build, con `src/world/inseguitore.js` (regole in
+[`raccordi.md`](raccordi.md), sezione 7). Prima posizione e direzione si calcolavano separate: gli spostamenti di lato
+(`latOff`, `tramOff`) valevano subito, la direzione `c.h` seguiva con un ritardo, a fine svolta la posizione saltava
+sulla corsia e `turnPath` inventava la curva (una quadratica col vertice sull'incontro delle corsie, o a metà strada se
+non c'era). Da sapere:
+
+- il centro dell'asse posteriore sta sul percorso alla progressiva `q` (auto: `c.q`, 1,35 m dietro al centro; bus:
+  `b.q = b.s - 2,6`), la direzione è la tangente più la pendenza dello scostamento (`posa`). Nei raccordi il mezzo gira
+  con il loro raggio; nei bus il muso esce dalla curva come nel bus di chi guida (prima i due assi stavano tutti e due
+  sulla corsia, e in curva il bus andava di traverso rispetto alle ruote dietro);
+- lo scostamento di lato (`lat` a destra, `pend` metri per metro) è il sorpasso, lo spostamento fuori dalla sede del
+  tram e l'accosto alle fermate: cambia al più di 0,15 (auto) e 0,12 (bus) metri per metro, con la curva entro metà
+  del raggio minimo, e nei raccordi stretti resta fermo (`scosta`). Il cambio di corsia invece è un tratto del
+  percorso (`tratto`, una cicloide). I bus non spostano più i punti della corsia per stare fuori dai binari: lo
+  spostamento calcolato in `buildLane` è il bersaglio dello scostamento (`L.shift`);
+- auto: `Traffic.movimenti(e, fwd)` sono i movimenti dei raccordi con il bit delle auto; `chooseNext` sceglie tra loro
+  (vicoli ciechi e pozzi come prima, ora sui movimenti: senza inversioni sullo stesso arco), `estendi` allunga il
+  percorso 90 m avanti con la corsia scelta anche per la svolta dopo (`scegli`), `segui` dice dove sta l'auto (`c.edge`,
+  `c.fwd`, `c.s` del centro sulla corsia; nel raccordo `c.turn = { next, rest, len }`). Le linee d'arresto dei semafori
+  sono progressive del percorso (`c.ev`, `lineeArresto`): valgono anche quando il raccordo comincia prima della linea.
+  In fondo a una strada chiusa l'auto si ferma e, lontano da chi guida, esce di scena. Per le prove `Traffic.nuova` e
+  `Traffic.inCurva`; `along` campiona il percorso;
+- bus: `percorsoBus` prende per ogni svolta del percorso un raccordo con il bit del bus da 12 m e sceglie le corsie su
+  tutto il percorso (meno cambi, sempre con il posto, a destra quando si può); `buildLane` campiona il percorso ogni
+  2 m (ogni metro nei raccordi) con la progressiva vera (`P.cum`), e fermate, semafori, incroci col tram e velocità
+  restano calcolati su quei punti. `walk` (avvicinamento e uscita) preferisce le svolte con il raccordo del bus.
+  `BusSim.ahead`: il di lato dell'ostacolo si confronta con lo scostamento che il bus avrà arrivandoci (verso
+  `b.latT`, al più 0,12 m per metro; prima lo scostamento di adesso, sommato invece che tolto), anche durante il
+  sorpasso di chi gioca, che prima si ignorava: con lo scostamento che cambia solo andando avanti, il bus automatico
+  della 24 al capolinea di Largo Debussy tamponava il bus di chi guida e lo spostava da sotto la colonnina
+  (`tests/elettrico.spec.js`). Se non c'è spazio per spostarsi di lato, aspetta;
+- `tests/pali.js` (area Mappa, #109): l'ingombro dei bus automatici è messo come il nuovo `BusSim.place` (asse
+  posteriore sulla corsia, direzione della corsia lì). In `data/eccezioni/mappa-gioco.json`, `pali_nell_ingombro_dei_bus`:
+  spariscono i cinque casi della coda che tagliava l'angolo (Prato della Valle, Due Palazzi, Gramsci 120, Albignasego)
+  e dieci dei pali sulle rampe del Chiesanuova e di Via Venezia; arrivano quattro casi del muso che in curva esce oltre
+  il cordolo (#130), sette di bus su curve di ripiego (#135, #114, #134), quattro della 10 sul Cavalcavia San Marco
+  fuori dall'asfalto (#131), la lanterna del tram in mezzo alla rotonda Rosetta Gagliardi e un palo della rampa del
+  Chiesanuova;
+- `tests/sosta.spec.js` (#111): le corsie delle auto sono quelle di `laneLayout` (o la corsia sola di `corsie()`), la
+  carrozzeria dei bus è messa come `BusSim.place`. In `data/eccezioni/sosta-gioco.json` sparisce il caso del Capolinea
+  Mandria e arrivano cinque stalli subito dopo una svolta (linee 3, 6, 11 e 11B): con l'asse posteriore ancora nel
+  raccordo il muso esce verso l'esterno della curva, fino a 1,2 m dentro lo stallo. Li toglie `scripts/sosta.py` quando
+  conosce l'ingombro dei bus in svolta (#130);
+- `tests/profili.spec.js` (area Mappa): il pilota sta nelle corsie dove gli stalli stringono la carreggiata (`e.sede`),
+  come quello di `tests/guida.js` dopo #111. Sul Cavalcavia Montà, a un quarto della carreggiata, il fianco del bus
+  passava fino a 44 cm sopra le auto in sosta: in una serie completa il pilota si è fermato lì, da sola la prova
+  passava;
+- ripieghi, dove manca il raccordo per il mezzo: dichiarati sul pezzo (`p.ripiego`), contati in `BusSim.ripieghi` e
+  `Traffic.ripieghi`, e nella chiave dei casi della prova del moto;
+- `turnPath`, `startTurn`, `routeAt`, `laneGeom`, `laneLat`, `latOff` e `tramOff` non ci sono più (con loro i ritocchi di
+  #111 per `e.sede`: le corsie di `laneLayout` gli stalli li hanno già); lo spostamento dai binari dei bus tiene il
+  limite di #111 a destra (`e.sede`);
+- andatura delle auto in curva: √(3 · r) nel raccordo (3,4 m/s nelle rotonde piccole, 6,7 m/s con 15 m di raggio),
+  frenata di 2 m/s² prima. Con 2 m/s² la rotonda di Via Bembo con Via Marinelli, sulla 3 da Lion, smaltiva troppo poco:
+  il bus di chi guida restava in coda oltre 150 s e la prova di Tito Livio finiva lì. Nella stessa rotonda l'anello si
+  riempiva con un giro di attese di 10 auto, e `untangle` ne seguiva al più 9: ora 30;
+- la prova delle auto in svolta che si aspettano (#79) era a Porta Trento, dove la svolta da Via Bezzecca in Via
+  Belfiore non ha un raccordo delle auto: ora cerca le due auto all'incrocio di Via Gattamelata con Via Tartini, dove
+  due raccordi delle auto si incrociano a 1,5 m (`stallo` in `tests/traffico.spec.js`);
+- la prova del moto (`tests/moto.spec.js`, regole in `tests/moto.js`) era rossa su `main` prima della modifica: numeri
+  di prima e dopo nell'issue #113. Restano 100 posti, tutti bus su ripieghi: 60 raccordi delle auto (#134), 31 corsie
+  che non si legano tra svolte vicine (#135), 9 curve del gioco dove la rete non ha la svolta (#114 e #134). Le auto
+  non hanno casi. `tempoMassimo(300)` è provvisorio: in locale la prova dura 1,3 minuti.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

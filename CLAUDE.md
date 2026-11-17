@@ -49,7 +49,9 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   mappa ne porta per nodo e per arco (`svolte`, `sosta`, `rilevati`, `pendenze`, `fondo`), quanto copre OSM e controlli.
 * `docs/raccordi.md`: raccordi di corsia agli incroci calcolati nella build (`scripts/raccordi.py`): da quale corsia a
   quale corsia, curva, raggio e classi di mezzo (auto, bus da 12 m, snodato), formato del campo `raccordi` della
-  mappa, controlli contro la pianta delle strade e casi noti (`data/eccezioni/raccordi.json`).
+  mappa, controlli contro la pianta delle strade e casi noti (`data/eccezioni/raccordi.json`). Auto e bus automatici li
+  seguono con l'inseguitore di percorso (`src/world/inseguitore.js`, sezione 7): l'asse posteriore sul percorso, la
+  direzione è la tangente, i ripieghi dove manca il raccordo sono dichiarati e contati.
 * `docs/sosta.md`: sosta lungo le strade calcolata nella build (`scripts/sosta.py`): file di stalli per arco e per lato
   dai tag OSM, dalle aree OSM, dal DBGT e dalla larghezza della carreggiata, formato dei campi `stalli` e `sedeCorsie`
   della mappa, zone libere (incroci, fermate, passi carrai), controlli (`data/eccezioni/sosta.json`,
@@ -151,12 +153,16 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   con il perché: `verifica-mappa.json`, `osm-rete.json` (`scripts/osm_rete.py`, svolte di OSM), `cavalcavia.json`
   (`scripts/cavalcavia.py`, anche da `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`),
   `traffico.json` (`tests/traffico.spec.js`), `raccordi.json` (`scripts/raccordi.py`), `sosta.json`
-  (`scripts/sosta.py`), `sosta-gioco.json` (`tests/sosta.spec.js`) e `percorsi.json` (`scripts/percorsi.py`,
-  anche alla fine della build). Un caso fuori dall'elenco fa fallire il
+  (`scripts/sosta.py`), `sosta-gioco.json` (`tests/sosta.spec.js`), `percorsi.json` (`scripts/percorsi.py`,
+  anche alla fine della build) e `moto.json` (`tests/moto.spec.js`). Un caso fuori dall'elenco fa fallire il
   controllo anche se il totale non sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione
   l'elenco si riscrive con `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i
   casi nuovi finiscono in un gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un
   conteggio.
+* **Moto dei mezzi.** `tests/moto.spec.js` guarda auto e bus automatici per 10 minuti in tre zone (regole in
+  `tests/moto.js`): a zero i casi di traverso, i salti, l'imbardata oltre v / raggio minimo e le inversioni sullo stesso
+  arco, con i casi noti in `data/eccezioni/moto.json`. Dove il mezzo è su un ripiego dell'inseguitore la chiave lo dice
+  tra parentesi: quei casi spariscono quando #134 e #114 danno alle svolte il loro raccordo.
 * **Profili dei cavalcavia dichiarati.** `data/profili-cavalcavia.json` ha la quota lungo archi e binari di ogni
   struttura; `tests/profili.spec.js` fallisce se la mappa ne ha altri. Chi cambia di proposito le quote di una
   struttura lancia `python3 scripts/profili_strutture.py --aggiorna` nello stesso commit e la nomina nel messaggio.

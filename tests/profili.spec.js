@@ -172,7 +172,15 @@ function parti(c) {
     const q = segs[i], t = s - cum[i];
     return { x: pts[i].x + q.dx * t, z: pts[i].z + q.dz * t, dx: q.dx, dz: q.dz, e: q.e };
   };
-  const lato = (e) => (e.oneway ? 0 : Math.min(e.width / 4, e.width / 2 - 1.5));
+  // a destra dell'asse; dove gli stalli stringono la carreggiata (e.sede, #111) nelle corsie, come il pilota di
+  // tests/guida.js: la fiancata a 30 cm dal bordo degli stalli di destra, senza passare oltre quelli di sinistra (sul
+  // Cavalcavia Montà a un quarto della carreggiata il bus passava 44 cm sopra le auto in sosta)
+  const lato = (p) => {
+    const e = p.e;
+    let l = e.oneway ? 0 : Math.min(e.width / 4, e.width / 2 - 1.5);
+    if (e.sede) { const av = p.dx * e.dx + p.dz * e.dz > 0; l = Math.max(Math.min(l, e.sede[av ? 1 : 0] - 1.6), 1.6 - e.sede[av ? 0 : 1]); }
+    return l;
+  };
   const proietta = () => {
     let best = Infinity, s = 0;
     for (let i = 0; i < segs.length; i++) {
@@ -185,7 +193,7 @@ function parti(c) {
   // i profili del file per arco
   const file = new Map();
   for (const S of Object.values(c.profili || {})) for (const a of S.archi) file.set(a.slice(0, 4).join(','), a);
-  const p0 = punto(8), l0 = lato(p0.e);
+  const p0 = punto(8), l0 = lato(p0);
   bus.place(p0.x - p0.dz * l0, p0.z + p0.dx * l0, Math.atan2(p0.dx, p0.dz));
   bus.elev = undefined; bus.v = 0; bus.steerIn = 0; bus.steer = 0; bus.parking = false;
   g.city.ensureTiles(bus.x, bus.z, 600);
@@ -196,7 +204,7 @@ function parti(c) {
       A.s = proietta();
       // sterzo: inseguimento puro dall'asse posteriore
       const rx = bus.x - Math.sin(h) * 2.6, rz = bus.z - Math.cos(h) * 2.6;
-      const ld = clamp(8 + 0.5 * v, 9, 16), p = punto(A.s - 2.6 + ld), l = lato(p.e);
+      const ld = clamp(8 + 0.5 * v, 9, 16), p = punto(A.s - 2.6 + ld), l = lato(p);
       const vx = p.x - p.dz * l - rx, vz = p.z + p.dx * l - rz, D = Math.hypot(vx, vz) || 1;
       const sinA = (vx * Math.cos(h) - vz * Math.sin(h)) / D;
       const delta = Math.atan((2 * 5.9 * sinA) / D), max = 0.62 / (1 + v * v * 0.0045);

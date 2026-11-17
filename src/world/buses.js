@@ -5,9 +5,9 @@ import { mulberry32, distToSeg } from './spatial.js';
 import { ledTexture } from './textures.js';
 import { TrackPath } from '../tram/tram.js';
 import { buildRoute, alignStops, busCan } from '../game/routes.js';
-import { driveOffset } from '../data/padova.js';
 import { scheduleFor, isPeak, Crowd } from '../game/mission.js';
 import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
+import { percorsoBus, posa, scosta, entro, corsie, raccordiDi, BUS12, raggioMinimo } from './inseguitore.js';
 
 // ------------------------------------------------------------------
 // Bus automatici delle linee urbane, dall'orario GTFS: in servizio ci sono le corse che a quell'ora sono per strada
@@ -22,7 +22,11 @@ import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
 const LEAD = 260, EXIT = 320; // metri di strada prima del capolinea di partenza e dopo quello di arrivo
 const VLEAD = 7; // velocità media stimata per entrare e uscire di linea (m/s)
 const FRONT = 6; // dal centro del bus al muso
-const STEP = 2; // passo dei punti della corsia (m)
+const ASSE = 2.6; // dal centro del bus all'asse posteriore, che segue il percorso
+const STEP = 2; // passo dei punti della corsia (m); nei raccordi 1 m
+// scostamento di lato (fermate, sorpasso, fuori dai binari): al più K metri per metro, con la curva entro metà del
+// raggio minimo del bus (src/world/inseguitore.js)
+const K_LAT = 0.12, A_LAT = 1 / (2 * raggioMinimo(BUS12));
 const R_VIS = 560, MAX_VIS = 16; // modelli: entro questa distanza dal giocatore, al massimo tanti
 const NEAR = 700; // oltre questa distanza non si guarda chi c'è davanti (nessuno lo vede)
 const DOOR_T = 1.6; // secondi per aprire o chiudere le porte
@@ -30,25 +34,26 @@ const DRIVER = [0.62, 0, 4.5]; // autista: seduto a sinistra, dietro al cruscott
 const PAX_CAP = 70; // passeggeri a bordo al massimo
 const R_PAX = 260; // gente alle fermate solo entro questa distanza dal giocatore
 
-// corsia del bus: sui doppi sensi quella di destra, sui sensi unici stretti il centro
-// (dove gli stalli stringono la carreggiata, e.sede, la corsia più a destra delle corsie della build)
-const laneLat = (e, fwd = true) => (!e ? 1.8 : (e.sede && driveOffset(e, fwd)) ?? (e.oneway ? (e.width < 8 ? 0 : e.width / 2 - 2) : Math.max(e.width / 4, e.width / 2 - 2.2)));
 // prosecuzione più dritta possibile lungo il grafo: avanti (uscita dall'ultima fermata, arrivando da prev) o indietro
-// (strada da cui si arriva al capolinea: prev è il nodo successivo sul percorso)
+// (strada da cui si arriva al capolinea: prev è il nodo successivo sul percorso). Prima le svolte che hanno un raccordo
+// della build per il bus (src/world/inseguitore.js): queste strade non sono percorsi di linea, e dove la curva delle
+// auto è sotto il raggio del bus il percorso userebbe un ripiego
 function walk(net, from, prev, maxLen, back) {
-  const out = [], seen = new Set([from, prev]);
+  const out = [], seen = new Set([from, prev]), rac = raccordiDi(net);
   let cur = from, p = prev, len = 0;
   while (len < maxLen) {
-    const C = net.nodes[cur], P = net.nodes[p];
+    const C = net.nodes[cur], P = net.nodes[p], eP = net.edgeBetween(cur, p);
     let dx = back ? P.x - C.x : C.x - P.x, dz = back ? P.z - C.z : C.z - P.z;
     const l = Math.hypot(dx, dz) || 1;
     dx /= l; dz /= l;
+    // il bus va da da ad a passando da cur: avanti da eP all'arco nuovo, indietro dall'arco nuovo a eP
+    const perBus = (e) => rac.at(cur).some((R) => R.classi & BUS12 && !R.via.length && (back ? R.da === e && R.a === eP : R.da === eP && R.a === e));
     let best = null, bd = 0.25;
     for (const e of C.edges) {
       const m = e.a === cur ? e.b : e.a;
       if (seen.has(m) || !busCan(e, back ? m : cur)) continue;
       const M = net.nodes[m], ex = back ? C.x - M.x : M.x - C.x, ez = back ? C.z - M.z : M.z - C.z, el = Math.hypot(ex, ez) || 1;
-      const sc = (ex * dx + ez * dz) / el + (e.main ? 0.15 : 0) - (e.service ? 0.3 : 0);
+      const sc = (ex * dx + ez * dz) / el + (e.main ? 0.15 : 0) - (e.service ? 0.3 : 0) + (perBus(e) ? 1 : 0);
       if (sc > bd) { bd = sc; best = { m, el }; }
     }
     if (!best) break;
@@ -60,9 +65,11 @@ function walk(net, from, prev, maxLen, back) {
   return out;
 }
 
-// Corsia di una variante: avvicinamento + percorso + uscita, spostata a destra della mezzeria e smussata, con fermate,
-// semafori, incroci col tram e velocità massima punto per punto (curve e limiti), tutto in progressiva lungo la corsia
-function buildLane(net, city, v, tramSignals) {
+// Corsia di una variante: avvicinamento + percorso + uscita sulle corsie e sui raccordi della build (percorsoBus di
+// src/world/inseguitore.js), con fermate, semafori, incroci col tram e velocità massima punto per punto (curve e
+// limiti), tutto in progressiva lungo il percorso. P sono i punti del percorso (ogni 2 m, ogni metro nei raccordi), con
+// la progressiva vera del percorso (P.cum); per: il percorso, su cui place() mette il bus. conta(tipo, nodo): i ripieghi
+function buildLane(net, city, v, tramSignals, conta = () => {}) {
   const route = buildRoute(net, v);
   if (city.stopPlacements) alignStops(route, city.stopPlacements);
   const seq = route.seq;
@@ -74,41 +81,28 @@ function buildLane(net, city, v, tramSignals) {
   for (let i = 0; i < N.length - 1; i++) {
     const dx = N[i + 1].x - N[i].x, dz = N[i + 1].z - N[i].z, len = Math.hypot(dx, dz) || 0.01;
     const e = net.edgeBetween(ids[i], ids[i + 1]);
-    const fwd = e ? e.a === ids[i] : true;
-    segs.push({ e, dx: dx / len, dz: dz / len, len, lat: laneLat(e, fwd), fwd });
+    segs.push({ e, dx: dx / len, dz: dz / len, len, fwd: e ? e.a === ids[i] : true, n0: ids[i], n1: ids[i + 1] });
     cum.push(cum[i] + len);
   }
-  // estremi dei tratti spostati di lato, uniti nel punto d'incontro delle due rette (smussato dopo)
-  const raw = [];
-  for (let i = 0; i < segs.length; i++) {
-    const g = segs[i], h = segs[i + 1];
-    const B = { x: N[i + 1].x - g.dz * g.lat, z: N[i + 1].z + g.dx * g.lat, cs: cum[i + 1] };
-    if (i === 0) raw.push({ x: N[0].x - g.dz * g.lat, z: N[0].z + g.dx * g.lat, cs: 0 });
-    if (!h) { raw.push(B); break; }
-    const B2 = { x: N[i + 1].x - h.dz * h.lat, z: N[i + 1].z + h.dx * h.lat, cs: cum[i + 1] };
-    const cross = g.dx * h.dz - g.dz * h.dx;
-    if (Math.abs(cross) > 0.08) {
-      const t = ((B2.x - B.x) * h.dz - (B2.z - B.z) * h.dx) / cross, u = ((B2.x - B.x) * g.dz - (B2.z - B.z) * g.dx) / cross;
-      const X = { x: B.x + g.dx * t, z: B.z + g.dz * t, cs: cum[i + 1] };
-      if (t > -0.9 * g.len && u < 0.9 * h.len && Math.hypot(X.x - N[i + 1].x, X.z - N[i + 1].z) < 10) { raw.push(X); continue; }
-    }
-    raw.push(B);
-    if (Math.hypot(B2.x - B.x, B2.z - B.z) > 0.05) raw.push(B2);
-  }
-  // punti ogni ~2 m, poi media mobile (curve e cambi di corsia senza spigoli)
-  const pts = [raw[0]];
-  for (let i = 1; i < raw.length; i++) {
-    const a = raw[i - 1], b = raw[i], d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.round(d / STEP));
-    for (let k = 1; k <= n; k++) pts.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n, cs: a.cs + ((b.cs - a.cs) * k) / n });
-  }
-  for (let pass = 0; pass < 2; pass++) {
-    const src = pts.map((p) => ({ x: p.x, z: p.z }));
-    for (let i = 3; i < pts.length - 3; i++) {
-      let x = 0, z = 0;
-      for (let j = -3; j <= 3; j++) { x += src[i + j].x; z += src[i + j].z; }
-      pts[i].x = x / 7; pts[i].z = z / 7;
+  const per = percorsoBus(net, segs, BUS12, conta);
+  // punti del percorso: progressiva (cum), progressiva della mezzeria del percorso dei nodi (cs) e scostamento della
+  // corsia dall'asse dell'arco (off, per l'accosto alle fermate)
+  const pts = [], Qs = [], CS = [], OFF = [], o = {};
+  for (const p of per.pezzi) {
+    const racc = p.tipo === 'raccordo', n = Math.max(1, Math.ceil(p.len / (racc ? 1 : STEP)));
+    const cs0 = racc ? cum[p.k0] + (p.R.da ? p.g.s0 : 0) : 0, cs1 = racc ? cum[p.k1] + (p.R.a ? p.g.s1 : 0) : 0;
+    const off = racc && p.R.da ? corsie(p.R.da, p.R.fin)[Math.min(p.R.cda, corsie(p.R.da, p.R.fin).length - 1)].off : 0;
+    for (let j = 0; j <= n; j++) {
+      const u = (p.len * j) / n, q = p.q0 + u;
+      if (Qs.length && q <= Qs[Qs.length - 1] + 1e-4) continue;
+      p.at(u, o);
+      pts.push({ x: o.x, z: o.z });
+      Qs.push(q);
+      CS.push(racc ? cs0 + (cs1 - cs0) * (p.len > 0 ? u / p.len : 1) : cum[p.k0] + p.sa + u);
+      OFF.push(racc ? off : p.off(p.sa + u));
     }
   }
+  if (pts.length < 2) { const o2 = per.at(per.fine, {}); pts.push({ x: o2.x + 0.01, z: o2.z }); Qs.push(Qs[0] + 0.01); CS.push(CS[0]); OFF.push(OFF[0]); }
   const segAt = (cs) => {
     let lo = 0, hi = cum.length - 2;
     while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cum[m] <= cs) lo = m; else hi = m - 1; }
@@ -118,10 +112,12 @@ function buildLane(net, city, v, tramSignals) {
   // verso opposto prima di tutto: prima i bus lasciavano il binario più vicino anche quando era quello del loro verso
   // e finivano sull'altro, incontro al tram (Via Morgagni, Via Tommaseo, Piazza Garibaldi). Sulle corsie riservate che
   // percorrono la sede (Cavalcavia Borgomagno, Via Tommaseo) il binario nello stesso verso si usa; dove nella
-  // carreggiata non c'è posto per lasciare quello opposto, il bus va sul binario del proprio verso (Via Belludi)
+  // carreggiata non c'è posto per lasciare quello opposto, il bus va sul binario del proprio verso (Via Belludi).
+  // Dal 16 novembre (#113) lo spostamento non sposta i punti del percorso: è lo scostamento a cui il bus tende
+  // (L.shift, lungo i punti), limitato per metro e che torna sull'asse prima dei raccordi stretti
   const shift = new Float32Array(pts.length), q = [];
   for (let i = 0; i < pts.length; i++) {
-    const g = segs[segAt(pts[i].cs)];
+    const g = segs[segAt(CS[i])];
     const shared = !!(g.e && g.e.psv);
     const a = pts[Math.max(0, i - 1)], c = pts[Math.min(pts.length - 1, i + 1)], p = pts[i];
     let dx = c.x - a.x, dz = c.z - a.z;
@@ -138,8 +134,8 @@ function buildLane(net, city, v, tramSignals) {
       if (dx * sx + dz * sz < 0) { if (!opp || r.d < opp.d) opp = o; } else if (!own || r.d < own.d) own = o;
     }
     if ((!opp || opp.d >= opp.hw) && (shared || !own || own.d >= own.hw)) continue;
-    // (a destra non oltre il bordo degli stalli, dove la build li ha messi: e.sede)
-    const room = g.e ? g.e.width / 2 - 1.3 : 3, lo = -room - g.lat, hi = Math.min(room, g.e && g.e.sede ? g.e.sede[g.fwd ? 1 : 0] - 1.45 : room) - g.lat;
+    // (a destra non oltre il bordo degli stalli, dove la build li ha messi: e.sede, #111)
+    const room = g.e ? g.e.width / 2 - 1.3 : 3, lo = -room - OFF[i], hi = Math.min(room, g.e && g.e.sede ? g.e.sede[g.fwd ? 1 : 0] - 1.45 : room) - OFF[i];
     const cost = (sh) => (opp ? 10 * Math.max(0, opp.hw - Math.abs(opp.lat - sh)) : 0) +
       (own && !shared ? Math.max(0, own.hw - Math.abs(own.lat - sh)) : 0) + 0.05 * Math.abs(sh);
     let bestSh = 0, bestC = cost(0);
@@ -148,16 +144,11 @@ function buildLane(net, city, v, tramSignals) {
     if (own && Math.abs(own.lat) < 8) tryAt(own.lat);
     shift[i] = bestSh;
   }
-  if (shift.some((x) => x)) {
-    const sm = shift.map((_, i) => { let a = 0, n = 0; for (let j = Math.max(0, i - 5); j <= Math.min(shift.length - 1, i + 5); j++) { a += shift[j]; n++; } return a / n; });
-    for (let i = 0; i < pts.length; i++) {
-      if (!sm[i]) continue;
-      const a = pts[Math.max(0, i - 1)], c = pts[Math.min(pts.length - 1, i + 1)], l = Math.hypot(c.x - a.x, c.z - a.z) || 1;
-      pts[i].x += (-(c.z - a.z) / l) * sm[i]; pts[i].z += ((c.x - a.x) / l) * sm[i];
-    }
-  }
-  const P = new TrackPath(pts.map((p) => ({ x: p.x, z: p.z })));
-  const CS = pts.map((p) => p.cs);
+  const sm = shift.some((x) => x) ? shift.map((_, i) => { let a = 0, n = 0; for (let j = Math.max(0, i - 5); j <= Math.min(shift.length - 1, i + 5); j++) { a += shift[j]; n++; } return a / n; }) : shift;
+  // i punti con la progressiva del percorso (non quella della spezzata, appena più corta nelle curve)
+  const P = new TrackPath(pts);
+  P.cum = Qs;
+  P.len = Qs[Qs.length - 1];
   // progressiva sulla corsia di un punto della mezzeria (cs)
   const ls = (cs) => {
     let lo = 0, hi = CS.length - 1;
@@ -168,9 +159,9 @@ function buildLane(net, city, v, tramSignals) {
   const c0 = cum[lead.length];
   // fermate: muso a fine zona di fermata, accostato al marciapiede
   const stops = route.stops.map((st) => {
-    const k = segAt(c0 + st.s), sg = segs[k];
+    const fs = ls(c0 + st.s) - 0.5, lat = OFF[P.seg(Math.max(0, Math.min(P.len, fs)))];
     return {
-      fs: ls(c0 + st.s) - 0.5, extra: Math.max(0, (st.kl ?? st.kerb ?? st.hw) - Math.max(0, st.ks || 0) * 12 - 1.7 - sg.lat), name: st.name, importance: st.importance, terminal: st.terminal,
+      fs, extra: Math.max(0, (st.kl ?? st.kerb ?? st.hw) - Math.max(0, st.ks || 0) * 12 - 1.7 - lat), name: st.name, importance: st.importance, terminal: st.terminal,
       // dove si aspetta: sul marciapiede alla palina, verso di marcia (dx, dz) e normale verso il marciapiede (rx, rz)
       wx: st.x, wz: st.z, dx: st.dx, dz: st.dz, rx: st.rx, rz: st.rz,
     };
@@ -218,7 +209,7 @@ function buildLane(net, city, v, tramSignals) {
   }
   for (let i = n - 2; i >= 0; i--) vlim[i] = Math.min(vlim[i], Math.sqrt(vlim[i + 1] * vlim[i + 1] + 2 * 1.1 * (P.cum[i + 1] - P.cum[i])));
   const leadLen = stops.length ? stops[0].fs : 0, exitLen = stops.length ? P.len - stops[stops.length - 1].fs : 0;
-  return { P, stops, signals, tram, vlim, segOf, segs, cum, CS, ids, leadLen, exitLen, dest: v.stops[v.stops.length - 1].name };
+  return { P, per, shift: sm, stops, signals, tram, vlim, segOf, segs, cum, CS, ids, leadLen, exitLen, dest: v.stops[v.stops.length - 1].name };
 }
 
 // quota della strada sotto il punto i della corsia (cavalcavia)
@@ -360,6 +351,9 @@ export class BusSim {
     this.scene = scene; this.net = net; this.city = city;
     this.tramSignals = opts.tramSignals || null;
     this.lanes = new Map(); // variante -> corsia
+    // ripieghi dei percorsi (src/world/inseguitore.js): svolte senza un raccordo della build per il bus, cambi di corsia
+    // senza posto. "tipo @ x,z" -> varianti che lo usano
+    this.ripieghi = new Map();
     this.buses = [];
     this.runs = [];
     this.parts = []; // pezzi dei bus vicini (collisioni col giocatore, auto, tram)
@@ -375,7 +369,11 @@ export class BusSim {
   }
   lane(v) {
     let L = this.lanes.get(v);
-    if (!L) { L = buildLane(this.net, this.city, v, this.tramSignals); this.lanes.set(v, L); }
+    if (!L) {
+      const conta = (tipo, n) => { const k = `${tipo} @ ${Math.round(n.x)},${Math.round(n.z)}`; this.ripieghi.set(k, (this.ripieghi.get(k) || 0) + 1); };
+      L = buildLane(this.net, this.city, v, this.tramSignals, conta);
+      this.lanes.set(v, L);
+    }
     return L;
   }
   // prepara in sottofondo (nel menu) le corsie delle varianti con corse attorno all'ora t, poche alla volta
@@ -429,7 +427,7 @@ export class BusSim {
     if (clock < start || clock >= end || !L.stops.length) return null;
     const st = L.stops, T = r.times;
     const b = {
-      run: r, L, s: 0, v: 0, k: 0, phase: 'line', wait: 0, doors: 0, doorTarget: 0, lat: 0, x: 0, z: 0, h: 0, y: 0,
+      run: r, L, s: 0, v: 0, k: 0, phase: 'line', wait: 0, doors: 0, doorTarget: 0, lat: 0, pend: 0, q: 0, x: 0, z: 0, h: 0, y: 0,
       model: null, blockT: 0, passT: 0, ignoreBusT: 0, waveT: 0, sig: 0, tx: 0, id: this.rnd(),
       serve: st.map((s2, i) => i === 0 || i === st.length - 1 || this.rnd() < (s2.importance >= 3 ? 0.95 : s2.importance === 2 ? 0.8 : 0.6)),
       dest: L.dest,
@@ -452,6 +450,9 @@ export class BusSim {
     }
     // a bordo: nessuno prima della partenza e fuori servizio, in linea secondo l'ora
     b.pax = b.phase === 'line' && b.k > 0 && !b.atStop ? Math.round((3 + this.rnd() * 20) * this.demand(clock)) : 0;
+    // nato dentro un raccordo stretto: lo scostamento subito entro quello che il raccordo ammette
+    b.q = Math.max(0, b.s - ASSE);
+    entro(L.per, b);
     this.place(b);
     // un altro bus è già lì (capolinea comune a più linee, tratti in comune): in coda dietro di lui
     for (let k = 0; k < 4 && this.buses.some((o) => Math.hypot(o.x - b.x, o.z - b.z) < 13); k++) { b.s -= 15; this.place(b); }
@@ -485,13 +486,12 @@ export class BusSim {
     }
     this.lastClock = clock;
   }
-  // posizione e direzione dal punto della corsia: assi anteriore e posteriore sulla corsia (più lo spostamento laterale)
+  // posizione e direzione dal percorso (src/world/inseguitore.js): il centro dell'asse posteriore sul percorso, ASSE
+  // metri dietro al centro del bus (b.s), scostato di b.lat a destra, con la direzione della tangente. Prima i due assi
+  // stavano tutti e due sulla corsia: in curva il bus andava di traverso rispetto al moto delle ruote dietro
   place(b) {
-    const P = b.L.P, f = P.at(b.s + 3.3), r = P.at(b.s - 2.6);
-    const fx = f.x - f.dz * b.lat, fz = f.z + f.dx * b.lat, rx = r.x - r.dz * b.lat, rz = r.z + r.dx * b.lat;
-    const l = Math.hypot(fx - rx, fz - rz) || 1;
-    b.h = Math.atan2(fx - rx, fz - rz);
-    b.x = rx + ((fx - rx) / l) * 2.6; b.z = rz + ((fz - rz) / l) * 2.6;
+    b.q = Math.max(0, b.s - ASSE);
+    posa(b.L.per, b, ASSE);
   }
 
   // ctx: { player (bus o tram del giocatore), traffic, trams, lights, clock }
@@ -549,7 +549,8 @@ export class BusSim {
           vt = Math.min(vt, Math.sqrt(2 * 1.2 * Math.max(0, d)) + (d > 0.6 ? 0.25 : 0));
           if (d < 30) wantLat = s0.extra;
           if (d < 0.6) {
-            b.s = s0.fs - FRONT; b.v = 0; b.atStop = true; b.doorTarget = 1;
+            // fermo dov'è (a meno di 60 cm dalla fine della fermata): prima saltava lì
+            b.v = 0; b.atStop = true; b.doorTarget = 1;
             // salita e discesa; in anticipo si aspetta l'orario (al massimo un minuto); al capolinea l'orario
             const T = b.run.times[b.k];
             b.wait = b.k === 0 ? Math.max(5, b.run.t - clock) : b.k === st.length - 1 ? 18 : Math.max(8 + this.rnd() * 12, Math.min(60, T - clock));
@@ -564,8 +565,9 @@ export class BusSim {
         if (front - prev.fs < 18) wantLat = prev.extra * Math.max(0, 1 - (front - prev.fs) / 18);
       }
       if (b.passT > 0) { b.passT -= dt; wantLat = -3.2; }
-      b.lat += Math.max(-0.9 * dt, Math.min(0.9 * dt, wantLat - b.lat));
       // chi c'è davanti sulla corsia (solo vicino al giocatore)
+      // lo scostamento a cui il bus tende (fermata, sorpasso, fuori dai binari): ahead guarda dove sarà arrivando
+      b.latT = wantLat + L.shift[P.seg(Math.max(0, Math.min(P.len, b.s)))];
       const ob = near ? this.ahead(b, front, player, traffic, trams) : null;
       const stopAt = (d) => (d < 0.3 ? 0 : Math.sqrt(2 * 1.6 * (d - 0.3)));
       // chi non può liberare l'incrocio non ci entra: oltre l'uscita la coda non lascia posto al bus (12 m più i 3 da
@@ -621,6 +623,10 @@ export class BusSim {
       const a = vt > b.v ? Math.min(1.1, (vt - b.v) * 1.2) : Math.max(-3.5, (vt - b.v) * 2.5);
       b.v = Math.max(0, b.v + a * dt);
       b.s += b.v * dt;
+      // di lato: verso la fermata, il sorpasso o fuori dai binari, al più K_LAT metri per metro di strada
+      const q0 = b.q;
+      b.q = Math.max(0, b.s - ASSE);
+      scosta(L.per, b, b.latT, b.q - q0, A_LAT, K_LAT);
       this.doorsStep(b, dt);
       if (b.phase === 'exit' && b.s + FRONT > P.len - 2) ended.push(b);
       this.place(b);
@@ -724,10 +730,14 @@ export class BusSim {
     const f = Math.max(0, Math.min(1, (s - P.cum[i]) / ((P.cum[i + 1] - P.cum[i]) || 1)));
     return L.vlim[i] + (L.vlim[Math.min(i + 1, L.vlim.length - 1)] - L.vlim[i]) * f;
   }
-  // il primo ostacolo sulla corsia davanti al muso: distanza (gap) e velocità lungo la corsia
+  // il primo ostacolo sulla corsia davanti al muso: distanza (gap) e velocità lungo la corsia. Di lato conta dove sarà il
+  // bus arrivando all'ostacolo: lo scostamento va verso b.latT al più di K_LAT metri per metro (#113). Anche durante il
+  // sorpasso di chi gioca: prima lo si ignorava e lo scostamento cambiava anche da fermi; ora, se non c'è spazio per
+  // spostarsi di lato prima di arrivargli addosso, il bus aspetta
   ahead(b, front, player, traffic, trams) {
     const P = b.L.P, i0 = P.seg(Math.max(0, front - 3)), i1 = Math.min(P.pts.length - 1, P.seg(front + 40) + 1);
-    const fp = P.at(front);
+    const fp = P.at(front), T = b.latT ?? b.lat;
+    const latA = (d) => b.lat + Math.sign(T - b.lat) * Math.min(Math.abs(T - b.lat), K_LAT * Math.max(0, d));
     let best = null;
     const test = (x, z, h, v, r, lat, info) => {
       if (Math.abs(x - fp.x) > 45 || Math.abs(z - fp.z) > 45) return;
@@ -737,16 +747,17 @@ export class BusSim {
         const A = P.pts[i], B = P.pts[i + 1], ex = B.x - A.x, ez = B.z - A.z, l2 = ex * ex + ez * ez || 1e-6;
         const t = Math.max(0, Math.min(1, ((x - A.x) * ex + (z - A.z) * ez) / l2));
         const d = Math.hypot(x - A.x - ex * t, z - A.z - ez * t);
-        if (d < bd) { const l = Math.sqrt(l2); bd = d; bs = P.cum[i] + l * t; bl = ((x - A.x) * -ez + (z - A.z) * ex) / l + b.lat; bh = Math.atan2(ex, ez); }
+        // bl: a destra del percorso (il bus ci sta latA(gap) a destra: prima lo scostamento si sommava, col segno rovesciato)
+        if (d < bd) { const l = Math.sqrt(l2); bd = d; bs = P.cum[i] + (P.cum[i + 1] - P.cum[i]) * t; bl = ((x - A.x) * -ez + (z - A.z) * ex) / l; bh = Math.atan2(ex, ez); }
       }
-      if (bs == null || Math.abs(bl) > lat) return;
+      if (bs == null) return;
       const gap = bs - r - front;
-      if (gap < -1.5 || gap > 40) return;
+      if (gap < -1.5 || gap > 40 || Math.abs(bl - latA(gap)) > lat) return;
       const c = h == null ? 1 : Math.cos(h - bh);
       if (h != null && c < -0.3 && !info.player) return; // chi viene incontro
       if (!best || gap < best.gap) best = { gap, v: (v || 0) * Math.max(0, c), ...info };
     };
-    if (player && b.passT <= 0 && Math.abs(player.x - fp.x) < 60 && Math.abs(player.z - fp.z) < 60) {
+    if (player && Math.abs(player.x - fp.x) < 60 && Math.abs(player.z - fp.z) < 60) {
       const pts = player.isTram && player.trackPoints ? player.trackPoints() : [-4.9, -2.45, 0, 2.45, 4.9].map((lz) => player.toWorld(0, lz));
       for (const p of pts) test(p.x, p.z, player.h, Math.abs(player.v), 1.3, 2.6, { player: true });
     }
