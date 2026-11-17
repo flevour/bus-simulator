@@ -1,6 +1,13 @@
 {
  "cosa": "Casi noti delle prove del traffico (tests/traffico.spec.js). Chiave: chi @ x,z del gioco, dove è rimasto fermo. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
-  "fermi_oltre_un_ciclo": []
+  "fermi_oltre_un_ciclo": [
+   {
+    "perche": "Riviera dei Ponti Romani (#127): il bus della 22 è in coda dietro un bus della 16 che sosta fino all'orario alla fermata e resta fermo 61 s, appena oltre il ciclo di 60 s. È il caso del 13 novembre (#122), uscito dall'elenco con #109 e tornato con la mappa rigenerata di #124: la posa delle paline e la pianta cambiano di qualche millimetro a ogni rigenerazione (#139), e qui basta un secondo. Lo toglie #127.",
+    "casi": [
+     "bus 22 @ 41,108"
+    ]
+   }
+  ]
  }
 }

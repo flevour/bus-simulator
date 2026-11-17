@@ -186,15 +186,26 @@ class GeoBuilder {
       if (sgn > 0) this.idx.push(b + i0, b + i2, b + i1); else this.idx.push(b + i0, b + i1, b + i2);
     }
   }
-  // come polygon, con la quota di ogni vertice da yFn(x, z). Con tol i lati più lunghi di 1 m la cui quota a metà si
-  // stacca di più di tol dalla corda si dividono: la superficie segue il profilo della rampa invece di tagliarlo
-  // (l'impalcato del Camerini, con un lato di 170 m, spuntava sopra l'asfalto), e dove è piana o dritta resta com'è
+  // come polygon, con la quota di ogni vertice da yFn(x, z). Con tol i lati più lunghi di 1 m la cui quota si stacca di
+  // più di tol dalla corda si dividono: la superficie segue il profilo della rampa invece di tagliarlo (l'impalcato del
+  // Camerini, con un lato di 170 m, spuntava sopra l'asfalto), e dove è piana o dritta resta com'è. La quota si guarda a
+  // metà dei lati fino a 10 m e ogni 10 m su quelli più lunghi: in un corridoio stretto un lato di 700 m con i capi e la
+  // metà sul viadotto a 7 m passava sopra la rampa a 0,75 m che corre accanto, e da lì si vedeva un filo nel cielo (#124)
   polygonH(rings, yFn, uvScale = 20, tol = 0) {
     const b = this.pos.length / 3, t0 = this.idx.length;
     this.polygon(rings, 0, uvScale);
     const P = this.pos;
     for (let i = b * 3; i < P.length; i += 3) P[i + 1] = yFn(P[i], P[i + 2]);
-    if (tol) this.refine(t0, yFn, uvScale, (l2, ax, az, bx, bz, ya, yb) => l2 > 1 && Math.abs(yFn((ax + bx) / 2, (az + bz) / 2) - (ya + yb) / 2) > tol);
+    if (!tol) return;
+    this.refine(t0, yFn, uvScale, (l2, ax, az, bx, bz, ya, yb) => {
+      if (l2 <= 1) return false;
+      const n = Math.max(1, Math.ceil(Math.sqrt(l2) / 10));
+      for (let i = 1; i < 2 * n; i += 2) {
+        const t = i / (2 * n);
+        if (Math.abs(yFn(ax + (bx - ax) * t, az + (bz - az) * t) - (ya + (yb - ya) * t)) > tol) return true;
+      }
+      return false;
+    });
   }
   // divide i triangoli dall'indice t0 in poi finché nessun lato lo chiede (split(l2, ax, az, bx, bz, ya, yb): l2
   // lunghezza al quadrato, ya e yb quote dei capi). Si divide sempre il lato più lungo, a metà (dividere quello che lo

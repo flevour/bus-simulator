@@ -23,14 +23,12 @@
    {
     "perche": "Strutture col tram con il profilo del risolutore (#123): ai piedi delle rampe del Chiesanuova e del San Marco, che ora sono archi a terra su un rilevato, l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero, come ai piedi del Camerini: stessa trama, il colore non cambia. Lo toglie la pianta come partizione, #126.",
     "casi": [
-     "cavalcavia-chiesanuova-rampa: strato 2 da vicino, strato 3 da lontano @ -1660,-380",
-     "cavalcavia-san-marco-rampa: strato 2 da vicino, strato 3 da lontano @ 4317,-1381"
+     "cavalcavia-chiesanuova-rampa: strato 2 da vicino, strato 3 da lontano @ -1660,-380"
     ]
    },
    {
     "perche": "Strutture col tram e Cavalcavia Dalmazia con il profilo del risolutore (#123): l'asfalto in quota (strato 3) copre da vicino la sede del tram ai piedi del San Marco verso Ippodromo (strato 5.5, 109 punti su 800) e le righe in cima al Dalmazia (strato 4, 11 punti). Sulla rampa del San Marco verso Ippodromo la carreggiata è in quota fino a 0,8 m sopra il terreno, che lì resta quello di Via San Marco a livello strada; l'asfalto in quota prende la quota dell'asse e il terreno del bordo, e dove il terreno cambia sulla larghezza della carreggiata si piega sopra la sede, che la quota la prende dall'asse. Prima di #123 lo stesso caso stava sulla rampa ovest (cavalcavia-san-marco-rampa, ora pulita). Lo toglie #126 (asfalto in quota senza la sede); la quota dell'asse su tutta la larghezza è in #125.",
     "casi": [
-     "cavalcavia-dalmazia-cima: strato 3 da vicino, strato 4 da lontano @ -613,-1327",
      "rotonda-sir2-ippodromo: strato 3 da vicino, strato 5.5 da lontano @ 4654,-1559"
     ]
    },

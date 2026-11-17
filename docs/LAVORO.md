@@ -532,6 +532,19 @@ l'asfalto vicino alla sede del tram).
 - passo 1: Cavalcavia Mortise attivo (quindici strutture). In cima al Mortise, alla spalla sud, spunta dall'asfalto
   una superficie chiara dell'impalcato (veduta `cavalcavia-mortise-cima`): è l'asfalto in quota che si piega dove il
   terreno cambia sulla larghezza della carreggiata (#137).
+- passo 2: le cinque strutture di Corso Primo Maggio (venti in tutto), e i piedi sul terreno: negli ultimi 20 m prima
+  di un piede la quota scritta scende a zero (`quote_archi`). Senza, il piede restava un gradino del terreno sopra
+  (5-15 cm, il terreno del primo giro contro quello del secondo), la sua quota passava agli archi fuori dalla struttura
+  e un arco a terra lungo 400 m contava come in quota: in gioco asfalto in quota, nel controllo un cavalcavia con le
+  quote di prima (così era nato il gruppo "senza nome (4193, −1185)" accanto al San Marco). Sulle strutture di prima
+  cambia la quota negli ultimi 20 m di qualche rampa, fino a 15 cm (Via Alessandro Volta);
+- fuori dalla mia area, in `src/world/city.js` (`GeoBuilder.polygonH`, asfalto in quota e piano degli impalcati):
+  `refine` divideva un lato solo se la quota a metà si staccava dalla corda. Sulle rampe di Corso Irlanda, quando due
+  archi accanto al San Marco sono usciti dall'asfalto in quota, la triangolazione ha dato lati di 700 m con i capi e la
+  metà sul viadotto a 7 m, che passavano sopra la rampa a 0,75 m: dal posto di guida un filo nel cielo (veduta
+  `tangenziale-irlanda-rampe`). Ora la quota si guarda ogni 10 m sui lati più lunghi di 10 m (a metà su quelli più
+  corti, come prima). Misura con la mappa del passo 2: `buildRoads` da circa 1.575 a 1.615 ms, `buildDecks` da 262 a
+  299 ms, triangoli da 7,63 a 7,65 milioni (asfalto in quota da 342 a 364 mila);
 
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 

@@ -1058,6 +1058,15 @@ def quote_archi(R, P, T, via):
             t = min(1.0, s / 100 / L)
             x, z = A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t
             qs.append(max(0, round((P.quota(k, t * L) - via.at(x, z)) * 1000)))
+        # un piede sta sul terreno: il profilo lì è il terreno del primo giro, e se il secondo giro ha cambiato la cella
+        # di un gradino (5,6 cm) il piede restava qualche centimetro sopra. La sua quota passava agli archi fuori dalla
+        # struttura, lineare fino all'altro capo, e un arco a terra lungo 400 m contava come in quota (#124). Negli
+        # ultimi ARRIVO metri prima di un piede, dove il profilo segue già il terreno com'è, quello scarto scende a zero
+        for nd, s_nd in ((e[0], 0), (e[1], round(L * 100))):
+            q0 = qs[0] if s_nd == 0 else qs[-1]
+            if nd in P.piedi and q0 > 0:
+                arco = min(ARRIVO, L) * 100
+                qs = [max(0, round(q - q0 * (1 - abs(s - s_nd) / arco))) if abs(s - s_nd) < arco else q for s, q in zip(ss, qs)]
         if max(qs) > IN_QUOTA * 1000:
             out[k] = _sfoltisci(ss, qs, fissi, FEDELE)
     return out

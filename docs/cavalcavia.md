@@ -351,7 +351,12 @@ La quota scritta è il profilo meno la variante "via" campionata come nel gioco,
 confine di cella, più quelli che servono in mezzo perché terreno più quota dia il profilo entro 2 mm (#123: lungo un
 arco in diagonale il terreno interpolato tra quattro celle è una parabola, e sotto le spalle, dove le celle vicine
 hanno quote molto diverse, tra due punti la strada si scostava dal profilo di 1-2 cm, abbastanza per portare un
-binario dal 5,4 al 6%). Nella mappa: `cavalcavia` (`id`, `x`, `z`, `archi` di ogni struttura attiva), `edgeH` (`[arco,
+binario dal 5,4 al 6%). Un piede sta sul terreno: il profilo lì è il terreno del primo giro, e dove il secondo giro
+cambia la cella di un gradino il piede restava qualche centimetro sopra; quella quota passava agli archi fuori dalla
+struttura, lineare fino all'altro capo, e un arco a terra lungo 400 m (Corso Primo Maggio sotto Via Salboro) contava
+come in quota. Negli ultimi 20 m prima di un piede (`ARRIVO`, dove il profilo segue già il terreno com'è) quello
+scarto scende a zero (#124): al più 15 cm, sulle strutture di prima. Nella mappa: `cavalcavia` (`id`, `x`, `z`,
+`archi` di ogni struttura attiva), `edgeH` (`[arco,
 progressive in cm, quote in mm]` per gli archi con più di 5 cm sopra il terreno), `nodeH` come prima, `terrain.via`
 (righe `[j, i0, byte, ...]` di celle fissate dopo chiusura e ponti). Il gioco legge `edgeH` in `edgeHeight`
 (`src/data/padova.js`) e `terrain.via` in `Terrain`; i binari che affiancano un arco di una struttura attiva prendono
@@ -360,8 +365,10 @@ la quota assoluta della strada, senza media (sezione 7).
 Attive dal 13 novembre: Cavalcavia Antonio Grassi, Camerini, Montà, Pietro Maroncelli, i due del Ponte dell'Unità
 d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Dal 16 novembre (#123) quelle dove passa il
 tram, Cavalcavia Borgomagno, Chiesanuova, San Marco e Via Venezia, e il Cavalcavia Dalmazia, che arriva accanto al
-Borgomagno. Dal 17 novembre (#124) il Cavalcavia Mortise, accanto a Via Boves. Spente, con il perché nel registro: le
-tangenziali (#124) e Via Salboro, sotto il cui ponte Corso Primo Maggio scenderebbe di 0,7 m (#125). Una rampa con le
+Borgomagno. Dal 17 novembre (#124) il Cavalcavia Mortise, accanto a Via Boves, e le cinque strutture di Corso Primo
+Maggio (le due carreggiate verso Via Guizza, i ponti su Via Pietro Bembo e lo svincolo di Corso Esperanto). Spente, con
+il perché nel registro: le altre tangenziali (#124) e Via Salboro, sotto il cui ponte Corso Primo Maggio scenderebbe
+di 0,7 m (#125). Una rampa con le
 quote di prima non può entrare in una struttura attiva: la build si ferma e nomina i nodi. Il 13 novembre sulle nove
 attive restavano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
 regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto
