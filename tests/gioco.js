@@ -12,7 +12,39 @@ export async function apriGioco(page) {
   await page.goto(process.env.GIOCO_URL);
   await page.waitForFunction(() => window.__game, null, { timeout: 270_000 });
   await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
+  await page.evaluate(fotografaFunzioni);
   return errori;
+}
+
+// Le prove guardano il gioco sostituendo le sue funzioni: gli osservatori di tests/code.js e tests/moto.js avvolgono
+// gli update, il corridoio di Via Querini forza un semaforo (lights.stateOf), altre raccolgono i messaggi (hud.toast).
+// La pagina serve più prove dello stesso worker, e una sostituzione rimasta cambia quelle dopo: in CI, con due worker,
+// la prova dei dieci minuti di code.spec girava subito dopo quella dell'incrocio e trovava il semaforo di Via Querini
+// forzato al verde, quindi i bus automatici che passano di lì e tutto il traffico dopo andavano in un altro modo che
+// sul Mac, dove con tre worker partiva su una pagina nuova (#145). Gli oggetti che restano da una corsa all'altra sono
+// quelli qui sotto (traffico, pedoni e bus di chi guida si rifanno a ogni corsa): all'apertura si fotografano le loro
+// funzioni, e a fine prova (`pagina`) si tolgono le sostituzioni dei metodi e si rimettono le funzioni di __game.
+export function fotografaFunzioni() {
+  const g = window.__game;
+  const oggetti = { __game: g, lights: g.lights, trams: g.trams, tramSignals: g.tramSignals, buses: g.buses, city: g.city, net: g.net, hud: g.hud, audio: g.audio, chargers: g.chargers };
+  const funzioni = (o) => Object.fromEntries(Object.entries(Object.getOwnPropertyDescriptors(o)).filter(([, d]) => typeof d.value === 'function').map(([k, d]) => [k, d.value]));
+  window.__fotoFunzioni = Object.entries(oggetti).filter(([, o]) => o).map(([nome, o]) => ({ nome, o, prima: funzioni(o) }));
+}
+
+// in pagina: rimette le funzioni fotografate; dà quelle rimesse ("lights.stateOf")
+export function ripristinaFunzioni() {
+  const rimesse = [];
+  for (const { nome, o, prima } of window.__fotoFunzioni || []) {
+    for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(o))) {
+      if (typeof d.value !== 'function' || d.value === prima[k]) continue;
+      // un metodo della classe sostituito sull'oggetto (le funzioni proprie che il gioco crea mentre gira restano)
+      if (k in prima) o[k] = prima[k];
+      else if (k in Object.getPrototypeOf(o)) delete o[k];
+      else continue;
+      rimesse.push(`${nome}.${k}`);
+    }
+  }
+  return rimesse;
 }
 
 // Caricare la città costa decine di secondi, una corsa nuova no: ogni worker apre il gioco una volta e le prove lo
@@ -25,8 +57,13 @@ export const test = base.extend({
     await use({ page, inizio: () => { da = tutti.length; }, errori: () => tutti.slice(da) });
     await page.close();
   }, { scope: 'worker', timeout: 300_000 }],
-  // prima di ogni prova si azzera l'elenco degli errori
-  pagina: async ({ gioco }, use) => { gioco.inizio(); await use(gioco.page); },
+  // prima di ogni prova si azzera l'elenco degli errori; dopo, si tolgono le funzioni del gioco che la prova ha
+  // sostituito (fotografaFunzioni, sopra). Se la pagina si è chiusa non c'è niente da rimettere
+  pagina: async ({ gioco }, use) => {
+    gioco.inizio();
+    await use(gioco.page);
+    await gioco.page.evaluate(ripristinaFunzioni).catch(() => []);
+  },
 });
 export { expect };
 

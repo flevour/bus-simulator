@@ -221,6 +221,8 @@ export function corridoio({ sx, sz, nome }) {
   const L = cum[cum.length - 1], linea = L - g.lights.stopOn(app, sig).t, S0 = sig.signal;
   const C = (window.__cor = { chain, cum, dopo, sig, L, linea, forza: null });
   const orig = g.lights.constructor.prototype.stateOf;
+  // i semafori restano da una corsa all'altra: a fine prova il fixture `pagina` di tests/gioco.js toglie questa
+  // sostituzione (prima restava, col verde forzato, per tutte le prove dopo sulla stessa pagina: #145)
   g.lights.stateOf = function (s, ph) { return s === S0 && C.forza ? C.forza : orig.call(this, s, ph); };
   // posizione del centro dell'auto lungo il corridoio (oltre il semaforo: L più quanto ha fatto; null altrove)
   C.pos = (c) => {
