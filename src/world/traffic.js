@@ -458,6 +458,8 @@ const K_LAT = 0.15, A_LAT = 1 / (2 * R_AUTO);
 // con 2 m/s² la rotonda di Via Bembo con Via Marinelli smaltiva troppo poco e la coda arrivava oltre 150 s) e frenata
 // prima della curva (m/s²)
 const ALAT = 3, FRENO = 2;
+// quanto traffico attira una strada nella scelta del movimento (chooseNext)
+const pesoVia = (e) => (e.main ? 4 : e.service ? 0.08 : e.cls === 6 ? 0.3 : 1);
 const CAR_COLORS = ['#c0c0c0', '#202020', '#f5f5f5', '#8a1c1c', '#1c3d8a', '#3a3a3a', '#6b6b6b', '#d8d0b8', '#2d5a3a', '#b5651d', '#e6c229', '#4a6fa5', '#9e9e9e', '#f0f0f0'];
 
 function carGeometry() {
@@ -644,11 +646,44 @@ export class Traffic {
       const ok = opts.filter((m) => m.racs.some((R) => this.costo(T, R) < 100));
       if (ok.length) opts = ok;
     }
-    // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio
-    const w = opts.map((m) => (m.edge.main ? 4 : m.edge.service ? 0.08 : m.edge.cls === 6 ? 0.3 : 1));
+    // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio. Nell'anello
+    // di una rotonda l'uscita si sceglie come all'ingresso: restare nell'anello pesa quanto le uscite che restano prima
+    // di tornare dove si è entrati (T.giro), e lì non si resta. Prima l'anello, via principale, pesava 4 contro 1 di
+    // una traversa: attorno alla rotonda di Via Bembo con Via Marinelli un'auto su dieci faceva più di un giro, e in una
+    // rotonda di Via Salboro qualcuna ne faceva sei
+    const giro = edge.roundabout ? (T && T.giro) || { nodo: fwd ? edge.a : edge.b } : null, qui = fwd ? edge.b : edge.a;
+    let w = opts.map((m) => (!giro || !m.edge.roundabout ? pesoVia(m.edge) : qui === giro.nodo ? 0 : this.restanti(m.edge, m.fwd, giro.nodo)));
+    if (!w.some((x) => x > 0)) w = opts.map((m) => pesoVia(m.edge));
+    opts = opts.filter((_, i) => w[i] > 0);
+    w = w.filter((x) => x > 0);
     let r = this.rnd() * w.reduce((a, b) => a + b, 0), k = 0;
     while (k < opts.length - 1 && (r -= w[k]) > 0) k++;
     return opts[k];
+  }
+  // il peso delle uscite dell'anello dalla fine dell'arco (e, fwd) in avanti, fino al nodo dove si è entrati
+  restanti(e, fwd, nodo) {
+    const memo = this._restanti || (this._restanti = new Map()), key = `${fwd ? e.id : -1 - e.id}:${nodo}`;
+    if (memo.has(key)) return memo.get(key);
+    let w = 0;
+    for (let k = 0, a = e, f = fwd; k < 40 && (f ? a.b : a.a) !== nodo; k++) {
+      let dopo = null;
+      for (const m of this.movimenti(a, f)) {
+        if (!m.edge.roundabout) w += pesoVia(m.edge);
+        else if (!dopo && m.racs.some((R) => !R.via.length)) dopo = m;
+      }
+      if (!dopo) break;
+      a = dopo.edge; f = dopo.fwd;
+    }
+    memo.set(key, w);
+    return w;
+  }
+  // dove si è entrati nell'anello di una rotonda, dopo il movimento m dalla coda T (null fuori dall'anello): il nodo
+  // dove comincia l'arco d'anello raggiunto, perché il raccordo d'ingresso può scavalcare archi corti e la fine
+  // dell'arco da cui si arriva può non stare sull'anello
+  giroDopo(T, m) {
+    if (!m.edge.roundabout) return null;
+    if (T.e.roundabout) return T.giro || { nodo: T.fwd ? T.e.a : T.e.b };
+    return { nodo: m.racs[0].m };
   }
   // costo di prendere il raccordo R dalla corsia dove si è (T): cambi di corsia, e 100 se non c'è posto per farli
   costo(T, R) { return costoCambio(T.e, T.fwd, T.corsia, R.cda, curva(this.net, R).s0 - T.s, R_AUTO); }
@@ -687,7 +722,7 @@ export class Traffic {
       if (c.route.length) R = this.scegli(T, m, c.route[0]);
       else {
         R = this.scegli(T, m, null);
-        const m2 = this.chooseNext(m.edge, m.fwd, { e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca });
+        const m2 = this.chooseNext(m.edge, m.fwd, { e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca, giro: this.giroDopo(T, m) });
         if (m2) c.route.push(m2);
       }
       const L = curva(this.net, R).s0 - T.s;
@@ -702,7 +737,7 @@ export class Traffic {
       this.lineeArresto(c, p);
       const k = c.per.aggiungi(new Curva(this.net, R, R_AUTO));
       if (rip) k.ripiego = rip;
-      c.coda = { e: m.edge, fwd: m.fwd, s: R.g.s1, corsia: R.ca };
+      c.coda = { e: m.edge, fwd: m.fwd, s: R.g.s1, corsia: R.ca, giro: this.giroDopo(T, m) };
     }
   }
   conta(tipo) { this.ripieghi[tipo] = (this.ripieghi[tipo] || 0) + 1; }

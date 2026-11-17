@@ -172,7 +172,10 @@ direzione è la tangente: nei raccordi il mezzo gira con il loro raggio.
 - `Raccordi` (uno per rete, `raccordiDi(net)`) decodifica le voci di un nodo alla prima richiesta; `curva(net, R)` dà
   i tratti della curva (archi e rette) e le progressive dei capi sui due archi (`s0` su `da`, `s1` su `a`). Un raccordo
   di raggio zero tra due corsie appena piegate (sotto il grado) diventa un arco di 30 m con al più mezzo metro di
-  tangente, che resta sulle due rette: lo spigolo, da fermi, sarebbe un colpo di sterzo.
+  tangente, che resta sulle due rette: lo spigolo, da fermi, sarebbe un colpo di sterzo. I vertici al centimetro
+  mettono i capi della curva fino a qualche millimetro di lato dall'asse della corsia (su tutta la rete il 99% entro
+  6 mm, al più 2 cm): `Curva.at` porta lo scarto a zero ai due capi, spalmato lungo la curva, perché a ogni giunto il
+  mezzo non faccia un passo di lato (a 1,2 m/s, 4 cm a passo, 8 mm sono 11 gradi tra direzione e moto).
 - Le auto scelgono il movimento tra quelli con il bit delle auto (`Traffic.movimenti`), e il raccordo dalla corsia
   dove sono guardando anche la svolta dopo: meno cambi di corsia, sempre con il posto per farli. Il cambio di corsia
   è un tratto del percorso (una cicloide, curva zero ai capi) lungo quanto serve a stare entro metà del raggio minimo.

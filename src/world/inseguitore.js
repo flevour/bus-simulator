@@ -148,6 +148,16 @@ export function curva(net, R) {
   const S = N[R.fin ? da.a : da.b], M = N[R.m];
   g.s0 = (g.p0.x - S.x) * din.x + (g.p0.z - S.z) * din.z;
   g.s1 = (g.p1.x - M.x) * dout.x + (g.p1.z - M.z) * dout.z;
+  // i vertici della build sono al centimetro: i capi della curva stanno fino a qualche millimetro di lato dall'asse
+  // della corsia (su tutta la rete il 99% entro 6 mm, al più 2 cm). Curva.at porta lo scarto a zero ai due capi,
+  // spalmato lungo la curva: senza, a ogni giunto il mezzo fa un passo di lato, che a passo d'uomo (4 cm a passo) è
+  // una sbandata di 10 gradi
+  const scarto = (e, fwd, i, p, Q, d) => {
+    const L = corsie(e, fwd), o = L[Math.min(i, L.length - 1)].off, w = o - ((p.x - Q.x) * -d.z + (p.z - Q.z) * d.x);
+    return { x: -d.z * w, z: d.x * w };
+  };
+  g.e0 = scarto(da, R.fin, R.cda, g.p0, S, din);
+  g.e1 = a ? scarto(a, R.fout, R.ca, g.p1, M, dout) : { x: 0, z: 0 };
   return (R.g = g);
 }
 
@@ -201,7 +211,15 @@ export class Curva {
     this.latOk = this.lib ? Infinity : Math.max(0, g.r - Rmin - 0.2);
   }
   at(u, out) {
-    suCurva(this.g, u, out);
+    const g = this.g, e0 = g.e0, e1 = g.e1;
+    suCurva(g, u, out);
+    if (e0 && this.len > 0) {
+      // scarto dei capi dall'asse delle corsie (curva()), da e0 all'inizio a e1 alla fine. La direzione resta quella
+      // della curva: lo scarto cambia di millimetri per metro, e su una curva di pochi millimetri piegherebbe la
+      // tangente di decine di gradi
+      const w = Math.max(0, Math.min(1, u / this.len));
+      out.x += e0.x + (e1.x - e0.x) * w; out.z += e0.z + (e1.z - e0.z) * w;
+    }
     out.nx = -out.dz; out.nz = out.dx; out.bx = out.dx; out.bz = out.dz;
     return out;
   }

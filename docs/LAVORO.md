@@ -1119,6 +1119,19 @@ non c'era). Da sapere:
   frenata di 2 m/s² prima. Con 2 m/s² la rotonda di Via Bembo con Via Marinelli, sulla 3 da Lion, smaltiva troppo poco:
   il bus di chi guida restava in coda oltre 150 s e la prova di Tito Livio finiva lì. Nella stessa rotonda l'anello si
   riempiva con un giro di attese di 10 auto, e `untangle` ne seguiva al più 9: ora 30;
+- uscita dalle rotonde (`chooseNext`): nell'anello restare pesa quanto le uscite che restano prima di tornare al nodo
+  d'ingresso (`T.giro`, `restanti`), e lì non si resta. Prima a ogni nodo l'anello, via principale, pesava 4 contro 1
+  di una traversa: in Node, attorno alla rotonda di Via Bembo, il 10% delle auto faceva più di un giro e in una
+  rotonda di Via Salboro si arrivava a sei giri. Ora nessuna ripassa sullo stesso arco dell'anello. Il nodo d'ingresso
+  è quello dove comincia l'arco d'anello raggiunto: il raccordo d'ingresso può scavalcare archi corti. La rotonda di
+  Via Bembo resta al limite: in Node ci sono in media 9 auto nell'anello, prima e dopo questa regola. L'anello (7
+  archi, una quarantina di metri) ha raccordi da 3,8 a 5,2 m ai nodi, dove le auto vanno a 3,4-3,9 m/s. Con la sola
+  correzione dei giunti dei raccordi (sotto) la prova di Tito Livio si fermava lì, con questa passa: un cambiamento
+  piccolo del traffico può farla tornare;
+- giunti dei raccordi: i vertici della build sono al centimetro e i capi delle curve stanno fino a 2 cm di lato
+  dall'asse della corsia; `Curva.at` porta lo scarto a zero ai capi ([`raccordi.md`](raccordi.md), sezione 7). Con
+  la mappa del 17 novembre (#124) un'auto a passo d'uomo passava da un raccordo all'altro con un passo laterale di
+  millimetri: 10,8 gradi tra direzione e moto nella prova del moto (in Node 8 mm a 1,2 m/s, 11 gradi);
 - la prova delle auto in svolta che si aspettano (#79) era a Porta Trento, dove la svolta da Via Bezzecca in Via
   Belfiore non ha un raccordo delle auto: ora cerca le due auto all'incrocio di Via Gattamelata con Via Tartini, dove
   due raccordi delle auto si incrociano a 1,5 m (`stallo` in `tests/traffico.spec.js`);
