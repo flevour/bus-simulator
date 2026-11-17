@@ -367,8 +367,8 @@ d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Dal 16 no
 tram, Cavalcavia Borgomagno, Chiesanuova, San Marco e Via Venezia, e il Cavalcavia Dalmazia, che arriva accanto al
 Borgomagno. Dal 17 novembre (#124) il Cavalcavia Mortise, accanto a Via Boves, e le cinque strutture di Corso Primo
 Maggio (le due carreggiate verso Via Guizza, i ponti su Via Pietro Bembo e lo svincolo di Corso Esperanto). Spente, con
-il perché nel registro: le altre tangenziali (#124) e Via Salboro, sotto il cui ponte Corso Primo Maggio scenderebbe
-di 0,7 m (#125). Una rampa con le
+il perché nel registro: le altre tangenziali e Via Salboro, finché sotto le loro campate la strada che passa sotto
+sprofonda fino a 3 m sotto il DTM (#125, poi #142). Una rampa con le
 quote di prima non può entrare in una struttura attiva: la build si ferma e nomina i nodi. Il 13 novembre sulle nove
 attive restavano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
 regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto

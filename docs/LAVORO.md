@@ -545,6 +545,10 @@ l'asfalto vicino alla sede del tram).
   `tangenziale-irlanda-rampe`). Ora la quota si guarda ogni 10 m sui lati più lunghi di 10 m (a metà su quelli più
   corti, come prima). Misura con la mappa del passo 2: `buildRoads` da circa 1.575 a 1.615 ms, `buildDecks` da 262 a
   299 ms, triangoli da 7,63 a 7,65 milioni (asfalto in quota da 342 a 364 mila);
+- quello che resta è in #142, bloccato da #125: con tutte le tangenziali accese il profilo è dentro la regola (casi da
+  889 a 413), ma sotto le campate le strade che passano sotto sprofondano fino a 3 m sotto il DTM (Lungargine San
+  Lazzaro sotto Corso Irlanda, Via Fornace Morandi sotto Corso Tredici Giugno, una rampa sotto Via del Commercio).
+  Le vedute `tangenziale-*` sono state fotografate prima di #124 e restano il prima per #142.
 
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
