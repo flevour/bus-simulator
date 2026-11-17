@@ -21,7 +21,7 @@
   {"nome": "tangenziale-primo-maggio-bembo", "x": 1284.5, "z": 4312.9, "verso": -72, "perche": "Corso Primo Maggio verso ovest: 140 m prima del ponte su Via Pietro Bembo"},
   {"nome": "tangenziale-primo-maggio-esperanto", "x": 2421.1, "z": 3673.8, "verso": -40, "perche": "Corso Primo Maggio dallo svincolo di Corso Esperanto, sul ponte, verso la discesa"},
   {"nome": "tangenziale-commercio-boves", "x": 5349.4, "z": -2416.6, "verso": 107, "perche": "Via Boves verso est, 150 m prima della rampa di Via del Commercio"},
-  {"nome": "tangenziale-commercio-est", "x": 6036.5, "z": -2674.2, "verso": -65, "perche": "Via del Commercio verso ovest, 150 m prima dei ponti sullo svincolo"},
+  {"nome": "tangenziale-commercio-est", "x": 6099, "z": -2705.4, "verso": -65, "perche": "Via del Commercio verso ovest, 220 m prima dei ponti sullo svincolo, dove la strada è ancora a terra (150 m prima la telecamera stava dove impalcato e asfalto in quota sono sullo stesso piano, e tra macOS e Linux cambiava quale dei due si vede)"},
   {"nome": "tangenziale-boston-ovest", "x": -2673.5, "z": 3426.7, "verso": 63, "perche": "Corso Boston verso est, sulla rampa ovest dello svincolo di Via Adriatica"},
   {"nome": "tangenziale-boston-adriatica", "x": -2372.2, "z": 3582.5, "verso": 62, "perche": "Corso Boston verso est, sul ponte su Via Armistizio, verso quello su Via Adriatica"},
   {"nome": "tangenziale-boston-rampa", "x": -1837, "z": 3984.2, "verso": -156, "perche": "Corso Boston: rampa dello svincolo di Via Galileo Galilei, verso il ponte"},
