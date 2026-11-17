@@ -1140,7 +1140,8 @@ non c'era). Da sapere:
   di prima e dopo nell'issue #113. Restano 99 posti, tutti bus su ripieghi: 60 raccordi delle auto (#134), 31 corsie
   che non si legano tra svolte vicine (#135), 8 curve del gioco dove la rete non ha la svolta (#114 e #134; con i
   percorsi corretti di #114 è sparita quella vicino al Capolinea Mandria). Le auto
-  non hanno casi. `tempoMassimo(300)` è provvisorio: in locale la prova dura 1,3 minuti.
+  non hanno casi. `tempoMassimo(310)`: tre volte la durata della prima serie in CI (1,7 minuti il 17 novembre,
+  461b4ce, con la serie intera in 26 minuti); in locale 1,2-1,5 minuti.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

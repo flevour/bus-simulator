@@ -22,7 +22,7 @@ function controEccezioni(info, casi, toll = 3) {
 }
 
 test('moto di auto e bus automatici: mai di traverso, senza salti, imbardata entro il raggio minimo, senza inversioni', async ({ pagina, gioco }, info) => {
-  tempoMassimo(300);
+  tempoMassimo(310);
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(osservaMoto, {});
   const r = await pagina.evaluate(giraZone, { zone: ZONE, sec: 200 });
