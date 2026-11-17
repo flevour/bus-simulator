@@ -769,7 +769,7 @@ parcheggio del Capolinea Plebiscito, con la 24 contro un edificio (#25).
 Funzioni di altre aree cambiate da #16: `stopPose` (vedi sopra, `area:mappa` per le fermate) e la `scosta` del
 pilota (`area:verifiche`).
 
-#114, percorsi delle linee controllati nella build (16 novembre). Regola, cosa fa la build e controllo in
+#114, percorsi delle linee controllati nella build (17 novembre). Regola, cosa fa la build e controllo in
 [`percorsi.md`](percorsi.md). Da sapere:
 
 - `scripts/percorsi.py` controlla ogni variante: salti, archi contromano fuori dalle corsie dei bus in controsenso,
@@ -784,13 +784,21 @@ pilota (`area:verifiche`).
   OSM per id (`agg`, `osm_campi`) si fa prima dell'aggancio delle linee, perché la riparazione usa le svolte; l'aggancio
   per pezzi parte anche per i salti e per i giri lontani dal tracciato (`giro`, `GIRO_SCARTO`, `GIRO_LUNGO`, `BUCO`);
   `ripara` dopo `cut_path`. I percorsi senza niente da riparare escono uguali;
-- quello che cambia nei percorsi: il controsenso dei bus in Corso del Popolo (31 varianti, nessun nodo diverso, cambia
+- quello che cambia nei percorsi: il controsenso dei bus in Corso del Popolo (33 varianti, nessun nodo diverso, cambia
   il flag di tre archi); la 4 tra Pontevigodarzere e Cadoneghe è tagliata alla rotonda che non c'è (cinque varianti);
   la 19 non salta più 440 m a nord di Pontevigodarzere (tre varianti, una fermata in meno); la 22 entra nel golfo del
   capolinea di Mandria dall'ingresso; al Capolinea Plebiscito la 16 e la 24 fanno il giro attorno al palazzetto come i
   sensi unici, senza avanti e indietro; la 15B a Largo Europa non fa due volte il giro dell'isolato; la 11B finisce
   23 m prima, prima della carreggiata contromano verso la rotonda di Via Montà; la 12 e la 6 (sette varianti) partono
-  95 m prima in Via Sorio, dove l'aggancio per pezzi ha tolto il giro di #36 dal tracciato agganciato.
+  95 m prima in Via Sorio, dove l'aggancio per pezzi ha tolto il giro di #36 dal tracciato agganciato;
+- con i percorsi cambiano i dati della pianta che li seguono (carreggiate allargate per i bus, svolte strette a
+  sinistra, `bus_edges`) e, attraverso la pianta, bordi di marciapiede e righe della posa anche lontano (#139, con le
+  misure di questa rigenerazione): posa rifatta con `--tutta` (90 righe), metri quadri per riquadro riscritti in
+  `data/eccezioni/verifica-mappa.json`, un edificio che sfiora la carreggiata di 0,2 m a (-504, -575) e una corsia di
+  Via Ariosto fuori dall'asfalto di 3 cm entrati nei gruppi che c'erano. Nei raccordi, al Piazzale Castagnara, la
+  corsia di sinistra dell'arco di 3,6 m di Via Pontevigodarzere a (1410, -4601) resta senza curva per le auto: lo
+  spazio degli archi corti va alla svolta della 4, che arriva ora dalla carreggiata e non più dalla stradina di
+  servizio (gruppo degli archi corti di `auto_senza_uscita`).
 
 ### Traffico (corsia `traffico`)
 

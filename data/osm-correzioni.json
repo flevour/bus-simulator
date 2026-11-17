@@ -5,7 +5,7 @@
    "via": 23555665,
    "nome": "Corso del Popolo",
    "tag": {"busway": "opposite_lane"},
-   "perche": "Tra Via Trieste e Via Foscolo i bus vanno anche verso nord, sulla corsia in controsenso accanto al tram, come nelle due vie prima e dopo (Corso Garibaldi 61982988 e Corso del Popolo 363479333, busway=opposite_lane). In OSM questa via ha avuto busway=opposite_lane dal 2011 alla versione 37 (16 ottobre 2025); la 38 (19 dicembre 2025) l'ha cambiato in busway=yes, che non è un valore del tag, e lanes da 2 a 1. I tracciati GTFS delle 31 varianti dirette alla stazione passano di qui verso nord: senza la correzione il loro percorso andava contromano su 100 m (#114)."
+   "perche": "Tra Via Trieste e Via Foscolo i bus vanno anche verso nord, sulla corsia in controsenso accanto al tram, come nelle due vie prima e dopo (Corso Garibaldi 61982988 e Corso del Popolo 363479333, busway=opposite_lane). In OSM questa via ha avuto busway=opposite_lane dal 2011 alla versione 37 (16 ottobre 2025); la 38 (19 dicembre 2025) l'ha cambiato in busway=yes, che non è un valore del tag, e lanes da 2 a 1. I tracciati GTFS delle 33 varianti dirette alla stazione passano di qui verso nord: senza la correzione il loro percorso andava contromano su 100 m (#114)."
   }
  ]
 }

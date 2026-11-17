@@ -59,7 +59,7 @@ import cavalcavia  # noqa: E402
 import osm_rete  # noqa: E402
 import raccordi  # noqa: E402
 import sosta  # noqa: E402
-import percorsi  # noqa: E402
+import percorsi as percorsi_linee  # noqa: E402  (scripts/percorsi.py: verifica_mappa ha già una funzione percorsi)
 from eccezioni import Elenco, chiave  # noqa: E402
 
 BUS_NEAR = 6.0  # m: oltre metà carreggiata, un edificio è "lungo il percorso" fin qui dall'asse
@@ -385,7 +385,7 @@ def main():
     valori_o, casi_o, errori_o = osm_rete.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
     valori_r, casi_r, errori_r = raccordi.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
     valori_s, casi_s, errori_s = sosta.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
-    valori_p, casi_p, errori_p = percorsi.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
+    valori_p, casi_p, errori_p = percorsi_linee.rapporto(mappa.M, args.elenco, aggiorna=args.aggiorna)
     if args.json:
         json.dump({'osm': {'valori': valori_o, 'casi': casi_o}, 'raccordi': {'valori': valori_r, 'casi': casi_r}, 'sosta': {'valori': valori_s, 'casi': casi_s}, 'percorsi': {'valori': valori_p, 'casi': casi_p}, 'valori': valori, 'eccezioni': E.esiti, 'fermate': dove, 'casi': casi, 'marciapiedi_stretti_per_riquadro': stretto_per_riquadro,
                    'pianta_sovrapposta': {'coppie': sovrapposte, 'per_riquadro': pianta_per_riquadro, 'verde_per_riquadro': verde_per_riquadro},
