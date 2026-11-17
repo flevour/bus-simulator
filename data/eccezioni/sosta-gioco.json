@@ -2,13 +2,6 @@
  "cosa": "Casi noti della prova sulla sosta nel gioco (tests/sosta.spec.js): stalli della mappa, occupati o no, che stanno dove passano i mezzi automatici. `stalli_nella_corsia_delle_auto`: l'auto ferma tocca la corsia che Traffic.laneGeom dà alle auto sul suo arco. `stalli_nell_ingombro_dei_bus`: tocca la carrozzeria di un bus automatico lungo la corsia di una variante (12 m per 2,55, come in tests/pali.js), compreso l'accosto al marciapiede da 30 m prima della fermata a 18 m dopo. La chiave è cosa passa lì, la via e il posto dello stallo. Un caso nuovo si corregge nella build (scripts/sosta.py: zone libere, larghezza che serve alle corsie), non qui.",
  "controlli": {
   "stalli_nella_corsia_delle_auto": [],
-  "stalli_nell_ingombro_dei_bus": [
-   {
-    "perche": "Capolinea Mandria: lo stallo a pettine sta su un arco di pochi metri fuori dal percorso della 22, dove il bus automatico arriva e riparte lungo la strada oltre il capolinea (lead ed exit di buildLane in src/world/buses.js, che la build non conosce). La carrozzeria accostata lo sfiora di 10 cm. Si toglie quando i percorsi dei bus vengono dai raccordi della build (#113).",
-    "casi": [
-     "linea 22, fermata, Via Monselice @ -3567,4108"
-    ]
-   }
-  ]
+  "stalli_nell_ingombro_dei_bus": []
  }
 }

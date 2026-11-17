@@ -30,13 +30,6 @@
      "linea 10, Capolinea Ponte Brenta @ 5595,-2039",
      "linea 10, Provvidenza 14 @ -4173,-1229"
     ]
-   },
-   {
-    "perche": "Elenco di partenza del 13 novembre 2026 (#105): Roma 35 e Roma 88 della 19, al bordo nord della mappa, con le ruote a 8 m dall'asfalto. Causa non ancora cercata: #119.",
-    "casi": [
-     "linea 19, Roma 35 @ 892,-5033",
-     "linea 19, Roma 88 @ 919,-5022"
-    ]
    }
   ],
   "fermate_spostate": [
@@ -103,10 +96,10 @@
     ]
    },
    {
-    "perche": "#109, 16 novembre 2026: in curva la coda del bus automatico taglia l'angolo sopra il cordolo e tocca il palo, che sta da 0,6 a 0,9 m fuori dall'asfalto: semafori di Prato della Valle (linea 3) e di Albignasego (linea 88, palo e ripetitrice), paline di Capolinea Due Palazzi (linea 11) e Gramsci 120 (linea 4). Lo spazio libero non ha ancora l'ingombro dei bus in svolta, che verrà dai raccordi di corsia della build: #130.",
+    "perche": "#109, 16 novembre 2026: in curva la coda del bus automatico taglia l'angolo sopra il cordolo e tocca il palo, che sta fuori dall'asfalto: semafori di Prato della Valle (linea 3) e di Albignasego (linea 88, palo e ripetitrice), palina di Capolinea Due Palazzi (linea 11). #114, 17 novembre: la palina del Capolinea Plebiscito, 0,18 m dentro l'ingombro della 16, che ora arriva al capolinea dal giro attorno al palazzetto come vogliono i sensi unici e svolta sull'angolo dove sta la palina (prima ci arrivava contromano dalla corsia accanto); la palina di Gramsci 120 non c'è più perché la 4 non ci passa. Lo spazio libero non ha ancora l'ingombro dei bus in svolta, che verrà dai raccordi di corsia della build: #130.",
     "casi": [
      "palina Capolinea Due Palazzi @ -2018,-3509",
-     "palina Gramsci 120 @ 1592,-4751",
+     "palina Capolinea Plebiscito @ 1677,-3010",
      "semaforo @ -4,890",
      "semaforo @ -895,6150",
      "semaforo @ -895,6150"
