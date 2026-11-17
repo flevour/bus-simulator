@@ -1,0 +1,7 @@
+{
+ "cosa": "Casi noti della prova della località (#139, data/localita.json): uscite della build cambiate oltre il raggio dai cambi. 'mappa' da scripts/rigenera_mappa.py --localita (chiave: cosa è cambiato @ centro del riquadro o posto), 'posa' da node scripts/posa_arredo.mjs --localita --mappa <rete> (riga tolta o aggiunta, tipo @ posto). Vuoti: un caso nuovo vuol dire che un passo della build lavora su tutta la città e porta lontano un cambiamento locale.",
+ "controlli": {
+  "mappa": [],
+  "posa": []
+ }
+}

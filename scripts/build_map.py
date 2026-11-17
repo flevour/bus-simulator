@@ -70,6 +70,31 @@ CELLA = 250.0
 CORRIDOI_TRAM = ('SIR3', 'SIR2')
 CORRIDOI_BUS = ('25', '24', '3', '22', '10', '11', '88')
 SNODATI = ('10',)  # linee con lo snodato da 18 m (ARTICULATED_LINES in src/game/routes.js)
+# prova della località (#139): i cambi di data/localita.json, che scripts/rigenera_mappa.py --localita mette qui. La
+# build li applica appena prima della pianta delle strade (prova_localita), e quello che ne ricava deve cambiare solo
+# vicino a ciascuno. Vuoto nella mappa del gioco
+PROVA_LOCALITA = []
+
+
+def prova_localita(cambi, nodes, edges, heights):
+    """Applica i cambi della prova della località: 'larghezza' aggiunge metri alla carreggiata dell'arco col punto medio
+    più vicino a (x, z); 'quota' mette il nodo più vicino a quei metri sopra il terreno (i suoi archi vanno in quota, e
+    nelle unioni della pianta entrano pezzi diversi). Restituisce le righe da stampare."""
+    out = []
+    for c in cambi:
+        x, z = c['x'], c['z']
+        if c['cosa'] == 'larghezza':
+            k = min((k for k, e in enumerate(edges) if e[2] != 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3),
+                    key=lambda k: math.dist(((nodes[edges[k][0]][0] + nodes[edges[k][1]][0]) / 2, (nodes[edges[k][0]][1] + nodes[edges[k][1]][1]) / 2), (x, z)))
+            edges[k][3] = round(edges[k][3] + c['metri'], 1)
+            out.append(f"prova della località: arco {k} largo {edges[k][3]} m, presso ({x}, {z})")
+        elif c['cosa'] == 'quota':
+            n = min(range(len(nodes)), key=lambda n: math.dist(nodes[n], (x, z)))
+            heights[n] = c['metri']
+            out.append(f"prova della località: nodo {n} a {c['metri']} m, presso ({x}, {z})")
+        else:
+            raise SystemExit(f"data/localita.json: cambio sconosciuto {c['cosa']!r} (larghezza, quota)")
+    return out
 SVOLTA_STRETTA = 60.0  # gradi: da qui una svolta a sinistra dei bus è stretta (street_surfaces.BUS_TURN_KERB)
 # percorsi delle linee (docs/percorsi.md): un percorso agganciato che si allontana dal tracciato GTFS più di GIRO_SCARTO
 # metri per GIRO_LUNGO metri di fila fa un giro che il bus vero non fa (il tracciato passa dove la mappa non ha strade);
@@ -1740,6 +1765,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             back = (12.0 if l['id'] in SNODATI else 6.0) - (s - 6.5)
             if back > 0:
                 stalli.append((ns[0], ns[1], back + 1.0))
+    for riga in prova_localita(PROVA_LOCALITA, nodes, edges, heights):
+        print(riga)
     surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
                                                    sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm())
     print('pianta delle strade:', st)

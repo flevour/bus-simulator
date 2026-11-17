@@ -83,6 +83,7 @@ gira su Linux con Python 3.12 e le librerie fissate in `scripts/requirements-map
 ```bash
 scripts/rigenera_mappa.sh
 scripts/rigenera_mappa.sh --controlla   # rigenera a parte e confronta col repository
+scripts/rigenera_mappa.sh --localita    # prova della località: rigenera con i cambi di data/localita.json
 python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore se i casi non sono quelli degli elenchi
 ```
 
@@ -92,6 +93,8 @@ con uno shapely diverso, o su macOS con lo stesso, la mappa esce diversa in un c
 repository deve essere quella che questo comando produce, e il job `rigenera` di `.github/workflows/verifiche.yml` lo
 controlla a ogni push: chi cambia uno script o un dato della mappa la rigenera e la pubblica nello stesso commit. Come
 si cambiano le librerie, l'immagine o il feed è in testa a `scripts/rigenera_mappa.py` e a `scripts/rigenera_mappa.sh`.
+Alla fine la rigenerazione dice quante aree e celle della pianta sono cambiate e a che distanza dai dati cambiati
+(`scripts/localita.py`): un cambiamento in un posto deve cambiare la mappa solo lì (#139).
 
 `build_map.py` scrive la mappa in due parti (`scripts/aree_mappa.py`): la rete (nodi, archi, linee, fermate,
 segnaletica, terreno, carreggiate e isole della pianta delle strade) in `src/data/padova-map.json`, dentro il bundle, ed
@@ -154,15 +157,22 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   (`scripts/cavalcavia.py`, anche da `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`),
   `traffico.json` (`tests/traffico.spec.js`), `raccordi.json` (`scripts/raccordi.py`), `sosta.json`
   (`scripts/sosta.py`), `sosta-gioco.json` (`tests/sosta.spec.js`), `percorsi.json` (`scripts/percorsi.py`,
-  anche alla fine della build) e `moto.json` (`tests/moto.spec.js`). Un caso fuori dall'elenco fa fallire il
-  controllo anche se il totale non sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione
-  l'elenco si riscrive con `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i
-  casi nuovi finiscono in un gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un
-  conteggio.
+  anche alla fine della build), `moto.json` (`tests/moto.spec.js`) e `localita.json` (job `localita`,
+  `scripts/rigenera_mappa.py --localita`). Un caso fuori dall'elenco fa fallire il controllo anche se il totale non
+  sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione l'elenco si riscrive con
+  `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i casi nuovi finiscono in un
+  gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un conteggio.
 * **Moto dei mezzi.** `tests/moto.spec.js` guarda auto e bus automatici per 10 minuti in tre zone (regole in
   `tests/moto.js`): a zero i casi di traverso, i salti, l'imbardata oltre v / raggio minimo e le inversioni sullo stesso
   arco, con i casi noti in `data/eccezioni/moto.json`. Dove il mezzo è su un ripiego dell'inseguitore la chiave lo dice
   tra parentesi: quei casi spariscono quando #134 e #114 danno alle svolte il loro raccordo.
+* **Mappa locale (#139).** Cambiato un dato in un punto, la mappa cambia solo vicino: la pianta si unisce per zone e
+  si semplifica per riquadro (`unione` e `semplifica_riquadro` in `scripts/street_surfaces.py`), e alberi e case di
+  contorno del gioco prendono i numeri casuali dal loro posto (`rngAt` di `src/world/spatial.js`). La prova è il job
+  `localita` di `verifiche.yml`: rigenera con i cambi di `data/localita.json` e fallisce se oltre il raggio dichiarato
+  cambia qualcosa (pianta, aree, stalli, raccordi, terreno, posa) che non sta in `data/eccezioni/localita.json`. Chi
+  scrive un passo della build che lavora su tutta la città lo fa con le stesse regole (nota #139 della Mappa in
+  `docs/LAVORO.md`).
 * **Profili dei cavalcavia dichiarati.** `data/profili-cavalcavia.json` ha la quota lungo archi e binari di ogni
   struttura; `tests/profili.spec.js` fallisce se la mappa ne ha altri. Chi cambia di proposito le quote di una
   struttura lancia `python3 scripts/profili_strutture.py --aggiorna` nello stesso commit e la nomina nel messaggio.

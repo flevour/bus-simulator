@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Grid, distToSeg, mulberry32, circleVsOBB } from './spatial.js';
+import { Grid, distToSeg, mulberry32, rngAt, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { stopDetails } from '../game/routes.js';
 import { LINES, TRAM_LINES, TRAM_DEPOTS, laneLayout, laneSpan, parseBuilding, edgeHeight, profileAt } from '../data/padova.js';
@@ -424,7 +424,6 @@ export class City {
     this.uniforms = { uNight: { value: 0 } };
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.rnd = mulberry32(1234);
     this.segGrid = new Grid(80);
     this.kerbGrid = new Grid(40); // incroci, curve strette e rotonde: dove la ruota posteriore taglia la curva
     this.obstacles = new Grid(40);
@@ -2730,7 +2729,6 @@ export class City {
 
   buildBuildings() {
     const { nodes, edges } = this.net;
-    const rnd = this.rnd;
     const list = [];
     const roofs = [];
     // fermate: dalla palina a 13 m indietro stanno il bus fermo (accostato al cordolo vero, che può essere oltre il bordo
@@ -2754,6 +2752,8 @@ export class City {
       if (e.elev) continue;
       const mA = A.joint ? 1 : A.radius + 6, mB = B.joint ? 1 : B.radius + 6;
       for (const side of [-1, 1]) {
+        // case e scelte di questo lato dell'arco da una sequenza sua (#139)
+        const rnd = rngAt(A.x, A.z, B.x, B.z, side);
         let s = mA;
         while (s < e.len - mB) {
           const mx = A.x + e.dx * s, mz = A.z + e.dz * s;
@@ -2824,6 +2824,7 @@ export class City {
         for (let gx = 0; gx < W; gx++) {
           const k = gz * W + gx, d = dist[k];
           if (d < 1) continue;
+          const rnd = rngAt(minX + gx * C, minZ + gz * C, 2); // una sequenza per cella (#139)
           const x = minX + (gx + 0.5) * C + (rnd() - 0.5) * 5, z = minZ + (gz + 0.5) * C + (rnd() - 0.5) * 5;
           const zone = zoneOf(x, z);
           const maxD = zone === 0 ? 18 : zone === 1 ? 9 : 3;
@@ -2898,7 +2899,6 @@ export class City {
 
   buildTreesAndLamps() {
     const { nodes, edges } = this.net;
-    const rnd = this.rnd;
     const trees = [...(this.pratoTrees || []), ...(this.fillerTrees || [])];
     const lamps = [];
     // alberi veri del DBGT (filari, aree alberate, boschi) dentro il comune; lì non se ne generano altri
@@ -2918,6 +2918,8 @@ export class City {
       let k = e.id;
       const zoneE = zoneOf(A.x, A.z);
       const lampStep = zoneE === 2 ? 75 : 40;
+      // le scelte di questo arco da una sequenza sua (#139)
+      const rnd = rngAt(A.x, A.z, B.x, B.z, 7);
       if (zoneE === 2 && !e.main && rnd() < 0.6) continue;
       const mA = A.joint ? 2 : A.radius + 8, mB = B.joint ? 2 : B.radius + 4;
       for (let s = mA + ((e.id * 17) % lampStep); s < e.len - mB; s += lampStep, k++) {
@@ -2953,7 +2955,8 @@ export class City {
         this.addObstacle(x, z, 0.35, 0.35, 0, 'tree');
       }
     }
-    // alberi sparsi nei parchi/campagna
+    // alberi sparsi nei parchi/campagna: posti da una sequenza che non dipende dal resto della città (#139)
+    const rnd = mulberry32(1234);
     for (let i = 0; i < 2500; i++) {
       const x = (rnd() - 0.5) * 9000, z = (rnd() - 0.5) * 9000;
       if (dbgt.length && inDbgt(x, z)) continue;
@@ -2967,6 +2970,7 @@ export class City {
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
     const col = new THREE.Color();
     trees.forEach((t, i) => {
+      const rnd = rngAt(t.x, t.z, 9); // grandezza, verso e colore dal posto dell'albero
       const s = (t.big ? 1.1 : 0.8) + rnd() * 0.6;
       Q.setFromAxisAngle(Y, rnd() * 6.28);
       M.compose(P.set(t.x, 0, t.z), Q, S.set(s, s * (0.9 + rnd() * 0.3), s));

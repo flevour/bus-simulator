@@ -102,6 +102,7 @@ divise per area.
 | `scripts/percorsi.py`, `data/eccezioni/percorsi.json`, `data/osm-correzioni.json`; in `scripts/build_map.py` `ripara`, `giro`, `via_bus` | `area:linee` (#114), e chi rigenera la mappa | percorsi delle linee guidabili ([`percorsi.md`](percorsi.md)): la build li controlla alla fine e si ferma su un caso nuovo; chi cambia rete, svolte, corsie, pianta o raccordi guarda i casi con `python3 scripts/percorsi.py --elenco` e, se restano, li mette nell'elenco con il perché (`--aggiorna`). Un tag OSM sbagliato si corregge con una riga di `data/osm-correzioni.json`, non nel codice |
 | `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113, #115), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7), con chi segue chi e l'incrocio da liberare (`idm`, `incrocioDavanti`, sezione 8), e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
 | `tests/code.js`, `tests/code.spec.js`, `data/eccezioni/code.json` | `area:traffico` (#115), poi chi cambia chi segue chi, sblocchi, precedenze o il numero di auto (#49, #50, #116, #117) | prova delle code: corridoio di Via Querini (flusso contro densità, scarico al semaforo), incrocio da liberare, dieci minuti senza sblocchi a tempo, incroci bloccati e fermi oltre 120 s. Chi cambia il traffico la rilancia; un caso sparito si toglie dall'elenco nello stesso commit |
+| `scripts/localita.py`, `data/localita.json`, `data/eccezioni/localita.json`; in `scripts/street_surfaces.py` `unione`, `semplifica_riquadro`, `canonico`, `anelli_canonici` | `area:mappa` (#139), e chi scrive un passo della build | località della mappa: rapporto a fine rigenerazione e prova (job `localita`, nota #139 della Mappa). Un passo che lavora su tutta la città usa `unione` e semplifica per riquadro; un caso nuovo della prova si capisce prima di metterlo nell'elenco |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -550,6 +551,42 @@ l'asfalto vicino alla sede del tram).
   889 a 413), ma sotto le campate le strade che passano sotto sprofondano fino a 3 m sotto il DTM (Lungargine San
   Lazzaro sotto Corso Irlanda, Via Fornace Morandi sotto Corso Tredici Giugno, una rampa sotto Via del Commercio).
   Le vedute `tangenziale-*` sono state fotografate prima di #124 e restano il prima per #142.
+
+#139, mappa locale (17 novembre). Un dato cambiato in un punto cambia la mappa solo vicino. Causa e misure in #139.
+Da sapere prima di scrivere un passo della build che lavora su tutta la città:
+
+- la causa era in `street_surfaces.surfaces`. Le unioni di tutta la città (`unary_union`) danno la stessa forma, ma su
+  un albero costruito con tutti i pezzi: un pezzo in più o in meno (un arco che va in quota, un arco che entra nei
+  percorsi dei bus, un'isola del DBGT presa) cambia l'ultima cifra delle coordinate in tutta la mappa e, dove due bordi
+  quasi si toccano, strisce di qualche centesimo di metro quadro tra asfalto e isola. Poi la semplificazione si faceva
+  sulla geometria di tutta la città, prima del taglio in riquadri: Douglas-Peucker su anelli lunghi chilometri, che
+  tiene vertici diversi se l'anello parte da un altro punto, trasformava quelle differenze in decimetri (fino a 40 m²
+  per riquadro). Nel gioco una sequenza casuale sola (`City.rnd`) per case di riempimento, alberi e lampioni: un
+  albero in più vicino al cambio cambiava tutti gli altri;
+- ora le unioni della pianta e degli impalcati passano da `unione` (per riquadro da 200 m, poi quattro a quattro con
+  un albero fisso nello spazio) e ogni strato si semplifica per riquadro (`semplifica_riquadro`): tagliato sul
+  riquadro, con fissi i vertici sul bordo (i riquadri accanto combaciano), con il punto di partenza degli anelli e
+  l'ordine di tratti e poligoni scelti sulle coordinate al millimetro, e anelli d'uscita in forma canonica
+  (`anelli_canonici`: esterno antiorario, dal vertice più piccolo, buchi e poligoni in ordine). Asfalto in quota,
+  impalcati ed edifici ritagliati passano da `canonico` prima di `simplify`. Le regole per un passo nuovo: unioni con
+  `unione`, niente `simplify` su una geometria di tutta la città, ordine delle uscite dalle coordinate arrotondate e non
+  dall'ordine in cui GEOS restituisce i pezzi o da un indice;
+- nel gioco `City.rnd` non c'è più: case di riempimento, alberi dei viali e lampioni prendono i numeri da `rngAt` di
+  `src/world/spatial.js` con il posto (arco e lato, cella da 24 m), grandezza, verso e colore di ogni albero dal suo
+  punto, gli alberi sparsi da una sequenza loro. Chi aggiunge alla scena cose a caso fa lo stesso;
+- `scripts/localita.py PRIMA DOPO` dice cosa cambia tra due mappe (celle della pianta nella rete e nelle aree, edifici,
+  alberi, asfalto in quota, impalcati, stalli, corsie strette, raccordi, terreno) e a che distanza dai dati cambiati
+  (nodi, archi, quote, percorsi delle linee, fermate, binari, cavalcavia). `scripts/rigenera_mappa.py` lo stampa a fine
+  rigenerazione, rispetto alla mappa che c'era prima;
+- la prova: `data/localita.json` ha i cambi (larghezza di un arco di Corso del Popolo, quota di un nodo di Via Pietro
+  Gerardo) e il raggio (300 m); `build_map.prova_localita` li applica appena prima della pianta quando
+  `rigenera_mappa.py --localita` li mette in `build_map.PROVA_LOCALITA`; oltre il raggio la mappa deve essere quella
+  del repository byte per byte, e la posa dell'arredo sulla mappa così ottenuta quella di `src/data/padova-arredo.json`
+  (`node scripts/posa_arredo.mjs --localita --mappa <rete>`, con `costruisci(poi, { mappa })` di
+  `scripts/citta_node.mjs`). Casi noti in `data/eccezioni/localita.json` (controlli `mappa` e `posa`), vuoto. Job
+  `localita` di `verifiche.yml`; in locale `scripts/rigenera_mappa.sh --localita`, che scrive la mappa della prova in
+  `.localita/` e rifà la posa fuori da Docker;
+- misure: MISURE.
 
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 

@@ -1,0 +1,20 @@
+{
+ "cosa": "Prova della località della mappa (#139). scripts/rigenera_mappa.py --localita rigenera la mappa con questi cambi, che build_map.prova_localita applica appena prima della pianta delle strade, e la confronta con quella del repository (scripts/localita.py); node scripts/posa_arredo.mjs --localita --mappa <rete> fa lo stesso con la posa dell'arredo. Oltre 'raggio' metri da tutti i cambi pianta, aree (edifici, marciapiedi, verde, alberi), asfalto in quota, impalcati, stalli, raccordi, terreno e posa devono restare uguali byte per byte, tranne i casi di data/eccezioni/localita.json; ogni cambio deve cambiare qualcosa entro il raggio. Gira nel job 'localita' di .github/workflows/verifiche.yml; in locale scripts/rigenera_mappa.sh --localita.",
+ "raggio": 300,
+ "cambi": [
+  {
+   "cosa": "larghezza",
+   "x": 124,
+   "z": -763,
+   "metri": 1.0,
+   "perche": "Un arco di Corso del Popolo, in centro, largo un metro in più: carreggiata, raccordi agli incroci, marciapiedi ed edifici ritagliati attorno. Un cambio che non cambia il numero dei pezzi delle unioni: era locale anche prima di #139."
+  },
+  {
+   "cosa": "quota",
+   "x": 2313,
+   "z": 1944,
+   "metri": 7.0,
+   "perche": "Un nodo di Via Pietro Gerardo a 7 m: i suoi due archi vanno in quota ed escono dalla carreggiata a terra, quindi nelle unioni della pianta entrano pezzi diversi, come quando si attiva un cavalcavia. Prima di #139 cambiavano 133 aree su 224, 110 oltre 2 km."
+  }
+ ]
+}

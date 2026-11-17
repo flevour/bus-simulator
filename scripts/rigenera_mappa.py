@@ -27,6 +27,15 @@ riferimento FER_DATE e FES_DATE in scripts/build_gtfs.py, e la mappa rigenerata 
 
 --controlla esce con 1 se la mappa rigenerata non è quella del repository, ed elenca le chiavi della rete e le aree
 diverse. Lo lancia il job "rigenera" di .github/workflows/verifiche.yml a ogni push su main.
+
+Alla fine dice quante aree e celle della pianta sono cambiate rispetto alla mappa di prima (quella che c'era nel file
+d'uscita, o quella del repository con --controlla) e a che distanza dai dati cambiati (scripts/localita.py, #139).
+
+--localita è la prova della località (#139): rigenera con i cambi di data/localita.json (la larghezza di un arco, la
+quota di un nodo), in una cartella temporanea o in --uscita, e confronta con la mappa del repository: oltre il raggio
+dichiarato da ogni cambio la mappa deve restare uguale byte per byte, tranne i casi di data/eccezioni/localita.json
+(--aggiorna riscrive l'elenco). La posa dell'arredo sulla mappa così ottenuta si controlla dopo, fuori da qui:
+node scripts/posa_arredo.mjs --localita --mappa <uscita>. Lo lancia il job "localita" di verifiche.yml.
 """
 import argparse
 import filecmp
@@ -34,6 +43,7 @@ import importlib.metadata
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 import zipfile
@@ -43,6 +53,7 @@ PYTHON = (3, 12)
 LOCK = os.path.join('scripts', 'requirements-mappa.txt')
 GTFS = os.path.join('data', 'gtfs-biv.zip')
 MAPPA = os.path.join('src', 'data', 'padova-map.json')
+LOCALITA = os.path.join('data', 'localita.json')
 # nell'ordine di build_map.main, dopo OSM, GTFS e uscita
 DATI = ['overture-buildings-padova.parquet', 'osm-padova-nodes.json', 'osm-padova-tram.json', 'misure-strade.json',
         'dbgt-volumi.json', 'dtm-padova.json', 'dbgt-verde.json', 'dbgt-strade.json', 'osm-fermate.json',
@@ -119,6 +130,10 @@ def main():
                     help='rigenera in una cartella temporanea e confronta con la mappa del repository')
     ap.add_argument('--gtfs', help='cartella di un feed GTFS scompattato, al posto di ' + GTFS)
     ap.add_argument('--uscita', help='file della rete, al posto di ' + MAPPA)
+    ap.add_argument('--localita', action='store_true',
+                    help='prova della località: rigenera con i cambi di %s e controlla che la mappa cambi solo vicino a '
+                         'ognuno (scripts/localita.py)' % LOCALITA)
+    ap.add_argument('--aggiorna', action='store_true', help='con --localita, riscrive data/eccezioni/localita.json')
     ap.add_argument('--altre-versioni', action='store_true',
                     help='prosegue anche con sistema, Python o librerie diversi da quelli fissati (per prove: la mappa esce diversa)')
     args = ap.parse_args()
@@ -134,15 +149,42 @@ def main():
     sys.path.insert(0, os.path.join(ROOT, 'scripts'))
     import aree_mappa
     import build_map
+    import localita
 
+    prova = None
+    if args.localita:
+        prova = json.load(open(LOCALITA, encoding='utf-8'))
+        build_map.PROVA_LOCALITA = prova['cambi']
     with tempfile.TemporaryDirectory(prefix='mappa-') as tmp:
         gtfs = args.gtfs
         if not gtfs:
             gtfs = os.path.join(tmp, 'gtfs')
             with zipfile.ZipFile(GTFS) as z:
                 z.extractall(gtfs)
-        uscita = os.path.join(tmp, 'padova-map.json') if args.controlla else (args.uscita or MAPPA)
+        uscita = args.uscita or (os.path.join(tmp, 'padova-map.json') if args.controlla or args.localita else MAPPA)
+        os.makedirs(os.path.dirname(os.path.abspath(uscita)), exist_ok=True)
+        # la mappa di prima, per dire alla fine cosa è cambiato e dove: quella del repository per --controlla e
+        # --localita, altrimenti quella che c'era nel file d'uscita (copiata, la build la sovrascrive)
+        prima = MAPPA if args.controlla or args.localita else None
+        if prima is None and os.path.exists(uscita) and os.path.isdir(aree_mappa.aree_dir(uscita)):
+            prima = os.path.join(tmp, 'prima', 'padova-map.json')
+            os.makedirs(os.path.dirname(prima))
+            shutil.copy(uscita, prima)
+            shutil.copytree(aree_mappa.aree_dir(uscita), aree_mappa.aree_dir(prima))
         build_map.main(os.path.join('data', 'osm-padova.json'), gtfs, uscita, *[os.path.join('data', f) for f in DATI])
+        sys.stdout.flush()
+        if args.localita:
+            righe, errori = localita.controlla(prima, uscita, prova, args.aggiorna)
+            print('\nProva della località (%s): rispetto a %s' % (LOCALITA, MAPPA))
+            print('\n'.join(righe))
+            if errori:
+                print('\n'.join(errori), file=sys.stderr)
+                return 1
+            print('Fuori dal raggio dei cambi la mappa è quella del repository.')
+            return 0
+        if prima:
+            print('\nCambiato rispetto alla mappa di prima (%s):' % ('repository' if args.controlla else uscita))
+            print('\n'.join(localita.rapporto(prima, uscita)[0]))
         if not args.controlla:
             return 0
         righe = confronta(uscita, aree_mappa.aree_dir(uscita), aree_mappa.conto_file(uscita),

@@ -66,6 +66,24 @@ jobs:
       - run: pip install --disable-pip-version-check --root-user-action=ignore --require-hashes -r scripts/requirements-mappa.txt
       - run: python scripts/rigenera_mappa.py --controlla
 
+  # Prova della località (#139): rigenerata con i cambi di data/localita.json (la larghezza di un arco, la quota di un
+  # nodo), la mappa e la posa dell'arredo cambiano solo entro il raggio dichiarato da ognuno; il resto deve restare
+  # quello del repository byte per byte, tranne i casi di data/eccezioni/localita.json. Stessa immagine di "rigenera",
+  # accanto alle prove.
+  localita:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - run: pip install --disable-pip-version-check --root-user-action=ignore --require-hashes -r scripts/requirements-mappa.txt
+      - run: python scripts/rigenera_mappa.py --localita --uscita .localita/padova-map.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/posa_arredo.mjs --localita --mappa .localita/padova-map.json
+
   mappa:
     runs-on: ubuntu-latest
     timeout-minutes: 10

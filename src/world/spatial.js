@@ -99,6 +99,18 @@ export function mulberry32(a) {
   };
 }
 
+// numeri casuali legati a un posto (#139): la sequenza dipende solo dai valori dati (coordinate in metri, al
+// decimetro, e un numero che distingue più sequenze nello stesso posto), non da quante ne ha già chieste il resto della
+// città. Con una sequenza sola per tutta la mappa un arco in più o in meno spostava alberi e case in ogni quartiere
+export function rngAt(...v) {
+  let h = 0x811c9dc5;
+  for (const x of v) {
+    h = Math.imul(h ^ (Math.round(x * 10) | 0), 0x01000193);
+    h ^= h >>> 15;
+  }
+  return mulberry32(h);
+}
+
 export function angleDiff(a, b) {
   let d = b - a;
   while (d > Math.PI) d -= 2 * Math.PI;
