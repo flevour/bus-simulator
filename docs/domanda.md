@@ -76,7 +76,7 @@ dove le auto non entravano più, ora sono le uscite di chi va fuori città.
 I viaggi dei residenti sono 1,1 per abitante al giorno: 2,3 spostamenti, il 60% in auto, 1,25 persone per auto (ISFORT,
 Audimob, valori di un capoluogo del nord). Padova attira circa 90.000 pendolari al giorno (ISTAT); 60.000 in auto sono
 una stima. Non risultano conteggi di traffico aperti per Padova: i totali sono stime, la forma della curva è quella
-tipica delle città italiane, e le punte sono quelle che il GTFS conferma (sezione 6).
+tipica delle città italiane, e le punte sono quelle che il GTFS conferma (sezione 7).
 
 La destinazione segue un modello gravitazionale: la probabilità di andare da `o` a `d` è proporzionale
 all'attrattività di `d` (addetti, scuole, abitanti, o per gli altri viaggi negozi, addetti e sosta) per
@@ -181,15 +181,73 @@ danno flussi: per le quantità restano le stime della sezione 4.
 
 ## 8. La prova
 
-`tests/domanda.spec.js` (regole in `tests/domanda.js`, casi noti in `data/eccezioni/domanda.json`):
+`tests/domanda.spec.js` (regole in `tests/domanda.js`). Tutte e due sono misure aggregate con un margine, non elenchi
+di casi: gli intrecci esatti di qualche minuto di traffico cambiano tra il Mac e Linux e a ogni piccolo cambiamento
+(#145).
 
-- viaggi e ore: alle 8:15 ogni auto ha un viaggio con origine, destinazione e arrivo; un ritardo misurato sul movimento
-  migliore di un'auto le fa prendere l'altro; con i tempi della punta del mattino il percorso da Voltabarozzo a
-  Pontecorvo costa più del 10% che con quelli delle 11; portando l'orologio alle 22:30, senza ripartire, il disco si
-  allarga (#60);
-- punte: sui tre corridoi della tabella sopra, per le 8, le 11, le 18 e le 22 di un feriale (corsa della 10, poi
-  l'orologio all'ora), chi guida a 900 m e il disco fermo a metà del corridoio, 60 s di riscaldamento e tre auto sonda
-  per verso, una ogni 20 s, con un viaggio fino all'altro capo. Alle 8 e alle 18 almeno un verso deve essere più lento
-  del 10% che alle 11 e alle 22, altrimenti è un caso.
+- Viaggi e ore: alle 8:15 ogni auto ha un viaggio con origine, destinazione e arrivo; un ritardo misurato sul movimento
+  migliore di un'auto le fa prendere un'altra strada; con i tempi della punta del mattino il percorso da Voltabarozzo a
+  Pontecorvo costa più del 10% che con quelli delle 11 (264,7 s contro 222,6); portando l'orologio alle 22:30, senza
+  ripartire, il disco si allarga di più di una volta e mezza (da 306 a 1.028 m: #60).
+- Punte: sui tre corridoi della tabella sopra, alle 8, alle 11, alle 18 e alle 22 di un feriale (corsa della 10,
+  poi l'orologio all'ora), chi guida a 900 m e il disco fermo a metà del corridoio, 60 s di riscaldamento e quattro
+  auto sonda per verso, una ogni 20 s, con un viaggio fino all'altro capo. Per ogni corridoio e ora di punta il
+  rapporto tra il tempo medio e quello della morbida più lenta (11 o 22) nel verso che la sente di più; la media dei
+  tre corridoi deve superare 1,08 alle 8 e alle 18.
 
-<!-- risultati -->
+Tempi medi delle auto sonda sul Mac, 17 novembre (quattro per verso; verso il centro, poi verso fuori):
+
+| Corridoio | 8 | 11 | 18 | 22 | punta delle 8 | delle 18 |
+|---|---|---|---|---|---|---|
+| Via Sorio (940 m) | 82 e 114 s | 78 e 119 | 78 e 121 | 78 e 102 | 1,04 | 1,02 |
+| Via Facciolati (990 m) | 172 e 84 | 109 e 94 | 95 e 172 | 94 e 94 | 1,58 | 1,82 |
+| Via Ariosto e Via Gattamelata (1.350 m) | 254 e 152 | 250 e 150 | 347 e 152 | 129 e 156 | 1,02 | 1,39 |
+| media | | | | | 1,21 | 1,41 |
+
+Da un lancio all'altro, con piccoli cambiamenti del traffico, il rapporto di un corridoio si sposta anche di 0,2 (Via
+Gattamelata alle 8 è stata 1,19 e 1,02); la media dei tre molto meno.
+
+Via Facciolati ha la punta dove la ha il GTFS: la mattina verso il centro, la sera verso fuori; Via Gattamelata la sera
+verso il centro, come la E073, e la mattina poco. Via Sorio no: nella build il tratto tra Via Col Berretta e
+Piazzale San Giovanni porta 90-290 auto l'ora per verso alle 8, lontano dalla capacità. Sta a 170 m dal bordo della
+mappa, e chi arriva da Tencarola, Selvazzano e Rubano entra dalla porta di Via Sorio, pesata come una secondaria
+(0,35 contro 1 di una trunk), o da Corso Australia e Via Chiesanuova (che alle 8 sono le più cariche della mappa). Il
+GTFS dice +43% alle 8 sulla U12: è il primo posto da guardare per tarare le porte.
+
+## 9. Costo per passo
+
+Misura sul Mac (Chromium headless, SwiftShader, macchina carica), stessa corsa e stesso percorso per le due build: la
+3 delle 8:15, poi 200 s in ognuna delle tre zone della prova del moto (centro, stazione, sud-est, con il teletrasporto
+tra una e l'altra), 18.000 passi da 1/30 s, due lanci per build.
+
+| | `main` (4ecf9be) | con la domanda |
+|---|---|---|
+| `traffic.update` per passo, media | 0,78-0,82 ms con 72 auto | 1,10-1,11 ms con 61 auto |
+| 99° percentile | 1,7-2,0 ms | 2,0 ms |
+| passi oltre 4 ms / oltre 8 ms | 9-13 / 4-5 | 7-16 / 4-6 |
+| passo più lungo (al teletrasporto) | 37-53 ms | 50-62 ms |
+| `buses.update` per passo | 0,36-0,38 ms | 0,32-0,33 ms |
+| partenza della corsa (`startMission` e aree) | 470 ms (1.570 il primo lancio) | 530-710 ms |
+
+Il costo per auto cresce di circa due terzi: la scelta della svolta guarda l'albero e i ritardi, la nascita traccia il
+percorso del viaggio. Gli alberi non danno scatti: si calcolano 4.000 stati per passo (in Node un albero intero, 37.000
+stati raggiungibili, costa 2-8 ms; a pezzi meno di 1 ms per passo), e alla partenza della corsa quelli che servono si
+calcolano tutti insieme (circa 45 alberi, 120 ms dei 530-710). Il raggio del disco e i pesi dei viaggi (`aggiorna`) si
+rifanno quando cambia il minuto di gioco o chi guida si sposta di 150 m: 0,5-2 ms. I passi oltre 8 ms sono quelli del
+teletrasporto, come su `main`. Il bundle cresce di 534 KB (il file della domanda, 150 KB compresso).
+
+## 10. Cosa resta fuori
+
+- Il traffico di tutta la città (#117): fuori dal disco attorno a chi guida le code non ci sono, ci sono solo i tempi
+  della fascia della build. Arrivando in un corridoio nell'ora di punta la coda si forma mentre il disco ci arriva (60-
+  90 s prima di chi guida), non c'è già; i bus automatici non prendono ritardo dai tempi della fascia.
+- Le auto non parcheggiano: arrivate, lontano da chi guida escono di scena; le auto in sosta di #111 seguono la loro
+  quota per ora, non i viaggi.
+- I numeri di partenza sono stime (sezione 4) e le porte hanno pesi per classe: niente conteggi aperti per Padova. Il
+  GTFS dice dove la punta c'è (sezione 7); Via Sorio è il primo caso dove il modello non la dà.
+- La domanda non è locale come la pianta (#139): l'assegnazione è un equilibrio, e un arco cambiato può spostare i flussi
+  della fascia anche lontano. Per questo il file non è nella prova di località; si rifà con la mappa
+  (`rigenera_mappa.sh`), e la CI controlla che sia quello che esce dalla mappa di oggi.
+- Con la densità vera attorno a chi guida si vedono di più le code che restano dentro gli incroci quando il rosso
+  ferma la fila (Via Gozzi, Via Tommaseo, Via Piovese, nella prova dei dieci minuti di `tests/code.spec.js`): le auto
+  entrano quando la fila davanti si muove e si fermano lì quando si ferma (#115, #49).

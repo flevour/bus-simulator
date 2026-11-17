@@ -61,6 +61,12 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   `data/osm-correzioni.json`, aggancio per pezzi dove il tracciato esce dalla mappa, riparazione dei passaggi) e il
   controllo `scripts/percorsi.py`, che `build_map.py` lancia alla fine e che si ferma su un caso fuori da
   `data/eccezioni/percorsi.json`.
+* `docs/domanda.md`: domanda di traffico (#116): viaggi con origine, destinazione e ora; la build
+  (`scripts/domanda.py`, solo libreria standard) scrive in `src/data/padova-domanda.json` zone, porte, tempi,
+  destinazioni per scopo, curva oraria feriale e festiva e l'assegnazione con la capacità per tre fasce; il gioco
+  (`src/world/domanda.js`) sceglie i viaggi che passano nel disco attorno a chi guida, col raggio che tiene 72 auto.
+  Verifica sul GTFS dei tempi tra punta e morbida in `scripts/gtfs_tempi.py`. Chi rigenera la mappa rifà il file
+  (`python3 scripts/domanda.py`, in fondo a `rigenera_mappa.sh`; `verifica_mappa.py` controlla che sia quello che esce).
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,
   verifiche, tappe). Le misure di riferimento della sezione 3 valgono dove mancano i dati.
@@ -171,6 +177,10 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   `tests/moto.js`): a zero i casi di traverso, i salti, l'imbardata oltre v / raggio minimo e le inversioni sullo stesso
   arco, con i casi noti in `data/eccezioni/moto.json`. Dove il mezzo è su un ripiego dell'inseguitore la chiave lo dice
   tra parentesi: quei casi spariscono quando #134 e #114 danno alle svolte il loro raccordo.
+* **Punte del traffico (#116).** `tests/domanda.spec.js` misura con auto sonda il tempo su tre corridoi (Via Sorio,
+  Via Facciolati, Via Ariosto e Via Gattamelata) alle 8, alle 11, alle 18 e alle 22 di un feriale: la media dei
+  rapporti tra punta e morbida deve superare 1,08. È una misura aggregata con un margine, non un elenco di casi: gli
+  intrecci esatti del traffico cambiano tra Mac e Linux (#145).
 * **Mappa locale (#139).** Cambiato un dato in un punto, la mappa cambia solo vicino: la pianta si unisce per zone e
   si semplifica per riquadro (`unione` e `semplifica_riquadro` in `scripts/street_surfaces.py`), e alberi e case di
   contorno del gioco prendono i numeri casuali dal loro posto (`rngAt` di `src/world/spatial.js`). La prova è il job

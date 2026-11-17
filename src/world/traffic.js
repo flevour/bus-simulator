@@ -808,14 +808,16 @@ export class Traffic {
       }
       // la corsia del raccordo guarda anche la svolta dopo; se non è ancora scelta, la si sceglie dalla corsia dove il
       // raccordo arriva, tra quelle che non chiedono un cambio di corsia senza posto
-      let R, rip = null;
-      if (c.route.length) R = this.scegli(T, m, c.route[0]);
-      else if (c.viaggio) {
-        // con un viaggio (#116) prima la svolta dopo, verso l'arrivo, poi la corsia per farla: scegliendo prima la corsia
-        // la svolta verso l'arrivo poteva non avere posto per il cambio di corsia, e l'auto girava in un anello vicino
+      let R, rip = null, m2 = null;
+      // con un viaggio (#116) prima la svolta dopo, verso l'arrivo, poi la corsia per farla: scegliendo prima la corsia la
+      // svolta verso l'arrivo poteva non avere posto per il cambio di corsia, e l'auto girava in un anello vicino
+      if (!c.route.length && c.viaggio) {
         if (c.viaggio.arrivo === 2 * m.edge.id + (m.fwd ? 0 : 1)) this.cambiaViaggio(c);
-        const m2 = this.chooseNext(m.edge, m.fwd, null, c.viaggio);
-        if (m2) c.route.push(m2);
+        if (c.viaggio) m2 = this.versoArrivo(m, c.viaggio);
+      }
+      if (c.route.length) R = this.scegli(T, m, c.route[0]);
+      else if (m2) {
+        c.route.push(m2);
         R = this.scegli(T, m, m2);
       } else {
         R = this.scegli(T, m, null);
@@ -838,6 +840,26 @@ export class Traffic {
     }
   }
   conta(tipo) { this.ripieghi[tipo] = (this.ripieghi[tipo] || 0) + 1; }
+  // la svolta dopo il movimento m per chi ha il viaggio v: quella che arriva prima, senza guardare la corsia (la corsia
+  // per farla la sceglie poi scegli). Con 60 s in più per le svolte che dalla corsia di adesso non si fanno, le auto
+  // dirette alla porta di Via Sorio deviavano in un anello di strade laterali e lo riempivano. null se l'albero
+  // dell'arrivo non è pronto o da lì non ci si arriva
+  versoArrivo(m, v) {
+    const D = this.domanda;
+    let A = v.albero && v.albero.fatto ? v.albero : null;
+    if (!A || A.fascia !== D.chiaveTempi) { const B = D.albero(v.arrivo); if (B) A = v.albero = B; }
+    if (!A) return null;
+    const s = 2 * m.edge.id + (m.fwd ? 0 : 1);
+    let best = null, bc = Infinity;
+    for (const m2 of this.movimenti(m.edge, m.fwd)) {
+      const u = 2 * m2.edge.id + (m2.fwd ? 0 : 1);
+      if (!(A.T[u] < Infinity)) continue;
+      const c = D.costo(s, u, A);
+      if (c < bc) { bc = c; best = m2; }
+    }
+    if (!best) v.perso = true;
+    return best;
+  }
   // il viaggio di c arriva (il prossimo stato è il suo arrivo): il viaggio dopo parte dalla zona d'arrivo, con una
   // destinazione per le probabilità dell'ora (#116)
   cambiaViaggio(c) {
@@ -1045,19 +1067,22 @@ export class Traffic {
       if (!p) continue;
       const cos = Math.sin(o.h) * p.tx + Math.cos(o.h) * p.tz;
       if (cos < -0.3) continue;
+      // chi esce da un giro di attese (untangle) passa davanti all'auto che aspettava, finché non l'ha superata, anche se
+      // sono unite
+      if (o === c.through) { through = true; continue; }
       // due auto una sopra l'altra nello stesso verso (si sono unite nello stesso punto, nella rotonda o in una svolta,
       // e nessuna ha l'altra davanti): passa quella nata prima, l'altra (se non le sta davanti) si ferma finché non si
       // sono separate. Restavano unite per sempre: le auto in coda sovrapposte di Corso Milano (#80), le pile
-      // nell'anello di Via Bembo (#115)
+      // nell'anello di Via Bembo (#115). Non si cede a chi aspetta proprio noi: a Piazzale San Giovanni, con la densità
+      // vera delle 8 (#116), la più giovane cedeva alla più vecchia, che la vedeva un metro davanti e la aspettava, e la
+      // coda di Via Sorio restava ferma oltre dieci minuti
       if (p.u <= 0.5) {
-        if (cos > 0.7 && o.n < c.n && (o.x - c.x) * Math.sin(c.h) + (o.z - c.z) * Math.cos(c.h) > -0.5) tieni(p.u - LUNGA, 0, o, 'auto');
+        if (cos > 0.7 && o.n < c.n && o.aspetta !== c && (o.x - c.x) * Math.sin(c.h) + (o.z - c.z) * Math.cos(c.h) > -0.5) tieni(p.u - LUNGA, 0, o, 'auto');
         continue;
       }
       // tra due auto che svoltano verso lo stesso arco passa chi ha meno curva da fare (a Lion, entrando in Via Mascagni
       // da Via Sant'Andrea e dalla traversa, ognuna aveva l'altra davanti e restavano ferme per sempre)
       if (c.turn && o.turn && o.turn.next.edge === c.turn.next.edge && c.turn.rest < o.turn.rest) continue;
-      // chi esce da un giro di attese (untangle) passa davanti all'auto che aspettava, finché non l'ha superata
-      if (o === c.through) { through = true; continue; }
       // due auto su traiettorie che si tagliano, ognuna sul percorso dell'altra, e l'altra ferma ad aspettare questa:
       // passa subito chi ha l'altra più di lato (la regola di untangle, senza il secondo di fermo). In Via Piovese con
       // Via Pietro Orseolo il giro si formava o no per un soffio, sul Mac sì e in CI no (#115)

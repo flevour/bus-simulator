@@ -52,7 +52,7 @@ export function corridoioStati({ da, a, vie }) {
 // fermo a metà; riscaldamento di `warm` secondi, poi `sonde` auto per verso, una ogni `passo` secondi, e il tempo di
 // ognuna fino all'altro capo (null se in 600 s non ci arriva). Restituisce i tempi per verso e lo stato del disco
 export function misuraCorridoio({ corr, ora, statiFn, warm = 60, sonde = 4, passo = 20 }) {
-  const g = window.__game, T = g.traffic, D = g.domanda, E = g.net.edges, N = g.net.nodes;
+  const g = window.__game, T = g.traffic, D = g.domanda, E = g.net.edges;
   const stati = new Function('return ' + statiFn)();
   g.mission.clock = ora * 3600;
   const mx = (corr.da[0] + corr.a[0]) / 2, mz = (corr.da[1] + corr.a[1]) / 2;
@@ -67,14 +67,19 @@ export function misuraCorridoio({ corr, ora, statiFn, warm = 60, sonde = 4, pass
   const versi = [stati({ ...corr }), stati({ ...corr, da: corr.a, a: corr.da })];
   const tutte = [];
   let t = 0;
-  // una sonda: un'auto con un viaggio fino all'ultimo stato del corridoio, sul primo stato dove c'è posto
+  // una sonda: un'auto con un viaggio fino all'ultimo stato del corridoio, all'inizio del primo stato dove ci sta (le
+  // auto a meno di 12 m dal suo posto escono di scena: la sonda parte comunque)
   const lancia = (v, k) => {
     const ultimo = v.stati[v.stati.length - 1], albero = D.alberoOra(ultimo);
     for (const s0 of v.stati.slice(0, 4)) {
-      const e = E[s0 >> 1], f = !(s0 & 1), A = N[f ? e.a : e.b];
-      for (let i = T.cars.length - 1; i >= 0; i--) if (Math.hypot(T.cars[i].x - A.x, T.cars[i].z - A.z) < 15) T.cars.splice(i, 1);
-      const c = T.metti(e, f, 0, { arrivo: ultimo, albero }, { x: 1e9, z: 1e9 }, 0, Infinity);
-      if (c) { c.sonda = true; tutte.push({ c, verso: k, ultimo, da: t, t: null }); return; }
+      const nuove = [], c = T.metti(E[s0 >> 1], !(s0 & 1), 0, { arrivo: ultimo, albero }, { x: 1e9, z: 1e9 }, 0, Infinity, nuove);
+      if (!c) continue;
+      for (let i = T.cars.length - 1; i >= 0; i--) if (Math.hypot(T.cars[i].x - c.x, T.cars[i].z - c.z) < 12) T.cars.splice(i, 1);
+      c.sonda = true;
+      T.cars.push(c);
+      const eU = E[ultimo >> 1];
+      tutte.push({ c, verso: k, fine: g.net.nodes[ultimo & 1 ? eU.a : eU.b], da: t, t: null });
+      return;
     }
     tutte.push({ c: null, verso: k, t: null });
   };
@@ -82,7 +87,9 @@ export function misuraCorridoio({ corr, ora, statiFn, warm = 60, sonde = 4, pass
     if (tutte.length < 2 * sonde && t >= (tutte.length / 2) * passo) { lancia(versi[0], 0); lancia(versi[1], 1); }
     g.sim(1, 1 / 30, false);
     t += 1;
-    for (const x of tutte) if (x.c && x.t == null && T.cars.includes(x.c) && 2 * x.c.edge.id + (x.c.fwd ? 0 : 1) === x.ultimo) x.t = t - x.da;
+    // arrivata: entro 20 m dal nodo dove finisce l'ultimo stato (l'ultimo stato può essere più corto di quello che
+    // l'auto fa in un secondo, e arrivata l'auto esce di scena)
+    for (const x of tutte) if (x.c && x.t == null && T.cars.includes(x.c) && Math.hypot(x.c.x - x.fine.x, x.c.z - x.fine.z) < 20) x.t = t - x.da;
   }
   T.centro = null;
   return {

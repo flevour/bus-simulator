@@ -102,6 +102,7 @@ divise per area.
 | `scripts/percorsi.py`, `data/eccezioni/percorsi.json`, `data/osm-correzioni.json`; in `scripts/build_map.py` `ripara`, `giro`, `via_bus` | `area:linee` (#114), e chi rigenera la mappa | percorsi delle linee guidabili ([`percorsi.md`](percorsi.md)): la build li controlla alla fine e si ferma su un caso nuovo; chi cambia rete, svolte, corsie, pianta o raccordi guarda i casi con `python3 scripts/percorsi.py --elenco` e, se restano, li mette nell'elenco con il perché (`--aggiorna`). Un tag OSM sbagliato si corregge con una riga di `data/osm-correzioni.json`, non nel codice |
 | `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113, #115), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7), con chi segue chi e l'incrocio da liberare (`idm`, `incrocioDavanti`, sezione 8), e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
 | `tests/code.js`, `tests/code.spec.js`, `data/eccezioni/code.json` | `area:traffico` (#115), poi chi cambia chi segue chi, sblocchi, precedenze o il numero di auto (#49, #50, #116, #117) | prova delle code: corridoio di Via Querini (flusso contro densità, scarico al semaforo), incrocio da liberare, dieci minuti senza sblocchi a tempo, incroci bloccati e fermi oltre 120 s. Chi cambia il traffico la rilancia; un caso sparito si toglie dall'elenco nello stesso commit |
+| `scripts/domanda.py`, `src/data/padova-domanda.json`, `src/world/domanda.js`, `tests/domanda.js`, `tests/domanda.spec.js`, `scripts/gtfs_tempi.py` | `area:traffico` (#116), poi #117 e chi cambia rete, raccordi, edifici o sosta | domanda di traffico ([`domanda.md`](domanda.md)): la build scrive zone, porte, tempi, destinazioni, curva oraria e l'assegnazione per fascia; il file dipende da rete, raccordi ed edifici delle aree, e chi rigenera la mappa lo rifà nello stesso commit (`python3 scripts/domanda.py`, in fondo a `rigenera_mappa.sh`; `verifica_mappa.py` controlla che sia quello che esce). Non è locale: l'assegnazione sposta i flussi anche lontano |
 | `scripts/localita.py`, `data/localita.json`, `data/eccezioni/localita.json`; in `scripts/street_surfaces.py` `unione`, `semplifica_riquadro`, `canonico`, `anelli_canonici` | `area:mappa` (#139), e chi scrive un passo della build | località della mappa: rapporto a fine rigenerazione e prova (job `localita`, nota #139 della Mappa). Un passo che lavora su tutta la città usa `unione` e semplifica per riquadro; un caso nuovo della prova si capisce prima di metterlo nell'elenco |
 | `tests/impronta.json`, `tests/impronta.js`, `tests/impronta.spec.js` | chi cambia traffico, bus o tram automatici, mappa o linee (#145) | impronta del traffico di una corsa, ai bit, uguale su Mac e in CI (nota #145 delle Verifiche): chi la cambia di proposito la riscrive nello stesso commit con `IMPRONTA=aggiorna npx playwright test tests/impronta.spec.js`; se in CI è diversa da quella del Mac, l'esito dipende dalla macchina e la causa va trovata |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
@@ -1333,6 +1334,38 @@ scritta prima della modifica: numeri di prima e di dopo nell'issue #115. Da sape
   prova di ogni worker partiva alle 8:26 e le altre alle 8:14, e l'esito dipendeva dall'ordine delle prove;
 - tempo per passo, 72 auto, nella prova delle code: `traffic.update` da 0,55 a 0,6-0,77 ms, `buses.update` da 0,33 a
   0,23-0,35 ms (macchina carica, load 8-25).
+
+Domanda di traffico (#116, 17 novembre). Regole, numeri, verifica sul GTFS e prova in [`domanda.md`](domanda.md). Da
+sapere prima di toccare il traffico:
+
+- ogni auto nata dalla corsa ha `c.viaggio` (`o`, `d`: luoghi della domanda, zone e poi porte; `arrivo`: lo stato,
+  `2 · arco + verso`, dove finisce; `albero`: l'albero dei tempi dell'arrivo di `Domanda`). Le auto delle prove fatte
+  con `Traffic.nuova` non ce l'hanno e scelgono come prima (`pesoVia`, rotonde, vicoli ciechi e pozzi);
+- `Traffic.chooseNext(edge, fwd, T, v)`: con il viaggio, tra i movimenti da cui l'arrivo si raggiunge, quello che arriva
+  prima (`Domanda.costo`: movimento, albero, ritardo misurato); la corsia conta solo per scegliere tra quelli che ci
+  si possono fare. In `estendi` per le auto con un viaggio la svolta dopo si sceglie prima della corsia (`scegli(T, m,
+  m2)`): scegliendo prima la corsia, su un arco di 11 m di Via Sorio l'auto finiva in un anello laterale e ci girava
+  (sotto, `versoArrivo`).
+  L'arrivo (`cambiaViaggio`): il viaggio dopo parte dalla zona d'arrivo; `c.arriva` è la progressiva dove l'auto,
+  lontano da chi guida, esce di scena (contata in `Traffic.ripieghi` come `arrivo`);
+- `Traffic.target` resta il numero massimo (72, `AUTO_SIMULATE` in `main.js`; le prove che lo mettono a 0 spengono le
+  auto come prima); `Traffic.quante` e `Traffic.raggio` li decide la domanda per l'ora e il posto; le auto oltre
+  `raggio + 250` escono di scena (erano 1.700 m). `Traffic.centro` mette il disco altrove (prove); `Traffic.popola`
+  fa le auto della partenza (in `startMission`, al posto delle `count` chiamate a `spawn`); le auto con `c.sonda` non
+  escono per la distanza;
+- `traffic.update` riceve `ctx.clock` e `ctx.giorno` (in `main.js`); `Domanda.passo` avanza gli alberi di 4.000 stati
+  per passo e `Domanda.reset` (in `startMission`) li toglie: chi aggiunge stato a `Domanda` lo rimette lì, come per
+  #122;
+- `Traffic.davanti` (di #115): tra due auto unite nello stesso punto la più giovane non cede più alla più vecchia se
+  questa aspetta proprio lei, e chi esce da un giro di attese (`through`) passa anche lì. A Piazzale San Giovanni, con
+  la densità vera delle 8, la più giovane cedeva alla più vecchia, che la vedeva un metro davanti e la aspettava, e la
+  coda di Via Sorio restava ferma oltre dieci minuti;
+- per le auto con un viaggio la svolta dopo si sceglie senza guardare la corsia (`versoArrivo`) e poi la corsia per
+  farla; dove non ci sta un ripiego, come prima. Con 60 s di penalità per le svolte che dalla corsia non si fanno le
+  auto dirette alla porta di Via Sorio deviavano in un anello di strade laterali e lo riempivano;
+- le prove del traffico cambiano: a parità di ora le auto sono le stesse 72 o poche meno, ma stanno in un disco di
+  300-700 m invece che fino a 1.700, sui percorsi dei loro viaggi, quindi gli incontri e le code sono altri.
+  `traffic.update` costa 1,1 ms per passo invece di 0,8 (tabella in [`domanda.md`](domanda.md), sezione 9).
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
