@@ -103,7 +103,6 @@
    {
     "perche": "#143: auto che escono da una rotonda con l'anello a due corsie dove i raccordi della build entrano solo nella corsia interna ed escono solo dall'esterna, con archi di 5-7 m: il cambio di corsia non ci sta. Da #115 Traffic.chooseNext le fa uscire alla prima uscita con una curva del gioco (ripiego cambio di corsia senza posto o raccordi sovrapposti) invece di farle girare per sempre nell'anello (a Via Bembo con Via Marinelli l'anello si riempiva e fermava il bus della 3). Spariscono quando la build dà a ogni corsia d'ingresso un'uscita raggiungibile.",
     "casi": [
-     "auto imbardata (cambio di corsia senza posto) @ 1989,-720",
      "auto imbardata (cambio di corsia senza posto) @ 2461,3572",
      "auto imbardata (cambio di corsia senza posto) @ 2509,3579",
      "auto imbardata (cambio di corsia senza posto) @ 2512,3584",
