@@ -41,6 +41,12 @@
      "tangenziale-boves-fornace: strato 3 da vicino, strato 4 da lontano @ 894,-3594",
      "tangenziale-commercio-boves: strato 3 da vicino, strato 2 da lontano @ 5349,-2417"
     ]
+   },
+   {
+    "perche": "Cavalcavia Mortise con il profilo del risolutore dal 17 novembre 2026 (#124): ai piedi della rampa nord, che ora è un arco a terra su un rilevato, le righe della carreggiata (strato 4) e l'asfalto a terra (strato 2) stanno quasi alla stessa quota e si sovrappongono in pianta: da 20 m si vede l'asfalto, da 300 m le righe, su 16 punti su 800, accanto al punto della veduta. È l'asfalto che si piega dove il terreno non è uguale su tutta la larghezza della carreggiata (#137), come ai piedi delle rampe del Camerini, del Chiesanuova e del San Marco. Lo toglie la pianta come partizione, #126.",
+    "casi": [
+     "cavalcavia-mortise-rampa: strato 2 da vicino, strato 4 da lontano @ 2871,-2865"
+    ]
    }
   ]
  }

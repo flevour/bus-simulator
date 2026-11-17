@@ -11,21 +11,6 @@
      "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -1941,-344",
      "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -1989,-345",
      "Cavalcavia Dalmazia | scarti_dtm | strada senza nome @ -720,-1338",
-     "Cavalcavia Mortise | onde | Cavalcavia Mortise @ 2900,-2750",
-     "Cavalcavia Mortise | pendenze | Cavalcavia Mortise @ 2893,-2765",
-     "Cavalcavia Mortise | pendenze | Cavalcavia Mortise @ 2905,-2749",
-     "Cavalcavia Mortise | pendenze | Cavalcavia Mortise @ 2949,-2785",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2855,-2570",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2863,-2618",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2874,-2416",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2884,-2721",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2884,-2832",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2892,-2770",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2898,-2752",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2916,-2754",
-     "Cavalcavia Mortise | raccordi | Cavalcavia Mortise @ 2953,-2790",
-     "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2857,-2520",
-     "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2893,-2771",
      "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2900,-2750",
      "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2916,-2754",
      "Cavalcavia San Ignazio di Loyola | onde | Cavalcavia San Ignazio di Loyola @ -1510,-1780",
@@ -546,7 +531,6 @@
      "Corso Tredici Giugno (1182, -3448) | pendenze | Corso Tredici Giugno @ 375,-3777",
      "Corso Tredici Giugno (1182, -3448) | pendenze | Corso Tredici Giugno @ 415,-3767",
      "Corso Tredici Giugno (1182, -3448) | pendenze | Corso Tredici Giugno @ 426,-3764",
-     "Corso Tredici Giugno (1182, -3448) | pendenze | Corso Tredici Giugno @ 465,-3753",
      "Corso Tredici Giugno (1182, -3448) | pendenze | Corso Tredici Giugno @ 565,-3726",
      "Corso Tredici Giugno (1182, -3448) | pendenze | Via Boves @ 1303,-3317",
      "Corso Tredici Giugno (1182, -3448) | pendenze | Via Boves @ 1365,-3301",
@@ -910,6 +894,20 @@
      "Ponte dell'Unità d'Italia (1145, -1143) | onde | Viale della Pace @ 871,-1000",
      "Ponte dell'Unità d'Italia (1145, -1143) | raccordi | Via Giuseppe Impastato @ 814,-896",
      "Via Madonnina | onde | Via Madonnina @ -4123,3896"
+    ]
+   },
+   {
+    "perche": "Cavalcavia Mortise con il profilo del risolutore dal 17 novembre 2026 (#124): il profilo sta nei limiti della regola (al più il 6,3% sulla strada principale, che ne ammette l'8) e non ha onde; prima erano 17 casi, tra cui una conca di 1,69 m in 41 m in cima e pendenze dell'11%. Scarti dal DTM: sulla rampa sud il profilo resta fino a 1,23 m sotto il rilevato che il DTM vede (2855, -2556), perché il raccordo in dosso (800 m) non lo lascia salire prima; sulla rampa nord e sul ramo verso est da -0,78 a +0,75 m su tratti da 5 a 31 m, dove il rilievo fa gradini. Via Antonino Cascino e Via Luigi Rizzo, che si innestano di lato sulla rampa sud e restano sul terreno com'è: una conca di 0,52 m in 92 m e due raccordi in conca di 515 e 533 m (minimo 690), dove il terreno accanto non coincide con il profilo; sul ramo verso est una conca di 0,22 m in 238 m dove la strada torna sul terreno com'è. Restano a #125.",
+    "casi": [
+     "Cavalcavia Mortise | onde | Cavalcavia Mortise @ 2987,-2840",
+     "Cavalcavia Mortise | onde | Via Antonino Cascino @ 2840,-2539",
+     "Cavalcavia Mortise | raccordi | Via Antonino Cascino @ 2838,-2628",
+     "Cavalcavia Mortise | raccordi | Via Luigi Rizzo @ 2820,-2552",
+     "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2855,-2556",
+     "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2887,-2740",
+     "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2926,-2764",
+     "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2936,-2774",
+     "Cavalcavia Mortise | scarti_dtm | Via Antonino Cascino @ 2841,-2570"
     ]
    }
   ],

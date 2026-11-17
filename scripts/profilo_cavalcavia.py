@@ -41,6 +41,7 @@ from collections import Counter, defaultdict
 import numpy as np
 from scipy.optimize import linprog
 from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from binari_tram import Griglia  # noqa: E402
@@ -380,11 +381,33 @@ class LP:
         self.m += 1
 
     def risolvi(self):
+        """Risolve per parti: le incognite che nessun vincolo lega tra loro (strutture lontane) stanno in programmi
+        separati. Un programma solo per tutte ha molte soluzioni con lo stesso costo, e quella che HiGHS sceglie dipende
+        da tutto il resto: attivare una struttura spostava fino a 20 cm il profilo di un'altra a chilometri di distanza.
+        Una parte che non cambia ha la stessa soluzione, perché il suo programma è lo stesso, nello stesso ordine."""
         A = coo_matrix((self.v, (self.r, self.c)), shape=(self.m, self.n)).tocsr()
-        res = linprog(self.costo, A_ub=A, b_ub=self.b, bounds=list(zip(self.lo, self.hi)), method='highs')
-        if res.status != 0:
-            raise RuntimeError('profilo dei cavalcavia: il programma lineare non ha soluzione: ' + res.message)
-        return res.x
+        primo = np.full(self.m, -1)
+        r, c = np.asarray(self.r), np.asarray(self.c)
+        a = np.r_[0, np.flatnonzero(np.diff(r)) + 1]  # le righe sono scritte una dopo l'altra (riga)
+        primo[r[a]] = c[a]  # la prima incognita di ogni riga
+        G = coo_matrix((np.ones(len(c)), (primo[r], c)), shape=(self.n, self.n))
+        n_parti, parte = connected_components(G, directed=False)
+        costo, b = np.asarray(self.costo), np.asarray(self.b)
+        limiti = list(zip(self.lo, self.hi))
+        x = np.zeros(self.n)
+        righe_di = np.argsort(parte[primo], kind='stable')
+        inizio = np.searchsorted(parte[primo][righe_di], np.arange(n_parti + 1))
+        for p in range(n_parti):
+            inc = np.flatnonzero(parte == p)
+            righe = righe_di[inizio[p]:inizio[p + 1]]
+            if not len(righe):
+                x[inc] = [lo if lo is not None else 0.0 for lo in (limiti[i][0] for i in inc)]
+                continue
+            res = linprog(costo[inc], A_ub=A[righe][:, inc], b_ub=b[righe], bounds=[limiti[i] for i in inc], method='highs')
+            if res.status != 0:
+                raise RuntimeError('profilo dei cavalcavia: il programma lineare non ha soluzione: ' + res.message)
+            x[inc] = res.x
+        return x
 
 
 class Profili:

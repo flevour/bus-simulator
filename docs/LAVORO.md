@@ -506,6 +506,31 @@ l'asfalto vicino alla sede del tram).
 - `laneKey` di `buildRoads` ha anche gli scostamenti delle corsie dove c'è `e.sede`: due archi di fila con corsie
   diverse non stanno nella stessa catena di righe.
 
+#124, cavalcavia delle tangenziali con il profilo del risolutore (dal 17 novembre, a passi). Regola in
+[`cavalcavia.md`](cavalcavia.md), sezione 6. Da sapere:
+
+- il programma lineare si risolve per parti (`LP.risolvi` in `scripts/profilo_cavalcavia.py`): le incognite che nessun
+  vincolo lega stanno in programmi separati. Con un programma solo le soluzioni a parità di costo sono molte, e
+  attivare una struttura spostava fino a 20 cm il profilo di un'altra a chilometri (Via Venezia, Camerini). Per parti
+  `scripts/profili_strutture.py` nomina solo la struttura attivata e quelle accanto;
+- dove il profilo resta libero e due soluzioni costano uguale, la scelta può cambiare da una macchina all'altra: sul
+  Mac il tratto cieco di strada di servizio che da Via San Marco attraversa il SIR2 in (3372, −934) stava a terra, in
+  Docker saliva di 32 cm, contava come in quota e l'incrocio perdeva la lanterna del tram. Un punto nel registro lo
+  tiene sul terreno (`sopra: 0`). Le prove del risolutore sul Mac (fine della sezione 6 di `cavalcavia.md`) dicono
+  quali casi cambiano, non le quote al centimetro: quelle vengono solo da `scripts/rigenera_mappa.sh`;
+- le due carreggiate di una tangenziale sono strutture separate nel registro: attivarne una sola sposta casi
+  sull'altra, che tiene le quote di prima accanto a una piattaforma nuova. Si attivano insieme;
+- sotto una campata il terreno prende il piano di quello che passa sotto (35° percentile entro 30 m), anche dove passa
+  una strada fuori dalla struttura: quasi ovunque la porta al DTM, che è giusto, ma sotto Via Salboro Corso Primo
+  Maggio scende di 0,7 m in 40 m, con un gradino di 0,4 m in 8 m (un fosso accanto abbassa il percentile), e Via
+  Adriatica sotto Corso Boston va 0,8 m sotto il DTM. È il caso "strada che passa sotto e risale" di #125: Via
+  Salboro resta spenta finché la strada di sotto non tiene la sua quota sotto le campate. Il controllo non lo vede
+  se la strada di sotto non è in quota: la misura è, per ogni incrocio di `impalcati` con una strada fuori dalla
+  struttura, la quota della strada di sotto (terreno "via" più `edgeH`) prima e dopo, fino a 40 m per parte;
+- passo 1: Cavalcavia Mortise attivo (quindici strutture). In cima al Mortise, alla spalla sud, spunta dall'asfalto
+  una superficie chiara dell'impalcato (veduta `cavalcavia-mortise-cima`): è l'asfalto in quota che si piega dove il
+  terreno cambia sulla larghezza della carreggiata (#137).
+
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
 - il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e

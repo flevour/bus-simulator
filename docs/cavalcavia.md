@@ -314,6 +314,18 @@ sta sul rilevato come fuori dai ponti (Via Boves ha 280 m di "ponte" su un terra
 programma delle nove strutture attive (16 km, 4.071 incognite) si risolve in pochi secondi senza violare pendenze,
 raggi o franchi.
 
+Il programma si risolve per parti (#124): le incognite che nessun vincolo lega tra loro stanno in programmi separati,
+ognuno con le sue righe nell'ordine di prima. Una parte è una struttura, o più strutture legate da un franco, da due
+carreggiate affiancate o da un binario. Un programma solo per tutte ha molte soluzioni con lo stesso costo, e quella che
+HiGHS sceglie dipende da tutto il resto: nella prova sul Mac attivare il Cavalcavia Mortise spostava fino a 20 cm il
+profilo di Via Venezia e 16 cm quello del Camerini, a chilometri di distanza. Per parti, attivare una struttura cambia
+solo la sua parte, e `scripts/profili_strutture.py` nomina solo lei e quelle che le stanno accanto. Il passaggio ha
+cambiato da solo il viadotto di Via Venezia (9 cm a metà, con i binari del SIR2 sopra), un punto del Camerini (2 cm) e
+uno del San Marco (3 cm), con gli stessi casi del controllo. Dove il profilo resta libero e due soluzioni costano
+uguale la scelta cambia anche con i decimali: il tratto cieco di strada di servizio che da Via San Marco attraversa il
+SIR2 in (3372, −934) saliva di 32 cm sopra i binari e l'incrocio perdeva la lanterna del tram. Lo tiene sul terreno un
+punto nel registro (`sopra: 0`).
+
 Il terreno segue il profilo, perché la quota di ogni cosa nel gioco è terreno più quota sopra il terreno:
 
 * fuori dalle campate le celle attorno alla strada (carreggiata più 12 m) prendono la quota del profilo, nel terreno di
@@ -348,7 +360,8 @@ la quota assoluta della strada, senza media (sezione 7).
 Attive dal 13 novembre: Cavalcavia Antonio Grassi, Camerini, Montà, Pietro Maroncelli, i due del Ponte dell'Unità
 d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Dal 16 novembre (#123) quelle dove passa il
 tram, Cavalcavia Borgomagno, Chiesanuova, San Marco e Via Venezia, e il Cavalcavia Dalmazia, che arriva accanto al
-Borgomagno. Spente, con il perché nel registro: le tangenziali con Mortise e Via Salboro (#124). Una rampa con le
+Borgomagno. Dal 17 novembre (#124) il Cavalcavia Mortise, accanto a Via Boves. Spente, con il perché nel registro: le
+tangenziali (#124) e Via Salboro, sotto il cui ponte Corso Primo Maggio scenderebbe di 0,7 m (#125). Una rampa con le
 quote di prima non può entrare in una struttura attiva: la build si ferma e nomina i nodi. Il 13 novembre sulle nove
 attive restavano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
 regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto
