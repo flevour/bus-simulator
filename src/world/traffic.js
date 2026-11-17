@@ -974,6 +974,14 @@ export class Traffic {
       if (c.turn && o.turn && o.turn.next.edge === c.turn.next.edge && c.turn.rest < o.turn.rest) continue;
       // chi esce da un giro di attese (untangle) passa davanti all'auto che aspettava, finché non l'ha superata
       if (o === c.through) { through = true; continue; }
+      // due auto su traiettorie che si tagliano, ognuna sul percorso dell'altra, e l'altra ferma ad aspettare questa:
+      // passa subito chi ha l'altra più di lato (la regola di untangle, senza il secondo di fermo). In Via Piovese con
+      // Via Pietro Orseolo il giro si formava o no per un soffio, sul Mac sì e in CI no (#115)
+      if (cos < 0.5 && o.aspetta === c && c.v < 0.5) {
+        const mio = Math.abs((o.x - c.x) * Math.cos(c.h) - (o.z - c.z) * Math.sin(c.h));
+        const suo = Math.abs((c.x - o.x) * Math.cos(o.h) - (c.z - o.z) * Math.sin(o.h));
+        if (mio > suo || (mio === suo && c.n < o.n)) continue;
+      }
       tieni(p.u - LUNGA, o.v * Math.max(0, cos), o, 'auto');
     }
     if (!through) c.through = null;

@@ -127,7 +127,9 @@ export function osservaCode({ fermo = 120, scatola }) {
   const fermi = new Map(), inCoda = new Map();
   // in coda: un mezzo fermo o quasi (sotto 1,5 m/s) nello stesso verso (entro 60 gradi), a meno di 7 m davanti al muso.
   // Chi taglia la strada o passa (un tram, un'auto che attraversa) non è una coda, e nemmeno chi aspetta i binari
-  // chiamati da un tram entro 15 m (Traffic.calledAhead): lì ci si ferma anche dentro l'incrocio, per il tram
+  // chiamati da un tram entro 15 m (Traffic.calledAhead): lì ci si ferma anche dentro l'incrocio, per il tram. Il bus di
+  // chi gioca non conta: non è nel traffico, e la prova lo lascia fermo dove lo mette il teletrasporto (nella zona
+  // sud-est dentro un incrocio, e chi arriva dietro aspetta lì finché non lo sorpassa)
   const davanti = (c) => {
     if (T.calledAhead(c, TS) < 15) return false;
     const fx = Math.sin(c.h), fz = Math.cos(c.h), nx = c.x + fx * 2.1, nz = c.z + fz * 2.1;
@@ -135,7 +137,7 @@ export function osservaCode({ fermo = 120, scatola }) {
     for (const q of T.near(nx, nz, 10)) if (q !== c && q.car && vicino(q, q.h, q.v)) return true;
     for (const b of B.buses) if (Math.abs(b.x - nx) < 20 && Math.abs(b.z - nz) < 20 && (b.circles || []).some((p) => vicino(p, b.h, b.v))) return true;
     for (const p of TR.near(nx, nz, 10)) if (vicino(p, p.h, p.tram ? p.tram.v : 0)) return true;
-    return (g.bus.worldCircles ? g.bus.worldCircles() : []).some((p) => vicino(p, g.bus.h, g.bus.v));
+    return false;
   };
   const misura = () => {
     if ((dt += 1 / 30) < 0.5) return;
