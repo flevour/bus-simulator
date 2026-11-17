@@ -54,7 +54,7 @@ test('viaggi con origine e destinazione, percorsi che seguono i tempi, auto che 
 // sera chi ne esce. La media dei tre corridoi alle 8 e alle 18 deve superare 1,08.
 // Una misura aggregata con un margine, non un elenco di casi: gli intrecci esatti di qualche minuto di traffico cambiano
 // tra il Mac e Linux e a ogni piccolo cambiamento (#145), e un corridoio da solo può non sentire la punta (Via Sorio
-// non la sente: sezione 8 di docs/domanda.md). Il 17 novembre sul Mac: 1,17 alle 8 e 1,24 alle 18
+// non la sente: sezione 8 di docs/domanda.md, #147). Il 17 novembre sul Mac: 1,21 alle 8 e 1,41 alle 18
 const SOGLIA_PUNTA = 1.08;
 test('punte del mattino e della sera sui tre corridoi: più lenti alle 8 e alle 18 che alle 11 e alle 22', async ({ pagina, gioco }, info) => {
   tempoMassimo(900);

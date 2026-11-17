@@ -212,7 +212,7 @@ verso il centro, come la E073, e la mattina poco. Via Sorio no: nella build il t
 Piazzale San Giovanni porta 90-290 auto l'ora per verso alle 8, lontano dalla capacità. Sta a 170 m dal bordo della
 mappa, e chi arriva da Tencarola, Selvazzano e Rubano entra dalla porta di Via Sorio, pesata come una secondaria
 (0,35 contro 1 di una trunk), o da Corso Australia e Via Chiesanuova (che alle 8 sono le più cariche della mappa). Il
-GTFS dice +43% alle 8 sulla U12: è il primo posto da guardare per tarare le porte.
+GTFS dice +43% alle 8 sulla U12: è il primo posto da guardare per tarare le porte (#147).
 
 ## 9. Costo per passo
 

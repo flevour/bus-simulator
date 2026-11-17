@@ -9,21 +9,23 @@
 //     una porta). Per ogni arrivo un albero dei tempi (Dijkstra all'indietro) dice da ogni stato quanto manca: l'auto
 //     sceglie a ogni nodo il movimento che arriva prima, con i ritardi misurati dove le auto sono simulate. È il
 //     percorso più veloce con i tempi del momento, rifatto a ogni svolta;
-//   - quali viaggi passano di lì: con due alberi dallo stato P dove sta chi guida (verso P e da P), il viaggio da o a d
+//   - quante auto attorno a chi guida: la build ha le auto presenti per cella nelle tre fasce del giorno (l'assegnazione
+//     con la capacità delle strade); il raggio R del disco attorno a chi guida è il più grande per cui le auto attese
+//     non superano quelle che il gioco simula (72): nelle ore di punta il disco si stringe e le strade attorno a chi
+//     guida hanno le auto che avrebbero davvero;
+//   - quali viaggi passano di lì: con due alberi dal nodo P dove sta chi guida (verso P e da P), il viaggio da o a d
 //     passa vicino a P se andare da o a P e poi da P a d costa poco più del viaggio diretto (tempi della build). Il tempo
-//     in più dà la distanza a cui il viaggio passa da P, e da quella il tempo che passa nel disco di raggio R attorno a
-//     chi guida. I viaggi che partono o arrivano negli accessi dentro il disco ci passano una parte del raggio. La somma
-//     su tutti i viaggi dell'ora, per il loro numero, è quante auto ci sono nel disco;
-//   - il raggio R è il più grande per cui le auto attese nel disco non superano quelle che il gioco simula (72): nelle
-//     ore di punta il disco si stringe e le strade attorno a chi guida hanno le auto che avrebbero davvero.
+//     in più dà la distanza a cui il viaggio passa da P, e da quella il tempo che passa nel disco; i viaggi che partono o
+//     arrivano negli accessi dentro il disco ci passano una parte del raggio. Si sceglie un viaggio per quel tempo, si
+//     traccia il suo percorso e l'auto nasce lungo il tratto dentro il disco.
 // I conti lunghi (alberi) vanno a pezzi, con un numero fisso di stati per passo: non danno scatti e, a parità di
 // passi, danno sempre lo stesso risultato (le prove ripartono dallo stesso stato, #122).
 import DATI from '../data/padova-domanda.json' with { type: 'json' };
 
 // velocità media di chi viaggia (m/s): dal tempo in più di un giro da P alla distanza da P, e al tempo nel disco
-export const V_MEDIA = 8;
+const V_MEDIA = 8;
 // raggi del disco provati (m), dal più grande
-export const RAGGI = [1500, 1200, 950, 750, 600, 480, 380, 300];
+const RAGGI = [1500, 1200, 950, 750, 600, 480, 380, 300];
 // chi parte o arriva dentro il disco ci passa in media 8 / 3π del raggio (da un punto a caso del disco al bordo)
 const DENTRO = 8 / (3 * Math.PI);
 // stati chiusi per passo di un albero (meno di 1 ms)
