@@ -4,15 +4,9 @@
   "sblocchi": [],
   "giri_di_attese": [
    {
-    "perche": "#144: in Via Morgagni (e in Via Gozzi, sul Ponte Omizzolo, in Via Tommaseo) le corsie delle auto stanno sopra il binario del SIR3 in controsenso. Un'auto e il tram si fermano muso contro muso e ognuno aspetta l'altro: il tram, che ha la precedenza, fa sparire l'auto (lontano da chi gioca) appena vede che lei aspetta lui (c.aspetta, c.tramAttesi), invece che dopo 20 s come fino al 17 novembre. Sparisce quando le corsie non stanno più sul binario in controsenso.",
+    "perche": "Da #139 (17 novembre 2026): la pianta rifatta una volta in tutta la mappa (bordi spostati di qualche centimetro, 842 raccordi cambiati) fa andare diversamente i dieci minuti di traffico della prova, e gli intrecci noti compaiono in altri posti; entro 40 m da questi non è cambiato nessun raccordo. In Corso Garibaldi un bus e il tram SIR1 si aspettano a vicenda, come le auto e il tram in Via Morgagni (#144, dove il caso non c'è più): il tram, che ha la precedenza, passa appena vede che il bus aspetta lui.",
     "casi": [
-     "auto e tram che si aspettano @ 398,-336"
-    ]
-   },
-   {
-    "perche": "#49: all'incrocio senza semaforo di Via Piovese con Via Pietro Orseolo due auto arrivano insieme su traiettorie che si tagliano, a 1,8 m, e ognuna ha l'altra sul suo percorso: Traffic.untangle (chi aspetta chi, #79) fa passare quella che ha l'altra più di lato, dopo un secondo. Sparisce quando agli incroci ci sono le precedenze.",
-    "casi": [
-     "giro di attese @ 2119,3336"
+     "tram e bus che si aspettano @ 63,-386"
     ]
    }
   ],
@@ -21,6 +15,13 @@
     "perche": "#49: al Piazzale della Stazione un bus della 25 entra nell'incrocio con Corso del Popolo, venendo da un'altra via, davanti a un'auto che c'è già dentro, e si ferma 14 m più avanti al rosso della linea d'arresto dopo: l'auto resta dietro, dentro l'incrocio. Nessuno dei due vede l'altro davanti finché le due svolte non si uniscono nella stessa corsia, perché non ci sono precedenze tra chi s'immette. Sparisce quando le svolte che si uniscono hanno chi dà la precedenza a chi.",
     "casi": [
      "auto in coda nell'incrocio @ 159,-1029"
+    ]
+   },
+   {
+    "perche": "Da #139 (17 novembre 2026): la pianta rifatta una volta in tutta la mappa (bordi spostati di qualche centimetro, 842 raccordi cambiati) fa andare diversamente i dieci minuti di traffico della prova, e gli intrecci noti compaiono in altri posti; entro 40 m da questi non è cambiato nessun raccordo. In Via Venezia e in Via Piovese un'auto resta in coda dentro l'incrocio dietro a chi si è immesso davanti, come al Piazzale della Stazione (gruppo sopra): non ci sono precedenze tra chi s'immette (#49). Il giro di attese di Via Piovese con Via Pietro Orseolo (#49) non c'è più.",
+    "casi": [
+     "auto in coda nell'incrocio @ 1323,-443",
+     "auto in coda nell'incrocio @ 1951,3068"
     ]
    }
   ],

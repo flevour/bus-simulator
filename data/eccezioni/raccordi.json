@@ -378,6 +378,13 @@
     "casi": [
      "divieto, Via Andreon @ 5712,-2854"
     ]
+   },
+   {
+    "perche": "La sola svolta delle auto da questa corsia è al raggio minimo (3,8-3,9 m, a destra in una via di 5-6 m), e dopo #139 non sta più nell'asfalto: la pianta semplificata per riquadro ha spostato l'angolo di 16-18 cm. Al limite, come i gomiti del gruppo sopra.",
+    "casi": [
+     "curva, Piazzale Centenario Club Ignoranti @ -1731,-1190",
+     "curva, Via Beata Eustochio @ -332,2144"
+    ]
    }
   ],
   "raccordi_rotti": [],

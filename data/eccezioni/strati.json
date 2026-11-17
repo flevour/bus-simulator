@@ -45,6 +45,12 @@
     "casi": [
      "cavalcavia-mortise-rampa: strato 2 da vicino, strato 4 da lontano @ 2871,-2865"
     ]
+   },
+   {
+    "perche": "Pianta di #139 (17 novembre 2026): sulla rampa ovest di Corso Boston allo svincolo di Via Adriatica, con le quote di prima, l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero, come ai piedi del Camerini, del Chiesanuova e del San Marco (451 m² entro 60 m dal punto, prima e dopo #139). Quale dei due si vede da 20 m dipende da millimetri di quota e dai vertici, che la semplificazione per riquadro ha cambiato. Lo toglie la pianta come partizione (#126).",
+    "casi": [
+     "tangenziale-boston-ovest: strato 2 da vicino, strato 3 da lontano @ -2673,3427"
+    ]
    }
   ]
  }
