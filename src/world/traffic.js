@@ -5,7 +5,7 @@ import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
 import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
-import { raccordiDi, curva, Curva, Percorso, posa, punto, scosta, corsie, costoCambio, tratto, ripiego, AUTO, raggioMinimo } from './inseguitore.js';
+import { raccordiDi, curva, Curva, Percorso, posa, punto, scosta, corsie, costoCambio, tratto, ripiego, AUTO, raggioMinimo, idm, IDM_AUTO, incrocioDavanti } from './inseguitore.js';
 import { turni } from '../game/turni.js';
 
 // ------------------------------------------------------------------
@@ -460,6 +460,13 @@ const K_LAT = 0.15, A_LAT = 1 / (2 * R_AUTO);
 const ALAT = 3, FRENO = 2;
 // quanto traffico attira una strada nella scelta del movimento (chooseNext)
 const pesoVia = (e) => (e.main ? 4 : e.service ? 0.08 : e.cls === 6 ? 0.3 : 1);
+// chi segue chi (#115): l'IDM delle auto, in src/world/inseguitore.js
+const IDM_A = IDM_AUTO.a, IDM_S0 = IDM_AUTO.s0;
+const idmAuto = (v, v0, s, dv) => idm(IDM_AUTO, v, v0, s, dv);
+// lunghezza dell'auto più 20 cm: tra i centri di due auto in fila, la distanza meno questa è lo spazio tra muso e coda
+const LUNGA = 4.4;
+// metri dal centro al muso
+const MUSO = 2.1;
 const CAR_COLORS = ['#c0c0c0', '#202020', '#f5f5f5', '#8a1c1c', '#1c3d8a', '#3a3a3a', '#6b6b6b', '#d8d0b8', '#2d5a3a', '#b5651d', '#e6c229', '#4a6fa5', '#9e9e9e', '#f0f0f0'];
 
 function carGeometry() {
@@ -525,7 +532,7 @@ export class Traffic {
   // partenza dell'arco e (verso fwd), sulla corsia data; route: i movimenti già scelti
   nuovaAuto(e, fwd, s, corsia, route) {
     return {
-      car: true, edge: e, fwd, s: s + ASSE, v: 0, turn: null, id: Math.random(),
+      car: true, edge: e, fwd, s: s + ASSE, v: 0, turn: null, id: Math.random(), n: (this.serie = (this.serie || 0) + 1),
       per: new Percorso(), q: 0, lat: 0, pend: 0, coda: { e, fwd, s, corsia }, route, ev: [], chiusa: false,
       blocked: 0, pass: 0, passT: 0, honkCd: 0,
     };
@@ -644,7 +651,13 @@ export class Traffic {
     else if (back.length) opts = back;
     if (T) {
       const ok = opts.filter((m) => m.racs.some((R) => this.costo(T, R) < 100));
-      if (ok.length) opts = ok;
+      // nell'anello di una rotonda, se da questa corsia non c'è posto per cambiare corsia prima di nessuna uscita, si esce
+      // alla prima con una curva del gioco (un ripiego contato, Traffic.ripieghi). Nella rotonda di Via Bembo
+      // con Via Marinelli i raccordi della build entrano solo nella corsia interna ed escono solo da quella esterna, con
+      // archi di 5-7 m: le auto giravano per sempre finché l'anello era pieno, e la coda arrivava al bus della 3 (#115)
+      const fuori = edge.roundabout && ok.every((m) => m.edge.roundabout) ? opts.filter((m) => !m.edge.roundabout) : [];
+      if (fuori.length) opts = fuori;
+      else if (ok.length) opts = ok;
     }
     // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio. Nell'anello
     // di una rotonda l'uscita si sceglie come all'ingresso: restare nell'anello pesa quanto le uscite che restano prima
@@ -691,7 +704,15 @@ export class Traffic {
   // tutti con posto
   scegli(T, m, m2) {
     let best = null, bc = Infinity;
-    for (const R of m.racs) {
+    // entrando in una rotonda si va nella corsia esterna dell'anello, da cui si raggiungono le uscite: dalla corsia
+    // interna dell'anello di Via Bembo con Via Marinelli (archi di 5-7 m) non c'era posto per cambiare corsia prima di
+    // nessuna uscita, e le auto giravano finché l'anello era pieno (#115)
+    let racs = m.racs;
+    if (m.edge.roundabout && !T.e.roundabout) {
+      const est = corsie(m.edge, m.fwd).length - 1, fuori = racs.filter((R) => R.ca === est);
+      if (fuori.length) racs = fuori;
+    }
+    for (const R of racs) {
       let c = this.costo(T, R);
       if (m2) {
         const T2 = { e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca };
@@ -867,9 +888,10 @@ export class Traffic {
   // si entrava svoltando e ci si fermava sui binari in coda); Infinity se non serve fermarsi
   calledAhead(car, ts) {
     let enter = -1, exit = null, hit = Infinity;
+    this.xChiamato = null;
     this.along(car, 2.1, 2.1 + AHEAD, ts, (d, px, pz, dx, dz, xs) => {
       let on = false;
-      for (const x of xs) if (ts.cuts(x, px, pz, dx, dz)) { if (x.call) { hit = d - 2.1; return true; } on = true; }
+      for (const x of xs) if (ts.cuts(x, px, pz, dx, dz)) { if (x.call && !ts.sulBinarioAuto(car, x)) { hit = d - 2.1; this.xChiamato = x; return true; } on = true; }
       if (on) { if (enter < 0 || exit.open) exit = { px, pz, dx, dz, open: true }; if (enter < 0) enter = d - 2.1; }
       else if (exit) exit.open = false;
       return false;
@@ -892,6 +914,100 @@ export class Traffic {
     return hit;
   }
 
+  // Il primo mezzo lungo il percorso dell'auto c (corsie e raccordi, #113), entro D m davanti al centro: altre auto,
+  // pezzi dei bus automatici, il mezzo di chi gioca (pl: i suoi punti, con chi, v e h), i tram. Prima si guardava in
+  // linea retta, 33 m davanti al muso: in curva e nelle rotonde si vedevano le auto della strada accanto e non quelle
+  // della propria corsia dopo la svolta, e due auto in svolta si aspettavano a vicenda (#79). Il percorso si campiona
+  // ogni 2 m con lo scostamento dell'auto (in sorpasso è l'altra corsia); un mezzo ci sta sopra se il suo punto è a meno
+  // di `lat` m dall'asse: 1,7 m un'auto, 2,6 m un bus (i punti sono sul suo asse), per i tram come prima. Chi viene
+  // incontro non conta, nemmeno fermo di sbieco. Dà { gap: dal muso alla sua coda, v: la sua velocità lungo il
+  // percorso, o, tipo } o null
+  davanti(c, D, ctx, pl) {
+    const S = this._camp || (this._camp = new Float64Array(5 * 48)), Q = this._qd || (this._qd = {});
+    const qc = c.q + ASSE;
+    D = Math.max(2, Math.min(D, c.per.fine - qc, 2 * 46));
+    let n = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let u = 0; ; u = Math.min(D, u + 2)) {
+      punto(c.per, qc + u, Q);
+      const x = Q.x + Q.nx * c.lat, z = Q.z + Q.nz * c.lat, k = n * 5;
+      S[k] = x; S[k + 1] = z; S[k + 2] = u; S[k + 3] = Q.dx; S[k + 4] = Q.dz;
+      n++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+      if (u >= D) break;
+    }
+    // il punto più vicino del percorso a (px, pz), entro lim m: progressiva dal centro e tangente lì
+    const R = this._rd || (this._rd = {});
+    const proietta = (px, pz, lim) => {
+      if (px < x0 - lim || px > x1 + lim || pz < z0 - lim || pz > z1 + lim) return null;
+      let bd = lim, bi = -1, bt = 0;
+      for (let i = 0; i < n - 1; i++) {
+        const k = i * 5, ax = S[k], az = S[k + 1], ex = S[k + 5] - ax, ez = S[k + 6] - az, l2 = ex * ex + ez * ez;
+        const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((px - ax) * ex + (pz - az) * ez) / l2)) : 0;
+        const d = Math.hypot(px - ax - ex * t, pz - az - ez * t);
+        if (d < bd) { bd = d; bi = i; bt = t; }
+      }
+      if (bi < 0) return null;
+      const k = bi * 5;
+      R.u = S[k + 2] + (S[k + 7] - S[k + 2]) * bt; R.tx = S[k + 3]; R.tz = S[k + 4];
+      return R;
+    };
+    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, r = Math.hypot(x1 - x0, z1 - z0) / 2 + 3;
+    let best = null;
+    const tieni = (gap, v, o, tipo) => { if (!best || gap < best.gap) best = { gap, v, o, tipo }; };
+    let through = false;
+    for (const o of this.grid.query(mx, mz, r, this._nd || (this._nd = []))) {
+      if (o === c || !o.car) continue;
+      const p = proietta(o.x, o.z, 1.7);
+      if (!p) continue;
+      const cos = Math.sin(o.h) * p.tx + Math.cos(o.h) * p.tz;
+      if (cos < -0.3) continue;
+      // due auto una sopra l'altra nello stesso verso (si sono unite nello stesso punto, nella rotonda o in una svolta,
+      // e nessuna ha l'altra davanti): passa quella nata prima, l'altra (se non le sta davanti) si ferma finché non si
+      // sono separate. Restavano unite per sempre: le auto in coda sovrapposte di Corso Milano (#80), le pile
+      // nell'anello di Via Bembo (#115)
+      if (p.u <= 0.5) {
+        if (cos > 0.7 && o.n < c.n && (o.x - c.x) * Math.sin(c.h) + (o.z - c.z) * Math.cos(c.h) > -0.5) tieni(p.u - LUNGA, 0, o, 'auto');
+        continue;
+      }
+      // tra due auto che svoltano verso lo stesso arco passa chi ha meno curva da fare (a Lion, entrando in Via Mascagni
+      // da Via Sant'Andrea e dalla traversa, ognuna aveva l'altra davanti e restavano ferme per sempre)
+      if (c.turn && o.turn && o.turn.next.edge === c.turn.next.edge && c.turn.rest < o.turn.rest) continue;
+      // chi esce da un giro di attese (untangle) passa davanti all'auto che aspettava, finché non l'ha superata
+      if (o === c.through) { through = true; continue; }
+      tieni(p.u - LUNGA, o.v * Math.max(0, cos), o, 'auto');
+    }
+    if (!through) c.through = null;
+    // i bus (automatici e di chi gioca) si guardano anche in sorpasso solo se non sono quelli sorpassati
+    if (c.passT <= 0) {
+      const big = (pts, who, h) => {
+        for (const q of pts) {
+          const p = proietta(q.x, q.z, 2.6);
+          if (p && p.u > 0) tieni(p.u - 3.6, Math.abs(who.v) * Math.max(0, Math.sin(h) * p.tx + Math.cos(h) * p.tz), who, who.player ? 'giocatore' : 'bus');
+        }
+      };
+      if (Math.abs(pl.x - mx) < r + 40 && Math.abs(pl.z - mz) < r + 40) big(pl.pts, pl.who, pl.h);
+      for (const B of this.bigs) if (B.circles && Math.abs(B.x - mx) < r + 8 && Math.abs(B.z - mz) < r + 8) big(B.circles, B, B.h);
+    }
+    // i tram: chi passa davanti si aspetta, anche col muso già oltre l'incrocio o di sbieco contro; di chi viene
+    // incontro sul binario accanto conta solo quello proprio davanti. Il tram fermo alla barra orizzontale non si
+    // aspetta (si passa davanti al suo muso): conta solo se l'auto gli finirebbe addosso. Chi va nello stesso verso si
+    // segue alla sua velocità
+    if (ctx.trams) for (const q of ctx.trams.near(mx, mz, r)) {
+      const tv = q.tram ? q.tram.v : 0;
+      const pr = proietta(q.x, q.z, 2.6);
+      if (!pr || pr.u <= 0) continue;
+      const cos = Math.sin(q.h) * pr.tx + Math.cos(q.h) * pr.tz;
+      // (prima di proiettare non si sa la tangente: si riprova con la fascia giusta)
+      const lim = tv < 0.3 ? 1.4 : cos > -0.3 ? 2.6 : 1.6;
+      if (lim < 2.6 && !proietta(q.x, q.z, lim)) continue;
+      tieni(R.u - LUNGA, cos > 0.7 ? tv * cos : 0, q.tram || q, 'tram');
+    }
+    return best;
+  }
+
+  // l'incrocio davanti all'auto lungo il suo percorso (src/world/inseguitore.js), con la prossima linea d'arresto
+  incrocioDavanti(c, qn, fino) { return incrocioDavanti(this.net, c.per, qn, fino, c.ev[0] ? c.ev[0].q : null); }
+
   // l'arco ha la sede del tram a meno di 3 m dalla carreggiata (in memoria sull'arco)
   vicinoTram(e) {
     if (e.nearTram === undefined) {
@@ -903,23 +1019,34 @@ export class Traffic {
     return e.nearTram;
   }
   // la strada OSM e il tracciato GTFS del tram non sempre combaciano: un'auto che invaderebbe la sede si sposta di lato
-  // (lx, lz: verso sinistra) quanto basta per lasciare libero il binario, al massimo 3 m
+  // (lx, lz: verso sinistra; restituisce quanto, a sinistra) quanto basta per lasciare libero il binario, al massimo 3 m.
+  // Si guardano i binari che corrono accanto (non quelli che tagliano la strada, su cui si passa), per verso: prima di
+  // tutto si sta a 3 m da quello in controsenso, poi da quello nel proprio verso. Dove i due binari corrono nella
+  // carreggiata (Via Gozzi, Via Morgagni e Ponte Omizzolo col SIR3, il controsenso sulla corsia di destra) l'auto si
+  // allontanava dal binario più vicino, il suo, e finiva su quello del tram che le veniva incontro: si aspettavano a
+  // vicenda finché l'auto spariva (#115)
   tramShift(c, x, z, lx, lz) {
-    const q = this._qt || (this._qt = []);
     if (!this.vicinoTram(c.edge)) return 0;
-    let best = null;
-    for (const it of this.city.segGrid.query(x, z, TRAM_HW + 3, q)) {
-      if (it.kind !== 'tram') continue;
-      // solo dove la strada corre accanto alla sede: chi la attraversa di traverso passa sui binari
-      const sx = it.bx - it.ax, sz = it.bz - it.az;
-      if (Math.abs(lx * sx + lz * sz) > 0.5 * (Math.hypot(sx, sz) || 1)) continue;
-      const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
-      if (!best || r.d < best.d) best = { d: r.d, t: r.t, it };
+    const fx = -lz, fz = lx, tracks = Object.values(this.city.tramTracks || {});
+    const lontano = (px, pz) => {
+      let stesso = 3, contro = 3;
+      for (const T of tracks) for (const dir of [1, -1]) {
+        const P = T.path(dir), pr = P.projectNear(px, pz, 3);
+        if (!pr) continue;
+        const a = P.at(pr.s), dot = a.dx * fx + a.dz * fz;
+        if (Math.abs(dot) < 0.5) continue;
+        if (dot > 0) stesso = Math.min(stesso, pr.d); else contro = Math.min(contro, pr.d);
+      }
+      return contro * 10 + stesso;
+    };
+    let best = 0, bv = lontano(x, z);
+    if (bv >= 33) return 0;
+    for (let o = -3; o <= 3; o += 0.5) {
+      if (!o) continue;
+      const v = lontano(x + lx * o, z + lz * o) - Math.abs(o) * 0.05;
+      if (v > bv + 1e-6) { bv = v; best = o; }
     }
-    const need = best ? best.it.hw + 1.0 - best.d : 0;
-    if (need <= 0) return 0;
-    const { it, t } = best, qx = it.ax + (it.bx - it.ax) * t, qz = it.az + (it.bz - it.az) * t;
-    return ((x - qx) * lx + (z - qz) * lz >= 0 ? 1 : -1) * Math.min(3, need);
+    return best;
   }
 
   update(dt, bus, ctx) {
@@ -936,106 +1063,102 @@ export class Traffic {
     // griglia per ricerca vicini
     this.grid = new Grid(30);
     for (const c of this.cars) this.grid.insertAABB(c, c.x - 3, c.z - 3, c.x + 3, c.z + 3);
-    const near = [];
-    // ingombro del mezzo del giocatore: il bus (anche snodato) lo calcola da sé, per il tram bastano cinque cerchi
-    const busCircles = bus.worldCircles ? bus.worldCircles() : [-4.9, -2.45, 0, 2.45, 4.9].map((lz) => ({ x: bus.x + Math.sin(bus.h) * lz, z: bus.z + Math.cos(bus.h) * lz }));
+    // il mezzo di chi gioca: il bus (anche snodato) dà i suoi cerchi, il tram i punti lungo il convoglio
+    const pl = {
+      who: playerBig, x: bus.x, z: bus.z, h: bus.h,
+      pts: bus.worldCircles ? bus.worldCircles() : bus.trackPoints ? bus.trackPoints() : [-4.9, -2.45, 0, 2.45, 4.9].map((lz) => ({ x: bus.x + Math.sin(bus.h) * lz, z: bus.z + Math.cos(bus.h) * lz })),
+    };
     this.honks.length = 0;
 
     for (const c of this.cars) {
-      const fx = Math.sin(c.h), fz = Math.cos(c.h);
       c.far = Math.hypot(c.x - bus.x, c.z - bus.z) > 60; // il tram fermo dietro un'auto incastrata la fa sparire solo lontano
-      let gap = 80, leadV = Infinity; // leadV: velocità di chi c'è davanti (nessuno: Infinity)
       // andatura: quella dell'auto, e nelle curve quella del raggio del raccordo, con la frenata prima
       const v0 = Math.min(c.vmax, this.vCurva(c));
-      // auto davanti
-      let lead = null, through = false;
-      this.grid.query(c.x + fx * 15, c.z + fz * 15, 18, near);
-      for (const o of near) {
-        if (o === c) continue;
-        const dx = o.x - c.x, dz = o.z - c.z;
-        const fwd = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
-        if (fwd > 0.5 && fwd < gap + 4.5 && lat < 1.7) {
-          // evita stalli reciproci: ignora chi viene verso di noi
-          const cosH = Math.cos(o.h - c.h);
-          if (cosH < -0.3) continue;
-          // e tra due auto che svoltano verso lo stesso arco passa chi ha meno curva da fare (a Lion, entrando in Via
-          // Mascagni da Via Sant'Andrea e dalla traversa, ognuna aveva l'altra davanti e restavano ferme per sempre)
-          if (c.turn && o.turn && o.turn.next.edge === c.turn.next.edge && c.turn.rest < o.turn.rest) continue;
-          // chi esce da un giro di attese (sotto) passa davanti all'auto che aspettava, finché non l'ha superata
-          if (o === c.through) { through = true; continue; }
-          if (fwd - 4.4 < gap) { gap = fwd - 4.4; leadV = o.v; lead = o; }
-        }
-      }
-      if (!through) c.through = null;
-      const carGap = gap;
-      // il bus del giocatore e i bus automatici
-      let blocker = null;
-      if (c.passT <= 0) {
-        const hit = (p, who) => {
-          const dx = p.x - c.x, dz = p.z - c.z;
-          const fwd = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
-          if (fwd > 0 && fwd < 40 && lat < 2.6) {
-            const g = fwd - 3.6;
-            if (g < gap) { gap = g; blocker = who; leadV = Math.abs(who.v); }
-          }
-        };
-        for (const p of busCircles) hit(p, playerBig);
-        for (const B of this.bigs) {
-          if (!B.circles || Math.abs(B.x - c.x) > 50 || Math.abs(B.z - c.z) > 50) continue;
-          for (const p of B.circles) hit(p, B);
-        }
-      }
-      // i tram: chi passa davanti si aspetta, anche col muso già oltre l'incrocio o di sbieco contro; di chi viene
-      // incontro sul binario accanto conta solo quello proprio davanti. Il tram fermo alla barra orizzontale non si
-      // aspetta (si passa davanti al suo muso): conta solo se l'auto gli finirebbe addosso
-      if (ctx.trams) for (const p of ctx.trams.near(c.x + fx * 15, c.z + fz * 15, 20)) {
-        const dx = p.x - c.x, dz = p.z - c.z, fwd = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
-        const lim = p.tram && p.tram.v < 0.3 ? 1.4 : Math.cos(p.h - c.h) > -0.3 ? 2.6 : 1.6;
-        if (fwd > 0 && fwd < 40 && lat < lim && fwd - 4.4 < gap) { gap = fwd - 4.4; leadV = 0; }
-      }
+      const qc = c.q + ASSE, qn = qc + MUSO;
+      // l'incrocio davanti, entro 60 m, e il primo mezzo lungo il percorso, guardando fin oltre l'incrocio
+      const box = this.incrocioDavanti(c, qn, 60);
+      const L = this.davanti(c, Math.max(20 + 4 * c.v, box ? box.q1 - qc + 12 : 0), ctx, pl);
+      const gapL = L ? L.gap : Infinity, vL = L ? L.v : Infinity;
+      // IDM: l'accelerazione più bassa tra quella per chi c'è davanti e quelle per i punti dove fermarsi (fermi: Δv = v)
+      let acc = IDM_A * (1 - Math.pow(c.v / Math.max(0.1, v0), 4)), ferma = Infinity;
+      if (L) acc = idmAuto(c.v, v0, gapL, c.v - vL);
+      // (perX: l'incrocio col tram per cui ci si ferma, se è il vincolo più vicino)
+      let perX = null;
+      const fisso = (s, x = null) => { if (s < ferma) { ferma = s; perX = x; } acc = Math.min(acc, idmAuto(c.v, v0, s, c.v)); };
       // incrocio con la sede del tram chiamato da un tram, o con la coda oltre: ci si ferma prima. Chi nell'incrocio
       // in fondo all'arco taglierebbe i binari di un incrocio chiamato si ferma alla linea (o a fine arco), anche col
       // verde: col verde lungo il binario (fase tram) chi svoltava, o andava dritto dove il binario curva (Via Belludi),
       // passava davanti al tram. Anche in svolta: nella rotonda i pezzi sono corti e un'auto passa quasi tutto il tempo
       // nelle curve, e da una curva entrava nell'altra fino ai binari
       if (ctx.tramSignals) {
-        if (!c.turn) gap = Math.min(gap, ctx.tramSignals.carGap(c, { s1: c.pz.sb + ASSE }, gap, leadV));
+        if (!c.turn) { const s = ctx.tramSignals.carGap(c, { s1: c.pz.sb + ASSE }, gapL, vL); if (s < Infinity) fisso(s, ctx.tramSignals.xGap); }
         // (3 m prima dei binari; chi c'è già sopra va avanti e li libera)
         const d = this.calledAhead(c, ctx.tramSignals);
-        if (d > 0.5 && d < Infinity) gap = Math.min(gap, Math.max(0, d - 3));
+        if (d > 0.5 && d < Infinity) fisso(Math.max(0, d - 3), this.xChiamato);
       }
       // semaforo: la prossima linea d'arresto lungo il percorso, col muso (2,1 m davanti al centro dell'auto), anche
       // prima dell'arco che entra nell'incrocio e anche se il raccordo comincia prima della linea
-      while (c.ev.length && c.ev[0].q - (c.q + ASSE) - 2.3 < -0.3) c.ev.shift();
+      while (c.ev.length && c.ev[0].q - qc - 2.3 < -0.3) c.ev.shift();
+      let rosso = false, gialla = Infinity;
       if (c.ev.length) {
         const { sl, q } = c.ev[0], ap = sl.ap, st = this.lights.stateOf(ap.node.signal, ap.phase);
-        const dist = q - (c.q + ASSE) - 2.3;
-        if (dist < 120 && (st === 'R' || (st === 'Y' && dist > c.v * 1.2))) gap = Math.min(gap, dist + 1.2); // IDM: ci si ferma 2 m prima
+        const dist = q - qc - 2.3;
+        if (dist < 120 && (st === 'R' || (st === 'Y' && dist > c.v * 1.2))) { fisso(dist + 1.2); rosso = dist < gapL + 15; } // IDM: ci si ferma 2 m prima
+        // (per un incrocio prima della linea il giallo vale come il rosso: entrando ci si fermerebbe lì)
+        else if (st === 'Y' && dist > 0) gialla = dist + 1.2;
       }
       // in fondo a una strada chiusa ci si ferma prima della fine del percorso
-      if (c.chiusa) gap = Math.min(gap, c.per.fine - c.q - ASSE - 3);
-      // IDM
-      const aMax = 1.6, bComf = 2.5;
-      const sStar = 2 + c.v * 1.3 + (c.v * c.v) / (2 * Math.sqrt(aMax * bComf));
-      let acc = aMax * (1 - Math.pow(c.v / Math.max(0.1, v0), 4) - Math.pow(sStar / Math.max(0.3, gap), 2));
+      if (c.chiusa) fisso(c.per.fine - qc - 3);
+      // spazio davanti al muso fino a dove ci si fermerà, lungo la fila (space till last standing, come in SUMO): con
+      // chi c'è davanti fermo (o quasi, sotto 1 m/s), la distanza dalla sua coda; se va, anche i metri che farà ancora
+      // prima di fermarsi (il suo `spazio`, dal suo passo): a 2 m da chi ha davanti lui, per un semaforo, i binari, la
+      // fine della strada o un incrocio da liberare, e un bus o un tram alla fermata. Senza, quanto fa frenando
+      const fermo = L && Math.abs(vL) < 1;
+      const spazio = !L ? Infinity : fermo ? gapL : gapL + Math.max(0, (L.o.spazio ?? (vL * vL) / (2 * IDM_AUTO.b)) - IDM_S0);
+      // una coda non entra in un incrocio che non può liberare (#115): se tra la fine dell'incrocio e il primo mezzo
+      // fermo davanti non c'è posto per l'auto, ci si ferma prima dell'incrocio, quando si fa in tempo con una frenata
+      // comoda (4 m/s²; se no si passa). Prima si entrava e ci si fermava dentro, in mezzo a chi lo taglia
+      let scatola = Infinity;
+      if (box && L) {
+        const prima = box.q0 - qn - 0.3;
+        if (qn + Math.min(spazio, ferma, gialla) - box.q1 < LUNGA + IDM_S0 + 0.5 && prima > 0 && prima >= (c.v * c.v) / 8) {
+          scatola = prima;
+          acc = Math.min(acc, idmAuto(c.v, v0, prima, c.v));
+        }
+      }
       if (c.bump > 0) { acc = -8; c.overlapT = (c.overlapT || 0) + dt; c.bump = 0; }
       else c.overlapT = Math.max(0, (c.overlapT || 0) - dt * 0.5);
       acc = Math.max(-9, acc);
       c.v = Math.max(0, c.v + acc * dt);
-      if (gap < 0.2) c.v = 0;
-      // chi si aspetta: l'auto davanti, se basta da sola a tenerla ferma (a meno di 2 m l'IDM non riparte), e se a
-      // fermarla non c'è anche altro (un semaforo, un bus, un tram, i binari)
-      c.lead = carGap < 2 ? lead : null;
-      c.alone = gap === carGap;
+      if (Math.min(gapL, ferma, scatola) < 0.2) c.v = 0;
+      // chi si aspetta: l'auto davanti, se basta da sola a tenerla ferma (a meno di 2 m l'IDM non riparte, o ferma
+      // prima dell'incrocio che lei occupa), e se a fermarla non c'è anche altro (un semaforo, i binari, la fine della
+      // strada)
+      c.spazio = Math.min(spazio, ferma, scatola);
+      const perLei = Math.min(gapL, scatola);
+      c.lead = L && L.tipo === 'auto' && (gapL < 2 || scatola < Infinity) ? L.o : null;
+      // chi la tiene ferma, se è un mezzo (auto, bus, tram o chi gioca): per i bus automatici, che non fanno sparire
+      // un'auto che non aspetta loro
+      c.aspetta = L && c.v < 0.1 && perLei <= ferma ? L.o : null;
+      // i tram che l'auto ferma aspetta, anche attraverso la coda: quelli che chiamano i binari davanti a cui si ferma, il
+      // tram davanti, o quelli che aspetta l'auto davanti. Un tram fermo dietro di lei sul suo binario la fa sparire solo
+      // se è tra questi (TramSim.move): in Via Tommaseo la coda verso la rotonda Graziana Campanato sta sul binario del
+      // SIR2 in controsenso e aspetta i binari della rotonda chiamati proprio dal tram che ha davanti (#115)
+      c.tramAttesi = c.v >= 0.1 ? null : c.aspetta ? (c.aspetta.mods ? [c.aspetta] : c.aspetta.car ? c.aspetta.tramAttesi || null : null) : perX ? perX.who : null;
+      c.alone = perLei <= ferma;
       c.halt = c.v < 0.1 ? (c.halt || 0) + dt : 0;
 
-      // bloccati da un bus fermo: clacson (solo col giocatore) e sorpasso; un bus automatico si sorpassa in fermata
-      // o se resta fermo a lungo (al semaforo rosso si aspetta)
-      if (blocker && c.v < 0.3 && Math.abs(blocker.v) < 0.5) {
+      // bloccati da un bus fermo: clacson (solo col giocatore) e sorpasso. Si sorpassa il bus automatico in fermata e il
+      // bus di chi gioca fermo in corsia fuori da un rosso (chi gioca non è nel modello: è un ostacolo, come un furgone
+      // che scarica). Un bus automatico fermo fuori dalla fermata è in coda, al rosso o davanti ai binari, e si aspetta:
+      // fino al 17 novembre dopo 12 s lo si sorpassava comunque, anche in coda al semaforo (#115)
+      // (anche quando chi gioca è fermo appena oltre un incrocio, senza posto dietro di lui: si aspetta prima e poi si passa)
+      const blocker = L && L.tipo !== 'auto' && L.tipo !== 'tram' && (gapL <= Math.min(ferma, scatola) || (L.o.player && scatola <= ferma)) ? L.o : null;
+      if (blocker && c.v < 0.3 && Math.abs(blocker.v) < 0.5 && (blocker.atStop || (blocker.player && !rosso))) {
         c.blocked += dt;
         c.honkCd -= dt;
         if (blocker.player && c.blocked > 6 && c.honkCd <= 0 && !ctx.busAtStop) { this.honks.push(c); c.honkCd = 5 + this.rnd() * 5; }
-        if (c.blocked > (blocker.atStop ? 1.5 : blocker.player ? 5 : 12)) { c.passT = 9; c.blocked = 0; }
+        if (c.blocked > (blocker.atStop ? 1.5 : 5)) { c.passT = 9; c.blocked = 0; }
       } else c.blocked = Math.max(0, c.blocked - dt);
       if (c.passT > 0) c.passT -= dt;
       // di lato, a destra: il sorpasso a sinistra (3,2 m) e, sulle corsie, fuori dalla sede del tram dove la strada OSM
@@ -1638,8 +1761,10 @@ export class TramSim {
       // prossima fermata nel verso di marcia: il muso si ferma 12 m oltre la palina (fine banchina)
       let T = tr.track, P = T.path(tr.dir);
       let vt = 8.5;
+      // metri dal muso a dove il tram si fermerà (fermata, segnale, chi ha davanti), per le auto che lo seguono (#115)
+      let spazio = Infinity;
       if (tr.wait > 0) {
-        tr.wait -= dt; vt = 0;
+        tr.wait -= dt; vt = 0; spazio = 0;
         // in fermata ad aspettare l'orario (hold: i secondi oltre la sosta di 15 s): se dietro aspetta il traffico si
         // riparte finita la sosta, l'anticipo si recupera dopo
         if (tr.hold > 0 && (tr.holdT = (tr.holdT || 0) - dt) <= 0) {
@@ -1660,6 +1785,7 @@ export class TramSim {
         } else vt = 0;
       } else if (tr.run) {
         const d = tr.run.ss[tr.k] - tr.s;
+        spazio = Math.max(0, d);
         // in linea alla velocità normale anche in anticipo sull'orario: l'anticipo si recupera in fermata, come per i bus
         // automatici. Prima si rallentava fino a 3 m/s per arrivare 15 s prima della partenza: a Largo Europa i tram
         // passavano le linee d'arresto a 3,8 m/s invece di 8,5 (mediane), e chi aspettava col rosso li vedeva passare a
@@ -1701,7 +1827,7 @@ export class TramSim {
       // segnale del tram a via impedita: si rallenta per fermarsi alla linea
       if (this.signals) {
         const d = this.signals.stopAhead(tr.s, tr.dir, T);
-        if (d < 60) vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d - 0.5)));
+        if (d < 60) { vt = Math.min(vt, Math.sqrt(2 * 0.9 * Math.max(0, d - 0.5))); spazio = Math.min(spazio, Math.max(0, d)); }
       }
       // chi è sulla stessa corsia davanti, auto comprese: ci si ferma a distanza. Il mezzo del giocatore conta anche
       // appena a fianco del muso; un bus automatico solo se è tutto davanti al muso (quello accanto, anche solo in parte,
@@ -1727,16 +1853,41 @@ export class TramSim {
         if (t2.id > tr.id && (head.x - h2.x) * h2.fx + (head.z - h2.z) * h2.fz > -0.5 && Math.hypot(head.x - h2.x, head.z - h2.z) < 30) continue;
         for (const p of t2.parts) obst.push({ p, min: -2 });
       }
+      // chi è davanti lo è lungo il binario (#115): a meno di 2,2 m dal binario, fino a 30 m davanti al muso. Prima si
+      // guardava in linea retta davanti al muso, e dove il binario curva il tram vedeva davanti a sé le auto ferme
+      // accanto ai binari ad aspettare proprio lui (Piazzetta Nievo, Corso Milano: #80, #89)
       let byBus = null, byCar = null;
       for (const { p: o, min, bus } of obst) {
         const rx = o.x - head.x, rz = o.z - head.z;
-        if (Math.abs(rx) > 60 || Math.abs(rz) > 60) continue;
-        const a = rx * head.fx + rz * head.fz, lat = Math.abs(rx * -head.fz + rz * head.fx), v2 = Math.max(0, (a - 7) * 0.5);
-        if (lat < 2.2 && a > min && a < 30 && v2 < vt) { vt = v2; byBus = bus ? o.bus : null; byCar = o.car ? o : null; }
+        if (Math.abs(rx) > 40 || Math.abs(rz) > 40) continue;
+        let a;
+        if (P.projectNear && o.car) {
+          // un'auto c'è se la sua sagoma (muso, centro, coda) arriva a 1,9 m dal binario: metà tram più metà auto. Col
+          // solo centro, un'auto ferma di traverso davanti ai binari era fuori, una accanto al binario dentro
+          a = Infinity;
+          for (const l of [2.1, 0, -2.1]) {
+            const pr = P.projectNear(o.x + Math.sin(o.h) * l, o.z + Math.cos(o.h) * l, 1.9);
+            if (pr) a = Math.min(a, pr.s - tr.s);
+          }
+          if (a === Infinity) continue;
+        } else if (P.projectNear) {
+          const pr = P.projectNear(o.x, o.z, 2.2);
+          if (!pr) continue;
+          a = pr.s - tr.s;
+        } else {
+          a = rx * head.fx + rz * head.fz;
+          if (Math.abs(rx * -head.fz + rz * head.fx) >= 2.2) continue;
+        }
+        const v2 = Math.max(0, (a - 7) * 0.5);
+        if (a > min && a < 30 && v2 < vt) { vt = v2; byBus = bus ? o.bus : null; byCar = o.car ? o : null; spazio = Math.min(spazio, Math.max(0, a - 7)); }
       }
-      // un'auto ferma sui binari (in coda a metà svolta) si aspetta; dopo 20 s, lontano dal giocatore, sparisce
+      tr.spazio = spazio;
+      // un'auto ferma sui binari si aspetta, come in coda (al rosso, dietro chi la precede). Se aspetta proprio questo
+      // tram, anche attraverso la coda o i binari che lui ha chiamato (c.tramAttesi), il tram, che ha la precedenza, non
+      // può aspettare lei: lontano dal giocatore sparisce. Fino al 17 novembre spariva dopo 20 s qualunque cosa
+      // aspettasse, anche il verde (#115)
       tr.carT = byCar && tr.v < 0.1 ? (tr.carT || 0) + dt : 0;
-      if (tr.carT > 20 && byCar.far) { byCar.overlapT = 3; tr.carT = 0; }
+      if (tr.carT > 1 && byCar.far && (byCar.aspetta === tr || (byCar.tramAttesi && byCar.tramAttesi.includes(tr)))) { byCar.overlapT = 3; tr.carT = 0; }
       // dove la corsia del bus incrocia il binario quasi di striscio (o ci corre sopra) un bus fermo sui binari e il tram
       // possono aspettarsi a vicenda: il bus ha davanti questo tram, o aspetta l'incrocio che questo tram ha chiamato.
       // Allora dopo 4 s il tram passa lo stesso e per 10 s non guarda i bus. Un bus fermo al rosso o in coda invece si
@@ -2120,6 +2271,19 @@ export class TramSignals {
   unstick(x, traffic) {
     for (const c of traffic.near(x.px, x.pz, x.halfT + 25)) if (c.car && c.far && c.v <= 0.3 && this.covers(x, c, 0, traffic)) c.overlapT = 3;
   }
+  // Chi è già sul binario davanti al tram non aspetta la sua chiamata (#115): i punti pts (muso, centro e coda di
+  // un'auto o di un bus) stanno sul binario di ogni tram che chiama l'incrocio x, entro 40 m davanti al suo muso. Il tram
+  // aspetta loro, e loro vanno avanti e liberano il binario. Prima si fermavano prima dei binari chiamati, col tram
+  // fermo dietro: sul Ponte Omizzolo, dove la corsia delle auto è sul binario del SIR3, nessuno dei due ripartiva più, e
+  // dopo 20 s l'auto spariva (#89)
+  davantiAiTram(x, pts) {
+    if (!x.who || !x.who.length) return false;
+    return x.who.every((w) => {
+      if (!w.track || !w.track.path) return false;
+      const P = w.track.path(w.dir), front = w.front ?? w.s;
+      return pts.some((p) => { const pr = P.projectNear(p.x, p.z, 1.9); return pr && pr.s > front - 1 && pr.s < front + 40; });
+    });
+  }
   // il punto (px, pz), andando verso (dx, dz), è nella fascia dei binari dell'incrocio x e li taglia (non ci corre lungo;
   // gli incroci di sbieco sono quasi tutti strade lungo il binario, come Via Piovese col SIR3, che lo incrociano solo
   // perché la linea OSM e il tracciato del tram non combaciano: chi le percorre gli corre accanto); band: metri dall'asse
@@ -2145,6 +2309,7 @@ export class TramSignals {
   // le auto si fermano prima della sede se l'incrocio è chiamato da un tram, o se oltre i binari la coda (chi c'è davanti
   // a lead m, a leadV m/s) non lascia posto all'auto: chi non può liberare i binari non ci entra
   carGap(c, g, lead = Infinity, leadV = 0) {
+    this.xGap = null;
     const xs = this.byEdge.get(c.edge);
     if (!xs) return Infinity;
     let gap = Infinity;
@@ -2156,9 +2321,14 @@ export class TramSignals {
       const dist = stop - c.s;
       const out = (c.fwd ? x.tE : c.edge.len - x.tE) + x.halfE + 1;
       const full = leadV < 1.5 && c.s + 2.1 + lead < out + 6;
-      if ((x.call || full) && dist > -0.5 && dist < 80) gap = Math.min(gap, Math.max(0, dist));
+      if (((x.call && !(c.car && this.sulBinarioAuto(c, x))) || full) && dist > -0.5 && dist < 80 && Math.max(0, dist) < gap) { gap = Math.max(0, dist); this.xGap = x.call ? x : null; }
     }
     return gap;
+  }
+  // l'auto c sta sul binario davanti a ogni tram che chiama l'incrocio x: non lo aspetta (davantiAiTram)
+  sulBinarioAuto(c, x) {
+    const fx = Math.sin(c.h), fz = Math.cos(c.h);
+    return this.davantiAiTram(x, [{ x: c.x + fx * 2.1, z: c.z + fz * 2.1 }, { x: c.x, z: c.z }, { x: c.x - fx * 2.1, z: c.z - fz * 2.1 }]);
   }
   // per i tram automatici: distanza dalla prossima linea d'arresto a via impedita (track: la sede del tram)
   stopAhead(s, dir, track) {

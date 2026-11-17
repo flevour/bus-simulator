@@ -348,16 +348,18 @@ function stallo({ px, pz }) {
 // segue fino a tornare al punto di partenza (Traffic.untangle): in un giro di attese tra auto ferme passa chi ha l'auto
 // che aspetta più di lato. Dal 16 novembre (#113) le auto seguono i raccordi della build, e a Porta Trento la svolta da
 // Via Bezzecca in Via Belfiore non c'è più (la build non la ammette alle auto): la scena si cerca all'incrocio di Via
-// Gattamelata con Via Tartini, dove due raccordi delle auto si incrociano a 1,5 m.
-test('auto in svolta che si aspettano a vicenda: una passa e l\'altra la segue', async ({ pagina, gioco }) => {
+// Gattamelata con Via Tartini, dove due raccordi delle auto si incrociano a 1,5 m. Dal 17 novembre (#115) chi c'è davanti
+// si cerca lungo il percorso e non più in linea retta: le due auto, che in linea retta si vedono l'una davanti
+// all'altra, di solito non sono una sul percorso dell'altra e non si aspettano nemmeno. Conta che finiscano le due
+// svolte, con untangle o senza.
+test('auto in svolta che si aspetterebbero a vicenda: finiscono tutte e due la svolta', async ({ pagina, gioco }) => {
   await avviaCorsa(pagina, { linea: '3' });
   const r = await pagina.evaluate(stallo, { px: 760, pz: 896 });
   expect(r.trovate, 'due auto in svolta, ognuna con l\'altra davanti, all\'incrocio di Via Gattamelata con Via Tartini').toBe(true);
   expect(r.prima.a, `${r.dove}: la prima ha davanti la seconda`).toBe(true);
   expect(r.prima.b, `${r.dove}: la seconda ha davanti la prima`).toBe(true);
   expect(r.prima.d).toBeLessThan(2.5);
-  expect(r.passata, 'una delle due passa davanti all\'altra (through)').not.toBeNull();
-  expect(r.fuori, 'secondi per finire le due svolte').not.toBeNull();
+  expect(r.fuori, `secondi per finire le due svolte (passata davanti: ${r.passata})`).not.toBeNull();
   expect(r.fuori).toBeLessThan(10);
   expect(gioco.errori()).toEqual([]);
 });

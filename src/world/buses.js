@@ -7,7 +7,7 @@ import { TrackPath } from '../tram/tram.js';
 import { buildRoute, alignStops, busCan } from '../game/routes.js';
 import { scheduleFor, isPeak, Crowd } from '../game/mission.js';
 import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
-import { percorsoBus, posa, scosta, entro, corsie, raccordiDi, BUS12, raggioMinimo } from './inseguitore.js';
+import { percorsoBus, posa, scosta, entro, corsie, raccordiDi, BUS12, raggioMinimo, idm, IDM_BUS, incrocioDavanti } from './inseguitore.js';
 
 // ------------------------------------------------------------------
 // Bus automatici delle linee urbane, dall'orario GTFS: in servizio ci sono le corse che a quell'ora sono per strada
@@ -518,6 +518,7 @@ export class BusSim {
       // fermo in fermata: porte aperte, poi (all'orario) si chiudono e si riparte
       if (b.atStop) {
         b.v = 0;
+        b.spazio = 0;
         b.wait -= dt;
         const last = b.k >= st.length - 1;
         // all'orario si chiude, ma prima si aspetta chi sta salendo o scendendo (non più di 20 s)
@@ -533,6 +534,11 @@ export class BusSim {
         continue;
       }
       let vt = this.vcap(L, front);
+      // vlim: il limite di velocità lì; spazio: metri dal muso a dove il bus si fermerà (fermata, semaforo, binari, chi
+      // ha davanti), per le auto che lo seguono e devono sapere se oltre un incrocio ci sarà posto (#115)
+      const vlim = vt;
+      // (ferma: metri dal muso al rosso o ai binari dove il bus si fermerà, senza la fermata)
+      let spazio = Infinity, ferma = Infinity, gialla = Infinity;
       if (b.phase === 'lead' && front >= st[0].fs - 40) b.phase = 'line';
       // prossima fermata servita
       let wantLat = 0;
@@ -547,6 +553,7 @@ export class BusSim {
         if (b.phase === 'line' && b.k > 0 && b.k < st.length - 1 && !b.serve[b.k] && left > 40 && d < 80) b.serve[b.k] = true;
         if (b.serve[b.k]) {
           vt = Math.min(vt, Math.sqrt(2 * 1.2 * Math.max(0, d)) + (d > 0.6 ? 0.25 : 0));
+          spazio = Math.max(0, d);
           if (d < 30) wantLat = s0.extra;
           if (d < 0.6) {
             // fermo dov'è (a meno di 60 cm dalla fine della fermata): prima saltava lì
@@ -580,7 +587,9 @@ export class BusSim {
         const d = sg.s - front;
         if (d < 70) {
           const c = lights.lightFor(sg.node, sg.edge);
-          if (c === 'R' || (c === 'Y' && d > b.v * 1.5 + 2) || (d > -0.5 && full(sg.out))) vt = Math.min(vt, stopAt(d));
+          if (c === 'R' || (c === 'Y' && d > b.v * 1.5 + 2) || (d > -0.5 && full(sg.out))) { vt = Math.min(vt, stopAt(d)); ferma = Math.max(0, d); }
+          // (per l'incrocio prima della linea il giallo vale come il rosso: entrando ci si fermerebbe lì)
+          else if (c === 'Y' && d > 0) gialla = d;
         }
       }
       // incrocio con la sede: ci si ferma prima del primo binario se un tram l'ha chiamato o se oltre non c'è posto.
@@ -592,11 +601,14 @@ export class BusSim {
       while (b.tx < L.tram.length && L.tram[b.tx].s < front - 0.5) b.tx++;
       b.waitX = null;
       const rosso = (X) => sg && lights && sg.s > X.s && sg.s - X.out < 13 && lights.lightFor(sg.node, sg.edge) !== 'G';
+      // (chi è già sul binario davanti al tram che chiama non lo aspetta: va avanti e lo libera, #115)
+      const sopra = (X) => { const fx = Math.sin(b.h), fz = Math.cos(b.h); return !!this.tramSignals && this.tramSignals.davantiAiTram(X.x, [{ x: b.x + fx * 5, z: b.z + fz * 5 }, { x: b.x, z: b.z }, { x: b.x - fx * 5, z: b.z - fz * 5 }]); };
       for (let j = b.tx; j < L.tram.length && L.tram[j].s - front < 60; j++) {
         const X = L.tram[j];
-        if (X.x.call || full(X.out) || rosso(X)) {
+        if ((X.x.call && !sopra(X)) || full(X.out) || rosso(X)) {
           const v = stopAt(X.s - front);
           vt = Math.min(vt, v);
+          ferma = Math.min(ferma, Math.max(0, X.s - front));
           if (X.x.call && v < 0.3) b.waitX = X.x;
           break;
         }
@@ -604,23 +616,42 @@ export class BusSim {
       // waitTram: il tram per cui il bus è fermo (il tram non aspetta un bus che aspetta lui)
       b.blocker = null;
       b.waitTram = null;
+      // chi c'è davanti si segue con l'IDM dei bus (#115, src/world/inseguitore.js), fino a 3 m da fermi. Prima la velocità
+      // voluta era la sua più quella per fermarsi a 3 m: a ogni velocità si stava a 3 m da chi c'era davanti
+      let aOb = Infinity;
       if (ob) {
         if (ob.bus) b.blocker = ob.bus;
-        const v = ob.gap < 3 ? 0 : Math.max(0, ob.v) + Math.sqrt(2 * 2.5 * Math.max(0, ob.gap - 3));
-        vt = Math.min(vt, v);
-        if (ob.tram && v < 0.3) b.waitTram = ob.tram;
-        if (b.v < 0.3 && vt < 0.3) {
+        aOb = ob.gap < 0.3 ? -Infinity : idm(IDM_BUS, b.v, Math.max(vlim, b.v), ob.gap, b.v - Math.max(0, ob.v));
+        if (ob.tram && b.v < 0.3 && aOb < 0.05) b.waitTram = ob.tram;
+        if (b.v < 0.3 && (vt < 0.3 || aOb < 0.05)) {
           b.blockT += dt;
-          // il giocatore fermo in mezzo alla corsia: dopo un po' lo si sorpassa; un'auto incastrata sparisce;
-          // due bus che si aspettano a vicenda: uno passa. Il tram in sosta alla fermata si aspetta: dove la sede è
-          // la carreggiata (Riviera Tito Livio) non c'è posto per sorpassarlo
+          // il giocatore fermo in mezzo alla corsia: dopo un po' lo si sorpassa; un'auto che aspetta proprio questo bus
+          // (ognuno ha l'altro davanti) sparisce, lontano da chi gioca; due bus che si aspettano a vicenda: uno passa.
+          // Il tram in sosta alla fermata si aspetta: dove la sede è la carreggiata (Riviera Tito Livio) non c'è posto
+          // per sorpassarlo. Fino al 17 novembre l'auto davanti spariva dopo 15 s qualunque cosa aspettasse, anche il
+          // verde in coda al semaforo (#115)
           if (ob.player && b.blockT > 10 && Math.abs(player.v) < 0.3) { b.passT = 12; b.blockT = 0; }
-          else if (ob.car && b.blockT > 15 && (!player || Math.hypot(ob.car.x - player.x, ob.car.z - player.z) > 60)) { ob.car.overlapT = 3; b.blockT = 0; }
+          else if (ob.car && ob.car.aspetta === b && b.blockT > 1 && (!player || Math.hypot(ob.car.x - player.x, ob.car.z - player.z) > 60)) { ob.car.overlapT = 3; b.blockT = 0; }
           else if (ob.bus && ob.bus.blocker === b && b.blockT > 8 && b.id < ob.bus.id) { b.ignoreBusT = 4; b.blockT = 0; }
         }
       } else b.blockT = 0;
       if (b.ignoreBusT > 0) b.ignoreBusT -= dt;
-      const a = vt > b.v ? Math.min(1.1, (vt - b.v) * 1.2) : Math.max(-3.5, (vt - b.v) * 2.5);
+      // dove si fermerà: chi ha davanti, se va, fa ancora i metri del suo `spazio` (o della sua frenata)
+      if (ob) {
+        const o = ob.car || ob.bus || null, va = Math.abs(ob.v) < 1 ? 0 : (o && o.spazio != null ? o.spazio : (ob.v * ob.v) / 4);
+        ferma = Math.min(ferma, Math.max(0, ob.gap + Math.max(0, va - 2) - IDM_BUS.s0));
+      }
+      // una coda non entra in un incrocio che non può liberare (#115), come le auto: se tra la fine dell'incrocio e dove il
+      // bus si fermerà non ci sta tutto (12 m), si ferma prima, quando fa in tempo con 2 m/s². La fermata non conta: è
+      // dove il bus deve arrivare. Al Piazzale della Stazione un bus della 25 entrava in Corso del Popolo davanti a
+      // un'auto e si fermava al rosso 14 m più avanti, con la coda nell'incrocio e l'auto ferma dietro, dentro
+      const box = incrocioDavanti(this.net, L.per, front, 60, sg ? sg.s : null);
+      if (box) {
+        const prima = box.q0 - front - 0.3;
+        if (front + Math.min(ferma, gialla) - box.q1 < 2 * FRONT + 0.5 && prima > 0 && prima >= (b.v * b.v) / 4) { vt = Math.min(vt, stopAt(prima)); ferma = prima; }
+      }
+      b.spazio = Math.min(spazio, ferma);
+      const a = Math.max(-5, Math.min(aOb, vt > b.v ? Math.min(1.1, (vt - b.v) * 1.2) : Math.max(-3.5, (vt - b.v) * 2.5)));
       b.v = Math.max(0, b.v + a * dt);
       b.s += b.v * dt;
       // di lato: verso la fermata, il sorpasso o fuori dai binari, al più K_LAT metri per metro di strada

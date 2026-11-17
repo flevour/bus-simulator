@@ -16,6 +16,22 @@ const RAGGI = { [AUTO]: 3.8, [BUS12]: 8.3, [SNODATO]: 8.5 };
 export const raggioMinimo = (bit) => RAGGI[bit];
 // pendenza del cambio di corsia quando c'è posto (metri di lato per metro): 3 m di corsia in 25 m
 const PEND_CAMBIO = 0.12;
+
+// Chi segue chi (#115): il modello di guida intelligente (IDM: Treiber, Hennecke e Helbing, 2000), lo stesso per auto e
+// bus automatici, con la differenza di velocità da chi c'è davanti. a: accelerazione massima, b: frenata comoda (m/s²),
+// s0: distanza da fermi (m), T: tempo di sicurezza (s). Auto: su una corsia con le auto a 9 m/s ne passano al più circa
+// 1.650 l'ora, a 14 m/s circa 1.950, e al verde la coda ferma si scarica a un'auto ogni 2,0-2,2 s. Bus: l'accelerazione
+// che avevano già (1,1 m/s²), 3 m da fermi e 1,5 s. Fino al 17 novembre le auto avevano v² al posto di v · Δv nella
+// distanza voluta (anche dietro a chi andava alla stessa velocità si stava a 20 m: il corridoio di Via Querini portava
+// 900 auto l'ora e al verde ne passava una ogni 3,8 s), e i bus seguivano a 3 m a ogni velocità
+export const IDM_AUTO = { a: 1.6, b: 2, s0: 2, T: 1 };
+export const IDM_BUS = { a: 1.1, b: 2, s0: 3, T: 1.5 };
+// accelerazione con la velocità v, quella voluta v0, s metri liberi davanti e dv metri al secondo più veloci di chi c'è
+// davanti (per un punto dove fermarsi, dv = v)
+export function idm(P, v, v0, s, dv) {
+  const voluta = P.s0 + Math.max(0, v * P.T + (v * dv) / (2 * Math.sqrt(P.a * P.b)));
+  return P.a * (1 - Math.pow(v / Math.max(0.1, v0), 4) - Math.pow(voluta / Math.max(0.3, s), 2));
+}
 // un raccordo con raggio da qui in su (oltre il doppio del minimo, con 4 m di margine) lascia muovere lo scostamento
 const LIBERO = 4;
 
@@ -361,6 +377,53 @@ export function entro(per, o) {
     if (p.q0 + p.len < o.q) break;
     if (p.tipo === 'raccordo' && !p.lib && p.q0 <= o.q) { o.lat = Math.max(-p.latOk, Math.min(p.latOk, o.lat)); o.pend = 0; }
   }
+}
+
+// L'incrocio davanti lungo il percorso per, se il muso (qn, progressiva del percorso) non c'è ancora entrato: { q0, q1 }
+// progressive (#115). È il raccordo della build a un nodo con tre o più vie (o che scavalca archi corti), allungato a metà
+// della via più larga che lo taglia quando è più corto (un raccordo dritto può essere lungo zero), e col semaforo
+// comincia alla linea d'arresto (linea, progressiva) se è dentro il raccordo, che può cominciare prima; i raccordi
+// separati da meno di 6 m di corsia sono un incrocio solo. Nella rotonda l'incrocio è l'ingresso: si entra se c'è posto
+// nell'anello subito dopo, non dopo la propria uscita (con l'anello di Via Bembo con Via Marinelli lungo una
+// quarantina di metri e pieno, le auto non entravano più e la coda arrivava a chi guida la 3). null se il muso è già
+// dentro (anche nell'anello) o non c'è un incrocio entro `fino` m. Lo usano auto e bus automatici per non entrare in un
+// incrocio che non possono liberare
+export function incrocioDavanti(net, per, qn, fino, linea = null) {
+  const P = per.pezzi, N = net.nodes;
+  // dentro una rotonda si è già nell'incrocio: la regola vale prima di entrare, per tutto il passaggio. Rifatta a ogni
+  // nodo dell'anello, nella rotonda di Via Bembo con Via Marinelli quattro auto si fermavano in giro, ognuna senza posto
+  // dopo la sua uscita per l'auto che aveva davanti
+  const pn = P[per.indice(qn)];
+  if (pn && (pn.tipo === 'corsia' ? pn.e.roundabout : pn.R && pn.R.da && pn.R.da.roundabout)) return null;
+  let box = null;
+  for (let i = per.indice(Math.max(P.length ? P[0].q0 : 0, qn - 30)); i < P.length; i++) {
+    const p = P[i];
+    if (p.q0 > qn + fino && !box) return null;
+    if (p.tipo === 'corsia') {
+      if (!box) continue;
+      if (p.len < 6) continue;
+      break;
+    }
+    if (p._box === undefined) {
+      const R = p.R, nodo = R && N[R.n];
+      p._box = null;
+      if (nodo && (R.via.length || nodo.edges.filter((e) => !e.ped).length >= 3)) {
+        let w = 0;
+        for (const e of nodo.edges) if (!e.ped && e !== R.da && e !== R.a) w = Math.max(w, e.width);
+        p._box = Math.max(0, (w - p.len) / 2);
+      }
+    }
+    if (p._box === null) { if (box) break; continue; }
+    let q0 = p.q0 - p._box;
+    const q1 = p.q0 + p.len + p._box;
+    if (!box) {
+      if (q1 <= qn) continue;
+      if (linea != null && linea > q0 && linea < q1) q0 = linea;
+      if (q0 < qn) return null;
+      box = { q0, q1 };
+    } else box.q1 = Math.max(box.q1, q1);
+  }
+  return box;
 }
 
 // ------------------------------------------------------------------

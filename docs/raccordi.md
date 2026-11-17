@@ -191,3 +191,19 @@ direzione è la tangente: nei raccordi il mezzo gira con il loro raggio.
   uno scostamento (`scosta`) che cambia al più di K metri per metro, con la curva entro metà del raggio minimo; dentro
   un raccordo con il raggio sotto il doppio del minimo più 4 m resta fermo, e prima ci si torna in tempo.
 
+
+## 8. Chi segue chi e incroci da liberare (#115)
+
+Sul percorso dell'inseguitore auto e bus automatici guardano chi hanno davanti e dove possono fermarsi:
+
+- il mezzo davanti è quello davanti lungo il percorso, raccordi compresi (`Traffic.davanti`): il percorso dell'auto si
+  campiona ogni 2 m, con lo scostamento, e un'altra auto ci sta sopra se il suo centro è a meno di 1,7 m dall'asse (un
+  bus a 2,6 m dai punti del suo asse); chi viene incontro non conta. I bus automatici avevano già il loro (`ahead`, sulla
+  corsia campionata `L.P`, che è lo stesso percorso);
+- la velocità la regola l'IDM con la differenza di velocità (`idm`, `IDM_AUTO`, `IDM_BUS` in `src/world/inseguitore.js`),
+  per chi c'è davanti e per i punti dove fermarsi (semaforo, binari, fine della strada), come ostacoli fermi;
+- l'incrocio davanti (`incrocioDavanti`): il raccordo a un nodo con tre o più vie, allargato a metà della via più larga
+  che lo taglia, dalla linea d'arresto se c'è; raccordi separati da meno di 6 m di corsia sono un incrocio solo; dentro
+  l'anello di una rotonda si è già nell'incrocio. Un'auto non ci entra se oltre, fino a dove si fermerà la fila davanti
+  (`spazio` di auto, bus e tram), non c'è posto per lei; un bus non ci entra se non ci sta tutto (12 m). La fermata del
+  bus non conta: è dove deve arrivare.

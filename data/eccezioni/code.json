@@ -2,8 +2,23 @@
  "cosa": "Casi noti della prova delle code (tests/code.spec.js, regole in tests/code.js): dieci minuti nelle tre zone della prova del moto con il traffico delle 8:15. sblocchi: auto fatte sparire (sui binari, davanti al tram, davanti a un bus), tram o bus che passano attraverso un bus, bus in coda sorpassati dopo un'attesa; giri_di_attese: Traffic.untangle; incroci_bloccati: auto ferme in coda dentro un incrocio oltre 2 s; fermi: auto, bus o tram fermi oltre 120 s fuori dalle fermate. Chiave: cosa @ x,z del gioco (il nodo dell'incrocio per incroci_bloccati, dove il mezzo si è fermato per i fermi); un caso per posto. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/code.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
   "sblocchi": [],
-  "giri_di_attese": [],
-  "incroci_bloccati": [],
+  "giri_di_attese": [
+   {
+    "perche": "#144: in Via Morgagni (e in Via Gozzi, sul Ponte Omizzolo, in Via Tommaseo) le corsie delle auto stanno sopra il binario del SIR3 in controsenso. Un'auto e il tram si fermano muso contro muso e ognuno aspetta l'altro: il tram, che ha la precedenza, fa sparire l'auto (lontano da chi gioca) appena vede che lei aspetta lui (c.aspetta, c.tramAttesi), invece che dopo 20 s come fino al 17 novembre. Sparisce quando le corsie non stanno più sul binario in controsenso.",
+    "casi": [
+     "auto e tram che si aspettano @ 398,-336"
+    ]
+   }
+  ],
+  "incroci_bloccati": [
+   {
+    "perche": "#49: un bus automatico s'immette in un incrocio davanti a un'auto che c'è già dentro, venendo da un'altra via, e si ferma subito dopo (al rosso della linea d'arresto 14 m più avanti al Piazzale della Stazione, alla fermata in Via Altinate): l'auto resta dietro, dentro l'incrocio. Nessuno dei due vede l'altro davanti finché le due svolte non si uniscono, perché non ci sono precedenze tra chi s'immette nella stessa corsia. Spariscono quando le svolte che si uniscono hanno chi dà la precedenza a chi.",
+    "casi": [
+     "auto in coda nell'incrocio @ 159,-1029",
+     "auto in coda nell'incrocio @ 622,0"
+    ]
+   }
+  ],
   "fermi": []
  }
 }

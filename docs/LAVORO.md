@@ -100,7 +100,8 @@ divise per area.
 | `scripts/sosta.py`, `data/eccezioni/sosta.json`, `data/eccezioni/sosta-gioco.json`, `tests/sosta.spec.js` | `area:mappa` (#111), poi `area:traffico` (#113) per le zone di fermata | sosta lungo le strade ([`sosta.md`](sosta.md)): stalli per arco e per lato e corsie strette dagli stalli (`stalli`, `sedeCorsie` nella mappa). Chi cambia fermate, corsie, pianta o il modo in cui i bus accostano rigenera e guarda i due controlli; `corsie_arco` di `scripts/raccordi.py` è il conto delle corsie anche per la sosta |
 | `scripts/raccordi.py`, `data/eccezioni/raccordi.json`, `tests/raccordi.spec.js` | `area:traffico` (#112), poi chi li usa (#113, #114) | raccordi di corsia agli incroci ([`raccordi.md`](raccordi.md)): la build li calcola dalla rete, dalle corsie, da `svolte` e dalla pianta delle strade, quindi cambiano con ogni rigenerazione che tocca una di queste; chi rigenera rilancia `python3 scripts/raccordi.py` e, se i casi cambiano, `--aggiorna`. `corsie_arco` rifà `laneLayout` di `src/data/padova.js`: le due si cambiano insieme |
 | `scripts/percorsi.py`, `data/eccezioni/percorsi.json`, `data/osm-correzioni.json`; in `scripts/build_map.py` `ripara`, `giro`, `via_bus` | `area:linee` (#114), e chi rigenera la mappa | percorsi delle linee guidabili ([`percorsi.md`](percorsi.md)): la build li controlla alla fine e si ferma su un caso nuovo; chi cambia rete, svolte, corsie, pianta o raccordi guarda i casi con `python3 scripts/percorsi.py --elenco` e, se restano, li mette nell'elenco con il perché (`--aggiorna`). Un tag OSM sbagliato si corregge con una riga di `data/osm-correzioni.json`, non nel codice |
-| `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7) e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
+| `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113, #115), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7), con chi segue chi e l'incrocio da liberare (`idm`, `incrocioDavanti`, sezione 8), e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
+| `tests/code.js`, `tests/code.spec.js`, `data/eccezioni/code.json` | `area:traffico` (#115), poi chi cambia chi segue chi, sblocchi, precedenze o il numero di auto (#49, #50, #116, #117) | prova delle code: corridoio di Via Querini (flusso contro densità, scarico al semaforo), incrocio da liberare, dieci minuti senza sblocchi a tempo, incroci bloccati e fermi oltre 120 s. Chi cambia il traffico la rilancia; un caso sparito si toglie dall'elenco nello stesso commit |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -1159,6 +1160,49 @@ non c'era). Da sapere:
   percorsi corretti di #114 è sparita quella vicino al Capolinea Mandria). Le auto
   non hanno casi. `tempoMassimo(310)`: tre volte la durata della prima serie in CI (1,7 minuti il 17 novembre,
   461b4ce, con la serie intera in 26 minuti); in locale 1,2-1,5 minuti.
+
+Code vere (#115, 17 novembre). Chi segue chi è uno solo per auto e bus automatici, e una coda non entra in un incrocio
+che non può liberare. Prova in `tests/code.spec.js` (regole in `tests/code.js`, casi noti in `data/eccezioni/code.json`),
+scritta prima della modifica: numeri di prima e di dopo nell'issue #115. Da sapere:
+
+- IDM vero in `src/world/inseguitore.js` (`idm`, `IDM_AUTO` a 1,6 m/s², b 2, s0 2 m, T 1 s; `IDM_BUS` a 1,1, b 2, s0 3,
+  T 1,5), con la differenza di velocità da chi c'è davanti. Prima la distanza voluta delle auto aveva v² al posto di
+  v · Δv e i bus seguivano a 3 m a ogni velocità. Sul corridoio di Via Querini (auto a 9 m/s) la corsia porta 1.390
+  auto l'ora a 48 auto per km con le auto che entrano ogni 2,2 s (prima al più 900, a 37,5 per km), e al verde una coda
+  ferma si scarica a un'auto ogni 2,16 s (prima 3,79 s). Il numero di auto e la domanda per ora sono di #116 e #117;
+- il mezzo davanti è quello davanti lungo il percorso (`Traffic.davanti`, sostituisce la ricerca in linea retta 33 m
+  davanti al muso): auto entro 1,7 m dal percorso campionato ogni 2 m, pezzi dei bus entro 2,6 m, tram come prima;
+  `c.spazio` dice fin dove la fila davanti lascia andare l'auto, `c.aspetta` chi la tiene ferma, `c.tramAttesi` i
+  tram che aspetta, anche attraverso la coda. Due auto con i centri a meno di 1,7 m nello stesso verso (si sono unite in
+  una svolta o nella rotonda) non si vedevano e restavano unite (#80): passa quella nata prima (`c.n`, al posto di
+  `Math.random()` per l'ordine);
+- l'incrocio da liberare (`incrocioDavanti` di `inseguitore.js`, regola in [`raccordi.md`](raccordi.md), sezione 8):
+  auto e bus si fermano prima se oltre, fino a dove si fermerà la fila (`spazio` di auto, bus e tram), non ci stanno;
+  il giallo oltre l'incrocio vale come il rosso; nella rotonda conta il posto dopo l'ingresso, e dentro l'anello si è
+  già nell'incrocio (rifatta a ogni nodo, l'anello di Via Bembo con Via Marinelli si fermava in giro);
+- sblocchi: le auto non sorpassano più un bus automatico fermo fuori dalla fermata (prima dopo 12 s, anche in coda al
+  rosso); un bus fa sparire l'auto davanti solo se lei aspetta lui (prima dopo 15 s, anche al rosso); `carT` solo se
+  l'auto aspetta quel tram, anche attraverso la coda o i binari che lui ha chiamato (prima dopo 20 s). Il bus di chi
+  gioca fermo appena oltre un incrocio si sorpassa anche quando la regola dell'incrocio tiene ferma l'auto. Restano
+  `unstick`, `busT` (90 s; 4 s se il bus aspetta il tram), bus contro bus (8 s) e `untangle`: nella prova di 10 minuti
+  non scattano, o il caso è in `data/eccezioni/code.json` con il perché;
+- tram: chi c'è davanti lo è lungo il binario (`projectNear`), e un'auto con la sagoma (muso, centro e coda entro 1,9 m
+  dal binario): in linea retta il tram vedeva davanti le auto ferme accanto ai binari ad aspettare lui;
+- chi è sul binario davanti al tram che chiama un incrocio non aspetta la chiamata, va avanti e lo libera
+  (`TramSignals.davantiAiTram`, per le auto in `calledAhead` e `carGap`, per i bus in `move`): sul Ponte Omizzolo la
+  corsia delle auto è sul binario del SIR3, e auto e tram si aspettavano;
+- `tramShift` guarda i binari per verso: prima si sta a 3 m da quello in controsenso, poi da quello nel proprio. In Via
+  Gozzi, Via Morgagni e sul Ponte Omizzolo le corsie delle auto sono sopra i due binari del SIR3 e l'auto lasciava il
+  binario del suo verso per quello del tram che arrivava di fronte;
+- rotonde a due corsie: entrando l'auto prende la corsia esterna dell'anello, se la build ha il raccordo (`scegli`); se
+  dalla sua corsia non c'è posto per cambiare corsia prima di nessuna uscita, `chooseNext` la fa uscire alla prima con
+  una curva del gioco (ripiego contato). Nella rotonda di Via Bembo con Via Marinelli i raccordi entrano solo nella
+  corsia interna ed escono solo dall'esterna, con archi di 5-7 m: le auto giravano per sempre, l'anello si riempiva e
+  la coda arrivava al bus della 3 nella prova di Tito Livio (su main la nascondevano le code più rade e `untangle`);
+- `avviaCorsa` (`tests/gioco.js`, area Verifiche): la partenza si rimette a zero anche prima del verso. Prima la prima
+  prova di ogni worker partiva alle 8:26 e le altre alle 8:14, e l'esito dipendeva dall'ordine delle prove;
+- tempo per passo, 72 auto, nella prova delle code: `traffic.update` da 0,55 a 0,6-0,77 ms, `buses.update` da 0,33 a
+  0,23-0,35 ms (macchina carica, load 8-25).
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
