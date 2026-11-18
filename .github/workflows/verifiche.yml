@@ -97,6 +97,8 @@ jobs:
       # le stesse librerie della rigenerazione: i numeri del rapporto non cambiano con la versione di shapely
       - run: pip install --require-hashes -r scripts/requirements-mappa.txt
       - run: python3 scripts/verifica_mappa.py --elenco --json rapporto-mappa.json
+      # il risolutore dei cavalcavia su due strutture piccole, senza rigenerare la mappa: le regole di #125
+      - run: python3 scripts/prova_risolutore.py --controlla
       - if: always()
         uses: actions/upload-artifact@v7
         with:

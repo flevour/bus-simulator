@@ -300,7 +300,8 @@ intorno), fino a 1,2 km in più. `layer` dice solo chi sta sopra.
 
 1. i punti messi a mano e i piedi (i nodi dove la struttura incontra una strada che resta sul terreno) alla loro quota;
 2. pendenza massima e raggi minimi del tipo di strada (sezione 1; il 6% dove un binario affianca la strada), con il
-   margine di un gradino del terreno (5,6 cm), e il franco sopra quello che passa sotto più 0,9 m di impalcato. Il 6%
+   margine di un gradino del terreno (5,6 cm), e il franco sopra quello che passa sotto più 0,9 m di impalcato (sopra una
+   strada fuori dalla struttura dalla quota di quella strada, sopra la ferrovia dal piano della campata: vedi sotto). Il 6%
    del tram vale anche lungo ogni binario, sulla corda di 10 m che misura il controllo (#123): il binario prende la
    quota della strada nel punto dell'asse più vicino, e all'interno di una curva, o dove passa da una carreggiata
    all'altra, fa meno metri della strada per la stessa salita (sulla rampa del Borgomagno verso la stazione la strada
@@ -333,6 +334,24 @@ Il terreno segue il profilo, perché la quota di ogni cosa nel gioco è terreno 
   e resta un arco a terra;
 * sotto le campate (e sopra i sottopassi in galleria) vale il piano di quello che passa sotto, il 35° percentile del
   terreno entro 30 m; negli ultimi 40 m prima di una campata il terreno scende dal rilevato a quel piano;
+* sotto le campate la strada che passa sotto, se non è della struttura, tiene la sua quota (#125, `StradeSotto`): le
+  celle entro 14 m dal suo asse prendono quella e non il piano, e il franco si misura da lì. Il piano lo fa anche il
+  fosso o il canale accanto (Corso Primo Maggio sotto Via Salboro scendeva di 0,7 m in 40 m, con un gradino di 0,4 m in
+  8 m; il Lungargine San Lazzaro sotto Corso Irlanda di 2 m), e il DTM sotto l'impalcato non vede la strada: il rilievo
+  ha tolto la campata e interpola dalle spalle e dalle pile (Via Friburgo sotto il Grassi +2,4 m, Corso Australia sotto
+  il Chiesanuova +4 m). La quota della strada di sotto è quella che ha appena fuori dall'ombra della campata (le celle
+  che il piano cambia), dove il terreno resta com'è: le strade fuori dalla struttura che entrano nell'ombra sono una rete
+  di punti ogni 2 m, con i punti fuori dall'ombra alla quota del terreno e quelli dentro alla media dei vicini lungo la
+  strada. Su una strada sola è la retta tra i due lati, a un incrocio sotto la campata le strade arrivano alla stessa
+  quota, e dove una strada entra nella struttura la rete prosegue sulla rampa fino a dove la rampa esce dall'ombra (sul
+  suo rilevato, che il DTM vede; Via Sergio Fraccalanza sotto il San Marco faceva un gradino di 0,8 m al piede). Dove la
+  rete non esce mai dall'ombra (una bretella tutta sotto un viadotto, tra due impalcati) resta il piano. Le celle fuori
+  dalla campata attorno alla strada di sotto, dove lei è nell'ombra, non stanno più su della sua quota: quelle della
+  rampa che le corre accanto scendono, e la rampa resta al suo profilo con la quota sopra il terreno (Corso Australia
+  sotto il Chiesanuova faceva un dosso di 0,6 m sulle celle della rampa). Vale per le strade a terra: un sottopasso
+  (`layer` negativo, come Via Ca' Rasi sotto la Direttissima) sta nella sua trincea, che il DTM vede. Sotto il
+  Chiesanuova il franco su Corso Australia, misurato dalla strada e non dal piano alzato dal dosso del DTM, abbassa
+  l'impalcato di 0,3-0,7 m, e la conca in cima tra le due campate sparisce;
 * entro 90 m dalla struttura la variante "via" non riempie: la chiusura morfologica alzava la strada che passa tra due
   rilevati fino alla loro quota (Corso Australia sotto il Cavalcavia Chiesanuova: +3,8 m);
 * una cella vicina a più strade prende la quota più bassa. Le celle attorno a una strada fuori dalla struttura (entro
@@ -366,9 +385,9 @@ Attive dal 13 novembre: Cavalcavia Antonio Grassi, Camerini, Montà, Pietro Maro
 d'Italia, Via Alessandro Volta, Via Madonnina, Direttissima per Abano. Dal 16 novembre (#123) quelle dove passa il
 tram, Cavalcavia Borgomagno, Chiesanuova, San Marco e Via Venezia, e il Cavalcavia Dalmazia, che arriva accanto al
 Borgomagno. Dal 17 novembre (#124) il Cavalcavia Mortise, accanto a Via Boves, e le cinque strutture di Corso Primo
-Maggio (le due carreggiate verso Via Guizza, i ponti su Via Pietro Bembo e lo svincolo di Corso Esperanto). Spente, con
-il perché nel registro: le altre tangenziali e Via Salboro, finché sotto le loro campate la strada che passa sotto
-sprofonda fino a 3 m sotto il DTM (#125, poi #142). Una rampa con le
+Maggio (le due carreggiate verso Via Guizza, i ponti su Via Pietro Bembo e lo svincolo di Corso Esperanto). Dal 17
+novembre (#125) Via Salboro, con Corso Primo Maggio che passa sotto il ponte alla sua quota (ventuno strutture, 45 km,
+11.286 incognite). Spente, con il perché nel registro: le altre tangenziali (#142). Una rampa con le
 quote di prima non può entrare in una struttura attiva: la build si ferma e nomina i nodi. Il 13 novembre sulle nove
 attive restavano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
 regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto
@@ -383,9 +402,23 @@ e in cima al Chiesanuova (0,18 m in 137 m: il rilevato che il DTM vede tra le du
 passano da 1.012 a 875; sulle nove strutture di #84 da 132 a 93, per la regola delle celle accanto alle strade fuori
 dalla struttura. Corso Irlanda, accanto al San Marco, resta com'era (8 archi cambiano di al più 11 cm).
 
-Per provare una modifica al risolutore non serve rigenerare la mappa: bastano la rete di `src/data/padova-map.json`,
-il terreno di `street_surfaces.terrain_for_game` e `profilo_cavalcavia.calcola(..., tutte=True)`, poi
-`cavalcavia.rapporto` sulla mappa con le chiavi nuove (una ventina di secondi per tutte le strutture).
+Il 18 novembre (#125, passo 1), con la strada di sotto che tiene la sua quota e Via Salboro accesa: casi delle strade
+da 819 a 789, dei binari da 16 a 12 (spariscono le conche del SIR2 in cima al Chiesanuova e sul viadotto di Via
+Venezia). Via Salboro passa da 15 casi a zero. Spariscono la conca in cima al Chiesanuova, i dossi di Corso Australia
+sotto il Chiesanuova (0,97 m sopra la corda tra i due lati, ora 0,05) e di Via Friburgo sotto il Grassi (0,88, ora
+0,10), le conche e i raccordi di Via Sergio Fraccalanza sotto il San Marco. Restano otto casi nuovi, leggeri, dove i
+casi delle rampe si spostano con l'impalcato più basso (gruppo con il perché in `data/eccezioni/cavalcavia.json`).
+
+Per provare una modifica al risolutore non serve rigenerare la mappa (#125): `scripts/prova_risolutore.py` rifà il
+passo dei cavalcavia di `build_map.py` sulla rete di `src/data/padova-map.json`, con le strutture scelte accese da sole
+(`--struttura`, di base Via Salboro e il Grassi, che hanno strade sotto le campate) o con il registro com'è
+(`--registro`), scrive terreno ed `edgeH` in una copia della mappa in memoria e la misura con il controllo. Dice le
+violazioni del programma, i casi del controllo sulle strutture accese e, per ogni strada che passa sotto una campata,
+quanto la mappa scritta si stacca dalla quota della rete delle strade sotto le campate; con `--controlla` (in CI, nel
+lavoro `mappa` di `verifiche.yml`) esce con errore oltre 15 cm o con una violazione. Sul Mac 17 s con le due strutture,
+40 s con il registro. Non dice le quote al centimetro: i nodi della mappa sono arrotondati al decimetro, le strutture
+spente cambiano il terreno attorno, e dove il profilo resta libero due soluzioni dello stesso costo si scambiano da una
+macchina all'altra.
 
 ## 7. Quote lette per arco e per binario (#107)
 

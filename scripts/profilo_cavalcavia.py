@@ -65,6 +65,7 @@ SPALLA = 40.0     # m prima di una campata: il terreno scende dal rilevato al pi
 #                   ogni 5 m: su 40 m la discesa raccordata gli lascia meno di 8 cm di errore)
 SOTTOPASSO = 6.0  # m oltre metà della strada in galleria: lì la strada di sopra è una campata
 NUCLEO = 14.2     # m: le quattro celle attorno a un punto dell'asse stanno entro questa distanza (10 m per radice di 2)
+SOTTO_PASSO = 2.0  # m tra i punti della rete delle strade che passano sotto le campate (StradeSotto)
 CAMPATA_VERA = 1.5  # m: sotto un ponte OSM il DTM sta entro questa quota dal piano intorno, se no lì c'è un rilevato
 ATTORNO = 90.0    # m dagli archi di una struttura: lì la chiusura morfologica non riempie (tra due rilevati)
 VICINE = 200.0    # m: fin qui da una struttura con il profilo le celle sotto i cavalcavia con le quote di prima si fissano
@@ -525,8 +526,9 @@ class Profili:
         return [(idx[i], 1 - w), (idx[i + 1], w)]
 
     def risolvi(self, piani, fissi=None):
-        """piani: funzione (arco, frazione) -> quota del piano sotto una campata. fissi: [(incognita, quota minima)]
-        aggiunti dai giri contro le onde."""
+        """piani: funzione (arco, frazione, arco di sotto o None, punto) -> quota di quello che passa sotto una campata
+        (il piano della campata, o la strada di sotto). fissi: [(incognita, quota minima)] aggiunti dai giri contro le
+        onde."""
         R, N = self.R, self.N
         lp = LP(N)
         lp.lo, lp.hi = [-60.0] * N, [150.0] * N
@@ -651,7 +653,7 @@ class Profili:
                 giu = self.a_frazione(j, c[1])
                 lp.riga([(i, -w) for i, w in sopra] + [(i, w) for i, w in giu] + [(sl, -1)], -f)
             else:
-                lp.riga([(i, -w) for i, w in sopra] + [(sl, -1)], -(piani(k, t) + f))
+                lp.riga([(i, -w) for i, w in sopra] + [(sl, -1)], -(piani(k, t, j, p) + f))
             self.v_franco.append((sl, k, t, tipo, p, f))
         # carreggiate affiancate (i due sensi di un viale, la corsia di bus e tram accanto alla strada): stessa quota
         # alla stessa altezza della strada, così il terreno della piattaforma è un piano solo per corsie e binari
@@ -856,10 +858,186 @@ def non_riempire(R, P, T, acqua, fatte):
     return n
 
 
-def adatta_terreno(R, P, T, piano, solo_campate=False):
+def fuori_dalle_strutture(R, P):
+    """Gli archi carrabili a terra che non sono delle strutture (le strade che restano sul terreno com'è)."""
+    return [k for k in range(len(R.archi)) if k not in P.S and R.lung[k] > 0.05 and R.archi[k][2] != 8 and not R.archi[k][5] & 8
+            and R.archi[k][7] >= 0]
+
+
+class StradeSotto:
+    """Le strade fuori dalle strutture che passano sotto una campata, e la loro quota lì (#125).
+
+    Sotto una campata il terreno è il piano di quello che passa sotto (piani_campate: il 35° percentile entro 30 m), ma
+    la strada di sotto tiene la sua quota. Né il piano né il DTM la danno: il piano lo fa il fosso o il canale accanto
+    (Corso Primo Maggio sotto Via Salboro scendeva di 0,7 m, il Lungargine San Lazzaro sotto Corso Irlanda di 2 m), e
+    nel DTM, da cui le campate sono state tolte, sotto l'impalcato resta quello che il rilievo interpola dalle spalle e
+    dalle pile (Via Friburgo sotto il Grassi +2,4 m, Corso Australia sotto il Chiesanuova +4 m). La quota vera della
+    strada di sotto è quella che ha appena fuori dalle celle della campata (l'ombra), dove il terreno resta com'è.
+
+    Le strade fuori dalle strutture che entrano nell'ombra sono una rete di punti ogni SOTTO_PASSO metri, con i nodi in
+    comune, che prosegue sulle rampe delle strutture dove una strada ci entra: i punti fuori dall'ombra hanno la quota
+    del terreno, quelli dentro la media dei vicini lungo la strada (pesata con l'inverso della distanza). Su una strada
+    sola è la retta tra i due lati; a un incrocio sotto la campata le strade arrivano alla stessa quota; dove una strada
+    finisce nell'ombra (un capo cieco, o l'impalcato) prosegue in piano. Una parte della rete che non esce mai
+    dall'ombra (una bretella tutta sotto un viadotto, tra due impalcati) non ha quota: lì resta il piano della campata.
+    Il terreno di base è quello senza chiusura (la variante "via" lo riprende entro un gradino: non_riempire)."""
+
+    def __init__(self, R, P, T, terreno):
+        self.R, self.P, self.T = R, P, T
+        self.base = Via({**terreno, 'close': 0})
+        self.celle = set()  # l'ombra: le celle che il terreno sotto le campate cambia (adatta_terreno)
+        for k, tratti in P.campate.items():
+            e = R.archi[k]
+            A, B = R.nodi[e[0]], R.nodi[e[1]]
+            L = R.lung[k]
+            w = max(e[3] / 2 + MARGINE_CAMPATA, NUCLEO + e[3] / 2 + (AFFIANCA if P.tram[k] else 0))
+            for c in T.celle(((A[0] + B[0]) / 2, (A[1] + B[1]) / 2), L / 2 + w):
+                x, z = T.centro(*c)
+                t = max(0.0, min(1.0, ((x - A[0]) * (B[0] - A[0]) + (z - A[1]) * (B[1] - A[1])) / (L * L)))
+                if math.hypot(A[0] + (B[0] - A[0]) * t - x, A[1] + (B[1] - A[1]) * t - z) <= w \
+                        and any(s0 <= t * L <= s1 for s0, s1, _f in tratti):
+                    self.celle.add(c)
+        self.fuori = fuori_dalle_strutture(R, P)
+        self.di_fuori = set(self.fuori)
+        self.g_fuori = Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in self.fuori] or [((1e9, 1e9), (1e9, 1e9))], 40.0)
+        self.quote = self._rete()
+
+    def libero(self, x, z):
+        """Vero se nessuna delle quattro celle attorno al punto è nell'ombra."""
+        T = self.T
+        i, j = math.floor((x - T.x0) / T.step), math.floor((z - T.z0) / T.step)
+        return not any(c in self.celle for c in ((i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)))
+
+    def _punto(self, j, s):
+        e = self.R.archi[j]
+        A, B = self.R.nodi[e[0]], self.R.nodi[e[1]]
+        t = s / (self.R.lung[j] or 1)
+        return A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t
+
+    def _rete(self):
+        """{arco: [quota o None in ogni punto]} per le strade fuori dalle strutture che entrano nell'ombra."""
+        from scipy.sparse.linalg import spsolve
+        R = self.R
+        n_di = lambda j: max(1, math.ceil(R.lung[j] / SOTTO_PASSO))
+        candidati = sorted({self.fuori[m] for c in self.celle for m in self.g_fuori.vicini(self.T.centro(*c), NUCLEO)})
+        coda = [j for j in candidati if not all(self.libero(*self._punto(j, R.lung[j] * i / n_di(j))) for i in range(n_di(j) + 1))]
+        # da un nodo nell'ombra la rete prosegue sulle strade fuori dalle strutture e sulle rampe (archi delle strutture
+        # che non sono campate): dove la strada di sotto entra nella struttura, la rampa fuori dall'ombra sta sul suo
+        # rilevato, che il DTM vede (Via Sergio Fraccalanza sotto il San Marco: in piano fino al piede la strada faceva
+        # un gradino di 0,8 m con la rampa)
+        prosegue = lambda m: m in self.di_fuori or (m in self.P.S and m not in self.P.campate and R.archi[m][2] != 8)
+        archi = set()
+        while coda:
+            j = coda.pop()
+            if j in archi:
+                continue
+            archi.add(j)
+            for nd in R.archi[j][:2]:
+                if not self.libero(*R.nodi[nd]):
+                    coda += [m for m in R.at[nd] if prosegue(m) and m not in archi]
+        indice, valore, chiavi = {}, [], {}
+        lati = defaultdict(float)  # (punto, punto) -> peso
+        for j in sorted(archi):
+            n = n_di(j)
+            a, b = R.archi[j][:2]
+            ks = []
+            for i in range(n + 1):
+                ch = ('n', a) if i == 0 else ('n', b) if i == n else ('a', j, i)
+                if ch not in indice:
+                    p = self._punto(j, R.lung[j] * i / n)
+                    indice[ch] = len(valore)
+                    valore.append(self.base.at(*p) if self.libero(*p) else None)
+                ks.append(indice[ch])
+            chiavi[j] = ks
+            for u, v in zip(ks, ks[1:]):
+                if u != v:
+                    lati[(min(u, v), max(u, v))] += n / R.lung[j]
+        ignote = [u for u, v in enumerate(valore) if v is None]
+        pos = {u: i for i, u in enumerate(ignote)}
+        if ignote:
+            # parti della rete nell'ombra: quelle senza un punto fuori restano senza quota
+            righe, col = [], []
+            for (u, v) in lati:
+                if u in pos and v in pos:
+                    righe += [pos[u], pos[v]]
+                    col += [pos[v], pos[u]]
+            m = len(ignote)
+            _n, parte = connected_components(coo_matrix((np.ones(len(righe)), (righe, col)), shape=(m, m)), directed=False)
+            bordo = set()
+            for (u, v) in lati:
+                for a, b in ((u, v), (v, u)):
+                    if a in pos and b not in pos:
+                        bordo.add(parte[pos[a]])
+            dentro = [u for u in ignote if parte[pos[u]] in bordo]
+            q = {u: i for i, u in enumerate(dentro)}
+            r, c, w = [], [], []
+            rhs = np.zeros(len(dentro))
+            for (u, v), peso in lati.items():
+                for a, b in ((u, v), (v, u)):
+                    if a in q:
+                        r.append(q[a])
+                        c.append(q[a])
+                        w.append(peso)
+                        if b in q:
+                            r.append(q[a])
+                            c.append(q[b])
+                            w.append(-peso)
+                        else:
+                            rhs[q[a]] += peso * valore[b]
+            if dentro:
+                x = np.atleast_1d(spsolve(coo_matrix((w, (r, c)), shape=(len(dentro), len(dentro))).tocsc(), rhs))
+                for u, i in q.items():
+                    valore[u] = float(x[i])
+        return {j: [valore[u] for u in ks] for j, ks in chiavi.items()}
+
+    def quota(self, j, s):
+        """Quota della strada j (fuori dalle strutture) alla progressiva s, o None dove la sua parte della rete non esce
+        dall'ombra. Non il terreno nel punto: nell'ombra la variante "via" ha anche i ponti a terra di
+        street_surfaces.terrain_for_game sotto gli impalcati, la retta tra le spalle."""
+        L = self.R.lung[j] or 1
+        q = self.quote.get(j)
+        if q is None:
+            p = self._punto(j, s)
+            return self.base.at(*p) if self.libero(*p) else None
+        f = max(0.0, min(1.0, s / L)) * (len(q) - 1)
+        i = min(len(q) - 2, int(f))
+        if q[i] is None or q[i + 1] is None:
+            return None
+        return q[i] + (q[i + 1] - q[i]) * (f - i)
+
+    def in_punto(self, j, p):
+        """Quota della strada j nel punto p (proiettato sul suo asse), o None (quota)."""
+        e = self.R.archi[j]
+        A, B = self.R.nodi[e[0]], self.R.nodi[e[1]]
+        L = self.R.lung[j] or 1
+        t = max(0.0, min(1.0, ((p[0] - A[0]) * (B[0] - A[0]) + (p[1] - A[1]) * (B[1] - A[1])) / (L * L)))
+        return self.quota(j, t * L)
+
+    def cella(self, c, ombra=False):
+        """Quota della strada fuori dalle strutture il cui asse passa più vicino al centro della cella c, entro NUCLEO, o
+        None. Con ombra=True solo dove quella strada è nell'ombra di una campata (la sua quota viene dalla rete, non dal
+        terreno com'è)."""
+        p = self.T.centro(*c)
+        v = self.g_fuori.vicino(p, NUCLEO)
+        if v is None:
+            return None
+        j = self.fuori[v[1]]
+        if ombra:
+            e = self.R.archi[j]
+            A, B = self.R.nodi[e[0]], self.R.nodi[e[1]]
+            L = self.R.lung[j] or 1
+            t = max(0.0, min(1.0, ((p[0] - A[0]) * (B[0] - A[0]) + (p[1] - A[1]) * (B[1] - A[1])) / (L * L)))
+            if self.libero(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t):
+                return None
+        return self.in_punto(j, p)
+
+
+def adatta_terreno(R, P, T, piano, solo_campate=False, sotto=None):
     """Scrive nel terreno le piattaforme (quota del profilo fuori dalle campate, con la discesa di SPALLA metri verso il
     piano di sotto prima di ogni campata) e il piano sotto le campate. La cella prende la quota dell'arco più vicino, alla
-    sua proiezione; sotto una campata vale sempre il piano della campata."""
+    sua proiezione; sotto una campata vale sempre il piano della campata, tranne entro NUCLEO dall'asse di una strada
+    fuori dalla struttura, dove vale la quota di quella strada (sotto: StradeSotto). Fuori dalle campate, dove quella
+    strada è nell'ombra di una campata, la cella non sta più su della sua quota."""
     import heapq
     # metri dalla campata più vicina lungo le strade della struttura, e il piano di quella campata
     dist, heap = {}, []
@@ -902,8 +1080,8 @@ def adatta_terreno(R, P, T, piano, solo_campate=False):
                 return f + (h - f) * u * u * (3 - 2 * u)  # senza spigoli: chi campiona la quota ogni pochi metri non salta
         return h
     # le celle attorno all'asse di una strada che non è della struttura restano com'erano (lì la strada sta sul terreno)
-    fuori = [k for k in range(len(R.archi)) if k not in P.S and R.lung[k] > 0.05 and R.archi[k][2] != 8 and not R.archi[k][5] & 8 and R.archi[k][7] >= 0]
-    g_fuori = Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in fuori] or [((1e9, 1e9), (1e9, 1e9))], 40.0)
+    fuori = sotto.fuori if sotto else fuori_dalle_strutture(R, P)
+    g_fuori = sotto.g_fuori if sotto else Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in fuori] or [((1e9, 1e9), (1e9, 1e9))], 40.0)
     scelta = {}  # cella -> (priorità, distanza, quota, ponte a terra)
     nucleo = {}  # cella -> (quota, campata, ponte a terra): la più bassa tra gli archi che le passano entro NUCLEO
     asse = {}    # cella -> metri dall'asse più vicino di un arco della struttura che le passa accanto
@@ -951,14 +1129,28 @@ def adatta_terreno(R, P, T, piano, solo_campate=False):
     # (non salgono mai: la strada di fuori sta sul terreno e si alzerebbe con loro. Scendono al profilo se l'asse della
     # struttura è più vicino del suo: un rilevato del DTM più alto del profilo spunterebbe dalla carreggiata e dalla
     # sede del tram, che sopra il terreno si possono alzare e sotto no)
+    # (sotto una campata la strada di sotto tiene la sua quota, e le celle attorno al suo asse la prendono: il piano della
+    # campata lo fa anche il fosso accanto, e la strada sprofondava)
     protette = 0
     for c in list(scelta):
         if scelta[c][2]:
+            v = sotto.cella(c) if sotto else None
+            if v is not None:
+                scelta[c] = (scelta[c][0], v, True, scelta[c][3])
             continue
         d = g_fuori.piu_vicino(T.centro(*c), NUCLEO)
         if d is None:
             continue
+        # (dove la strada di fuori è nell'ombra di una campata la sua quota è quella della rete, e la cella non sta più
+        # su: la rampa della struttura che le corre accanto resta al suo profilo con la quota sopra il terreno, la strada
+        # di sotto senza dosso. Corso Australia sotto il Chiesanuova saliva di 0,6 m sulle celle della rampa accanto)
+        v = sotto.cella(c, ombra=True) if sotto else None
         if asse.get(c, 1e9) < d and T.byte(scelta[c][1]) < T.b[c[1], c[0]]:
+            if v is not None and T.byte(v) < T.byte(scelta[c][1]):
+                scelta[c] = (scelta[c][0], v, scelta[c][2], scelta[c][3])
+            continue
+        if v is not None and T.byte(v) < T.b[c[1], c[0]]:
+            scelta[c] = (scelta[c][0], v, scelta[c][2], scelta[c][3])
             continue
         del scelta[c]
         protette += 1
@@ -1165,15 +1357,20 @@ def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua
         f = w[-1]
         pts = [(f[i], f[i + 1]) for i in range(0, len(f) - 1, 2)]
         segmenti_acqua += list(zip(pts, pts[1:]))
+    # le strade fuori dalla struttura che passano sotto le campate tengono la loro quota (StradeSotto)
+    sotto = StradeSotto(R, P, T, terreno)
     # i piedi stanno alla quota del terreno com'è con il piano sotto le campate e senza il riempimento della chiusura
     T0 = Terreno(terreno)
-    fatte = adatta_terreno(R, P, T0, piano, solo_campate=True)
+    fatte = adatta_terreno(R, P, T0, piano, solo_campate=True, sotto=sotto)
     non_riempire(R, P, T0, segmenti_acqua, fatte)
     tieni_quote_di_prima(R, P, T0, terreno_prima, quote_di_prima or {})
     P.nat = Via(T0.scrivi())
 
-    def piano_di(k, t):
-        return sum(piano[i] * w for i, w in P.a_frazione(k, t))
+    def piano_di(k, t, j=None, p=None):
+        """Quota di quello che passa sotto l'arco k alla frazione t: la strada j, fuori dalla struttura, se c'è (il
+        franco si misura da lei), se no il piano della campata."""
+        v = sotto.in_punto(j, p) if j is not None else None
+        return v if v is not None else sum(piano[i] * w for i, w in P.a_frazione(k, t))
     # due giri: il terreno adattato al profilo cambia un poco la quota ai piedi (le celle accanto alle strade fuori dalla
     # struttura restano com'erano, ma la chiusura attorno cambia), e il secondo giro parte da lì
     for giro in range(2):
@@ -1181,7 +1378,7 @@ def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua
         log(f'cavalcavia: {len(strutture)} strutture, {len(S)} archi ({sum(R.lung[k] for k in S) / 1000:.1f} km), {P.N} incognite; '
             f"oltre la regola: pendenze {P.violazioni['pendenze']}, pendenze dei binari {P.violazioni['binari']}, raccordi {P.violazioni['raccordi']}, franchi {P.violazioni['franchi']}")
         T = Terreno(terreno)
-        fatte = adatta_terreno(R, P, T, piano)
+        fatte = adatta_terreno(R, P, T, piano, sotto=sotto)
         n = len(fatte)
         aperte = non_riempire(R, P, T, segmenti_acqua, fatte)
         tenute = tieni_quote_di_prima(R, P, T, terreno_prima, quote_di_prima or {})

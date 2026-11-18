@@ -595,6 +595,33 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   20 aree diverse); restano diversi i binari del tram (1 mm) e una decina di raccordi, quindi si rigenera sempre da
   Docker.
 
+#125, strade sotto le campate, onde e franchi veri (dal 17 novembre, a passi). Regola in
+[`cavalcavia.md`](cavalcavia.md), sezione 6. Da sapere:
+
+- passo 1: sotto una campata la strada che passa sotto, se non è della struttura, tiene la sua quota (`StradeSotto` in
+  `scripts/profilo_cavalcavia.py`). L'ombra della campata sono le celle che `adatta_terreno` porta al piano; le strade
+  fuori dalle strutture che ci entrano sono una rete di punti ogni 2 m, che prosegue sulle rampe delle strutture (non
+  sugli impalcati): fuori dall'ombra la quota del terreno di base senza chiusura, dentro la media dei vicini lungo la
+  strada. Le celle sotto la campata entro 14 m dal suo asse prendono quella quota, e il franco sopra di lei si misura da
+  lì. Dove la rete non esce dall'ombra (una bretella tutta sotto un viadotto) resta il piano della campata, non il
+  terreno nel punto: sotto gli impalcati delle strutture attive la variante "via" ha i ponti a terra di
+  `terrain_for_game` (le strutture attive non hanno quote in `heights`, e i loro impalcati passano per ponti sui fiumi),
+  la retta tra le spalle, fino a 5 m sopra la strada;
+- la misura che il controllo non fa: per ogni incrocio di `impalcati` con una strada fuori dalla struttura, la quota
+  della strada (terreno "via" più `edgeH`) ogni 2 m fino a 40 m per parte, contro la corda tra i due capi. Il DTM non
+  basta come riferimento: sotto l'impalcato interpola dalle spalle (Corso Australia sotto il Chiesanuova: 4 m di dosso).
+  La fa `scripts/prova_risolutore.py` sulle strutture accese (sotto);
+- `scripts/prova_risolutore.py`: il passo dei cavalcavia della build sulla rete della mappa, senza rigenerarla, con le
+  strutture scelte accese da sole (di base Via Salboro e il Grassi) o con il registro (`--registro`); dice violazioni,
+  casi del controllo e quanto la strada di sotto si stacca dalla quota della rete, e con `--controlla` esce con errore
+  (lavoro `mappa` di `verifiche.yml`). 17 s sul Mac. Le quote al centimetro vengono solo dalla rigenerazione;
+- passo 1 pubblicato il 18 novembre: casi delle strade da 819 a 789, dei binari da 16 a 12; Via Salboro accesa;
+  cambiano le quote di 24 strutture (`data/profili-cavalcavia.json`: tutte quelle con una strada o la ferrovia sotto
+  una campata, perché il franco sopra una strada si misura dalla strada); 14 aree della mappa, tutte entro 200 m dai
+  dati cambiati; la posa di 49 pali della linea aerea su Borgomagno, Chiesanuova, Via Venezia e San Marco (stessi punti,
+  altra altezza); in `data/eccezioni/verifica-mappa.json` le misure della pianta di cinque riquadri delle strutture
+  toccate (marciapiedi stretti e verde coperto, da 30 a 250 m²).
+
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
 - il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e

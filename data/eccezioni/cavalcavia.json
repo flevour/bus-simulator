@@ -7,9 +7,6 @@
     "casi": [
      "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -210,-2319",
      "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -233,-2405",
-     "Cavalcavia Chiesanuova | onde | Cavalcavia Chiesanuova @ -1865,-351",
-     "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -1941,-344",
-     "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -1989,-345",
      "Cavalcavia Dalmazia | scarti_dtm | strada senza nome @ -720,-1338",
      "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2900,-2750",
      "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2916,-2754",
@@ -567,21 +564,6 @@
      "Via Boves | scarti_dtm | Via Boves @ 1294,-3361",
      "Via Boves | scarti_dtm | Via Boves @ 2302,-3023",
      "Via Madonnina | scarti_dtm | Via Madonnina @ -3957,3569",
-     "Via Salboro | onde | Via Salboro @ 118,4570",
-     "Via Salboro | pendenze | Via Salboro @ 109,4556",
-     "Via Salboro | raccordi | Via Salboro @ 114,4563",
-     "Via Salboro | raccordi | Via Salboro @ 148,4672",
-     "Via Salboro | raccordi | Via Salboro @ 157,4690",
-     "Via Salboro | raccordi | Via Salboro @ 200,4730",
-     "Via Salboro | raccordi | Via Salboro @ 309,4772",
-     "Via Salboro | raccordi | Via Salboro @ 329,4779",
-     "Via Salboro | raccordi | Via Salboro @ 77,4542",
-     "Via Salboro | scarti_dtm | Via Salboro @ 153,4684",
-     "Via Salboro | scarti_dtm | Via Salboro @ 166,4704",
-     "Via Salboro | scarti_dtm | Via Salboro @ 223,4740",
-     "Via Salboro | scarti_dtm | Via Salboro @ 250,4750",
-     "Via Salboro | scarti_dtm | Via Salboro @ 305,4770",
-     "Via Salboro | scarti_dtm | Via Salboro @ 77,4542",
      "Via Venezia | scarti_dtm | Via San Marco @ 3108,-778",
      "Via Venezia | scarti_dtm | Via Venezia @ 2766,-590",
      "Via del Commercio (5541, -2475) | onde | Via Boves @ 5493,-2460",
@@ -693,7 +675,6 @@
      "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1895,-1330",
      "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1902,-1330",
      "Cavalcavia Antonio Grassi | onde | Via Carlo Goldoni @ 1571,-1241",
-     "Cavalcavia Antonio Grassi | onde | Via Friburgo @ 1879,-1378",
      "Cavalcavia Antonio Grassi | onde | Via Friburgo @ 1948,-1140",
      "Cavalcavia Antonio Grassi | onde | strada senza nome @ 1858,-1557",
      "Cavalcavia Antonio Grassi | pendenze | Via Friburgo @ 1957,-1151",
@@ -746,16 +727,11 @@
      "Cavalcavia Borgomagno | scarti_dtm | Via Niccolò Tommaseo @ 10,-983",
      "Cavalcavia Borgomagno | scarti_dtm | Via Niccolò Tommaseo @ 13,-974",
      "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -2120,-350",
-     "Cavalcavia Chiesanuova | scarti_dtm | Corso Australia @ -1964,-370",
      "Cavalcavia Chiesanuova | scarti_dtm | Corso Australia @ -1967,-349",
-     "Cavalcavia Chiesanuova | scarti_dtm | Corso Australia @ -1970,-324",
      "Cavalcavia Chiesanuova | scarti_dtm | Via Vicenza @ -1910,-468",
      "Cavalcavia Chiesanuova | scarti_dtm | Via del Cantiere @ -2028,-405",
      "Cavalcavia Chiesanuova | scarti_dtm | Via del Cantiere @ -2060,-362",
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -1903,-479",
-     "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -1908,-430",
-     "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -1909,-303",
-     "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -1926,-236",
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -2005,-451",
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -2010,-455",
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -2020,-406",
@@ -782,13 +758,8 @@
      "Cavalcavia Borgomagno | onde | Piazzale della Stazione @ 200,-1045",
      "Cavalcavia Borgomagno | pendenze | Piazza Alcide De Gasperi @ 40,-945",
      "Cavalcavia Borgomagno | raccordi | Piazza Alcide De Gasperi @ 42,-950",
-     "Cavalcavia Chiesanuova | onde | Cavalcavia Chiesanuova @ -1881,-342",
-     "Cavalcavia Chiesanuova | onde | Corso Australia @ -2008,-125",
      "Cavalcavia Chiesanuova | onde | Via Vicenza @ -1942,-499",
      "Cavalcavia Chiesanuova | onde | Via del Cantiere @ -2110,-363",
-     "Cavalcavia Chiesanuova | raccordi | Corso Australia @ -1964,-369",
-     "Cavalcavia Chiesanuova | raccordi | Corso Australia @ -1969,-330",
-     "Cavalcavia Chiesanuova | raccordi | Corso Australia @ -1971,-310",
      "Cavalcavia Chiesanuova | raccordi | Via Vicenza @ -1944,-451",
      "Cavalcavia Chiesanuova | raccordi | Via del Cantiere @ -2060,-362",
      "Cavalcavia Chiesanuova | raccordi | Via del Cantiere @ -2080,-362",
@@ -797,23 +768,14 @@
      "Cavalcavia Dalmazia | onde | Corso delle Tre Venezie @ -534,-1548",
      "Cavalcavia Dalmazia | onde | Via Fra' Paolo Sarpi @ -733,-1342",
      "Cavalcavia Dalmazia | raccordi | Rotonda Marcella Di Folco @ 38,-1270",
-     "Cavalcavia Dalmazia | raccordi | Via Jacopo Avanzo @ 60,-1257",
      "Cavalcavia San Marco | onde | Via Sergio Fraccalanza @ 4174,-1310",
-     "Cavalcavia San Marco | onde | Via Sergio Fraccalanza @ 4463,-1448",
-     "Cavalcavia San Marco | onde | Via Sergio Fraccalanza @ 4476,-1392",
-     "Cavalcavia San Marco | raccordi | Via Sergio Fraccalanza @ 4470,-1443",
-     "Cavalcavia San Marco | raccordi | Via Sergio Fraccalanza @ 4489,-1424",
-     "Via Venezia | onde | Via San Marco @ 3210,-834",
-     "Via Venezia | onde | Via Venezia @ 2660,-548",
-     "Via Venezia | onde | Via Venezia @ 2670,-538"
+     "Via Venezia | onde | Via San Marco @ 3210,-834"
     ]
    },
    {
     "perche": "Strutture con il profilo del risolutore da #84, dopo che le celle accanto alle strade fuori dalla struttura scendono alla quota del profilo (#123): sulle nove strutture i casi passano da 132 a 93. Questi sono casi di prima con il punto peggiore spostato di più di 4 m (Via Friburgo sotto il Grassi, conca di 1,1 m; Via Vianello sotto il Camerini, 0,88 m) e conche o raccordi lievi, di peso fino a 2,3, ai piedi dove il terreno non coincide con il profilo (#125).",
     "casi": [
      "Cavalcavia Antonio Grassi | onde | Via Friburgo @ 1891,-1326",
-     "Cavalcavia Antonio Grassi | raccordi | Via Friburgo @ 1866,-1372",
-     "Cavalcavia Antonio Grassi | raccordi | Via Friburgo @ 1899,-1381",
      "Cavalcavia Camerini | onde | Via Giovanni Vianello @ -80,-2256",
      "Direttissima per Abano | onde | Direttissima per Abano @ -4120,3764",
      "Direttissima per Abano | raccordi | Direttissima per Abano @ -4137,3791",
@@ -865,6 +827,19 @@
      "Corso Primo Maggio (977, 4400) | raccordi | Corso Primo Maggio @ 441,4540",
      "Corso Primo Maggio (977, 4400) | raccordi | Corso Primo Maggio @ 460,4535"
     ]
+   },
+   {
+    "perche": "dalla strada di sotto che tiene la sua quota (#125, passo 1): il franco sopra Via Friburgo, Corso Australia e Via Jacopo Avanzo si misura dalla strada e non dal piano della campata, quindi Grassi, Chiesanuova, Dalmazia e San Marco hanno l'impalcato un poco più basso (Chiesanuova 0,3-0,7 m) e i casi delle rampe si spostano di più di 4 m: scarti dal DTM da 0,52 a 0,68 m dove la rampa scende sul rilevato, e due conche di raggio 430-500 m al piede, dove Via Friburgo e Via Sergio Fraccalanza passano dalla quota della strada di sotto a quella della rampa (il giro contro le onde e i franchi veri sono i passi 2 e 3)",
+    "casi": [
+     "Cavalcavia Antonio Grassi | raccordi | Via Friburgo @ 1890,-1380",
+     "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ -30,-1075",
+     "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -2050,-346",
+     "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -1923,-248",
+     "Cavalcavia Dalmazia | scarti_dtm | Via Jacopo Avanzo @ 70,-1255",
+     "Cavalcavia San Marco | onde | Via Sergio Fraccalanza @ 4444,-1384",
+     "Cavalcavia San Marco | raccordi | Via Sergio Fraccalanza @ 4463,-1448",
+     "Cavalcavia San Marco | scarti_dtm | strada senza nome @ 4342,-1095"
+    ]
    }
   ],
   "binari dati": [
@@ -878,14 +853,10 @@
      "Cavalcavia Borgomagno | onde | SIR2 verso -1 @ 220,-1050",
      "Cavalcavia Borgomagno | onde | SIR3 verso -1 @ 180,-1060",
      "Cavalcavia Borgomagno | onde | SIR3 verso -1 @ 200,-1055",
-     "Cavalcavia Chiesanuova | onde | SIR2 verso +1 @ -1881,-344",
-     "Cavalcavia Chiesanuova | onde | SIR2 verso -1 @ -1877,-352",
      "Cavalcavia San Marco | onde | SIR2 verso +1 @ 4160,-1316",
      "Cavalcavia San Marco | onde | SIR2 verso +1 @ 4206,-1333",
-     "Via Venezia | onde | SIR2 verso +1 @ 2669,-534",
      "Via Venezia | onde | SIR2 verso +1 @ 3211,-832",
      "Via Venezia | onde | SIR2 verso +1 @ 3400,-936",
-     "Via Venezia | onde | SIR2 verso -1 @ 2670,-539",
      "Via Venezia | onde | SIR2 verso -1 @ 3211,-837"
     ]
    }
@@ -901,14 +872,10 @@
      "Cavalcavia Borgomagno | onde | SIR2 verso -1 @ 220,-1050",
      "Cavalcavia Borgomagno | onde | SIR3 verso -1 @ 180,-1060",
      "Cavalcavia Borgomagno | onde | SIR3 verso -1 @ 200,-1055",
-     "Cavalcavia Chiesanuova | onde | SIR2 verso +1 @ -1881,-344",
-     "Cavalcavia Chiesanuova | onde | SIR2 verso -1 @ -1877,-352",
      "Cavalcavia San Marco | onde | SIR2 verso +1 @ 4160,-1316",
      "Cavalcavia San Marco | onde | SIR2 verso +1 @ 4206,-1333",
-     "Via Venezia | onde | SIR2 verso +1 @ 2670,-534",
      "Via Venezia | onde | SIR2 verso +1 @ 3211,-832",
      "Via Venezia | onde | SIR2 verso +1 @ 3401,-936",
-     "Via Venezia | onde | SIR2 verso -1 @ 2670,-539",
      "Via Venezia | onde | SIR2 verso -1 @ 3211,-837"
     ]
    }
