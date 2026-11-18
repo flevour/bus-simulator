@@ -103,7 +103,7 @@ divise per area.
 | `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113, #115), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7), con chi segue chi e l'incrocio da liberare (`idm`, `incrocioDavanti`, sezione 8), e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
 | `tests/code.js`, `tests/code.spec.js`, `data/eccezioni/code.json` | `area:traffico` (#115), poi chi cambia chi segue chi, sblocchi, precedenze o il numero di auto (#49, #50, #116, #117) | prova delle code: corridoio di Via Querini (flusso contro densità, scarico al semaforo), incrocio da liberare, dieci minuti senza sblocchi a tempo, incroci bloccati e fermi oltre 120 s. Chi cambia il traffico la rilancia; un caso sparito si toglie dall'elenco nello stesso commit |
 | `scripts/domanda.py`, `src/data/padova-domanda.json`, `src/world/domanda.js`, `tests/domanda.js`, `tests/domanda.spec.js`, `scripts/gtfs_tempi.py` | `area:traffico` (#116), poi #117 e chi cambia rete, raccordi, edifici o sosta | domanda di traffico ([`domanda.md`](domanda.md)): la build scrive zone, porte, tempi, destinazioni, curva oraria e l'assegnazione per fascia; il file dipende da rete, raccordi ed edifici delle aree, e chi rigenera la mappa lo rifà nello stesso commit (`python3 scripts/domanda.py`, in fondo a `rigenera_mappa.sh`; `verifica_mappa.py` controlla che sia quello che esce). Non è locale: l'assegnazione sposta i flussi anche lontano |
-| `scripts/localita.py`, `data/localita.json`, `data/eccezioni/localita.json`; in `scripts/street_surfaces.py` `unione`, `semplifica_riquadro`, `canonico`, `anelli_canonici` | `area:mappa` (#139), e chi scrive un passo della build | località della mappa: rapporto a fine rigenerazione e prova (job `localita`, nota #139 della Mappa). Un passo che lavora su tutta la città usa `unione` e semplifica per riquadro; un caso nuovo della prova si capisce prima di metterlo nell'elenco |
+| `scripts/localita.py`, `data/localita.json`, `data/eccezioni/localita.json`; in `scripts/street_surfaces.py` `unione`, `partizione`, `canonico`, `anelli_canonici` | `area:mappa` (#139), e chi scrive un passo della build | località della mappa: rapporto a fine rigenerazione e prova (job `localita`, nota #139 della Mappa). Un passo che lavora su tutta la città usa `unione` e semplifica per riquadro; un caso nuovo della prova si capisce prima di metterlo nell'elenco |
 | `tests/impronta.json`, `tests/impronta.js`, `tests/impronta.spec.js` | chi cambia traffico, bus o tram automatici, mappa o linee (#145) | impronta del traffico di una corsa, ai bit, uguale su Mac e in CI (nota #145 delle Verifiche): chi la cambia di proposito la riscrive nello stesso commit con `IMPRONTA=aggiorna npx playwright test tests/impronta.spec.js`; se in CI è diversa da quella del Mac, l'esito dipende dalla macchina e la causa va trovata |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
@@ -624,10 +624,11 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   per riquadro). Nel gioco una sequenza casuale sola (`City.rnd`) per case di riempimento, alberi e lampioni: un
   albero in più vicino al cambio cambiava tutti gli altri;
 - ora le unioni della pianta e degli impalcati passano da `unione` (per riquadro da 200 m, poi quattro a quattro con
-  un albero fisso nello spazio) e ogni strato si semplifica per riquadro (`semplifica_riquadro`): tagliato sul
-  riquadro, con fissi i vertici sul bordo (i riquadri accanto combaciano), con il punto di partenza degli anelli e
-  l'ordine di tratti e poligoni scelti sulle coordinate al millimetro, e anelli d'uscita in forma canonica
-  (`anelli_canonici`: esterno antiorario, dal vertice più piccolo, buchi e poligoni in ordine). Asfalto in quota,
+  un albero fisso nello spazio) e la pianta a terra si semplifica per riquadro (da #126 `partizione`, nota sotto; era
+  `semplifica_riquadro`, uno strato alla volta): tagliata sul riquadro, con il bordo del riquadro fermo (i riquadri
+  accanto combaciano), con il punto di partenza degli anelli e l'ordine dei pezzi scelti sulle coordinate al
+  millimetro, e anelli d'uscita in forma canonica (`anelli_canonici`: esterno antiorario, dal vertice più piccolo,
+  buchi e poligoni in ordine). Asfalto in quota,
   impalcati ed edifici ritagliati passano da `canonico` prima di `simplify`. Le regole per un passo nuovo: unioni con
   `unione`, niente `simplify` su una geometria di tutta la città, ordine delle uscite dalle coordinate arrotondate e non
   dall'ordine in cui GEOS restituisce i pezzi o da un indice;
@@ -681,6 +682,50 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   dati cambiati; la posa di 49 pali della linea aerea su Borgomagno, Chiesanuova, Via Venezia e San Marco (stessi punti,
   altra altezza); in `data/eccezioni/verifica-mappa.json` le misure della pianta di cinque riquadri delle strutture
   toccate (marciapiedi stretti e verde coperto, da 30 a 250 m²).
+
+#126, pianta delle strade come partizione (18 novembre). Un solo proprietario per ogni metro quadro: chi si vede non lo
+decidono più `polygonOffset` e i centimetri di quota. Da sapere:
+
+- a terra le classi sono cinque, in ordine di priorità: sede del tram, isole, asfalto, marciapiede, verde (`CLASSI` in
+  `scripts/street_surfaces.py`), più le rampe a raso (sotto). La cella della mappa è `[ix, iz, asfalto, marciapiede,
+  isole, verde, sede, rampa]`: sede (indice 6) e rampa (7) sono nuove e restano nella rete con asfalto e isole. La
+  rampa non si disegna come pianta (la disegna l'asfalto in quota): c'è perché chi legge "la carreggiata" dalle celle
+  prenda asfalto, sede e rampa (`sosta.Asfalto`, `raccordi.Pianta`, `verifica_mappa.Mappa`; nel gioco `asphRings` e
+  `surfaceOff`, quindi la posa: senza, sulle rampe a raso la posa vedeva spazio libero e ci metteva i pali);
+- `partizione` fa la pianta di un riquadro da 200 m: le linee di tutte le classi più il bordo del riquadro unite sulla
+  griglia da 1 µm (`NODI`), le facce, ognuna alla prima classe che ne contiene un punto interno (il resto è il vuoto);
+  poi i bordi tra due classi da un nodo all'altro (`_catene`) semplificati una volta sola con Douglas-Peucker, con la
+  tolleranza della più fine delle due classi e la topologia di tutto il riquadro (a passate, le altre catene ferme come
+  lati di due punti), infittiti dove il terreno non è piano se una delle due classi lo chiede; infine tutte le linee
+  arrotondate insieme sulla griglia da 10 cm (snap rounding) e le facce di nuovo assegnate, quelle sotto 0,5 m² alla
+  vicina con il lato in comune più lungo. Il bordo del riquadro non si semplifica: i riquadri accanto combaciano (#139);
+- tre trappole trovate: arrotondare al decimetro ogni poligono per conto suo incrocia i lati dove due classi sono più
+  vicine di 10 cm (43 m² di sovrapposizioni, tutte sotto i 5 cm di spessore); `coverage_simplify` di shapely
+  (Visvalingam-Whyatt) toglie i vertici per area e mangiava le punte dei marciapiedi accanto alle banchine; l'unione
+  delle linee in virgola mobile, e `coverage_clean` di GEOS 3.14.1, alla rotonda di Santa Croce davano all'asfalto
+  un'isola di 440 m² che ne riempie un buco con il bordo spostato di 2 cm;
+- `build_map.py` si ferma se due classi della stessa cella si sovrappongono (`street_surfaces.sovrapposte`);
+  `scripts/verifica_mappa.py` misura le stesse coppie, sede compresa, per riquadro da 800 m;
+- in quota: i tratti degli archi in quota sotto 5 cm (`Q_TERRA`, i piedi delle rampe: un quarto di quello che era
+  asfalto in quota) sono asfalto a terra. Dove la rampa sta sotto 50 cm (`H_RASO`, a raso) le classi a terra le
+  lasciano il posto: l'asfalto e la sede in quota come li disegna il gioco entrano nella partizione del riquadro come
+  una classe prima di tutte che non esce (`rampa` di `partizione`), con i bordi fermi, così la pianta a terra finisce
+  sul bordo della rampa disegnata. Restano fessure di qualche centimetro solo dove un altro bordo della pianta
+  incontra quello della rampa (l'arrotondamento finale sposta quel nodo dal lato della rampa): `raccordi.Pianta`
+  chiude i buchi dell'asfalto larghi in media meno di 10 cm (`FESSURA`). Due prove scartate: tagliare con la geometria esatta delle rampe lasciava fessure
+  fino a 4 cm (i due bordi semplificati per strade diverse), che il controllo dei raccordi prendeva per il bordo della
+  strada (sei svolte nuove senza raccordo sul San Marco e sul Camerini); una fascia di 30 cm di asfalto a terra sotto
+  il bordo della rampa dava un caso nuovo degli strati a Corso Primo Maggio con Via Guizza, dove la quota scritta resta
+  di pochi centimetri per decine di metri e da vicino vinceva l'asfalto a terra. Sopra i 50 cm la rampa passa sopra
+  le strade a terra, come un ponte;
+- la sede in quota è una classe a sé, `surfaces.upSede`: dove il binario è in quota (`_tram_heights`, come gli
+  impalcati) la sede si toglie dall'asfalto in quota, e il gioco la disegna alla quota del binario (`City.quotaSede`,
+  dal profilo `tramH` come `onSede`), con lo stesso materiale dell'asfalto in quota. Asfalto e sede in quota si tagliano
+  sulla griglia della mappa dopo aver semplificato, così hanno lo stesso lato in comune;
+- nel gioco `buildSurfaces` disegna la sede a terra nella mesh dell'asfalto (corsie rosse e rotaie restano segni sopra,
+  `buildTramway`); i lati in comune tra asfalto e sede non hanno cordolo né riga e non contano per `surfaceOff`. Le
+  banchine del tram hanno lo strato 9: stanno 18 cm sopra le isole (strato 8) che a volte hanno sotto, e alla fermata
+  Santa Croce del SIR1 da 30 m l'isola spuntava sulla banchina.
 
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
@@ -795,9 +840,9 @@ Pianta a terra come partizione, misura di partenza (#110). `scripts/verifica_map
 metri quadri dove asfalto, marciapiede e isola della pianta si sovrappongono (`pianta_sovrapposta_m2`: 14.599 m² tra
 asfalto e marciapiede, 1.628 tra asfalto e isola, 29 tra marciapiede e isola) e il verde che sta sotto di loro
 (`verde_coperto_m2`, 471.510 m²), con i valori di oggi in `data/eccezioni/verifica-mappa.json` e 20 m² di tolleranza.
-Le carreggiate in quota non entrano: passano sopra le strade a terra, e le guarda la prova degli strati. Chi rigenera
-la mappa riscrive i valori con `--aggiorna`; la partizione vera (sovrapposizione zero, sede del tram come classe a sé,
-asfalto in quota senza la sede) è #126.
+Le carreggiate in quota non entrano: passano sopra le strade a terra, e le guarda la prova degli strati. Da #126 la
+pianta a terra è una partizione (nota #126 qui sotto): le due misure sono a zero, gli elenchi vuoti, e `build_map.py`
+si ferma se due classi si sovrappongono (`street_surfaces.sovrapposte`).
 
 ### Linee (corsia `capolinea`)
 

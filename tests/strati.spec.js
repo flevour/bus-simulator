@@ -6,9 +6,10 @@
 // (tests/strati.js). Un punto conta se da vicino non è su un bordo e se la quota è la stessa nelle due viste.
 //
 // Uno strato è il numero d'ordine dato a layer(): 1 marciapiedi e sponde, 1.5 giunti degli incroci, 2 carreggiate e
-// acqua, 3 incroci, asfalto in quota e cordoli, 4 righe e segni, 4.2 massicciata, 4.5, 5 e 5.5 sede del tram (5 anche
-// dossi, frecce e scritte), 6 rotaie e cordoli della sede, 7 linee d'arresto del tram, 8 isole; "verde" sono prati e
-// aiuole delle aree, "fondo" il prato sotto a tutto.
+// acqua, 3 incroci, asfalto e sede in quota e cordoli, 4 righe e segni, 4.2 massicciata, 4.5, 5 e 5.5 sede del tram (5
+// anche dossi, frecce e scritte), 6 rotaie e cordoli della sede, 7 linee d'arresto del tram, 8 isole; "verde" sono
+// prati e aiuole delle aree, "fondo" il prato sotto a tutto. Le banchine del tram hanno lo strato 9 ma sono solide e la
+// prova non le guarda (tests/strati.js).
 //
 // Soglie per caso (#105): un caso è una veduta con una coppia (strato da vicino, strato da lontano) su almeno CASO
 // punti, circa 3 m² di strada; i casi noti stanno in data/eccezioni/strati.json con il perché. Un caso dell'elenco

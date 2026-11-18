@@ -156,7 +156,7 @@ def split(data):
         for c in S.get('cells') or []:
             ix, iz, A, W, I = c[:5]
             V = c[5] if len(c) > 5 else None
-            cells.append([ix, iz, A, [], I, []])
+            cells.append([ix, iz, A, [], I, [], *c[6:]])  # sede del tram e rampe a raso (#126) restano nella rete
             if W or V:
                 area(key(ix * T, iz * T))['celle'].append([ix, iz, W, V or []])
         tr = S.get('trees') or []

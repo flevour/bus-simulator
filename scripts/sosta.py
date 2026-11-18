@@ -123,7 +123,7 @@ class Asfalto:
         self.celle = {}
         for c in surfaces['cells']:
             polys = []
-            for r in c[2]:
+            for r in c[2] + [r for i in (6, 7) if len(c) > i for r in c[i]]:  # asfalto, sede del tram e rampe a raso (#126)
                 est = [(r[0][i], r[0][i + 1]) for i in range(0, len(r[0]) - 1, 2)]
                 if len(est) < 3:
                     continue

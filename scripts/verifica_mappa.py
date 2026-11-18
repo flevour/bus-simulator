@@ -143,8 +143,9 @@ class Mappa:
             self.archi[(min(a, b), max(a, b))] = {'a': a, 'b': b, 'width': width, 'name': M['names'][name] if name < len(M['names']) else '', 'oneway': oneway}
         S = M['surfaces']
         self.asfalto, self.marciapiede = [], []
-        for ix, iz, A, W, *_ in S['cells']:
-            self.asfalto += [p for p in (poligono(r) for r in A) if p is not None and not p.is_empty]
+        for ix, iz, A, W, *resto in S['cells']:
+            # la carreggiata è asfalto più sede del tram e rampe a raso, classi a sé della pianta (#126)
+            self.asfalto += [p for p in (poligono(r) for r in A + [r for i in (2, 3) if len(resto) > i for r in resto[i]]) if p is not None and not p.is_empty]
             self.marciapiede += [p for p in (poligono(r) for r in W) if p is not None and not p.is_empty]
         self.t_asfalto, self.t_marciapiede = STRtree(self.asfalto), STRtree(self.marciapiede)
         self.edifici = []
@@ -291,8 +292,8 @@ def marciapiedi_stretti(mappa):
 
 
 def sovrapposizioni(mappa):
-    """Pianta delle strade a terra come partizione (#110): metri quadri dove asfalto, marciapiede e isola si
-    sovrappongono, e di verde sotto di loro. Per cella da 200 m, sommati per riquadro da 800 m. Le carreggiate in quota
+    """Pianta delle strade a terra come partizione (#110, #126): metri quadri dove asfalto, sede del tram, rampe a raso,
+    marciapiede e isola si sovrappongono, e di verde sotto di loro. Per cella da 200 m, sommati per riquadro da 800 m. Le carreggiate in quota
     non contano: stanno su un altro piano e passano sopra le strade a terra (le guarda tests/strati.spec.js)."""
     S = mappa.M['surfaces']
     T = S['tile']
@@ -302,15 +303,17 @@ def sovrapposizioni(mappa):
     for c in S['cells']:
         ix, iz, A, W, I = c[:5]
         V = c[5] if len(c) > 5 else []
-        a, w, i = unione(A), unione(W), unione(I)
+        a, w, i, s, r = unione(A), unione(W), unione(I), unione(c[6] if len(c) > 6 else []), unione(c[7] if len(c) > 7 else [])
         k = f'riquadro {aree_mappa.key(ix * T, iz * T)}'
-        for nome, g, h in (('asfalto e marciapiede', a, w), ('asfalto e isola', a, i), ('marciapiede e isola', w, i)):
+        for nome, g, h in (('asfalto e marciapiede', a, w), ('asfalto e isola', a, i), ('marciapiede e isola', w, i),
+                           ('asfalto e sede', a, s), ('sede e marciapiede', s, w), ('sede e isola', s, i),
+                           ('rampa e asfalto, sede, marciapiede o isola', r, unary_union([a, s, w, i]))):
             m2 = g.intersection(h).area if not g.is_empty and not h.is_empty else 0.0
             coppie_m2[nome] += m2
             pianta[k] += m2
         if V:
-            m2 = unione(V).intersection(unary_union([a, w, i])).area
-            coppie_m2['verde sotto asfalto, marciapiedi e isole'] += m2
+            m2 = unione(V).intersection(unary_union([a, w, i, s, r])).area
+            coppie_m2['verde sotto asfalto, sede, rampe, marciapiedi e isole'] += m2
             verde[k] += m2
     tondo = lambda d: {k: round(v) for k, v in d.items() if round(v) > 0}
     return {k: round(v) for k, v in coppie_m2.items()}, tondo(pianta), tondo(verde)

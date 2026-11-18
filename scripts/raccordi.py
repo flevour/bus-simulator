@@ -54,6 +54,7 @@ ESSE = 3.0  # m per parte che si tengono per una esse tra due corsie quasi paral
 LARGHE = (0.75, 1.5, 2.5, 3.5)  # m: di quanto una svolta larga passa oltre lo spigolo delle due corsie
 VIA_MAX, VIA_LUNGO = 4, 24.0  # archi corti che un raccordo può scavalcare, e quanti metri in tutto
 TRAM_LANE = 2.1  # m: metà della sede di un binario (street_surfaces.TRAM_LANE)
+FESSURA = 0.1  # m: un buco dell'asfalto largo in media meno di così è una fessura, non un bordo della carreggiata
 
 
 def croce(a, b):
@@ -182,8 +183,9 @@ class Pianta:
             return p if p.is_valid else p.buffer(0)
         self.celle = {}
         for c in S['cells']:
-            self.celle[(c[0], c[1])] = [[poli(a) for a in strato] for strato in (c[2], c[3], c[4])]
-        self.su = [poli(a) for a in S.get('up') or []]
+            # la carreggiata è asfalto più sede del tram e rampe a raso, che nella pianta sono classi a sé (#126)
+            self.celle[(c[0], c[1])] = [[poli(a) for a in strato] for strato in (c[2] + [r for i in (6, 7) if len(c) > i for r in c[i]], c[3], c[4])]
+        self.su = [poli(a) for a in (S.get('up') or []) + (S.get('upSede') or [])]  # asfalto e sede in quota (#126)
         self.su_tree = STRtree(self.su) if self.su else None
         # sede del tram, come in street_surfaces.surfaces: i binari allargati, con i varchi stretti tra due binari chiusi
         sedi = [LineString(t).buffer(TRAM_LANE, quad_segs=2) for t in binari if len(t) >= 2]
@@ -214,6 +216,11 @@ class Pianta:
         # solo i poligoni: il taglio sul bordo del quadrato lascia anche linee e punti
         g = sh.get_parts(sh.get_parts(sh.union_all(sh.intersection(self.np.array(parti, dtype=object), q))))
         g = [p for p in g if p.geom_type == 'Polygon']
+        if strato == 0:
+            # dove un bordo della pianta a terra incontra quello di una rampa disegnata (street_surfaces.partizione) tra
+            # le due restano fessure di qualche centimetro: non sono il bordo della carreggiata (#126)
+            fessura = lambda h: 2 * sh.area(sh.Polygon(h)) < FESSURA * h.length
+            g = [sh.Polygon(p.exterior, [h for h in p.interiors if not fessura(h)]) if any(fessura(h) for h in p.interiors) else p for p in g]
         return sh.multipolygons(g) if g else sh.Polygon()
 
 

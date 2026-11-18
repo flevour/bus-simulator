@@ -1770,6 +1770,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
                                                    sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm())
     print('pianta delle strade:', st)
+    # la pianta a terra è una partizione (#126): due classi sovrapposte sono un errore della build, non un caso da elencare
+    sovr = street_surfaces.sovrapposte(surf['cells'])
+    if sovr:
+        sys.exit('pianta delle strade: classi sovrapposte in %d posti (cella, classi, m²): %s' % (len(sovr), sovr[:20]))
 
     # le fermate del tram valgono solo dove c'è la rete stradale (l'export OSM finisce prima di Guizza)
     nxs, nzs = nodes_flat[0::2], nodes_flat[1::2]

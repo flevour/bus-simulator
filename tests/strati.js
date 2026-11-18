@@ -21,7 +21,9 @@ export function preparaStrati() {
   const S = { nascosti: [], cambiati: [], strati: [], quota: { value: new g.camera.position.constructor(0, 1, 0) } };
   const nome = (o, m) => {
     if (m === city.greenMat) return 'verde';
-    if (o === city.ground || !m.polygonOffset || (m.transparent && !m.alphaTest)) return null;
+    // gli oggetti solidi con polygonOffset (banchine del tram, sopra le isole) non sono strati: i loro spigoli coprono
+    // davvero quello che sta dietro, e da due distanze lo coprono in punti diversi
+    if (o === city.ground || !m.polygonOffset || m.userData.solido || (m.transparent && !m.alphaTest)) return null;
     return `strato ${-m.polygonOffsetFactor}`;
   };
   const trovati = [];

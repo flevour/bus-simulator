@@ -33,6 +33,8 @@ TRAM_LANE = 2.1  # m: metà della corsia rossa di un binario, con il cordolo
 TILE = 200  # m: riquadri dell'export
 CREPA = 0.3  # m: metà della fessura più larga che si chiude tra un parcheggio e la carreggiata
 DECK_MIN = 0.6  # m: da questa quota in su la strada o il tram stanno su un impalcato (sotto è rampa a raso)
+Q_TERRA = 0.05  # m: un tratto di arco in quota più basso di così è asfalto a terra (#126)
+H_RASO = 0.5  # m: sotto questa quota asfalto in quota e classi a terra sono lo stesso piano: ne resta uno solo (#126)
 DECK_EDGE = 1.0  # m: l'impalcato sporge oltre la carreggiata (cordolo e parapetto)
 DECK_JOIN = 4.5  # m: impalcati più vicini del doppio di così diventano un corpo unico (Cavalcavia Borgomagno)
 TRAM_HALF = 1.7 + 0.5  # m: metà della corsia di un binario più il cordolo
@@ -297,6 +299,45 @@ def _tram_heights(pts, nodes, edges, heights, profili=None, dichiarati=()):
     return out
 
 
+def tratti_quota(q, lo, hi=math.inf):
+    """Intervalli [t0, t1] del parametro dell'arco (0-1) dove la quota del profilo q = [(t, h)] sta tra lo e hi."""
+    out = []
+    for (ta, qa), (tb, qb) in zip(q, q[1:]):
+        if tb - ta < 1e-9:
+            continue
+        # i punti dove il tratto entra ed esce dalla fascia [lo, hi)
+        ts = [0.0, 1.0] + [(v - qa) / (qb - qa) for v in (lo, hi) if qb != qa and 0 < (v - qa) / (qb - qa) < 1]
+        ts.sort()
+        for u0, u1 in zip(ts, ts[1:]):
+            m = qa + (qb - qa) * (u0 + u1) / 2
+            if u1 - u0 < 1e-12 or not lo <= m < hi:
+                continue
+            t0, t1 = ta + (tb - ta) * u0, ta + (tb - ta) * u1
+            if out and t0 - out[-1][1] < 1e-9:
+                out[-1][1] = t1
+            else:
+                out.append([t0, t1])
+    return out
+
+
+def pezzi_quota(nodes, edges, ks, heights, profili, dichiarati, lo, hi=math.inf):
+    """Carreggiata degli archi ks dove la quota sta tra lo e hi: i tratti allargati a mezza carreggiata con i capi
+    dritti, più il disco del nodo dove la quota del nodo ci sta (come i giunti tondi della carreggiata intera)."""
+    parts = []
+    for k in ks:
+        e = edges[k]
+        q = quote_arco(k, e, heights, profili, dichiarati)
+        A, B = nodes[e[0]], nodes[e[1]]
+        P = lambda t: (A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t)
+        for t0, t1 in tratti_quota(q, lo, hi):
+            if (t1 - t0) * math.dist(A, B) > 1e-3:
+                parts.append(LineString([P(t0), P(t1)]).buffer(e[3] / 2, cap_style='flat'))
+        for n, h in ((e[0], q[0][1]), (e[1], q[-1][1])):
+            if lo <= h < hi:
+                parts.append(Point(nodes[n]).buffer(e[3] / 2, quad_segs=4))
+    return parts
+
+
 def decks(nodes, edges, heights, drive, tram, profili=None, dichiarati=()):
     """Impalcati in quota come un'area sola: i tratti di strada e di tram da DECK_MIN in su (carreggiata + 1 m, corsie
     del tram + cordolo), uniti e con la fascia tra impalcati vicini riempita."""
@@ -396,9 +437,6 @@ def _rings(geom):
     return out
 
 
-SUL_BORDO = 1e-6  # m: un vertice così vicino al bordo del riquadro ci sta sopra (punti calcolati dal taglio)
-
-
 # Ordine e punto di partenza di anelli e poligoni (#139). Le unioni di tutta la città (unary_union) danno la stessa
 # forma, ma con l'ultima cifra delle coordinate che cambia appena cambia il numero dei pezzi che entrano, anche
 # lontano. Le scelte che dipendono dall'ordine (da quale vertice parte un anello, in che ordine stanno i poligoni, e
@@ -450,99 +488,25 @@ def anelli_canonici(polys):
     return out
 
 
-def semplifica_riquadro(pezzi, b, tol):
-    """Semplifica i contorni dei pezzi di uno strato tagliati sul riquadro b = (x0, z0, x1, z1), con fissi i vertici che
-    stanno sul bordo: il risultato dipende solo da quello che c'è nel riquadro, e i pezzi dei riquadri accanto
-    combaciano (#139).
-
-    Semplificare tutta la città in una volta (Douglas-Peucker con la topologia, come prima) non è locale: gli anelli
-    della carreggiata e dei marciapiedi attraversano chilometri, e quali vertici restano dipende dal punto da cui parte
-    l'anello e dall'ultima cifra delle coordinate, che le unioni cambiano dappertutto appena cambia il numero dei pezzi
-    che entrano (un arco che passa in quota, un arco che entra nei percorsi dei bus). Qui ogni anello si spezza nei
-    vertici sul bordo (portati sul bordo esatto); i tratti tra due di questi, e gli anelli tutti dentro (dal vertice più
-    piccolo, canonico), si semplificano insieme, con la topologia, in un ordine fisso, e si rimettono al loro posto. Un
-    pezzo che verrebbe non valido resta com'è."""
-    from shapely.geometry import GeometryCollection, LinearRing
-    x0, z0, x1, z1 = b
-
-    def sul_bordo(x, z):
-        """Il vertice portato sul bordo, se ci sta (a meno di SUL_BORDO), e se è sul bordo."""
-        on = False
-        for v, i in ((x0, 0), (x1, 0), (z0, 1), (z1, 1)):
-            if abs((x, z)[i] - v) < SUL_BORDO:
-                x, z, on = (v, z, True) if i == 0 else (x, v, True)
-        return (x, z), on
-
-    pezzi = [q for g in pezzi for q in _polys(canonico(g))]
-    pezzi.sort(key=lambda q: (_chiave(q.exterior.coords[0]), round(q.area, 2)))
-    linee, forme = [], []
-    for p in pezzi:
-        anelli = []
-        for r in [p.exterior, *p.interiors]:
-            c, k = [], []
-            for i, (x, z) in enumerate(r.coords[:-1]):
-                q, on = sul_bordo(x, z)
-                c.append(q)
-                if on:
-                    k.append(i)
-            if not k:
-                anelli.append(len(linee))
-                linee.append(LinearRing(c))
-                continue
-            # tratti da un vertice sul bordo al successivo, dal più piccolo: quelli senza vertici in mezzo restano
-            k0 = min(k, key=lambda i: _chiave(c[i]))
-            c = c[k0:] + c[:k0] + [c[k0]]
-            k = sorted((i - k0) % (len(c) - 1) for i in k) + [len(c) - 1]
-            tratti = []
-            for i, j in zip(k, k[1:]):
-                if j - i > 1:
-                    tratti.append(len(linee))
-                    linee.append(LineString(c[i:j + 1]))
-                else:
-                    tratti.append(c[i:j + 1])
-            anelli.append(tratti)
-        forme.append(anelli)
-    semplici = list(shapely.simplify(GeometryCollection(linee), tol, preserve_topology=True).geoms) if linee else []
-    out = []
-    for p, anelli in zip(pezzi, forme):
-        rr = []
-        for a in anelli:
-            if isinstance(a, int):
-                rr.append(list(semplici[a].coords))
-                continue
-            pts = []
-            for t in a:
-                pts += (list(semplici[t].coords) if isinstance(t, int) else t)[:-1]
-            rr.append(pts + pts[:1])
-        q = Polygon(rr[0], rr[1:]) if all(len(r) >= 4 for r in rr) else None
-        out.append(q if q is not None and q.is_valid and not q.is_empty else p)
+def infittisci(coords, hfun, maxlen=12.0, tol=0.12):
+    """La spezzata coords con i lati più lunghi di maxlen spezzati dove il terreno lungo il lato si scosta più di tol
+    dalla retta tra i due estremi: il gioco alza solo i vertici, e un lato lungo taglierebbe argini e ponti."""
+    out = [coords[0]]
+    for p, q in zip(coords, coords[1:]):
+        L = math.dist(p, q)
+        if L > maxlen:
+            # dal capo più piccolo: un lato percorso nei due versi (bordo tra due riquadri, lato in comune tra due
+            # classi) ha gli stessi punti da una parte e dall'altra
+            a, b = (p, q) if p <= q else (q, p)
+            n = int(math.ceil(L / 4))
+            ha, hb = hfun(*a), hfun(*b)
+            err = max(abs(hfun(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n) - (ha + (hb - ha) * k / n)) for k in range(1, n))
+            if err > tol:
+                m = int(math.ceil(L / maxlen))
+                mid = [(a[0] + (b[0] - a[0]) * k / m, a[1] + (b[1] - a[1]) * k / m) for k in range(1, m)]
+                out += mid if a is p else mid[::-1]
+        out.append(q)
     return out
-
-
-def densify(geom, hfun, maxlen=12.0, tol=0.12):
-    """Spezza i lati più lunghi di maxlen dove il terreno lungo il lato si scosta più di tol dalla retta tra i due
-    estremi: il gioco alza solo i vertici, e un lato lungo taglierebbe argini e ponti. In piano non cambia niente."""
-    def ring(coords):
-        out = [coords[0]]
-        for p, q in zip(coords, coords[1:]):
-            L = math.dist(p, q)
-            if L > maxlen:
-                # dal capo più piccolo: un lato sul bordo tra due riquadri, che i due percorrono in versi opposti, ha
-                # gli stessi punti da una parte e dall'altra
-                a, b = (p, q) if p <= q else (q, p)
-                n = int(math.ceil(L / 4))
-                ha, hb = hfun(*a), hfun(*b)
-                err = max(abs(hfun(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n) - (ha + (hb - ha) * k / n)) for k in range(1, n))
-                if err > tol:
-                    m = int(math.ceil(L / maxlen))
-                    mid = [(a[0] + (b[0] - a[0]) * k / m, a[1] + (b[1] - a[1]) * k / m) for k in range(1, m)]
-                    out += mid if a is p else mid[::-1]
-            out.append(q)
-        return out
-    polys = []
-    for g in _polys(geom):
-        polys.append(Polygon(ring(list(g.exterior.coords)), [ring(list(r.coords)) for r in g.interiors]))
-    return polys
 
 
 def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram):
@@ -596,6 +560,192 @@ def dbgt_polys(lst):
         g = Polygon([(r[0][i], r[0][i + 1]) for i in range(0, len(r[0]), 2)], [[(h[i], h[i + 1]) for i in range(0, len(h), 2)] for h in r[1:] if len(h) >= 6])
         g = g if g.is_valid else g.buffer(0)
         out += _polys(g)
+    return out
+
+
+# Classi della pianta a terra (#126), nell'ordine in cui si prendono il terreno: dove due si sovrappongono vince quella
+# che viene prima. Con la tolleranza della semplificazione (Douglas-Peucker, metri), se i lati si infittiscono dove il
+# terreno non è piano, e il posto nella cella della mappa [ix, iz, asfalto, marciapiede, isole, verde, sede].
+CLASSI = (('sede', 0.1, True, 6), ('isole', 0.1, False, 4), ('asfalto', 0.15, True, 2), ('marciapiede', 0.3, True, 3),
+          ('verde', 1.0, False, 5))
+GRIGLIA = 0.1  # m: passo delle coordinate della pianta nella mappa
+NODI = 1e-6  # m: griglia su cui si incontrano le linee delle classi (snap rounding: senza, l'unione in virgola mobile
+#              lasciava lati tagliati e due facce diventavano una)
+FACCIA_MIN = 0.5  # m²: un pezzo di classe più piccolo di così va alla classe accanto
+
+
+def _catene(cop, bx):
+    """Le catene della copertura cop (poligoni per classe, l'ultima il vuoto): i bordi tra due classi da un nodo
+    all'altro, ognuno una volta sola, con la classe da una parte e dall'altra (None fuori dal riquadro). Gli anelli senza
+    nodi partono dal vertice più piccolo al millimetro."""
+    import numpy as np
+    linee = shapely.line_merge(shapely.union_all([LineString(r.coords) for ps in cop for p in ps for r in [p.exterior, *p.interiors]], grid_size=NODI))
+    tutte = [(i, p) for i, ps in enumerate(cop) for p in ps]
+    tr = STRtree([p for _i, p in tutte])
+    out = []
+    for c in sorted(shapely.get_parts(linee), key=lambda c: (_chiave(c.coords[0]), _chiave(c.coords[-1]), len(c.coords))):
+        pts = list(c.coords)
+        if pts[0] == pts[-1]:
+            pts = _anello(pts[:-1], True)
+            pts.append(pts[0])
+        # da che parte sta ogni classe: punti a un decimo di millimetro dal lato più lungo, a sinistra e a destra
+        k = max(range(len(pts) - 1), key=lambda k: math.dist(pts[k], pts[k + 1]))
+        (ax, az), (bx_, bz) = pts[k], pts[k + 1]
+        L = math.dist(pts[k], pts[k + 1]) or 1.0
+        mx, mz, nx, nz = (ax + bx_) / 2, (az + bz) / 2, -(bz - az) / L * 1e-4, (bx_ - ax) / L * 1e-4
+        lati = []
+        for q in (Point(mx + nx, mz + nz), Point(mx - nx, mz - nz)):
+            hit = [tutte[j][0] for j in tr.query(q, predicate='intersects')]
+            lati.append(min(hit) if hit and bx.contains(q) else None)
+        if lati[0] != lati[1]:
+            out.append((pts, lati[0], lati[1]))
+    return out
+
+
+def partizione(pezzi, b, hfun=None, rampa=()):
+    """Pianta a terra di un riquadro b = (x0, z0, x1, z1) come partizione: pezzi[i] sono i poligoni della classe i di
+    CLASSI tagliati sul riquadro; torna i poligoni di ogni classe, senza sovrapposizioni e con i vertici sulla griglia
+    da GRIGLIA metri.
+
+    Il resto del riquadro (dove non c'è nessuna classe) è una classe in più, il vuoto: così la copertura riempie il
+    riquadro, il suo bordo è quello del riquadro e resta fermo, e i riquadri accanto combaciano (#139). Le linee di tutte
+    le classi, unite, danno le facce della copertura; ogni faccia va alla prima classe che contiene un suo punto interno,
+    quindi dove due classi si sovrappongono vince quella che viene prima. Le linee si incontrano sulla griglia da NODI
+    metri: in virgola mobile l'unione lasciava lati tagliati, e alla rotonda di Santa Croce un'isola di 440 m² che riempie
+    un buco dell'asfalto con il bordo spostato di 2 cm si fondeva con l'asfalto attorno (lo stesso con coverage_clean di
+    GEOS 3.14.1, con qualunque strategia). Poi ogni bordo tra due classi,
+    da un nodo all'altro (_catene), si semplifica una volta sola con Douglas-Peucker e la tolleranza della più fine
+    delle due classi, tenendo la topologia di tutto il riquadro: a passate dalla tolleranza più piccola, con le catene
+    delle altre passate ferme (spezzate in lati di due punti, che non si semplificano ma contano per la topologia).
+    coverage_simplify (Visvalingam-Whyatt) toglieva i vertici per area e mangiava le punte strette dei marciapiedi.
+    Con il terreno (hfun) i bordi delle classi da infittire si spezzano dove il terreno non è piano.
+
+    Alla fine la griglia: arrotondare al decimetro ogni poligono per conto suo incrociava i lati dove due classi, o una
+    classe e il vuoto, sono più strette di un decimetro (43 m² di sovrapposizioni in tutta la città, nessuna più spessa
+    di 5 cm). Qui si arrotondano insieme tutte le linee del riquadro (snap rounding, union_all con grid_size), si
+    ricostruiscono le facce e ognuna va alla classe con cui ha più area in comune nella copertura prima di semplificare;
+    quelle sotto FACCIA_MIN m² vanno alla vicina con il lato in comune più lungo (prima si buttavano e lasciavano un buco
+    nella classe attorno). Tutto dipende solo da quello che c'è nel riquadro, in forma canonica.
+
+    rampa: i poligoni delle rampe a raso nel riquadro, già sulla griglia (l'asfalto e la sede in quota come li disegna il
+    gioco, dove stanno sotto H_RASO). Sono una classe in più, prima di tutte: le classi a terra lì lasciano il posto, e i
+    bordi verso la rampa restano fermi (né semplificati né infittiti), così finiscono esattamente sul bordo della rampa
+    disegnata, senza sovrapposizioni. Torna (poligoni di ogni classe di CLASSI, poligoni della rampa)."""
+    import numpy as np
+    from shapely.geometry import GeometryCollection
+    bx = box(*b)
+    pezzi = [list(rampa)] + list(pezzi)
+    n = len(pezzi)
+    tolls = [0.0] + [c[1] for c in CLASSI]
+    fitte_c = [False] + [c[2] for c in CLASSI]
+    cl = [[q for g in p for q in _polys(canonico(g))] for p in pezzi]
+    # facce della copertura e classe di ognuna: la prima che ne contiene un punto interno, altrimenti il vuoto (n)
+    linee = shapely.union_all([bx.exterior] + [LineString(r.coords) for ps in cl for p in ps for r in [p.exterior, *p.interiors]], grid_size=NODI)
+    facce = [f for f in shapely.get_parts(shapely.polygonize(shapely.get_parts(linee))) if f.area > 1e-9]
+    punti = shapely.point_on_surface(np.array(facce, dtype=object))
+    classe = np.full(len(facce), n)
+    for i in range(n - 1, -1, -1):
+        if cl[i]:
+            g = shapely.union_all(cl[i])
+            shapely.prepare(g)
+            classe[shapely.contains(g, punti)] = i
+    cop = [[f for f, c in zip(facce, classe) if c == i] for i in range(n + 1)]
+    cop = [_polys(shapely.coverage_union_all(np.array(fs, dtype=object))) if fs else [] for fs in cop]
+    catene = _catene(cop, bx)
+    # tolleranza di una catena: quella della più fine delle due classi (il vuoto non conta); il bordo del riquadro e
+    # quello della rampa sono fermi
+    tol = lambda c: math.inf if None in c[1:] or 0 in c[1:] else min(tolls[i] if i < n else math.inf for i in c[1:])
+    linee = [pts for pts, _a, _b in catene]
+    for t in sorted({tol(c) for c in catene} - {math.inf}):
+        qui = [k for k, c in enumerate(catene) if tol(c) == t]
+        ferme = [LineString(seg) for k, c in enumerate(catene) if tol(c) != t for seg in zip(linee[k], linee[k][1:])]
+        semplici = shapely.simplify(GeometryCollection([LineString(linee[k]) for k in qui] + ferme), t, preserve_topology=True).geoms
+        for k, g in zip(qui, semplici):
+            linee[k] = list(g.coords)
+    if hfun:
+        fitte = lambda i: i is not None and i < n and fitte_c[i]
+        linee = [infittisci(pts, hfun) if 0 not in c[1:] and (fitte(c[1]) or fitte(c[2])) else pts for pts, c in zip(linee, catene)]
+    # sulla griglia: linee arrotondate insieme (con il bordo del riquadro), facce, classe di ogni faccia
+    righe = [LineString(pts) for pts in linee] + [bx.exterior]
+    g = shapely.union_all(righe, grid_size=GRIGLIA)
+    facce = sorted(shapely.get_parts(shapely.polygonize(shapely.get_parts(g))), key=lambda f: (_chiave(shapely.get_coordinates(f)[0]), round(f.area, 2)))
+    tutte = [(i, p) for i, ps in enumerate(cop) for p in ps]
+    tr = STRtree([p for _i, p in tutte])
+    classe = []
+    for f in facce:
+        best, bi = 0.0, n
+        for k in sorted(tr.query(f)):
+            a = tutte[k][1].intersection(f).area
+            if a > best:
+                best, bi = a, tutte[k][0]
+        classe.append(bi)
+    tf = STRtree(facce)
+    for k, f in enumerate(facce):
+        if f.area >= FACCIA_MIN or classe[k] == n:
+            continue
+        lati = [(f.boundary.intersection(facce[j].boundary).length, -classe[j], j) for j in sorted(tf.query(f)) if j != k and classe[j] != classe[k]]
+        if lati:
+            classe[k] = classe[max(lati)[2]]
+    out = []
+    for i in range(n):
+        fs = [f for f, c in zip(facce, classe) if c == i]
+        out.append(_polys(shapely.coverage_union_all(np.array(fs, dtype=object))) if fs else [])
+    return out[1:], out[0]
+
+
+def riquadri(classi, hfun=None, rampa=None):
+    """Celle da TILE metri [ix, iz, asfalto, marciapiede, isole, verde, sede, rampa] (anelli piatti al decimetro) dalle
+    classi a terra nell'ordine di CLASSI: ogni classe tagliata sul riquadro, poi la partizione del riquadro (partizione).
+    La rampa (le rampe a raso, che il gioco disegna con l'asfalto in quota) non si disegna come pianta a terra: è
+    carreggiata per chi la cerca nelle celle (surfaceOff del gioco, la posa, la sosta). Si tagliano i singoli poligoni
+    (indice spaziale) invece dell'intera geometria, che può essere una collezione mista."""
+    L = [_polys(g) for g in classi]
+    trees = [STRtree(x) for x in L]
+    R = _polys(rampa) if rampa is not None else []
+    tR = STRtree(R) if R else None
+    cells = []
+    x0, z0, x1, z1 = shapely.total_bounds([p for x in L[:4] for p in x])  # il verde da solo non fa riquadri
+    for ix in range(int(x0 // TILE), int(x1 // TILE) + 1):
+        for iz in range(int(z0 // TILE), int(z1 // TILE) + 1):
+            b = (ix * TILE, iz * TILE, (ix + 1) * TILE, (iz + 1) * TILE)
+            bx = box(*b)
+            pezzi = [[q for i in tr.query(bx) for q in _polys(x[i].intersection(bx))] for x, tr in zip(L, trees)]
+            if not any(pezzi):
+                continue
+            parts = [None] * (len(CLASSI) + 1)
+            ram = [q for i in tR.query(bx) for q in _polys(R[i].intersection(bx))] if tR is not None else []
+            classi_r, rampa_r = partizione(pezzi, b, hfun, ram)
+            for (_n, _t, _f, posto), ps in zip(CLASSI, classi_r):
+                parts[posto - 2] = anelli_canonici([r for q in ps for r in _rings(q)])
+            parts[-1] = anelli_canonici([r for q in rampa_r for r in _rings(q)])
+            if any(parts):
+                cells.append([ix, iz, *parts])
+    return cells
+
+
+NOMI_CLASSI = {2: 'asfalto', 3: 'marciapiede', 4: 'isole', 5: 'verde', 6: 'sede', 7: 'rampa'}
+
+
+def sovrapposte(cells, minimo=0.01):
+    """Pianta a terra (celle della mappa) come partizione (#126): [(ix, iz, classe, classe, m²)] dove due classi della
+    stessa cella si sovrappongono per più di minimo m². Vuoto se la pianta è una partizione; build_map.py si ferma se
+    non lo è, scripts/verifica_mappa.py lo misura sulla mappa."""
+    out = []
+    for c in cells:
+        polys = []
+        for i in range(2, len(c)):
+            for rings in c[i]:
+                p = Polygon(*_ring_pts(rings))
+                polys.append((i, p if p.is_valid else p.buffer(0)))
+        if len(polys) < 2:
+            continue
+        tr = STRtree([p for _i, p in polys])
+        m2 = defaultdict(float)
+        for a, b in zip(*tr.query([p for _i, p in polys], predicate='intersects')):
+            (i, p), (j, q) = polys[a], polys[b]
+            if a < b and i != j:
+                m2[tuple(sorted((i, j)))] += p.intersection(q).area
+        out += [(c[0], c[1], NOMI_CLASSI[i], NOMI_CLASSI[j], round(v, 2)) for (i, j), v in sorted(m2.items()) if v > minimo]
     return out
 
 
@@ -867,11 +1017,54 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     D = decks(nodes, edges, heights, drive, tram, profili, dichiarati)
     up = unione([pieces[k] for k in drive if k in in_quota])
     islands = islands.difference(up).difference(D)
+    # asfalto in quota per quota (#126): i tratti degli archi in quota sotto Q_TERRA (i piedi delle rampe, un quarto
+    # dell'asfalto in quota) sono asfalto a terra; quelli sotto H_RASO (a raso) stanno sullo stesso piano delle classi a
+    # terra, che lì lasciano il posto alla rampa. Il resto passa sopra le strade a terra e non le tocca
+    kq = [k for k in drive if k in in_quota]
+    up_terra = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, -math.inf, Q_TERRA))
+    up_alto = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, Q_TERRA))
+    up_raso = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, Q_TERRA, H_RASO))
+    up_sopra = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, H_RASO))
     # la sede del tram nello spartitraffico (Via Aspetti, Via Guizza) e nelle rotonde che il tram attraversa resta
     # libera: l'isola è solo il verde ai lati (prima l'isola rialzata copriva binari e sede rossa)
     lanes = [LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE, quad_segs=2) for t in tram if len(t) >= 4]
     # (i varchi più stretti di 3 m tra le sedi dei due binari si chiudono: restava una striscia d'erba tra i binari)
-    S = allarga(allarga(unione(lanes), 1.5, quad_segs=2), -1.5, quad_segs=2).difference(up).difference(D) if lanes else Polygon()
+    S_tutta = allarga(allarga(unione(lanes), 1.5, quad_segs=2), -1.5, quad_segs=2) if lanes else Polygon()
+    # sede in quota: dove il binario è in quota (la quota della strada che affianca, _tram_heights), tolta dall'asfalto
+    # in quota; il gioco la disegna alla quota del binario, come corsie rosse e rotaie (prima l'asfalto in quota la
+    # copriva a chiazze: prendeva la quota dell'asse della strada e si piegava sulla larghezza, #85, #137)
+    corsie_su = []
+    for t in tram:
+        pts = [(t[i], t[i + 1]) for i in range(0, len(t), 2)]
+        if len(pts) < 2:
+            continue
+        dense = [pts[0]]
+        for a, b in zip(pts, pts[1:]):
+            m = max(1, int(math.dist(a, b) // 5))
+            dense += [(a[0] + (b[0] - a[0]) * k / m, a[1] + (b[1] - a[1]) * k / m) for k in range(1, m + 1)]
+        run = []
+        for p, h in zip(dense + [None], _tram_heights(dense, nodes, edges, heights, profili, dichiarati) + [0.0]):
+            if p is not None and h >= Q_TERRA:
+                run.append(p)
+                continue
+            if len(run) >= 2:
+                corsie_su.append(LineString(run).buffer(TRAM_LANE, quad_segs=2))
+            run = []
+    sede_su = allarga(allarga(unione(corsie_su), 1.5, quad_segs=2), -1.5, quad_segs=2).intersection(up_alto) if corsie_su else Polygon()
+    # asfalto e sede in quota come li disegna il gioco: la sede si taglia dopo aver semplificato, sulla griglia della
+    # mappa, così i due hanno lo stesso lato in comune e non si sovrappongono
+    up_area = canonico(up_alto).simplify(0.1).segmentize(4.0)
+    sede_area = canonico(sede_su).simplify(0.1).segmentize(4.0)
+    up_a = shapely.difference(up_area, sede_area, grid_size=GRIGLIA)
+    up_s = shapely.intersection(up_area, sede_area, grid_size=GRIGLIA)
+    # rampe a raso: l'asfalto e la sede in quota come li disegna il gioco, dove stanno sotto H_RASO. Nella partizione
+    # dei riquadri le classi a terra lì lasciano il posto e finiscono sul loro bordo (riquadri, partizione): tagliate con
+    # la geometria esatta delle rampe, i due bordi venivano semplificati e arrotondati per strade diverse, e tra l'uno e
+    # l'altro restavano fessure fino a 4 cm (il controllo dei raccordi le prendeva per il bordo della strada); con una
+    # fascia sotto il bordo della rampa, dove la rampa sta pochi centimetri sopra il terreno, da vicino vinceva l'asfalto
+    # a terra (Corso Primo Maggio a Via Guizza)
+    rampa = shapely.difference(unione(_polys(up_a) + _polys(up_s)), up_sopra)
+    S = S_tutta.difference(D).difference(up_sopra)
     if lanes:
         islands = islands.difference(S)
     # marciapiede solo dove la via ce l'ha (flag 64 sinistra, 128 destra): su entrambi i lati una fascia intorno al
@@ -897,11 +1090,12 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
     # sotto la sede del tram asfalto, anche dove OSM la mette sul marciapiede o in una zona pedonale (il marciapiede
     # rialzato copriva la corsia rossa)
+    sede = S.difference(W.difference(bridges)) if not S.is_empty else Polygon()
     if not S.is_empty:
         walk = walk.difference(S)
-        U = unione([U, S.difference(W.difference(bridges))]).buffer(0)
-    # verde del DBGT (prati, aree alberate, aiuole): sta sotto marciapiedi e carreggiate (il gioco lo disegna più in
-    # basso), quindi non si ritaglia, se non sull'acqua; ritagliarlo moltiplicava i vertici
+        U = unione([U, sede]).buffer(0)
+    # verde del DBGT (prati, aree alberate, aiuole): l'ultima classe della pianta, quella che resta fuori da carreggiate,
+    # sede, isole e marciapiedi (partizione, #126), e mai sull'acqua
     verde = Polygon()
     if green and green.get('verde'):
         vp = []
@@ -909,27 +1103,13 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             g = Polygon([(r[1][i], r[1][i + 1]) for i in range(0, len(r[1]), 2)], [[(h[i], h[i + 1]) for i in range(0, len(h), 2)] for h in r[2:] if len(h) >= 6])
             vp.append(g if g.is_valid else g.buffer(0))
         verde = unione(vp).difference(W).buffer(0)
-    # riquadri: ogni strato tagliato sul riquadro e semplificato lì, con i vertici sul bordo fissi (semplifica_riquadro:
-    # i bordi tra un riquadro e l'altro combaciano, e un cambiamento in un posto non sposta i contorni lontani, #139); si
-    # tagliano i singoli poligoni (indice spaziale) invece dell'intera geometria, che può essere una collezione mista.
-    # Con il terreno: carreggiate e marciapiedi infittiti dove il terreno non è piano (argini, ponti)
-    strati = [(_polys(g), tol, dens) for g, tol, dens in ((U, 0.15, True), (walk, 0.3, True), (islands, 0.1, False), (verde, 1.0, False))]
-    trees = [STRtree(L) for L, _t, _d in strati]
-    cells = []
-    x0, z0, x1, z1 = shapely.total_bounds([p for L, _t, _d in strati[:2] for p in L])
-    for ix in range(int(x0 // TILE), int(x1 // TILE) + 1):
-        for iz in range(int(z0 // TILE), int(z1 // TILE) + 1):
-            b = (ix * TILE, iz * TILE, (ix + 1) * TILE, (iz + 1) * TILE)
-            bx = box(*b)
-            parts = []
-            for (L, tol, dens), tr in zip(strati, trees):
-                pezzi = [q for i in tr.query(bx) for q in _polys(L[i].intersection(bx))]
-                pezzi = semplifica_riquadro(pezzi, b, tol) if pezzi else []
-                if hfun and dens:
-                    pezzi = [d for q in pezzi for d in densify(q, hfun)]
-                parts.append(anelli_canonici([r for q in pezzi for r in _rings(q)]))
-            if any(parts):
-                cells.append([ix, iz, *parts])
+    # riquadri: le classi a terra tagliate sul riquadro e messe insieme come partizione (un solo proprietario per ogni
+    # metro quadro, #126), semplificata lì con il bordo del riquadro fermo (i riquadri accanto combaciano, e un cambiamento
+    # in un posto non sposta i contorni lontani, #139). L'asfalto U contiene anche la sede: nel riquadro la sede viene
+    # prima, quindi l'asfalto è quello che resta. Con il terreno i lati lunghi infittiti dove non è piano (argini, ponti)
+    # i piedi delle rampe a terra, e niente classi a terra sotto le rampe a raso
+    U = unione([U, up_terra, up_raso])
+    cells = riquadri([sede, islands, U, walk, verde], hfun, rampa)
     # alberi del DBGT: fuori dall'asfalto (almeno 1 m) e dagli edifici
     alberi = []
     if green and green.get('alberi'):
@@ -944,13 +1124,13 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     stats = {'carreggiata_m2': round(U.area), 'marciapiede_m2': round(walk.area), 'isole': len(getattr(islands, 'geoms', [islands])),
              'isole_dbgt': n_isl, 'verde_m2': round(verde.area), 'alberi': len(alberi) // 2,
              'carreggiata_dbgt_m2': round(dbgt_c.area), 'marciapiede_dbgt_m2': round(dbgt_m.area),
-             'impalcati_m2': round(D.area), 'stalli': len(stub), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
+             'impalcati_m2': round(D.area), 'sede_m2': round(sede.area), 'in_quota_m2': round(up_alto.area), 'in_quota_a_terra_m2': round(up_terra.area),
+             'in_quota_a_raso_m2': round(rampa.area), 'sede_in_quota_m2': round(sede_su.area), 'stalli': len(stub), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
     # carreggiate in quota (cavalcavia e rampe): un'area sola anche loro, la quota la mette il gioco vertice per vertice.
     # Prima di semplificare, anelli dal vertice più piccolo e poligoni in ordine fisso (canonico): l'unione che li dà li
     # comincia da un punto che dipende da tutti i pezzi entrati (#139)
-    up_area = canonico(up).simplify(0.1).segmentize(4.0)
     out = {'tile': TILE, 'cells': cells, 'decks': anelli_canonici([r for p in _polys(canonico(D).simplify(0.1)) for r in _rings(p)]),
-           'up': anelli_canonici([r for p in _polys(up_area) for r in _rings(p)])}
+           'up': anelli_canonici([r for p in _polys(up_a) for r in _rings(p)]), 'upSede': anelli_canonici([r for p in _polys(up_s) for r in _rings(p)])}
     if alberi:
         out['trees'] = alberi
     if green and green.get('comune'):

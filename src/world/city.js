@@ -943,12 +943,18 @@ export class City {
     this.asphRings = new Map();
     this.asphEdges = new Grid(20);
     const onBorder = (ax, az, bx, bz, ix, iz) => (Math.abs(ax - bx) < 0.05 && [ix * T, (ix + 1) * T].some((v) => Math.abs(ax - v) < 0.06)) || (Math.abs(az - bz) < 0.05 && [iz * T, (iz + 1) * T].some((v) => Math.abs(az - v) < 0.06));
-    const eachEdge = (poly, ix, iz, fn) => {
+    // la pianta è una partizione (#126): asfalto, sede del tram e rampe a raso sono classi con i lati in comune uguali
+    // vertice per vertice, e un lato in comune non è il bordo della carreggiata (niente cordolo, niente riga, non conta
+    // per surfaceOff)
+    const lato = (ax, az, bx, bz) => (ax < bx || (ax === bx && az < bz) ? `${ax},${az},${bx},${bz}` : `${bx},${bz},${ax},${az}`);
+    // salta(ax, az, bx, bz): il lato non è bordo
+    const eachEdge = (poly, ix, iz, fn, salta = null) => {
       for (const r of poly) for (let i = 0; i < r.length; i += 2) {
         const j = (i + 2) % r.length;
-        if (!onBorder(r[i], r[i + 1], r[j], r[j + 1], ix, iz)) fn(r[i], r[i + 1], r[j], r[j + 1]);
+        if (!onBorder(r[i], r[i + 1], r[j], r[j + 1], ix, iz) && !(salta && salta(r[i], r[i + 1], r[j], r[j + 1]))) fn(r[i], r[i + 1], r[j], r[j + 1]);
       }
     };
+    const lati = (polys) => { const out = new Set(); for (const poly of polys) for (const r of poly) for (let i = 0; i < r.length; i += 2) { const j = (i + 2) % r.length; out.add(lato(r[i], r[i + 1], r[j], r[j + 1])); } return out; };
     // righe di bordo: lungo il bordo vero dell'asfalto, 0,35 m dentro, dove la strada più vicina ha la segnaletica e
     // non c'è un'isola (che ha la sua riga). Prima ogni via aveva le sue righe a metà larghezza, e dove due rami si
     // uniscono (Via Toti al Rondò Borgomagno) si incrociavano in mezzo all'asfalto
@@ -1003,9 +1009,28 @@ export class City {
         if (ok[i]) { if (!run) run = [pt(i)]; run.push(pt(i + 1)); } else if (run) { draw(run); run = null; }
       }
     });
-    for (const [ix, iz, A, W, I, V] of S.cells) {
+    // lati di un gruppo di poligoni, con il rettangolo che li contiene (per non fare chiavi dei lati lontani)
+    const latiDi = (polys) => {
+      const L = { set: new Set(), x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity };
+      for (const poly of polys) for (const r of poly) for (let i = 0; i < r.length; i += 2) {
+        const j = (i + 2) % r.length;
+        L.set.add(lato(r[i], r[i + 1], r[j], r[j + 1]));
+        L.x0 = Math.min(L.x0, r[i]); L.x1 = Math.max(L.x1, r[i]); L.z0 = Math.min(L.z0, r[i + 1]); L.z1 = Math.max(L.z1, r[i + 1]);
+      }
+      return L;
+    };
+    const tra = (L, ax, az, bx, bz) => L.set.size && Math.max(ax, bx) >= L.x0 && Math.min(ax, bx) <= L.x1 && Math.max(az, bz) >= L.z0 && Math.min(az, bz) <= L.z1 && L.set.has(lato(ax, az, bx, bz));
+    for (const [ix, iz, A, W, I, V, SD, RA] of S.cells) {
       for (const poly of V || []) green.polygon(poly, Y_GREEN, 8);
-      const rings = [];
+      // la carreggiata è asfalto, sede del tram a terra e rampe a raso (#126): tre classi della pianta con i lati in
+      // comune uguali vertice per vertice. Un lato in comune tra due di loro non è bordo
+      const rings = [], sede = SD || [], rampe = RA || [], LS = latiDi(sede), LR = latiDi(rampe), LA = new Set();
+      // lati dell'asfalto verso sede e rampe (si trovano scorrendo l'asfalto, che viene prima)
+      const versoAltri = (ax, az, bx, bz) => {
+        if (!tra(LS, ax, az, bx, bz) && !tra(LR, ax, az, bx, bz)) return false;
+        LA.add(lato(ax, az, bx, bz));
+        return true;
+      };
       const ib = I.map((p) => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; const r = p[0]; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); z0 = Math.min(z0, r[i + 1]); z1 = Math.max(z1, r[i + 1]); } return [x0, z0, x1, z1, p]; });
       const onIsland = (x, z) => ib.some(([x0, z0, x1, z1, p]) => x >= x0 && x <= x1 && z >= z0 && z <= z1 && inside(x, z, p));
       for (const poly of A) {
@@ -1018,8 +1043,25 @@ export class City {
         eachEdge(poly, ix, iz, (ax, az, bx, bz) => {
           this.asphEdges.insertAABB({ ax, az, bx, bz }, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz));
           kerb.ribbon(ax, az, bx, bz, 0.22, Y_ROAD + 0.003, 4);
-        });
-        borderLines(poly, (a, b, inx, inz, outx, outz) => !onBorder(a.x, a.z, b.x, b.z, ix, iz) && marked(inx, inz, false) && !onIsland(outx, outz));
+        }, versoAltri);
+        borderLines(poly, (a, b, inx, inz, outx, outz) => !onBorder(a.x, a.z, b.x, b.z, ix, iz) && !versoAltri(a.x, a.z, b.x, b.z) && marked(inx, inz, false) && !onIsland(outx, outz));
+      }
+      // sede del tram a terra: con lo stesso asfalto (le corsie rosse e le rotaie sono segni sopra, buildTramway); i lati
+      // verso marciapiedi, isole e fuori sono bordo della carreggiata, quelli verso asfalto e rampe no
+      for (const poly of sede) {
+        const t0 = asph.idx.length;
+        asph.polygon(poly, Y_ROAD, 20);
+        asph.refine(t0, () => Y_ROAD, 20, nearSede);
+        rings.push(...poly);
+        eachEdge(poly, ix, iz, (ax, az, bx, bz) => {
+          this.asphEdges.insertAABB({ ax, az, bx, bz }, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz));
+          kerb.ribbon(ax, az, bx, bz, 0.22, Y_ROAD + 0.003, 4);
+        }, (ax, az, bx, bz) => LA.has(lato(ax, az, bx, bz)) || tra(LR, ax, az, bx, bz));
+      }
+      // rampe a raso: le disegna l'asfalto in quota (S.up, S.upSede); qui contano solo come carreggiata (surfaceOff, posa)
+      for (const poly of rampe) {
+        rings.push(...poly);
+        eachEdge(poly, ix, iz, (ax, az, bx, bz) => this.asphEdges.insertAABB({ ax, az, bx, bz }, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)), (ax, az, bx, bz) => LA.has(lato(ax, az, bx, bz)) || tra(LS, ax, az, bx, bz));
       }
       this.asphRings.set(ix + ',' + iz, rings);
       for (const poly of W) walk.polygon(poly, Y_SIDEWALK, 6);
@@ -1036,13 +1078,19 @@ export class City {
         });
       }
     }
-    // carreggiate in quota: alla quota della strada (vertici ogni 4 m), sopra l'impalcato e sopra l'asfalto a terra ai
-    // piedi delle rampe
+    // carreggiate in quota: alla quota della strada (vertici ogni 4 m), sopra l'impalcato. La pianta non le sovrappone
+    // più all'asfalto a terra ai piedi delle rampe (#126): i tratti sotto 5 cm sono asfalto a terra, e sotto quelli fino a
+    // 50 cm le classi a terra non ci sono
     const upA = new GeoBuilder();
     for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.004, 20, 0.02);
-    // righe di bordo anche in quota, tranne dove la rampa si fonde con l'asfalto a terra (al piede)
+    // sede del tram in quota (#126): una classe a sé, tolta dall'asfalto in quota, alla quota del binario come corsie
+    // rosse e rotaie (quotaSede): prima l'asfalto in quota la copriva a chiazze, perché prende la quota dell'asse della
+    // strada e dove il terreno cambia sulla larghezza della carreggiata si piega (#85, #137)
+    for (const rings of S.upSede || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.quotaSede(x, z) + 0.004, 20, 0.02);
+    const latiSedeSu = lati(S.upSede || []);
+    // righe di bordo anche in quota, tranne dove la rampa si fonde con l'asfalto a terra (al piede) e verso la sede
     const onGround = (x, z) => rg.query(x, z, 1, q).some((it) => !it.ref.elev && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw);
-    for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => marked(inx, inz, true) && !onGround(outx, outz), (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.012);
+    for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => !latiSedeSu.has(lato(a.x, a.z, b.x, b.z)) && marked(inx, inz, true) && !onGround(outx, outz), (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.012);
     if (upA.pos.length) { const um = new THREE.Mesh(upA.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3)); um.receiveShadow = true; this.upMat = um.material; this.group.add(um); }
     const am = new THREE.Mesh(asph.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
     am.receiveShadow = true;
@@ -1557,7 +1605,14 @@ export class City {
       }
     }
     if (stopLines.pos.length) this.group.add(new THREE.Mesh(stopLines.build(), layer(new THREE.MeshLambertMaterial({ color: 0xf2f2ea }), 7)));
-    if (plat.length) this.group.add(new THREE.Mesh(mergeGeometries(plat), new THREE.MeshLambertMaterial({ color: 0xc9c3b8 })));
+    // le banchine stanno anche sopra le isole della pianta (prato rialzato, strato 8), 18 cm più giù: con lo strato 9
+    // vincono a ogni distanza (alla fermata Santa Croce del SIR1 da 30 m l'isola spuntava sulla banchina, #126). Sono
+    // oggetti solidi, non strati della pianta: la prova degli strati non le guarda (userData.solido, tests/strati.js)
+    if (plat.length) {
+      const pm = layer(new THREE.MeshLambertMaterial({ color: 0xc9c3b8 }), 9);
+      pm.userData.solido = true;
+      this.group.add(new THREE.Mesh(mergeGeometries(plat), pm));
+    }
     if (roofs.length) { const m = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: 0x5d646b })); m.castShadow = true; this.group.add(m); }
   }
 
@@ -1803,6 +1858,16 @@ export class City {
       if (Math.abs(hb - h) < 1.5) return true;
     }
     return false;
+  }
+  // quota sopra il terreno della sede del tram in (x, z): quella del binario più vicino, dal profilo scritto dalla build
+  // come in onSede. La sede in quota della pianta delle strade (#126) la prende da qui, come corsie rosse e rotaie
+  quotaSede(x, z) {
+    let best = Infinity, h = 0;
+    for (const t of this.tramGrid.query(x, z, 6, this._qsq || (this._qsq = []))) {
+      const r = distToSeg(x, z, t.ax, t.az, t.bx, t.bz);
+      if (r.d < best) { best = r.d; h = t.ref ? profileAt(t.ref.q, (t.ref.s + t.ref.l * r.t) * 100) : 0; }
+    }
+    return h;
   }
   // pezzi della spezzata pts (spostata di lato di off, come GeoBuilder.strip) fuori dalla sede del tram: le righe della
   // strada che la attraversano o la affiancano si fermano al suo bordo. hAt(x, z): quota della riga sopra il terreno

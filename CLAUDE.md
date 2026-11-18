@@ -184,7 +184,7 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   rapporti tra punta e morbida deve superare 1,08. È una misura aggregata con un margine, non un elenco di casi: gli
   intrecci esatti del traffico cambiano tra Mac e Linux (#145).
 * **Mappa locale (#139).** Cambiato un dato in un punto, la mappa cambia solo vicino: la pianta si unisce per zone e
-  si semplifica per riquadro (`unione` e `semplifica_riquadro` in `scripts/street_surfaces.py`), e alberi e case di
+  si fa per riquadro (`unione` e `partizione` in `scripts/street_surfaces.py`), e alberi e case di
   contorno del gioco prendono i numeri casuali dal loro posto (`rngAt` di `src/world/spatial.js`). La prova è il job
   `localita` di `verifiche.yml`: rigenera con i cambi di `data/localita.json` e fallisce se oltre il raggio dichiarato
   cambia qualcosa (pianta, aree, stalli, raccordi, terreno, posa) che non sta in `data/eccezioni/localita.json`. Chi

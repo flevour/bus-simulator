@@ -147,7 +147,7 @@ def uscite_cambiate(A, AA, B, BA):
     for k in set(ca) | set(cb):
         if ca.get(k) != cb.get(k):
             out.append(('celle della rete', f'{k[0]},{k[1]}', _box(*k, lato)))
-    for nome, cosa in (('up', 'asfalto in quota'), ('decks', 'impalcati')):
+    for nome, cosa in (('up', 'asfalto in quota'), ('upSede', 'sede in quota'), ('decks', 'impalcati')):
         for poly in _diff_multinsieme(S.get(nome) or [], T.get(nome) or []):
             out.append((cosa, '', _box_anello(poly[0])))
     lato_a = (B.get('aree') or A.get('aree') or {}).get('lato', aree_mappa.LATO)
