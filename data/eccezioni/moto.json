@@ -101,24 +101,13 @@
     ]
    },
    {
-    "perche": "#143: auto che escono da una rotonda con l'anello a due corsie dove i raccordi della build entrano solo nella corsia interna ed escono solo dall'esterna, con archi di 5-7 m: il cambio di corsia non ci sta. Da #115 Traffic.chooseNext le fa uscire alla prima uscita con una curva del gioco (ripiego cambio di corsia senza posto o raccordi sovrapposti) invece di farle girare per sempre nell'anello (a Via Bembo con Via Marinelli l'anello si riempiva e fermava il bus della 3). Spariscono quando la build dà a ogni corsia d'ingresso un'uscita raggiungibile.",
+    "perche": "#143: auto che escono da una rotonda con l'anello a due corsie dove i raccordi della build entrano solo nella corsia interna ed escono solo dall'esterna, con archi di 5-7 m: il cambio di corsia non ci sta. Da #115 Traffic.chooseNext le fa uscire alla prima uscita con una curva del gioco (ripiego cambio di corsia senza posto o raccordi sovrapposti) invece di farle girare per sempre nell'anello (a Via Bembo con Via Marinelli l'anello si riempiva e fermava il bus della 3). Spariscono quando la build dà a ogni corsia d'ingresso un'uscita raggiungibile. Con la domanda di traffico (#116) le auto passano da altre rotonde: restano quelle di Via Marconi (2510, 3590), con i posti spostati di qualche metro.",
     "casi": [
-     "auto imbardata (cambio di corsia senza posto) @ -1088,938",
      "auto imbardata (cambio di corsia senza posto) @ 2461,3572",
-     "auto imbardata (cambio di corsia senza posto) @ 2509,3579",
-     "auto imbardata (cambio di corsia senza posto) @ 2512,3584",
-     "auto imbardata (cambio di corsia senza posto) @ 908,653",
-     "auto imbardata (raccordi sovrapposti) @ -741,-1290",
-     "auto imbardata (raccordi sovrapposti) @ 2533,3599",
+     "auto imbardata (cambio di corsia senza posto) @ 2535,3603",
+     "auto imbardata (cambio di corsia senza posto) @ 2537,3582",
      "auto imbardata (raccordi sovrapposti) @ 2535,3605",
-     "auto imbardata (raccordi sovrapposti) @ 694,967"
-    ]
-   },
-   {
-    "perche": "Da #139 (17 novembre 2026): la pianta rifatta una volta in tutta la mappa fa andare diversamente il traffico della prova, e un'auto passa all'incrocio di Via Gattamelata con Via Tartini, dove due raccordi delle auto si incrociano a 1,5 m (la prova delle svolte che si aspettano in tests/traffico.spec.js): lì l'inseguitore prende il ripiego dei raccordi sovrapposti, come al caso di #143 vicino (694, 967). Entro 40 m non è cambiato nessun raccordo.",
-    "casi": [
-     "auto imbardata (raccordi sovrapposti) @ 755,893",
-     "auto imbardata (raccordi sovrapposti) @ 756,897"
+     "auto imbardata (raccordi sovrapposti) @ 2541,3580"
     ]
    }
   ],

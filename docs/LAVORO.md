@@ -1365,7 +1365,10 @@ sapere prima di toccare il traffico:
   auto dirette alla porta di Via Sorio deviavano in un anello di strade laterali e lo riempivano;
 - le prove del traffico cambiano: a parità di ora le auto sono le stesse 72 o poche meno, ma stanno in un disco di
   300-700 m invece che fino a 1.700, sui percorsi dei loro viaggi, quindi gli incontri e le code sono altri.
-  `traffic.update` costa 1,1 ms per passo invece di 0,8 (tabella in [`domanda.md`](domanda.md), sezione 9).
+  `traffic.update` costa 1,1 ms per passo invece di 0,8 (tabella in [`domanda.md`](domanda.md), sezione 9). Nella prova
+  dei dieci minuti delle code le code al rosso risalgono gli incroci vicini e ci restano dentro (Via Gozzi, Via
+  Tommaseo, Via Piovese: otto casi, #148); nella prova del moto restano solo le auto sui ripieghi della rotonda di Via
+  Marconi (#143). La prova delle punte (`tests/domanda.spec.js`) è una misura aggregata con margine, non un elenco.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

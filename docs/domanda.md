@@ -250,4 +250,4 @@ teletrasporto, come su `main`. Il bundle cresce di 534 KB (il file della domanda
   (`rigenera_mappa.sh`), e la CI controlla che sia quello che esce dalla mappa di oggi.
 - Con la densità vera attorno a chi guida si vedono di più le code che restano dentro gli incroci quando il rosso
   ferma la fila (Via Gozzi, Via Tommaseo, Via Piovese, nella prova dei dieci minuti di `tests/code.spec.js`): le auto
-  entrano quando la fila davanti si muove e si fermano lì quando si ferma (#115, #49).
+  entrano quando la fila davanti si muove e si fermano lì quando si ferma (#148: otto casi in `data/eccezioni/code.json`).
