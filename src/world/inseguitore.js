@@ -27,10 +27,13 @@ const PEND_CAMBIO = 0.12;
 export const IDM_AUTO = { a: 1.6, b: 2, s0: 2, T: 1 };
 export const IDM_BUS = { a: 1.1, b: 2, s0: 3, T: 1.5 };
 // accelerazione con la velocità v, quella voluta v0, s metri liberi davanti e dv metri al secondo più veloci di chi c'è
-// davanti (per un punto dove fermarsi, dv = v)
+// davanti (per un punto dove fermarsi, dv = v). Le potenze con le moltiplicazioni e non con Math.pow: Math.pow(x, 4) di
+// Chromium dà su arm64 (Mac) e su amd64 (CI) risultati diversi all'ultimo bit (343 volte su 200.000 tra 0 e 2,5), e le
+// stesse corse andavano diversamente sulle due macchine (#145); le moltiplicazioni sono uguali dappertutto
 export function idm(P, v, v0, s, dv) {
   const voluta = P.s0 + Math.max(0, v * P.T + (v * dv) / (2 * Math.sqrt(P.a * P.b)));
-  return P.a * (1 - Math.pow(v / Math.max(0.1, v0), 4) - Math.pow(voluta / Math.max(0.3, s), 2));
+  const r = v / Math.max(0.1, v0), r2 = r * r, q = voluta / Math.max(0.3, s);
+  return P.a * (1 - r2 * r2 - q * q);
 }
 // un raccordo con raggio da qui in su (oltre il doppio del minimo, con 4 m di margine) lascia muovere lo scostamento
 const LIBERO = 4;

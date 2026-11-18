@@ -103,6 +103,7 @@ divise per area.
 | `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113, #115), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7), con chi segue chi e l'incrocio da liberare (`idm`, `incrocioDavanti`, sezione 8), e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
 | `tests/code.js`, `tests/code.spec.js`, `data/eccezioni/code.json` | `area:traffico` (#115), poi chi cambia chi segue chi, sblocchi, precedenze o il numero di auto (#49, #50, #116, #117) | prova delle code: corridoio di Via Querini (flusso contro densità, scarico al semaforo), incrocio da liberare, dieci minuti senza sblocchi a tempo, incroci bloccati e fermi oltre 120 s. Chi cambia il traffico la rilancia; un caso sparito si toglie dall'elenco nello stesso commit |
 | `scripts/localita.py`, `data/localita.json`, `data/eccezioni/localita.json`; in `scripts/street_surfaces.py` `unione`, `semplifica_riquadro`, `canonico`, `anelli_canonici` | `area:mappa` (#139), e chi scrive un passo della build | località della mappa: rapporto a fine rigenerazione e prova (job `localita`, nota #139 della Mappa). Un passo che lavora su tutta la città usa `unione` e semplifica per riquadro; un caso nuovo della prova si capisce prima di metterlo nell'elenco |
+| `tests/impronta.json`, `tests/impronta.js`, `tests/impronta.spec.js` | chi cambia traffico, bus o tram automatici, mappa o linee (#145) | impronta del traffico di una corsa, ai bit, uguale su Mac e in CI (nota #145 delle Verifiche): chi la cambia di proposito la riscrive nello stesso commit con `IMPRONTA=aggiorna npx playwright test tests/impronta.spec.js`; se in CI è diversa da quella del Mac, l'esito dipende dalla macchina e la causa va trovata |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
 | `data/eccezioni/*.json`, `scripts/eccezioni.py` | tutte le aree, ognuna nei suoi casi | casi noti dei controlli, una riga per caso (regola 12): chi corregge un caso toglie la sua riga; in un rebase si tengono le righe tolte da tutti e si rilancia il controllo |
 
@@ -248,7 +249,65 @@ cause erano due.
   (`ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js`).
 - Per rifare il confronto su Linux: copia del worktree senza `node_modules` in una cartella sotto `/private/tmp`,
   `docker run --rm --cpus=4 --ipc=host -e CI=1 -v <copia>:/lavoro -w /lavoro mcr.microsoft.com/playwright:v1.65.0-noble`
-  con `npm ci` e poi `npx playwright test`: il setup delle prove compila e serve il gioco dentro il container.
+  con `npm ci` e poi `npx playwright test`: il setup delle prove compila e serve il gioco dentro il container. Senza
+  `--platform` su questo Mac l'immagine è arm64: la CI è amd64 (nota #145, sotto).
+
+### Verifiche: storia della pagina e impronta del traffico (#145, 17 novembre)
+
+Dal 17 novembre quattro serie di Verifiche di fila sono finite rosse sulle prove del traffico: in CI `code.spec` (e una
+volta Tito Livio) trovava un caso in meno o in più di quelli scritti sul Mac. La causa non era la macchina:
+
+- **Misura.** La prova dei dieci minuti di `code.spec` (18.000 passi) con un'impronta dello stato a ogni passo
+  (posizione, direzione e velocità di auto, bus, tram e chi guida, ai bit), su una pagina nuova, dà su Mac arm64 e su
+  Linux amd64 (Docker, lo stesso Chromium della CI) gli stessi casi e lo stesso stato finale. Sul Mac, sulla stessa
+  pagina dopo la prova dell'incrocio, dà esattamente l'esito della CI. In CI i worker sono 2: la prova dei dieci minuti
+  partiva subito dopo quella dell'incrocio, mentre il corridoio occupava l'altro worker; sul Mac, con 3 worker, quasi
+  sempre su una pagina nuova.
+- **Causa.** `corridoio()` di `tests/code.js` sostituisce `g.lights.stateOf` per forzare il semaforo di Via Querini, e
+  i semafori (come tram, segnali del tram, bus automatici e città) restano da una corsa all'altra: dopo la prova
+  dell'incrocio il semaforo restava verde per sempre, e i bus automatici che ci passano cambiavano il resto del
+  traffico. `startMission` rimette lo stato dei semafori (#122), non le funzioni che una prova ha messo al posto delle
+  loro.
+- **Ora.** `apriGioco` fotografa le funzioni di `__game`, `lights`, `trams`, `tramSignals`, `buses`, `city`, `net`,
+  `hud`, `audio` e `chargers`, e a fine prova il fixture `pagina` di `tests/gioco.js` (`ripristinaFunzioni`) toglie i
+  metodi sostituiti sugli oggetti e rimette le funzioni di `__game` (anche dopo una prova fallita, quando gli
+  osservatori di `code.js` e `moto.js` non arrivano a `fine()`). Chi guarda il gioco sostituendo una funzione di un
+  altro oggetto che resta tra le corse lo aggiunge lì; chi cambia lo stato (non le funzioni) di questi oggetti lo
+  rimette da sé.
+- **Impronta del traffico** (`tests/impronta.spec.js`, `tests/impronta.js`). La corsa della 3 delle 8:15, un minuto
+  in ognuna delle tre zone della prova del moto, un'impronta ogni 10 s, uguale a quella scritta in
+  `tests/impronta.json`; poi un tram del SIR1 per un minuto e di nuovo la stessa corsa, che deve dare la stessa
+  impronta. Chi cambia di proposito traffico, bus o tram automatici, mappa o linee la riscrive nello stesso commit
+  (`IMPRONTA=aggiorna npx playwright test tests/impronta.spec.js`) e la serie in CI dice se su Linux è la stessa.
+- **Regola degli elenchi del traffico** (`code.json`, `moto.json`, `traffico.json`): resta quella di #105 (regola 12).
+  Gli elenchi si scrivono sul Mac e valgono in CI perché l'esito è lo stesso, e l'impronta lo controlla a ogni serie;
+  un caso noto che non si presenta fa fallire la prova come prima, perché vuol dire che il traffico è cambiato. I casi
+  delle prove di dieci minuti compaiono e spariscono a ogni piccolo cambiamento del traffico (#113, #115, #139): chi lo
+  cambia rilancia le tre prove e riscrive gli elenchi nello stesso commit, con il perché.
+- **Se una prova del traffico è rossa solo in CI.** Prima l'impronta della stessa serie: rossa in CI e verde sul Mac
+  vuol dire che l'esito dipende dalla macchina, e la riga che cambia per prima dice zona e secondo da cui guardare;
+  verde, vuol dire che la prova ha trovato la pagina in un altro stato. Nel log della serie si guarda quale prova è
+  girata prima sullo stesso worker (in `list` le prove escono in ordine di fine, con il numero di partenza) e la si
+  rifà sul Mac in quell'ordine sulla stessa pagina. Non si riscrive l'elenco dall'esito della CI.
+- **Funzioni matematiche.** Nel Chromium delle prove (158, Playwright 1.65.0) `sin`, `cos`, `tan`, `atan`, `atan2`,
+  `exp`, `log`, `acos`, `asin`, `hypot` e `sqrt` danno gli stessi bit su Mac arm64, Linux arm64 e Linux amd64
+  (200.000 ingressi per funzione). Cambiano tra arm64 e amd64 `Math.pow` e `**` con esponente non intero e anche con
+  esponente 4 (343 volte su 200.000 tra 0 e 2,5; con esponente 2 mai), e `tanh` tra macOS e Linux. L'IDM delle auto
+  aveva `Math.pow(v / v0, 4)`: con la pagina pulita le impronte di Mac e Linux erano uguali alla fine dei dieci minuti
+  ma diverse in 316 passi su 18.000, a tratti brevi, per la velocità di un'auto diversa all'ultimo bit (al passo 1.069
+  `8.292327961177511` sul Mac, `8.29232796117751` su Linux) che poi tornava uguale; con un'auto al limite di una regola
+  avrebbe cambiato l'esito. Ora `idm` e `Traffic.update` fanno le potenze con le moltiplicazioni, e le impronte dei
+  dieci minuti su Mac e Linux amd64 sono uguali a tutti i 18.000 passi (stessi casi di prima). Nella simulazione
+  niente `Math.pow`, `**` con esponenti diversi da 2 e `tanh`. In Node 22 cambiano anche `cos`, `tan`, `asin` ed
+  `expm1` tra arm64 e amd64: gli script in Node che devono dare gli stessi numeri su Mac e Linux (posa dell'arredo)
+  non vanno confrontati ai bit.
+- **Su Linux amd64 dal Mac.** Immagine leggera: `FROM node:22-slim` e
+  `RUN npx -y playwright@1.65.0 install --with-deps --only-shell chromium`, costruita con
+  `docker build --platform linux/amd64` (circa 1 GB, invece dei 7 di quella di Playwright). Una prova come in CI:
+  copia del worktree senza `node_modules` sotto `/private/tmp`, `docker run --rm --platform linux/amd64 --ipc=host
+  --cpus=4 -v <copia>:/lavoro -w /lavoro <immagine> sh -c 'npm ci && CI=1 npx playwright test --workers=2 <prova>'`.
+  In emulazione la città si carica in 80 s e i dieci minuti di `code.spec` durano 5 minuti. Il container non vede i
+  posti di `tests/posto.js`: lo si lancia da uno script che prende un posto e lo libera alla fine.
 
 ### Mappa (corsia `mappa`)
 

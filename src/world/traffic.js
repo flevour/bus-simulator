@@ -1088,7 +1088,9 @@ export class Traffic {
       const L = this.davanti(c, Math.max(20 + 4 * c.v, box ? box.q1 - qc + 12 : 0), ctx, pl);
       const gapL = L ? L.gap : Infinity, vL = L ? L.v : Infinity;
       // IDM: l'accelerazione più bassa tra quella per chi c'è davanti e quelle per i punti dove fermarsi (fermi: Δv = v)
-      let acc = IDM_A * (1 - Math.pow(c.v / Math.max(0.1, v0), 4)), ferma = Infinity;
+      // (v / v0)⁴ con le moltiplicazioni: Math.pow(x, 4) cambia all'ultimo bit tra arm64 e amd64 (idm, #145)
+      const rv = c.v / Math.max(0.1, v0), rv2 = rv * rv;
+      let acc = IDM_A * (1 - rv2 * rv2), ferma = Infinity;
       if (L) acc = idmAuto(c.v, v0, gapL, c.v - vL);
       // (perX: l'incrocio col tram per cui ci si ferma, se è il vincolo più vicino)
       let perX = null;

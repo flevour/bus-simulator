@@ -147,7 +147,11 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
 * **Stesso gioco, stesso esito.** Una corsa avviata con `avviaCorsa` parte sempre dallo stesso stato: sereno
   (parametro `meteo`), e `startMission` rimette semafori, segnali del tram e sequenze casuali di auto e bus automatici
   com'erano alla prima corsa, qualunque prova abbia usato la pagina prima. Una prova nuova non dipende da
-  `Math.random`, dall'ordine delle prove o dal tempo vero. Le prove da più di un minuto in CI hanno
+  `Math.random`, dall'ordine delle prove o dal tempo vero. Le funzioni del gioco che una prova sostituisce per guardarlo
+  le rimette il fixture `pagina` a fine prova (#145). `tests/impronta.spec.js` confronta lo stato del traffico di una
+  corsa, ai bit, con quello di `tests/impronta.json`, uguale su Mac e in CI: chi cambia traffico, bus o tram
+  automatici, mappa o linee lo riscrive nello stesso commit (`IMPRONTA=aggiorna npx playwright test
+  tests/impronta.spec.js`). Le prove da più di un minuto in CI hanno
   `tempoMassimo(secondi)` di `tests/gioco.js`, tre volte la durata più lunga vista in CI; i limiti di merito non si
   allargano per il tempo (nota "Verifiche: stato di partenza e tempi delle prove" in `docs/LAVORO.md`).
 * Rapporto di verifica sulla mappa: `python3 scripts/verifica_mappa.py` sul JSON (dopo ogni rigenerazione) e
