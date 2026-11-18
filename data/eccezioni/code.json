@@ -4,7 +4,7 @@
   "sblocchi": [],
   "giri_di_attese": [
    {
-    "perche": "#148, 18 novembre 2026: con la mappa della pianta come partizione (#126) le auto delle 8:15 nascono e si intrecciano in un altro ordine (impronta riscritta), e nella stessa coda di Via Gozzi dei casi di incroci_bloccati, al Ponte Omizzolo, un'auto e il tram si aspettano a vicenda finché Traffic.untangle li scioglie (una volta, alle 8:16). È la coda che risale gli incroci: sparisce con la regola dell'incrocio da liberare che tiene conto del rosso che fermerà la fila (#148).",
+    "perche": "#144, 18 novembre 2026: al Ponte Omizzolo la corsia delle auto sta sul binario del SIR3 in controsenso, e un'auto e il tram si fermano muso contro muso finché Traffic.untangle li scioglie (una volta, alle 8:16). Con la mappa della pianta come partizione (#126) le auto delle 8:15 nascono e si intrecciano in un altro ordine (impronta riscritta), e il caso di Via Morgagni che #144 descrive si presenta qui, nella coda di Via Gozzi di #148. Sparisce quando le corsie delle auto non stanno più sul binario in controsenso (#144).",
     "casi": [
      "auto e tram che si aspettano @ 390,-453"
     ]
