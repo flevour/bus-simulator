@@ -1030,27 +1030,38 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     lanes = [LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE, quad_segs=2) for t in tram if len(t) >= 4]
     # (i varchi più stretti di 3 m tra le sedi dei due binari si chiudono: restava una striscia d'erba tra i binari)
     S_tutta = allarga(allarga(unione(lanes), 1.5, quad_segs=2), -1.5, quad_segs=2) if lanes else Polygon()
-    # sede in quota: dove il binario è in quota (la quota della strada che affianca, _tram_heights), tolta dall'asfalto
-    # in quota; il gioco la disegna alla quota del binario, come corsie rosse e rotaie (prima l'asfalto in quota la
-    # copriva a chiazze: prendeva la quota dell'asse della strada e si piegava sulla larghezza, #85, #137)
-    corsie_su = []
+    # sede in quota: la sede sotto una carreggiata in quota che corre accanto al binario (quasi parallela, come in
+    # _tram_heights), tolta dall'asfalto in quota; il gioco la disegna alla quota del binario, come corsie rosse e rotaie.
+    # Prima l'asfalto in quota la copriva a chiazze: prendeva la quota dell'asse della strada e si piegava sulla
+    # larghezza (#85, #137). Non conta la quota del binario: sulla rampa del San Marco verso l'Ippodromo il binario sta
+    # pochi centimetri sopra il terreno e la strada accanto 0,4-0,8 m (#137), e anche lì la sede è la sede. Una strada in
+    # quota di traverso è un ponte sopra il tram, e la sede sotto resta a terra
+    tratti_tram = []
     for t in tram:
         pts = [(t[i], t[i + 1]) for i in range(0, len(t), 2)]
-        if len(pts) < 2:
-            continue
-        dense = [pts[0]]
-        for a, b in zip(pts, pts[1:]):
-            m = max(1, int(math.dist(a, b) // 5))
-            dense += [(a[0] + (b[0] - a[0]) * k / m, a[1] + (b[1] - a[1]) * k / m) for k in range(1, m + 1)]
-        run = []
-        for p, h in zip(dense + [None], _tram_heights(dense, nodes, edges, heights, profili, dichiarati) + [0.0]):
-            if p is not None and h >= Q_TERRA:
-                run.append(p)
+        tratti_tram += [LineString([a, b]) for a, b in zip(pts, pts[1:]) if math.dist(a, b) > 1e-6]
+    albero_tram = STRtree(tratti_tram) if tratti_tram else None
+    sede_su_pezzi = []
+    if albero_tram is not None and not S_tutta.is_empty:
+        sedi = _polys(S_tutta)
+        albero_sedi = STRtree(sedi)
+        for k in kq:
+            ps = [p for p in pezzi_quota(nodes, edges, [k], heights, profili, dichiarati, Q_TERRA) if len(albero_sedi.query(p, predicate='intersects'))]
+            if not ps:
                 continue
-            if len(run) >= 2:
-                corsie_su.append(LineString(run).buffer(TRAM_LANE, quad_segs=2))
-            run = []
-    sede_su = allarga(allarga(unione(corsie_su), 1.5, quad_segs=2), -1.5, quad_segs=2).intersection(up_alto) if corsie_su else Polygon()
+            (ax, az), (bx, bz) = nodes[edges[k][0]], nodes[edges[k][1]]
+            L = math.hypot(bx - ax, bz - az) or 1e-9
+            ux, uz = (bx - ax) / L, (bz - az) / L
+            for p in ps:
+                g = shapely.union_all([p.intersection(sedi[i]) for i in sorted(albero_sedi.query(p, predicate='intersects'))])
+                if g.is_empty or g.area < 0.5:
+                    continue
+                c = g.representative_point()
+                (sx, sz), (tx, tz) = tratti_tram[albero_tram.nearest(c)].coords
+                l = math.hypot(tx - sx, tz - sz) or 1e-9
+                if abs(ux * (tz - sz) / l - uz * (tx - sx) / l) <= 0.7:  # quasi parallela: corre accanto al binario
+                    sede_su_pezzi.append(g)
+    sede_su = unione(sede_su_pezzi) if sede_su_pezzi else Polygon()
     # asfalto e sede in quota come li disegna il gioco: la sede si taglia dopo aver semplificato, sulla griglia della
     # mappa, così i due hanno lo stesso lato in comune e non si sovrappongono
     up_area = canonico(up_alto).simplify(0.1).segmentize(4.0)

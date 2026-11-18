@@ -1086,11 +1086,41 @@ export class City {
     // sede del tram in quota (#126): una classe a sé, tolta dall'asfalto in quota, alla quota del binario come corsie
     // rosse e rotaie (quotaSede): prima l'asfalto in quota la copriva a chiazze, perché prende la quota dell'asse della
     // strada e dove il terreno cambia sulla larghezza della carreggiata si piega (#85, #137)
-    for (const rings of S.upSede || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.quotaSede(x, z) + 0.004, 20, 0.02);
+    // I triangoli seguono anche il terreno, come la sede a terra (nearSede): con i soli vertici sul bordo, dove il terreno
+    // si incurva sotto la sede passavano sopra le corsie rosse (rampa del San Marco verso l'Ippodromo)
+    const quotaSu = (x, z) => Y_ROAD + this.quotaSede(x, z) + 0.004;
+    const curvaSu = (l2, ax, az, bx, bz, ya, yb) => {
+      if (!ter || l2 <= 4) return false;
+      const a = ya + ter(ax, az), b = yb + ter(bx, bz);
+      return [0.25, 0.5, 0.75].some((t) => { const x = ax + (bx - ax) * t, z = az + (bz - az) * t; return Math.abs(quotaSu(x, z) + ter(x, z) - a - (b - a) * t) > 0.01; });
+    };
+    for (const rings of S.upSede || []) {
+      const t0 = upA.idx.length;
+      upA.polygonH(rings, quotaSu, 20, 0.02);
+      upA.refine(t0, quotaSu, 20, curvaSu);
+    }
     const latiSedeSu = lati(S.upSede || []);
-    // righe di bordo anche in quota, tranne dove la rampa si fonde con l'asfalto a terra (al piede) e verso la sede
-    const onGround = (x, z) => rg.query(x, z, 1, q).some((it) => !it.ref.elev && distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw);
-    for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => !latiSedeSu.has(lato(a.x, a.z, b.x, b.z)) && marked(inx, inz, true) && !onGround(outx, outz), (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.012);
+    // righe di bordo anche in quota, tranne verso la sede e dove fuori c'è ancora strada: al piede della rampa, che si
+    // fonde con l'asfalto a terra, e dove la rampa a raso finisce di traverso sulla sua stessa carreggiata (da #126 i
+    // tratti sotto 5 cm sono asfalto a terra: lì una riga attraversava la strada)
+    const suStrada = (x, z) => rg.query(x, z, 1, q).some((it) => distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw);
+    for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => !latiSedeSu.has(lato(a.x, a.z, b.x, b.z)) && marked(inx, inz, true) && !suStrada(outx, outz), (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.012);
+    // fianchi delle rampe a raso (#126): sotto l'impalcato (DECK_MIN, 0,6 m) la carreggiata in quota non ha fianchi, e
+    // la pianta a terra non continua più sotto di lei: dal suo bordo, qualche centimetro sopra il suolo, si vedeva il
+    // terreno (una riga sottile dove l'asfalto a terra lascia il posto alla rampa). Una faccia verticale fino a terra
+    const fianco = new GeoBuilder(), latiSu = lati(S.up || []);
+    const fianchi = (rings, hFn, salta) => {
+      for (const r of rings) for (let i = 0; i < r.length; i += 2) {
+        const j = (i + 2) % r.length, ax = r[i], az = r[i + 1], bx = r[j], bz = r[j + 1];
+        if (salta.has(lato(ax, az, bx, bz))) continue;
+        const ha = hFn(ax, az), hb = hFn(bx, bz);
+        if (Math.max(ha, hb) < 0.01 || Math.min(ha, hb) >= 0.6) continue;
+        fianco.quad([ax, Y_ROAD, az], [bx, Y_ROAD, bz], [ax, Y_ROAD + ha + 0.004, az], [bx, Y_ROAD + hb + 0.004, bz], [0, 0, 1, 0, 0, 1, 1, 1]);
+      }
+    };
+    for (const rings of S.up || []) fianchi(rings, (x, z) => this.elevHeight(x, z), latiSedeSu);
+    for (const rings of S.upSede || []) fianchi(rings, (x, z) => this.quotaSede(x, z), latiSu);
+    if (fianco.pos.length) this.group.add(new THREE.Mesh(fianco.build(), new THREE.MeshLambertMaterial({ color: 0xa9a397, side: THREE.DoubleSide })));
     if (upA.pos.length) { const um = new THREE.Mesh(upA.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3)); um.receiveShadow = true; this.upMat = um.material; this.group.add(um); }
     const am = new THREE.Mesh(asph.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
     am.receiveShadow = true;
@@ -1781,35 +1811,39 @@ export class City {
   buildDecks() {
     const D = this.net.surfaces && this.net.surfaces.decks;
     if (!D || !D.length) return;
-    const track = this.tramTrack, q = [], qt = [];
-    // tratti dei due binari in una griglia: la proiezione su tutto il percorso, per ogni vertice dell'impalcato vicino al
-    // tram, costava secondi
+    const q = [], qt = [];
+    // tratti dei binari di tutte le linee in una griglia: la proiezione su tutto il percorso, per ogni vertice
+    // dell'impalcato vicino al tram, costava secondi
     const tg = new Grid(20);
-    if (track) for (const d of [1, -1]) {
-      const P = track.path(d);
+    for (const T of Object.values(this.tramTracks || {})) for (const d of [1, -1]) {
+      const P = T.path(d);
       for (let i = 0; i < P.pts.length - 1; i++) {
         const a = P.pts[i], b = P.pts[i + 1];
-        tg.insertAABB({ d, P, i }, Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z));
+        tg.insertAABB({ T, d, P, i }, Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z));
       }
     }
+    // la quota del piano dell'impalcato: quella della strada o del binario più vicino; dove il punto sta su più di uno
+    // (carreggiata e sede insieme) la più bassa. La sede in quota è una superficie a sé alla quota del binario (#126), e
+    // sul San Marco sta fino a 6 cm sotto la strada accanto: con la quota della strada il piano chiaro ci spuntava sopra
+    const prendi = (sc, hh) => { if (sc < best || (sc === best && hh < h)) { best = sc; h = hh; } };
+    let best = Infinity, h = 0;
     const near = (x, z) => {
-      let best = Infinity, h = 0, cross = false;
+      best = Infinity; h = 0;
+      let cross = false;
       for (const it of this.elevGrid.query(x, z, 16, q)) {
         const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz), sc = Math.max(0, r.d - it.hw);
         if (r.d < it.hw + 0.6) cross = true;
-        if (sc < best) { best = sc; h = edgeHeight(it.ref, r.t * it.ref.len); }
+        prendi(sc, edgeHeight(it.ref, r.t * it.ref.len));
       }
-      // binario più vicino in ogni verso, entro 16 m (come TrackPath.project sui soli tratti vicini)
-      const pr = { 1: { d: 16 }, [-1]: { d: 16 } };
-      for (const { d, P, i } of tg.query(x, z, 16, qt)) {
-        const a = P.pts[i], b = P.pts[i + 1], r = distToSeg(x, z, a.x, a.z, b.x, b.z);
-        if (r.d <= pr[d].d) pr[d] = { d: r.d, s: P.cum[i] + Math.hypot(b.x - a.x, b.z - a.z) * r.t };
+      // binario più vicino di ogni linea e verso, entro 16 m (come TrackPath.project sui soli tratti vicini)
+      const pr = new Map();
+      for (const { T, d, P, i } of tg.query(x, z, 16, qt)) {
+        const a = P.pts[i], b = P.pts[i + 1], r = distToSeg(x, z, a.x, a.z, b.x, b.z), k = T.id + ',' + d, o = pr.get(k);
+        if (r.d <= 16 && (!o || r.d <= o.d)) pr.set(k, { T, d, dd: r.d, s: P.cum[i] + Math.hypot(b.x - a.x, b.z - a.z) * r.t });
       }
-      for (const d of [1, -1]) {
-        if (pr[d].s === undefined) continue;
-        const sc = Math.max(0, pr[d].d - TRAM.lane - 0.3);
-        if (pr[d].d < TRAM.lane + 0.9) cross = true;
-        if (sc < best) { best = sc; h = track.heightAt(d, pr[d].s); }
+      for (const { T, d, dd, s } of pr.values()) {
+        if (dd < TRAM.lane + 0.9) cross = true;
+        prendi(Math.max(0, dd - TRAM.lane - 0.3), T.heightAt(d, s));
       }
       return { h, cross };
     };
