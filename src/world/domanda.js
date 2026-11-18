@@ -246,7 +246,8 @@ export class Domanda {
     if (chiave !== this.chiaveTempi) {
       this.chiaveTempi = chiave;
       this.tF.set(this.t);
-      const k4 = kq ** 4;
+      // (con le moltiplicazioni: ** con esponente 4 cambia all'ultimo bit tra arm64 e amd64, nota #145 delle Verifiche)
+      const k2 = kq * kq, k4 = k2 * k2;
       for (const [st, fs] of this.fattori) this.tF[st] = this.t[st] * (1 + (fs[f] - 1) * k4);
       // gli alberi vecchi restano alle auto che li hanno finché non è pronto il nuovo (chooseNext)
       this.alberi.clear();
