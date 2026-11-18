@@ -131,6 +131,10 @@ class Rete:
         f = self.archi[k][5]
         return 1 if f & 1 else -1 if f & 2 else 0
 
+    def rotonda(self, k):
+        """L'arco è un pezzo dell'anello di una rotonda (junction=roundabout)."""
+        return bool(self.archi[k][5] & 16)
+
     def chi(self, k, avanti):
         """Maschera di chi può percorrere l'arco nel verso: le auto non entrano nelle corsie riservate (Traffic.allowed),
         i bus anche in controsenso dove la via lo ammette (busCan di src/game/routes.js)."""
@@ -307,7 +311,8 @@ class Raccordi:
         # movimenti di ogni nodo, corsia per corsia; una corsia è (arco, avanti, corsia da sinistra)
         self.mov, self.dopo, self.prima = {}, defaultdict(list), defaultdict(list)
         for n in sorted(self.R.attorno):
-            mm = [self.geometria([(da, self.R.archi[da][1] == n, cda), (a, self.R.archi[a][0] == n, ca)], m) for da, cda, a, ca, m, _th in self.coppie(n)]
+            mm = [dict(self.geometria([(da, self.R.archi[da][1] == n, cda), (a, self.R.archi[a][0] == n, ca)], m), cambio=cambio)
+                  for da, cda, a, ca, m, _th, cambio in self.coppie(n)]
             if mm:
                 self.mov[n] = mm
             for g in mm:
@@ -324,6 +329,8 @@ class Raccordi:
         serve = defaultdict(lambda: [0.0, 0.0])
         for n, mm in self.mov.items():
             for g in mm:
+                if g['cambio']:  # i passaggi alla corsia esterna nell'anello prendono lo spazio che resta (#143)
+                    continue
                 for r, i in ((R_MIN[AUTO] if g['m'] & AUTO else R_MIN[SNODATO], 0),
                              (R_MIN[SNODATO] if (n, g['kin'][0], g['kout'][0]) in self.dei_bus or not g['m'] & AUTO else R_MIN[AUTO], 1)):
                     # le corsie che si incontrano vicino al nodo: la tangente dell'arco; le altre (quasi parallele, da
@@ -427,12 +434,27 @@ class Raccordi:
                 for bit in (AUTO, BUS12, SNODATO):
                     if Lin[i][1] & bit and not any((i, j) in amm and self._verso(Lin, i, uscite[j], dove[j], gen, bit) for j in range(len(uscite))):
                         amm |= {(i, j) for j in range(len(uscite))}
+            # nell'anello di una rotonda si prosegue da ogni corsia, sulla corsia allineata e su quella appena più
+            # esterna (#143): dove l'uscita è più allineata dell'anello, l'anello era una svolta a sinistra e
+            # proseguiva solo la corsia interna; e gli archi dell'anello, di pochi metri, non hanno il posto per un
+            # cambio di corsia, che si fa nel raccordo
+            anello = R.rotonda(da) and not fr
+            for j in range(len(uscite)):
+                if anello and R.rotonda(uscite[j][1]):
+                    amm |= {(i, j) for i in range(len(Lin))}
             for i, j in sorted(amm):
                 th, a, Lout, chi = uscite[j]
-                for ca in self._verso(Lin, i, uscite[j], dove[j], gen, 7):
+                cambio = set()
+                if anello and R.rotonda(a) and not Lin[i][2]:
+                    t = self._verso(Lin, i, uscite[j], DRITTO, gen, 7)
+                    go = [c for c, x in enumerate(Lout) if not x[2]]
+                    cambio = {go[go.index(c) + 1] for c in t if c in go and go.index(c) + 1 < len(go)} - set(t)
+                else:
+                    t = self._verso(Lin, i, uscite[j], dove[j], gen, 7)
+                for ca in sorted(set(t) | cambio):
                     m = Lin[i][1] & Lout[ca][1] & chi
                     if m:
-                        out.append((da, i, a, ca, m, th))
+                        out.append((da, i, a, ca, m, th, ca in cambio))
         return out
 
     @staticmethod
@@ -739,6 +761,18 @@ def raggio_massimo(d_in, verts, d_out):
     return m / k if k > 1e-9 else R_MAX
 
 
+def scritto(R, v):
+    """Il raccordo v come lo scrive codifica e lo legge chi usa la mappa: vertici al centimetro, raggio in decimetri per
+    difetto, e le classi a cui quel raggio basta. Dà (vertici, raggio in m, classi)."""
+    x, z = R.nodi[v['nodo']]
+    vr = [tuple(round((q - o) * 100) / 100 + o for q, o in zip(p, (x, z))) for p in v['v']]
+    r = min(v['r'], R_MAX)
+    if len(vr) == 2:  # con i vertici al centimetro i due archi devono ancora starci tra un vertice e l'altro
+        r = min(r, 0.995 * raggio_massimo(v['d_in'], vr, v['d_out']))
+    r = math.floor(r * 10 + 1e-6)
+    return vr, r / 10, v['classi'] & ~sum(bit for bit in (AUTO, BUS12, SNODATO) if r and r / 10 < R_MIN[bit])
+
+
 def codifica(R, voci):
     """Il campo della mappa dai raccordi buoni: per nodo una lista piatta di interi (docs/raccordi.md)."""
     per = defaultdict(list)
@@ -746,12 +780,8 @@ def codifica(R, voci):
         cat, n = v['cat'], v['nodo']
         x, z = R.nodi[n]
         via = [c[0] for c in cat[1:-1]]
-        vr = [tuple(round((q - o) * 100) / 100 + o for q, o in zip(p, (x, z))) for p in v['v']]
-        r = min(v['r'], R_MAX)
-        if len(vr) == 2:  # con i vertici al centimetro i due archi devono ancora starci tra un vertice e l'altro
-            r = min(r, 0.995 * raggio_massimo(v['d_in'], vr, v['d_out']))
-        r = math.floor(r * 10 + 1e-6)
-        classi = v['classi'] & ~sum(bit for bit in (AUTO, BUS12, SNODATO) if r and r / 10 < R_MIN[bit])
+        _vr, r, classi = scritto(R, v)
+        r = round(r * 10)
         if not classi:
             continue
         c = cat[0][2] | cat[-1][2] << 3 | classi << 6 | (len(v['v']) - 1) << 9 | len(via) << 10
@@ -783,12 +813,116 @@ def decodifica(R, campo):
     return out
 
 
+# ---------------------------------------------------------------- rotonde (#143)
+
+def anelli(R):
+    """Gli anelli delle rotonde: {arco: anello}, con gli archi junction=roundabout uniti dove si toccano."""
+    capo = defaultdict(list)
+    for k in range(len(R.archi)):
+        if R.rotonda(k) and R.chi(k, True) | R.chi(k, False):
+            capo[R.archi[k][0]].append(k)
+            capo[R.archi[k][1]].append(k)
+    out = {}
+    for k0 in sorted(k for ks in capo.values() for k in ks):
+        if k0 in out:
+            continue
+        out[k0], coda = k0, [k0]
+        while coda:
+            k = coda.pop()
+            for n in R.archi[k][:2]:
+                for j in capo[n]:
+                    if j not in out:
+                        out[j] = k0
+                        coda.append(j)
+    return out
+
+
+def capi(R, cat, verts, r):
+    """Dove comincia e dove finisce la curva di un raccordo: s0 sulla corsia d'arrivo, in metri dal nodo dove comincia
+    l'arco, e s1 su quella d'uscita, dal nodo dove comincia l'arco d'uscita nel suo verso (curva() di
+    src/world/inseguitore.js)."""
+    (da, av_in, _c), (a, av_out, _c2) = cat[0], cat[-1]
+    ea, eb = R.archi[da], R.archi[a]
+    oa, Ni = R.nodi[ea[0] if av_in else ea[1]], R.nodi[ea[1] if av_in else ea[0]]
+    No, ob = R.nodi[eb[0] if av_out else eb[1]], R.nodi[eb[1] if av_out else eb[0]]
+    d_in = ((Ni[0] - oa[0]) / R.lung[da], (Ni[1] - oa[1]) / R.lung[da])
+    d_out = ((ob[0] - No[0]) / R.lung[a], (ob[1] - No[1]) / R.lung[a])
+    _pts, t0, t1, _ok = campiona(d_in, verts, r, d_out)
+    p0 = (verts[0][0] - d_in[0] * t0, verts[0][1] - d_in[1] * t0)
+    p1 = (verts[-1][0] + d_out[0] * t1, verts[-1][1] + d_out[1] * t1)
+    return (p0[0] - oa[0]) * d_in[0] + (p0[1] - oa[1]) * d_in[1], (p1[0] - No[0]) * d_out[0] + (p1[1] - No[1]) * d_out[1]
+
+
+def cambio_min(dO, r):
+    """Metri di corsia che servono per spostarsi di lato di dO metri con la curva entro metà del raggio minimo r: la
+    cicloide di cambioMin di src/world/inseguitore.js, con il mezzo metro di costoCambio."""
+    return math.sqrt(4 * math.pi * dO * r) + 0.5
+
+
+def trappole(R, voci, bits=(AUTO,)):
+    """Raccordi che finiscono nell'anello di una rotonda su una corsia da cui un mezzo che ci passa (dei bits: le auto;
+    i bus seguono i percorsi delle linee, che controlla scripts/percorsi.py) non raggiunge nessuna uscita, né dritto né
+    cambiando corsia dove c'è il posto (costoCambio di src/world/inseguitore.js, con il raggio minimo del mezzo):
+    [(raccordo, bit)]. voci sono i raccordi come li legge chi usa la mappa (decodifica, o
+    scritto per quelli della build). Un'uscita è un raccordo che finisce fuori dall'anello; dove dall'arco non parte
+    nessun raccordo per il mezzo (anello tagliato dal bordo della mappa) la strada finisce, e non è una trappola."""
+    an = anelli(R)
+    dentro = [v for v in voci if v['cat'][-1][0] in an]
+    partono = defaultdict(list)
+    for v in voci:
+        if v['cat'][0][0] in an:
+            partono[v['cat'][0][:2]].append(v)
+    S = {id(v): capi(R, v['cat'], v['v'], v['r']) for v in voci if v['cat'][0][0] in an or v['cat'][-1][0] in an}
+    out = []
+    for bit in bits:
+        buoni, nuovi = set(), True
+        while nuovi:
+            nuovi = False
+            for v in dentro:
+                if not v['classi'] & bit or id(v) in buoni:
+                    continue
+                a, av, ca = v['cat'][-1]
+                cs, s1 = R.marcia(a, av), S[id(v)][1]
+                dopo = [w for w in partono[(a, av)] if w['classi'] & bit]
+                esce = not dopo
+                for w in dopo:
+                    if an.get(w['cat'][-1][0]) == an[a] and id(w) not in buoni:
+                        continue
+                    ci, L = w['cat'][0][2], S[id(w)][0] - s1
+                    if L >= -0.05 and (ci == ca or L >= cambio_min(abs(cs[ci][0] - cs[ca][0]), R_MIN[bit])):
+                        esce = True
+                        break
+                if esce:
+                    buoni.add(id(v))
+                    nuovi = True
+        out += [(v, bit) for v in dentro if v['classi'] & bit and id(v) not in buoni]
+    return out
+
+
+def senza_trappole(R, voci):
+    """Toglie ai raccordi delle rotonde che portano in una trappola (trappole) i mezzi che ci resterebbero, finché non
+    ce ne sono più: chi entra nell'anello trova sempre un'uscita. Dà i raccordi e quanti mezzi ha tolto."""
+    tolti = 0
+    while True:
+        scritti = []
+        for v in voci:
+            vr, r, classi = scritto(R, v)
+            scritti.append(dict(v, v=vr, r=r, classi=classi, sorgente=v))
+        tt = trappole(R, scritti)
+        if not tt:
+            return voci, tolti
+        for w, bit in tt:
+            w['sorgente']['classi'] &= ~bit
+        tolti += len(tt)
+        voci = scavalcati([v for v in voci if v['classi']])
+
+
 def campo_mappa(M, binari=None):
     """(campo, generatore, voci) per la mappa intera M: lo chiama la build, e --scrivi sulla mappa che c'è."""
     import aree_mappa
     G = Raccordi(M, aree_mappa.tram_tracks(M) if binari is None else binari)
     voci = G.calcola()
-    buone = scavalcati([dict(v) for v in voci if v['esito'] == 'ok' and v['classi']])
+    buone, G.trappole = senza_trappole(G.R, scavalcati([dict(v) for v in voci if v['esito'] == 'ok' and v['classi']]))
     return codifica(G.R, buone), G, voci
 
 
@@ -887,12 +1021,18 @@ def decodifica_sicura(R, campo, casi):
 
 def senza_uscita(G, voci):
     """Corsie da cui un'auto non esce: {perché: [caso]}. In fondo a una strada chiusa o al bordo della mappa (fine),
-    davanti a sole vie dove le auto non entrano (accesso), per le svolte vietate di OSM (divieto), o perché nessuna
-    delle svolte ammesse ha una curva che un'auto possa fare (curva)."""
+    davanti a sole vie dove le auto non entrano, o all'anello di una rotonda da cui le auto non escono (accesso), per le
+    svolte vietate di OSM (divieto), o perché nessuna delle svolte ammesse ha una curva che un'auto possa fare (curva)."""
     R = G.R
     esce = defaultdict(int)
     for v in voci:
         esce[v['cat'][0]] |= v['classi']
+    # anelli di rotonda con almeno un'uscita per le auto: negli altri (al capolinea di un bus, con le uscite solo per i
+    # bus) la build non porta le auto (senza_trappole)
+    an, aperti = anelli(R), set()
+    for mm in G.mov.values():
+        aperti |= {an[g['kin'][0]] for g in mm if g['m'] & AUTO and g['kin'][0] in an and an.get(g['kout'][0]) != an[g['kin'][0]]}
+    chiuso = lambda g: g['kout'][0] in an and an[g['kout'][0]] not in aperti
     out = defaultdict(list)
     for k in range(len(R.archi)):
         for avanti in (True, False):
@@ -905,13 +1045,29 @@ def senza_uscita(G, voci):
                 altri = [a for a in R.attorno[n] if a != k]
                 if not altri:
                     perche = 'fine'
-                elif not any(R.chi(a, R.archi[a][0] == n) & AUTO for a in altri):
+                elif not any(R.chi(a, R.archi[a][0] == n) & AUTO for a in altri) or all(chiuso(g) for g in G.dopo[L] if g['m'] & AUTO) and any(g['m'] & AUTO for g in G.dopo[L]):
                     perche = 'accesso'
                 elif not any(g['m'] & AUTO for g in G.dopo[L]):
                     perche = 'divieto' if all(G.vietata(n, k, a) & AUTO for a in altri if R.chi(a, R.archi[a][0] == n) & AUTO) else 'corsia'
                 else:
                     perche = 'curva'
                 out[perche].append({'perche': perche, 'via': R.nomi[e[4]] or 'senza nome', 'metri': round(R.lung[k], 1), 'x': R.nodi[n][0], 'z': R.nodi[n][1]})
+    return out
+
+
+def rotonde_senza_uscita(R, voci):
+    """Raccordi del campo che portano in una trappola nell'anello di una rotonda (trappole): un caso per nodo, mezzo e
+    corsia dove si arriva."""
+    nome = lambda k: R.nomi[R.archi[k][4]] or 'senza nome'
+    visti, out = set(), []
+    for v, bit in trappole(R, voci):
+        a, _av, ca = v['cat'][-1]
+        k = (v['nodo'], bit, a, ca)
+        if k in visti:
+            continue
+        visti.add(k)
+        x, z = R.nodi[v['nodo']]
+        out.append({'classe': CLASSI[bit.bit_length() - 1], 'da': nome(v['cat'][0][0]), 'a': nome(a), 'corsia': ca, 'x': x, 'z': z})
     return out
 
 
@@ -929,8 +1085,10 @@ def rapporto(M, elenco=False, aggiorna=False):
     casi.update(controlla(G, campo))
     su = senza_uscita(G, voci)
     casi['auto_senza_uscita'] = su['curva'] + su['divieto'] + su['corsia']
+    casi['rotonde_senza_uscita'] = rotonde_senza_uscita(G.R, voci)
     fissa = {k: (lambda c: f"{c['cosa']}, {c['da']} > {c['a']}") for k in casi if k.startswith('raccordi_')}
     fissa['auto_senza_uscita'] = lambda c: f"{c['perche']}, {c['via']}"
+    fissa['rotonde_senza_uscita'] = lambda c: f"{c['classe']}, {c['da']} > {c['a']}, corsia {c['corsia']}"
     valori = {k: len(v) for k, v in casi.items()}
     valori.update({'raccordi': len(voci), 'nodi': len(campo['nodi']), 'scavalcano': sum(1 for v in voci if len(v['cat']) > 2),
                    'byte': len(json.dumps(campo, separators=(',', ':'))),
@@ -974,7 +1132,8 @@ def main():
         prima = os.path.getsize(MAPPA)
         scrivi(campo)
         print(f'campo {CAMPO} scritto in {os.path.relpath(MAPPA, RADICE)}: da {prima} a {os.path.getsize(MAPPA)} byte')
-        print('  movimenti: ' + ', '.join(f'{n} {k}' for k, n in Counter(v['esito'] for v in voci if len(v['cat']) == 2).most_common()))
+        print('  movimenti: ' + ', '.join(f'{n} {k}' for k, n in Counter(v['esito'] for v in voci if len(v['cat']) == 2).most_common())
+              + f'; tolte le auto da {G.trappole} raccordi che portano in una corsia di rotonda senza uscita')
         M = aree_mappa.load(MAPPA)
     _v, _c, errori = rapporto(M, '--elenco' in sys.argv, '--aggiorna' in sys.argv)
     if errori:

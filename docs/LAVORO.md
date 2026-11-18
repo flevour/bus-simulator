@@ -98,7 +98,7 @@ divise per area.
 | `scripts/osm_rete.py`, `data/osm-padova-relazioni.json`, `data/osm-luoghi.json`, `data/osm-arredo.json`, `data/eccezioni/osm-rete.json` | `area:mappa` (#108), poi chi li usa: `area:traffico` (#112, #111, #116) | dati OSM agganciati alla rete per id ([`osm-dati.md`](osm-dati.md)); chi cambia nodi o archi della rete, o riscarica le relazioni, riscrive i campi (`python3 scripts/osm_rete.py --scrivi`) e l'elenco |
 | `src/world/posa.js`, `src/data/arredo.js`, `src/data/padova-arredo.json`, `scripts/posa_arredo.mjs`, `scripts/citta_node.mjs` | `area:mappa` (#109, poi #130 e #132); chi cambia mappa, binari o pianta rifà la posa | posa dell'arredo nella build: semafori, linea aerea, lanterne e segnali del tram, paline (nota #109 della Mappa). Il file si riscrive con `npm run posa -- --zona X,Z,R` nello stesso commit della modifica che sposta i pali; `tests/arredo.spec.js` fallisce se non è quello che la posa dà |
 | `scripts/sosta.py`, `data/eccezioni/sosta.json`, `data/eccezioni/sosta-gioco.json`, `tests/sosta.spec.js` | `area:mappa` (#111), poi `area:traffico` (#113) per le zone di fermata | sosta lungo le strade ([`sosta.md`](sosta.md)): stalli per arco e per lato e corsie strette dagli stalli (`stalli`, `sedeCorsie` nella mappa). Chi cambia fermate, corsie, pianta o il modo in cui i bus accostano rigenera e guarda i due controlli; `corsie_arco` di `scripts/raccordi.py` è il conto delle corsie anche per la sosta |
-| `scripts/raccordi.py`, `data/eccezioni/raccordi.json`, `tests/raccordi.spec.js` | `area:traffico` (#112), poi chi li usa (#113, #114) | raccordi di corsia agli incroci ([`raccordi.md`](raccordi.md)): la build li calcola dalla rete, dalle corsie, da `svolte` e dalla pianta delle strade, quindi cambiano con ogni rigenerazione che tocca una di queste; chi rigenera rilancia `python3 scripts/raccordi.py` e, se i casi cambiano, `--aggiorna`. `corsie_arco` rifà `laneLayout` di `src/data/padova.js`: le due si cambiano insieme |
+| `scripts/raccordi.py`, `data/eccezioni/raccordi.json`, `tests/raccordi.spec.js` | `area:traffico` (#112), poi chi li usa (#113, #114) | raccordi di corsia agli incroci ([`raccordi.md`](raccordi.md)): la build li calcola dalla rete, dalle corsie, da `svolte` e dalla pianta delle strade, quindi cambiano con ogni rigenerazione che tocca una di queste; chi rigenera rilancia `python3 scripts/raccordi.py` e, se i casi cambiano, `--aggiorna`. `corsie_arco` rifà `laneLayout` di `src/data/padova.js`: le due si cambiano insieme, e così `cambio_min` e `costoCambio` di `src/world/inseguitore.js` (rotonde senza uscita, #143) |
 | `scripts/percorsi.py`, `data/eccezioni/percorsi.json`, `data/osm-correzioni.json`; in `scripts/build_map.py` `ripara`, `giro`, `via_bus` | `area:linee` (#114), e chi rigenera la mappa | percorsi delle linee guidabili ([`percorsi.md`](percorsi.md)): la build li controlla alla fine e si ferma su un caso nuovo; chi cambia rete, svolte, corsie, pianta o raccordi guarda i casi con `python3 scripts/percorsi.py --elenco` e, se restano, li mette nell'elenco con il perché (`--aggiorna`). Un tag OSM sbagliato si corregge con una riga di `data/osm-correzioni.json`, non nel codice |
 | `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113, #115), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7), con chi segue chi e l'incrocio da liberare (`idm`, `incrocioDavanti`, sezione 8), e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
 | `tests/code.js`, `tests/code.spec.js`, `data/eccezioni/code.json` | `area:traffico` (#115), poi chi cambia chi segue chi, sblocchi, precedenze o il numero di auto (#49, #50, #116, #117) | prova delle code: corridoio di Via Querini (flusso contro densità, scarico al semaforo), incrocio da liberare, dieci minuti senza sblocchi a tempo, incroci bloccati e fermi oltre 120 s. Chi cambia il traffico la rilancia; un caso sparito si toglie dall'elenco nello stesso commit |
@@ -1417,7 +1417,8 @@ scritta prima della modifica: numeri di prima e di dopo nell'issue #115. Da sape
   dalla sua corsia non c'è posto per cambiare corsia prima di nessuna uscita, `chooseNext` la fa uscire alla prima con
   una curva del gioco (ripiego contato). Nella rotonda di Via Bembo con Via Marinelli i raccordi entrano solo nella
   corsia interna ed escono solo dall'esterna, con archi di 5-7 m: le auto giravano per sempre, l'anello si riempiva e
-  la coda arrivava al bus della 3 nella prova di Tito Livio (su main la nascondevano le code più rade e `untangle`);
+  la coda arrivava al bus della 3 nella prova di Tito Livio (su main la nascondevano le code più rade e `untangle`).
+  Da #143 non c'è più: nota sotto;
 - `avviaCorsa` (`tests/gioco.js`, area Verifiche): la partenza si rimette a zero anche prima del verso. Prima la prima
   prova di ogni worker partiva alle 8:26 e le altre alle 8:14, e l'esito dipendeva dall'ordine delle prove;
 - tempo per passo, 72 auto, nella prova delle code: `traffic.update` da 0,55 a 0,6-0,77 ms, `buses.update` da 0,33 a
@@ -1457,6 +1458,32 @@ sapere prima di toccare il traffico:
   dei dieci minuti delle code le code al rosso risalgono gli incroci vicini e ci restano dentro (Via Gozzi, Via
   Tommaseo, Via Piovese: otto casi, #148); nella prova del moto restano solo le auto sui ripieghi della rotonda di Via
   Marconi (#143). La prova delle punte (`tests/domanda.spec.js`) è una misura aggregata con margine, non un elenco.
+
+Rotonde a due corsie (#143, 18 novembre). Regola in [`raccordi.md`](raccordi.md), sezione 3 (corsie nell'anello e
+punto 7). Da sapere prima di toccare raccordi o scelte delle auto nelle rotonde:
+
+- nell'anello la build fa proseguire ogni corsia sulla corsia allineata e su quella appena più esterna (`coppie` di
+  `scripts/raccordi.py`). Prima, dove un'uscita era più allineata dell'anello, l'anello era una svolta a sinistra e
+  proseguiva solo la corsia interna; e con archi di 4-9 m tra un braccio e l'altro la corsia interna non aveva il posto
+  per passare all'esterna, da cui si esce (√(4π · 3,75 · 3,8) + 0,5 = 14 m). I raccordi verso la corsia esterna non
+  chiedono spazio lungo le corsie (`spazi` li salta, `cambio` sul movimento): prendono quello che resta, quindi gli
+  altri raccordi cambiano solo dove la prosecuzione da ogni corsia è nuova;
+- la build toglie le auto dai raccordi che le portano in una corsia dell'anello da cui nessuna uscita si raggiunge
+  (`trappole`, `senza_trappole`), con il posto per cambiare corsia di `costoCambio` di `src/world/inseguitore.js`
+  (`cambio_min`: chi cambia l'uno cambia l'altro), e `python3 scripts/raccordi.py` lo controlla sul campo scritto
+  (`rotonde_senza_uscita`, elenco vuoto). Solo per le auto: i bus seguono i percorsi delle linee (#134, #135). Oggi
+  l'anello tolto alle auto è uno, a Via Telemaco Signorini (1005, -3864), con le uscite solo per i bus (una via
+  riservata, una svolta vietata alle auto da OSM): le sue corsie in `auto_senza_uscita` sono `accesso`;
+- `Traffic.chooseNext` non fa più uscire alla prima con una curva del gioco chi nell'anello non ha un'uscita dalla sua
+  corsia (la regola di #115 sopra): prosegue, e un'uscita c'è sempre. `scegli` nell'anello, a parità di cambi di
+  corsia, prende la più esterna (mezzo cambio di corsia di costo per ogni corsia più in là); prima la corsia esterna
+  si imponeva solo entrando, anche quando dalla corsia dell'auto non ci si arrivava. Con un viaggio, `versoArrivo`
+  nell'anello sceglie prima le svolte che dalla corsia si fanno: chi non ha fatto in tempo a passare alla corsia
+  esterna fa un altro giro;
+- bus: con la prosecuzione da ogni corsia e i passaggi alla corsia esterna anche i bus automatici hanno più raccordi
+  nelle rotonde. Su tutte le varianti (corsie di `BusSim`, in Node) i posti con un ripiego passano da 281 a 234; ne
+  compaiono 8 dove le corsie di due svolte vicine non si legano (#135) e uno a Via Telemaco Signorini, dove la 4 usava
+  il raccordo delle auto tolto e ora fa una curva del gioco (#134).
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

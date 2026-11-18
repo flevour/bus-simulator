@@ -694,11 +694,7 @@ export class Traffic {
           let tra = verso;
           if (T) {
             const ok = verso.filter((m) => m.racs.some((R) => this.costo(T, R) < 100));
-            // (nell'anello di una rotonda, se da questa corsia non c'è posto per nessuna uscita, si esce alla prima:
-            // sotto)
-            const fuori = edge.roundabout && ok.every((m) => m.edge.roundabout) ? verso.filter((m) => !m.edge.roundabout) : [];
-            if (fuori.length) tra = fuori;
-            else if (ok.length) tra = ok;
+            if (ok.length) tra = ok;
           }
           let best = tra[0], bc = Infinity;
           for (const m of tra) { const c = D.costo(s, st(m), A); if (c < bc) { bc = c; best = m; } }
@@ -713,15 +709,13 @@ export class Traffic {
     const back = opts.filter((m) => !this.pit(m.edge, m.fwd));
     if (open.length) opts = open;
     else if (back.length) opts = back;
+    // dalla corsia dove si arriva, le svolte che si fanno senza un cambio di corsia che non ci sta. Nell'anello di una
+    // rotonda ce n'è sempre una: la build porta le auto solo nelle corsie da cui un'uscita si raggiunge, e dentro
+    // l'anello dà i raccordi che passano alla corsia più esterna (#143). Fino a #143, dove i raccordi entravano nella
+    // corsia interna e uscivano solo dall'esterna, da qui si usciva alla prima con una curva del gioco
     if (T) {
       const ok = opts.filter((m) => m.racs.some((R) => this.costo(T, R) < 100));
-      // nell'anello di una rotonda, se da questa corsia non c'è posto per cambiare corsia prima di nessuna uscita, si esce
-      // alla prima con una curva del gioco (un ripiego contato, Traffic.ripieghi). Nella rotonda di Via Bembo
-      // con Via Marinelli i raccordi della build entrano solo nella corsia interna ed escono solo da quella esterna, con
-      // archi di 5-7 m: le auto giravano per sempre finché l'anello era pieno, e la coda arrivava al bus della 3 (#115)
-      const fuori = edge.roundabout && ok.every((m) => m.edge.roundabout) ? opts.filter((m) => !m.edge.roundabout) : [];
-      if (fuori.length) opts = fuori;
-      else if (ok.length) opts = ok;
+      if (ok.length) opts = ok;
     }
     // le vie principali attirano più traffico delle traverse; quasi nessuno entra nelle strade di servizio. Nell'anello
     // di una rotonda l'uscita si sceglie come all'ingresso: restare nell'anello pesa quanto le uscite che restano prima
@@ -768,16 +762,12 @@ export class Traffic {
   // tutti con posto
   scegli(T, m, m2) {
     let best = null, bc = Infinity;
-    // entrando in una rotonda si va nella corsia esterna dell'anello, da cui si raggiungono le uscite: dalla corsia
-    // interna dell'anello di Via Bembo con Via Marinelli (archi di 5-7 m) non c'era posto per cambiare corsia prima di
-    // nessuna uscita, e le auto giravano finché l'anello era pieno (#115)
-    let racs = m.racs;
-    if (m.edge.roundabout && !T.e.roundabout) {
-      const est = corsie(m.edge, m.fwd).length - 1, fuori = racs.filter((R) => R.ca === est);
-      if (fuori.length) racs = fuori;
-    }
-    for (const R of racs) {
-      let c = this.costo(T, R);
+    // nell'anello di una rotonda, a parità di cambi di corsia, la corsia più esterna, da cui si esce: entrando, e dentro
+    // l'anello con i raccordi che passano alla corsia esterna (#143). Un'auto nella corsia interna senza la svolta dopo
+    // già scelta girava finché non trovava un'uscita da lì
+    const est = m.edge.roundabout ? corsie(m.edge, m.fwd).length - 1 : 0;
+    for (const R of m.racs) {
+      let c = this.costo(T, R) + 0.5 * (est - Math.min(R.ca, est));
       if (m2) {
         const T2 = { e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca };
         c += Math.min(...m2.racs.map((R2) => this.costo(T2, R2)));
@@ -813,7 +803,7 @@ export class Traffic {
       // svolta verso l'arrivo poteva non avere posto per il cambio di corsia, e l'auto girava in un anello vicino
       if (!c.route.length && c.viaggio) {
         if (c.viaggio.arrivo === 2 * m.edge.id + (m.fwd ? 0 : 1)) this.cambiaViaggio(c);
-        if (c.viaggio) m2 = this.versoArrivo(m, c.viaggio);
+        if (c.viaggio) m2 = this.versoArrivo(m, c.viaggio, T);
       }
       if (c.route.length) R = this.scegli(T, m, c.route[0]);
       else if (m2) {
@@ -844,18 +834,22 @@ export class Traffic {
   // per farla la sceglie poi scegli). Con 60 s in più per le svolte che dalla corsia di adesso non si fanno, le auto
   // dirette alla porta di Via Sorio deviavano in un anello di strade laterali e lo riempivano. null se l'albero
   // dell'arrivo non è pronto o da lì non ci si arriva
-  versoArrivo(m, v) {
+  versoArrivo(m, v, T) {
     const D = this.domanda;
     let A = v.albero && v.albero.fatto ? v.albero : null;
     if (!A || A.fascia !== D.chiaveTempi) { const B = D.albero(v.arrivo); if (B) A = v.albero = B; }
     if (!A) return null;
     const s = 2 * m.edge.id + (m.fwd ? 0 : 1);
-    let best = null, bc = Infinity;
+    // nell'anello di una rotonda, prima le svolte che dalla corsia dove si è si fanno senza un cambio di corsia che non
+    // ci sta: chi non ha fatto in tempo a passare alla corsia esterna fa un altro giro, come chiunque (#143)
+    const fattibile = T && m.edge.roundabout ? (m2) => m.racs.some((R) => this.costo(T, R) < 100
+      && m2.racs.some((R2) => this.costo({ e: m.edge, fwd: m.fwd, s: curva(this.net, R).s1, corsia: R.ca }, R2) < 100)) : null;
+    let best = null, bc = Infinity, ok = false;
     for (const m2 of this.movimenti(m.edge, m.fwd)) {
       const u = 2 * m2.edge.id + (m2.fwd ? 0 : 1);
       if (!(A.T[u] < Infinity)) continue;
-      const c = D.costo(s, u, A);
-      if (c < bc) { bc = c; best = m2; }
+      const f = !fattibile || fattibile(m2), c = D.costo(s, u, A);
+      if ((f && !ok) || (f === ok && c < bc)) { bc = c; best = m2; ok = f; }
     }
     if (!best) v.perso = true;
     return best;

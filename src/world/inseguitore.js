@@ -433,7 +433,8 @@ export function incrocioDavanti(net, per, qn, fino, linea = null) {
 // Cambi di corsia lungo un arco
 // ------------------------------------------------------------------
 // lunghezza minima del cambio di corsia di dO metri perché la curva (al più 2π dO / D² a metà della cicloide) resti
-// entro metà del raggio minimo, e quella voluta
+// entro metà del raggio minimo, e quella voluta. La build fa lo stesso conto (cambio_min di scripts/raccordi.py) per
+// non portare le auto in una corsia di rotonda da cui non si esce (#143): si cambiano insieme
 const cambioMin = (dO, Rmin) => Math.sqrt(4 * Math.PI * dO * Rmin);
 const cambioVoluto = (dO, Rmin) => Math.max(cambioMin(dO, Rmin), dO / PEND_CAMBIO);
 

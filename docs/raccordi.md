@@ -50,6 +50,12 @@ dell'asfalto.
    la più a sinistra, a destra dalla più a destra verso la più a destra; con le frecce (`turnLanes`) ogni corsia fa
    quello che dice la sua freccia. Le corsie in più a sinistra si prendono dalla più a sinistra, la corsia dei bus
    che comincia dalla più a destra. Una corsia che resterebbe senza uscite le prende tutte.
+   Nell'anello di una rotonda (archi `junction=roundabout`, senza frecce) si prosegue da ogni corsia, anche dove
+   un'uscita è più allineata dell'anello e l'anello sarebbe una svolta a sinistra: sulla corsia allineata e su quella
+   appena più esterna (#143). Gli archi dell'anello vanno da un braccio all'altro e sono lunghi pochi metri, quindi
+   lungo la corsia un cambio non ci sta: il passaggio verso la corsia esterna, da cui si esce, lo fa il raccordo.
+   Questi raccordi non chiedono spazio lungo le corsie (punto 3): prendono quello che resta, e dove non basta
+   scavalcano l'arco dopo (punto 5) o non ci sono.
 3. Spazio lungo la corsia. Un raccordo che arriva su una corsia e uno che ne parte non si sovrappongono: i due capi
    della corsia si dividono la lunghezza dell'arco. A ogni capo va prima quanto serve al raggio minimo di chi ci
    passa (lo snodato sui percorsi delle linee), il resto a metà; se non ci stanno tutti e due, il capo che chiede
@@ -69,6 +75,13 @@ dell'asfalto.
    sagoma dal bordo, o quanto le corsie che unisce se quelle stanno più vicine. Non entra nella sede del tram (i
    binari allargati di 2,1 m) dove nessuna delle due vie la tocca: dove una la tocca è un incrocio col tram, o una
    via che porta i binari.
+7. Rotonde senza uscita. Un raccordo che porta un'auto in una corsia dell'anello da cui non si raggiunge nessuna
+   uscita, né diritto né cambiando corsia dove c'è il posto, perde le auto (`senza_trappole`), e così quelli prima
+   di lui finché non ce ne sono più. Il posto per cambiare corsia è quello del gioco: √(4π · scarto · 3,8) + 0,5 m
+   lungo la corsia, tra dove finisce il raccordo che arriva e dove comincia quello che parte (`cambioMin` e
+   `costoCambio` di `src/world/inseguitore.js`, `cambio_min` qui). Oggi succede in un anello solo, a Via Telemaco
+   Signorini (1005, -3864): le due uscite sono una via riservata ai bus e una svolta che OSM vieta alle auto, e le auto
+   che entravano non uscivano più.
 
 Sul percorso di una linea lo stesso movimento può avere due raccordi dalla stessa corsia alla stessa corsia: quello
 delle auto e uno più largo per i bus.
@@ -126,6 +139,7 @@ mappa e lo controlla raccordo per raccordo, con i casi noti in `data/eccezioni/r
 | `raccordi_nella_sede` | la curva entra nella sede del tram dove le due vie non la toccano |
 | `raccordi_sovrapposti` | su una corsia un raccordo che arriva finisce oltre il punto da cui ne parte un altro |
 | `auto_senza_uscita` | corsie da cui un'auto non esce, per le curve, per le corsie o per le svolte vietate |
+| `rotonde_senza_uscita` | raccordi che portano un'auto in una corsia dell'anello di una rotonda da cui non si raggiunge nessuna uscita (sezione 3, punto 7): la build non li scrive, il controllo guarda il campo come è scritto |
 
 Le svolte dei percorsi delle linee senza un raccordo per il loro mezzo (lo snodato per la 10) le conta
 `scripts/percorsi.py`, variante per variante, con gli altri controlli dei percorsi ([percorsi.md](percorsi.md)).
@@ -151,7 +165,7 @@ Corsie da cui un'auto non esce: 3.664.
 | Perché | Corsie | Nell'elenco dei casi |
 |---|---|---|
 | fine: strada chiusa o bordo della mappa | 3.328 | no |
-| accesso: davanti solo vie pedonali, riservate o contromano | 77 | no |
+| accesso: davanti solo vie pedonali, riservate o contromano, o l'anello di una rotonda da cui le auto non escono | 77 | no |
 | curva: nessuna svolta ammessa ha una curva da auto (gomiti oltre 120 gradi, tronchi ciechi di pochi metri, archi corti in fila) | 252 | sì |
 | corsia: l'uscita ha nel verso giusto solo corsie dei bus | 6 | sì |
 | divieto: le svolte di OSM non lasciano uscite | 1 | sì |
@@ -179,6 +193,10 @@ direzione è la tangente: nei raccordi il mezzo gira con il loro raggio.
 - Le auto scelgono il movimento tra quelli con il bit delle auto (`Traffic.movimenti`), e il raccordo dalla corsia
   dove sono guardando anche la svolta dopo: meno cambi di corsia, sempre con il posto per farli. Il cambio di corsia
   è un tratto del percorso (una cicloide, curva zero ai capi) lungo quanto serve a stare entro metà del raggio minimo.
+  Nell'anello di una rotonda, a parità di cambi di corsia, l'auto prende la corsia più esterna (`scegli`), e con un
+  viaggio la svolta dopo è prima di tutto una che dalla sua corsia si fa (`versoArrivo`): chi non è passato in tempo
+  alla corsia esterna fa un altro giro. Fino a #143, dove i raccordi entravano nella corsia interna e uscivano solo
+  dall'esterna, chi nell'anello non aveva un'uscita dalla sua corsia usciva alla prima con una curva del gioco.
 - I bus prendono per ogni svolta del loro percorso un raccordo con il loro bit (`percorsoBus`), prima quelli diretti,
   poi quelli che scavalcano archi corti; le corsie si scelgono su tutto il percorso insieme.
 - Dove il raccordo per il mezzo non c'è, un ripiego dichiarato, contato e scritto sul pezzo (`p.ripiego`): il
