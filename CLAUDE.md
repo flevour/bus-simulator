@@ -91,6 +91,8 @@ scripts/rigenera_mappa.sh
 scripts/rigenera_mappa.sh --controlla   # rigenera a parte e confronta col repository
 scripts/rigenera_mappa.sh --localita    # prova della località: rigenera con i cambi di data/localita.json
 python3 scripts/verifica_mappa.py --elenco   # rapporto di verifica: esce con errore se i casi non sono quelli degli elenchi
+python3 scripts/domanda.py                    # domanda di traffico (#116) sulla mappa di oggi; --controlla, --conti
+python3 scripts/gtfs_tempi.py                 # tempi delle corse del GTFS per fascia oraria (verifica della punta)
 ```
 
 `scripts/rigenera_mappa.py` chiama `build_map.py` con i dati di `data/` e con il feed GTFS fissato in
