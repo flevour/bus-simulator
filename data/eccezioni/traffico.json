@@ -1,13 +1,6 @@
 {
  "cosa": "Casi noti delle prove del traffico (tests/traffico.spec.js). Chiave: chi @ x,z del gioco, dove è rimasto fermo. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
-  "fermi_oltre_un_ciclo": [
-   {
-    "perche": "#127: alla fermata di Riviera dei Ponti Romani, che sta sul binario del SIR1, il bus della 16 in anticipo sosta fino a 60 s e la 22 dietro di lui supera il ciclo del semaforo di un secondo (61 s). Torna con le quote nuove del Borgomagno (#125, passo 1), dove passa la 22: i suoi tempi cambiano di qualche secondo. Era uscito con l'inseguitore di #113 (2d2f8be)",
-    "casi": [
-     "bus 22 @ 43,106"
-    ]
-   }
-  ]
+  "fermi_oltre_un_ciclo": []
  }
 }
