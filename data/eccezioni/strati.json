@@ -3,37 +3,7 @@
  "controlli": {
   "strati_diversi_da_lontano": [
    {
-    "perche": "Elenco di partenza del 13 novembre 2026 (#110): sui cavalcavia con il tram (San Marco, Chiesanuova, Borgomagno) l'asfalto in quota (strato 3) si sovrappone in pianta alla sede del tram (strati 5 e 5.5, rotaie 6) e passa qualche centimetro sopra: da 20 m copre la sede, da 300 m la sede si vede intera. In cima al San Marco sono 200 punti su 800, il difetto fotografato in #85. Li toglie la pianta come partizione (asfalto in quota senza la sede), #126.",
-    "casi": [
-     "cavalcavia-borgomagno-cima: strato 3 da vicino, strato 5 da lontano @ 83,-1270",
-     "cavalcavia-borgomagno-cima: strato 3 da vicino, strato 5.5 da lontano @ 83,-1270",
-     "cavalcavia-chiesanuova-cima: strato 3 da vicino, strato 5 da lontano @ -1753,-357",
-     "cavalcavia-chiesanuova-cima: strato 3 da vicino, strato 5.5 da lontano @ -1753,-357",
-     "cavalcavia-san-marco-cima: strato 3 da vicino, strato 5 da lontano @ 4554,-1480",
-     "cavalcavia-san-marco-cima: strato 3 da vicino, strato 5.5 da lontano @ 4554,-1480",
-     "cavalcavia-san-marco-cima: strato 3 da vicino, strato 6 da lontano @ 4554,-1480"
-    ]
-   },
-   {
-    "perche": "Elenco del 13 novembre 2026 (#110, sulla mappa con i profili dei cavalcavia di #84): ai piedi della rampa del Cavalcavia Camerini l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero: da 20 m si vede quello a terra, da 300 m quello in quota, su 148 punti su 800. Hanno la stessa trama, quindi il colore non cambia. Prima dei profili di #84 lo stesso caso era ai piedi della rampa della Montà. Lo toglie la pianta come partizione, #126.",
-    "casi": [
-     "cavalcavia-camerini-rampa: strato 2 da vicino, strato 3 da lontano @ -207,-2319"
-    ]
-   },
-   {
-    "perche": "Strutture col tram con il profilo del risolutore (#123): ai piedi delle rampe del Chiesanuova e del San Marco, che ora sono archi a terra su un rilevato, l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero, come ai piedi del Camerini: stessa trama, il colore non cambia. Lo toglie la pianta come partizione, #126.",
-    "casi": [
-     "cavalcavia-chiesanuova-rampa: strato 2 da vicino, strato 3 da lontano @ -1660,-380"
-    ]
-   },
-   {
-    "perche": "Strutture col tram e Cavalcavia Dalmazia con il profilo del risolutore (#123): l'asfalto in quota (strato 3) copre da vicino la sede del tram ai piedi del San Marco verso Ippodromo (strato 5.5, 109 punti su 800) e le righe in cima al Dalmazia (strato 4, 11 punti). Sulla rampa del San Marco verso Ippodromo la carreggiata è in quota fino a 0,8 m sopra il terreno, che lì resta quello di Via San Marco a livello strada; l'asfalto in quota prende la quota dell'asse e il terreno del bordo, e dove il terreno cambia sulla larghezza della carreggiata si piega sopra la sede, che la quota la prende dall'asse. Prima di #123 lo stesso caso stava sulla rampa ovest (cavalcavia-san-marco-rampa, ora pulita). Lo toglie #126 (asfalto in quota senza la sede); la quota dell'asse su tutta la larghezza è in #125.",
-    "casi": [
-     "rotonda-sir2-ippodromo: strato 3 da vicino, strato 5.5 da lontano @ 4654,-1559"
-    ]
-   },
-   {
-    "perche": "Vedute nuove sugli svincoli delle tangenziali (#124), sulla mappa con le quote di prima (street_surfaces.overpass_heights): casi che c'erano già, nuovi solo perché i punti sono nuovi. Sui viadotti di Via Boves alla Fornace l'asfalto in quota (strato 3) passa sopra le righe (strato 4): da 20 m le copre, da 300 m si vedono (9 e 13 punti su 800). Ai piedi della rampa di Via del Commercio su Via Boves l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero, come ai piedi del Camerini (8 punti, stessa trama). Si rivedono quando la struttura prende il profilo del risolutore; li toglie la pianta come partizione, #126.",
+    "perche": "Svincoli delle tangenziali con le quote di prima (#124, #142), dopo la pianta come partizione (#126, 18 novembre 2026): non sono sovrapposizioni di classi della pianta. Sui viadotti di Via Boves alla Fornace le righe (strato 4) stanno alla quota dell'asse del loro arco, mentre l'asfalto in quota (strato 3) prende in ogni vertice la quota più alta tra gli archi in quota vicini (City.elevHeight): dove due viadotti corrono accanto è più alto delle righe e da vicino le copre (14 e 5 punti su 800). Ai piedi della rampa di Via del Commercio su Via Boves la rampa, a 0,4 m, sale proprio accanto all'asfalto a terra e da vicino il suo bordo copre l'asfalto dietro (5 punti: un'occlusione vera, contata perché la quota differisce meno di 0,5 m; prima di #126 lì i due si sovrapponevano in pianta). Si rivedono quando le strutture prendono il profilo del risolutore (#142) e con la quota dell'asse su tutta la larghezza (#137).",
     "casi": [
      "tangenziale-boves-est: strato 3 da vicino, strato 4 da lontano @ 1457,-3332",
      "tangenziale-boves-fornace: strato 3 da vicino, strato 4 da lontano @ 894,-3594",
@@ -41,15 +11,9 @@
     ]
    },
    {
-    "perche": "Cavalcavia Mortise con il profilo del risolutore dal 17 novembre 2026 (#124): ai piedi della rampa nord, che ora è un arco a terra su un rilevato, le righe della carreggiata (strato 4) e l'asfalto a terra (strato 2) stanno quasi alla stessa quota e si sovrappongono in pianta: da 20 m si vede l'asfalto, da 300 m le righe, su 16 punti su 800, accanto al punto della veduta. È l'asfalto che si piega dove il terreno non è uguale su tutta la larghezza della carreggiata (#137), come ai piedi delle rampe del Camerini, del Chiesanuova e del San Marco. Lo toglie la pianta come partizione, #126.",
+    "perche": "Cavalcavia Mortise con il profilo del risolutore dal 17 novembre 2026 (#124): ai piedi della rampa nord, un arco a terra su un rilevato, le righe della carreggiata (strato 4) e l'asfalto a terra (strato 2) stanno quasi alla stessa quota: da 20 m si vede l'asfalto, da 300 m le righe, su 17 punti su 800. Non è una sovrapposizione di classi della pianta (da #126 non ce ne sono, e il caso c'era uguale prima): le righe sono un segno sopra l'asfalto, che lì non sta alla loro quota dove il terreno non è uguale su tutta la larghezza della carreggiata. Resta con #137.",
     "casi": [
      "cavalcavia-mortise-rampa: strato 2 da vicino, strato 4 da lontano @ 2871,-2865"
-    ]
-   },
-   {
-    "perche": "Pianta di #139 (17 novembre 2026): sulla rampa ovest di Corso Boston allo svincolo di Via Adriatica, con le quote di prima, l'asfalto a terra (strato 2) e quello in quota (strato 3) si sovrappongono in pianta dove la quota della rampa arriva a zero, come ai piedi del Camerini, del Chiesanuova e del San Marco (451 m² entro 60 m dal punto, prima e dopo #139). Quale dei due si vede da 20 m dipende da millimetri di quota e dai vertici, che la semplificazione per riquadro ha cambiato. Lo toglie la pianta come partizione (#126).",
-    "casi": [
-     "tangenziale-boston-ovest: strato 2 da vicino, strato 3 da lontano @ -2673,3427"
     ]
    }
   ]

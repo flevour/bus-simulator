@@ -87,31 +87,19 @@
   ],
   "pali_nell_ingombro_dei_bus": [
    {
-    "perche": "#109, 16 novembre 2026: lungo Via Venezia, Via San Marco e il Cavalcavia San Marco la corsia della 10 automatica corre da 2,5 a 3 m fuori dall'asfalto, accanto alla sede del SIR2, e passa attraverso i pali della linea aerea e una lanterna del tram che stanno al loro posto. È la corsia a essere sbagliata: #131.",
+    "perche": "#109, 16 novembre 2026: lungo Via Venezia, Via San Marco e il Cavalcavia San Marco la corsia della 10 automatica corre da 2,5 a 3 m fuori dall'asfalto, accanto alla sede del SIR2, e passa attraverso i pali della linea aerea e una lanterna del tram che stanno al loro posto. È la corsia a essere sbagliata: #131. Con la pianta come partizione (#126) la posa vede le rampe a raso come carreggiata e sei di questi pali sono andati fuori dall'ingombro; resta quello in cima al San Marco verso l'Ippodromo.",
     "casi": [
-     "lanterna del tram @ 3306,-882",
-     "linea aerea @ 3274,-864",
-     "linea aerea @ 3300,-879",
-     "linea aerea @ 4268,-1354",
-     "linea aerea @ 4322,-1381",
-     "linea aerea @ 4635,-1543",
-     "linea aerea @ 4657,-1564"
+     "linea aerea @ 4635,-1543"
     ]
    },
    {
-    "perche": "Rampe del Chiesanuova e del cavalcavia di Via Venezia, con il profilo del risolutore (#123): ora sono archi a terra su un rilevato e i loro pali della linea aerea si misurano (prima erano in quota, fuori dal controllo). Stanno dov'erano, fuori dall'asfalto accanto alla sede, tranne uno spostato di 17 m sul Chiesanuova; la corsia dei bus automatici della 6 e della 10 lì corre lungo il bordo dell'asfalto accanto al SIR2 e la carrozzeria li tocca, come nei sei casi di Via Venezia e Via San Marco (#131).",
+    "perche": "Rampe del Chiesanuova e del cavalcavia di Via Venezia, con il profilo del risolutore (#123): ora sono archi a terra su un rilevato e i loro pali della linea aerea si misurano (prima erano in quota, fuori dal controllo). Stanno dov'erano, fuori dall'asfalto accanto alla sede, tranne uno spostato di 17 m sul Chiesanuova; la corsia dei bus automatici della 6 e della 10 lì corre lungo il bordo dell'asfalto accanto al SIR2 e la carrozzeria li tocca, come nei sei casi di Via Venezia e Via San Marco (#131). Con la pianta come partizione (#126) le rampe a raso sono carreggiata per la posa, e sei di questi pali sono andati fuori dall'ingombro; restano questi cinque.",
     "casi": [
-     "linea aerea @ -1458,-431",
-     "linea aerea @ -1899,-341",
      "linea aerea @ -2079,-343",
      "linea aerea @ -2109,-346",
-     "linea aerea @ 2691,-554",
      "linea aerea @ 2718,-568",
      "linea aerea @ 3143,-792",
-     "linea aerea @ 3169,-806",
-     "linea aerea @ 3195,-820",
-     "linea aerea @ 3222,-835",
-     "linea aerea @ 3248,-849"
+     "linea aerea @ 3169,-806"
     ]
    },
    {

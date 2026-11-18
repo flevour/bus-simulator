@@ -1088,11 +1088,17 @@ export class City {
     // strada e dove il terreno cambia sulla larghezza della carreggiata si piega (#85, #137)
     // I triangoli seguono anche il terreno, come la sede a terra (nearSede): con i soli vertici sul bordo, dove il terreno
     // si incurva sotto la sede passavano sopra le corsie rosse (rampa del San Marco verso l'Ippodromo)
-    const quotaSu = (x, z) => Y_ROAD + this.quotaSede(x, z) + 0.004;
-    const curvaSu = (l2, ax, az, bx, bz, ya, yb) => {
+    // Mai sopra la strada accanto: al Chiesanuova un binario sale già a 0,6 m dove la strada e l'altro binario stanno a
+    // 5-8 cm, e la sede si alzava di 0,6 m sul taglio con la sede a terra, con la sua faccia di traverso alla strada
+    // (le corsie rosse di quel binario restano alla sua quota, come prima)
+    const sedeSu = (x, z) => Math.min(this.quotaSede(x, z), this.elevHeight(x, z));
+    const quotaSu = (x, z) => Y_ROAD + sedeSu(x, z) + 0.004;
+    // (solo il terreno, come nearSede: la quota del binario lungo il lato la segue già polygonH, e con le due quote a ogni
+    // prova la sede in quota costava 0,2 s all'avvio)
+    const curvaSu = (l2, ax, az, bx, bz) => {
       if (!ter || l2 <= 4) return false;
-      const a = ya + ter(ax, az), b = yb + ter(bx, bz);
-      return [0.25, 0.5, 0.75].some((t) => { const x = ax + (bx - ax) * t, z = az + (bz - az) * t; return Math.abs(quotaSu(x, z) + ter(x, z) - a - (b - a) * t) > 0.01; });
+      const ta = ter(ax, az), tb = ter(bx, bz);
+      return [0.25, 0.5, 0.75].some((t) => Math.abs(ter(ax + (bx - ax) * t, az + (bz - az) * t) - ta - (tb - ta) * t) > 0.01);
     };
     for (const rings of S.upSede || []) {
       const t0 = upA.idx.length;
@@ -1104,32 +1110,86 @@ export class City {
     // fonde con l'asfalto a terra, e dove la rampa a raso finisce di traverso sulla sua stessa carreggiata (da #126 i
     // tratti sotto 5 cm sono asfalto a terra: lì una riga attraversava la strada)
     const suStrada = (x, z) => rg.query(x, z, 1, q).some((it) => distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d < it.hw);
+    const arcoIn = (x, z) => { let best = null, bd = 0; for (const it of rg.query(x, z, 1, q)) { const d = distToSeg(x, z, it.ax, it.az, it.bx, it.bz).d - it.hw; if (d < bd) { bd = d; best = it; } } return best; };
     for (const rings of S.up || []) borderLines(rings, (a, b, inx, inz, outx, outz) => !latiSedeSu.has(lato(a.x, a.z, b.x, b.z)) && marked(inx, inz, true) && !suStrada(outx, outz), (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.012);
-    // fianchi delle rampe a raso (#126): sotto l'impalcato (DECK_MIN, 0,6 m) la carreggiata in quota non ha fianchi, e
-    // la pianta a terra non continua più sotto di lei: dal suo bordo, qualche centimetro sopra il suolo, si vedeva il
-    // terreno (una riga sottile dove l'asfalto a terra lascia il posto alla rampa). Una faccia verticale fino a terra
+    // fianchi delle rampe a raso (#126): dove la rampa disegnata sta sotto 15 cm (street_surfaces.H_RASO) la pianta a
+    // terra non continua sotto di lei, e dal suo bordo, qualche centimetro sopra il suolo, si vedeva il terreno (una riga
+    // sottile dove l'asfalto a terra lascia il posto alla rampa). Una faccia verticale fino a terra
     // Tra asfalto e sede in quota la faccia va da una quota all'altra: la strada prende la quota del suo asse e la sede
     // quella del binario, e dove il terreno non è uguale sulla larghezza (#137) tra le due c'è un gradino, fino a mezzo
     // metro sulla rampa del San Marco verso l'Ippodromo
     const fianco = new GeoBuilder(), latiSu = lati(S.up || []);
-    const faccia = (ax, az, bx, bz, a0, b0, a1, b1) => fianco.quad([ax, Y_ROAD + a0, az], [bx, Y_ROAD + b0, bz], [ax, Y_ROAD + a1 + 0.004, az], [bx, Y_ROAD + b1 + 0.004, bz], [0, 0, 1, 0, 0, 1, 1, 1]);
+    // due volte, una per verso (con DoubleSide three.js gira la normale per la faccia vista da dietro, e la normale in su
+    // diventava in giù: la faccia usciva nera)
+    const faccia = (ax, az, bx, bz, a0, b0, a1, b1) => {
+      const A0 = [ax, Y_ROAD + a0, az], B0 = [bx, Y_ROAD + b0, bz], A1 = [ax, Y_ROAD + a1 + 0.004, az], B1 = [bx, Y_ROAD + b1 + 0.004, bz];
+      // trama nella scala della strada anche in altezza (con la stessa in alto e in basso venivano righe verticali)
+      const ua = [ax / 20, az / 20], ub = [bx / 20, bz / 20], va = [ax / 20, (az + a1 - a0) / 20], vb = [bx / 20, (bz + b1 - b0) / 20];
+      fianco.quad(A0, B0, A1, B1, [...ua, ...ub, ...va, ...vb]);
+      fianco.quad(B0, A0, B1, A1, [...ub, ...ua, ...vb, ...va]);
+    };
+    // La faccia segue la quota fino a mezzo metro, come il bordo della carreggiata disegnata (polygonH divide i lati dove
+    // la quota non è lineare): con le sole quote dei capi, su un lato dove elevHeight salta (al
+    // Borgomagno, sul taglio di una carreggiata a 5 cm, l'altra accanto sta già a 0,47 m) la faccia spuntava sopra la
+    // strada. Fino a terra solo dove la rampa sta sotto 15 cm: sopra, la pianta a terra continua sotto di lei. Sul taglio
+    // di traverso alla carreggiata (strada da tutte e due le parti, lato quasi perpendicolare all'arco) tutto il lato:
+    // dove l'altra carreggiata alza la quota disegnata, da sotto la rampa si vedeva il terreno della rampa a raso accanto.
+    // Un lato lungo la strada tra due carreggiate a quote diverse resta aperto (sotto c'è la strada a terra): con la
+    // faccia intera, al Corso Argentina un muro scuro correva accanto alla corsia
     const fianchi = (rings, hFn, altra, hAltra) => {
       for (const r of rings) for (let i = 0; i < r.length; i += 2) {
         const j = (i + 2) % r.length, ax = r[i], az = r[i + 1], bx = r[j], bz = r[j + 1], ha = hFn(ax, az), hb = hFn(bx, bz);
-        if (altra.has(lato(ax, az, bx, bz))) {
+        const comune = altra.has(lato(ax, az, bx, bz)), mx = (ax + bx) / 2, mz = (az + bz) / 2, hm = hFn(mx, mz);
+        const sa = comune ? hAltra(ax, az) : 0, sb = comune ? hAltra(bx, bz) : 0;
+        let traverso = false;
+        if (comune) {
           // lato in comune: la faccia la mette chi sta più in alto
-          const sa = hAltra(ax, az), sb = hAltra(bx, bz);
-          if (ha + hb > sa + sb && Math.max(ha - sa, hb - sb) > 0.01) faccia(ax, az, bx, bz, sa + 0.004, sb + 0.004, ha, hb);
-          continue;
+          if (Math.max(ha - sa, hb - sb, hm - hAltra(mx, mz)) <= 0.01) continue;
+        } else {
+          if (Math.max(ha, hb, hm) < 0.01 || Math.min(ha, hb, hm) >= 0.15) continue;
+          const L = Math.hypot(bx - ax, bz - az) || 1, nx = ((bz - az) / L) * 0.3, nz = (-(bx - ax) / L) * 0.3;
+          const it = arcoIn(mx + nx, mz + nz) || arcoIn(mx - nx, mz - nz);
+          traverso = !!it && suStrada(mx + nx, mz + nz) && suStrada(mx - nx, mz - nz) && Math.abs(((bx - ax) * (it.bx - it.ax) + (bz - az) * (it.bz - it.az)) / (L * (Math.hypot(it.bx - it.ax, it.bz - it.az) || 1))) < 0.5;
         }
-        if (Math.max(ha, hb) < 0.01 || Math.min(ha, hb) >= 0.6) continue;
-        faccia(ax, az, bx, bz, 0, 0, ha, hb);
+        // a metà finché la quota si stacca dalla corda di più di 1 cm, fino a mezzo metro (come polygonH divide il bordo
+        // disegnato); fuori dai tagli di traverso la faccia fino a terra si ferma dove la rampa passa i 15 cm
+        const tratto = (x0, z0, h0, s0, x1, z1, h1, s1) => {
+          if ((x1 - x0) ** 2 + (z1 - z0) ** 2 > 0.25) {
+            const x = (x0 + x1) / 2, z = (z0 + z1) / 2, h = hFn(x, z), s = comune ? hAltra(x, z) : 0;
+            if (Math.abs(h - (h0 + h1) / 2) > 0.01 || Math.abs(s - (s0 + s1) / 2) > 0.01) {
+              tratto(x0, z0, h0, s0, x, z, h, s);
+              tratto(x, z, h, s, x1, z1, h1, s1);
+              return;
+            }
+          }
+          if (comune) {
+            if (h0 + h1 > s0 + s1 && Math.max(h0 - s0, h1 - s1) > 0.01) faccia(x0, z0, x1, z1, s0 + 0.004, s1 + 0.004, h0, h1);
+          } else if (Math.max(h0, h1) >= 0.01 && (traverso || Math.min(h0, h1) < 0.15)) {
+            if (traverso || Math.max(h0, h1) <= 0.15) faccia(x0, z0, x1, z1, 0, 0, h0, h1);
+            else {
+              const t = (0.15 - h0) / (h1 - h0), x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+              if (h0 < h1) faccia(x0, z0, x, z, 0, 0, h0, 0.15);
+              else faccia(x, z, x1, z1, 0, 0, 0.15, h1);
+            }
+          }
+        };
+        tratto(ax, az, ha, sa, bx, bz, hb, sb);
       }
     };
-    const hStrada = (x, z) => this.elevHeight(x, z), hSede = (x, z) => this.quotaSede(x, z);
+    const hStrada = (x, z) => this.elevHeight(x, z), hSede = sedeSu;
     for (const rings of S.up || []) fianchi(rings, hStrada, latiSedeSu, hSede);
     for (const rings of S.upSede || []) fianchi(rings, hSede, latiSu, hStrada);
-    if (fianco.pos.length) this.group.add(new THREE.Mesh(fianco.build(), new THREE.MeshLambertMaterial({ color: 0xa9a397, side: THREE.DoubleSide })));
+    // con la trama dell'asfalto nella scala della strada e illuminate come lei (normali verso l'alto): una faccia
+    // verticale prende la luce di fianco, e i 5 cm sul taglio tra asfalto a terra e rampa erano una riga scura (o chiara,
+    // contro il sole) di traverso alla strada a ogni piede di rampa
+    if (fianco.pos.length) {
+      const fg = fianco.build(), nn = fg.attributes.normal;
+      for (let i = 0; i < nn.count; i++) nn.setXYZ(i, 0, 1, 0);
+      const fm = new THREE.Mesh(fg, new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }));
+      fm.receiveShadow = true;
+      fm.name = 'fianchi';
+      this.group.add(fm);
+    }
     if (upA.pos.length) { const um = new THREE.Mesh(upA.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 3)); um.receiveShadow = true; this.upMat = um.material; this.group.add(um); }
     const am = new THREE.Mesh(asph.build(), layer(new THREE.MeshLambertMaterial({ map: TX.intersectionTexture() }), 2));
     am.receiveShadow = true;

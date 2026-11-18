@@ -703,25 +703,51 @@ decidono più `polygonOffset` e i centimetri di quota. Da sapere:
   vicine di 10 cm (43 m² di sovrapposizioni, tutte sotto i 5 cm di spessore); `coverage_simplify` di shapely
   (Visvalingam-Whyatt) toglie i vertici per area e mangiava le punte dei marciapiedi accanto alle banchine; l'unione
   delle linee in virgola mobile, e `coverage_clean` di GEOS 3.14.1, alla rotonda di Santa Croce davano all'asfalto
-  un'isola di 440 m² che ne riempie un buco con il bordo spostato di 2 cm;
+  un'isola di 440 m² che ne riempie un buco con il bordo spostato di 2 cm. Una quarta per la località (#139): l'unione
+  sulla griglia arrotonda i nodi, ma calcola gli incroci dai vertici com'erano, e dove due bordi quasi coincidono (il
+  lato fermo di una rampa a raso e quello dell'asfalto a terra della stessa carreggiata) l'ultima cifra di un vertice
+  sposta l'incrocio di decimetri; l'ultima cifra dell'asfalto cambia anche lontano da un cambio (le differenze e
+  `buffer(0)` di tutta la città, di prima di #126), e nella prova della località un nodo di una rampa a Corso Primo
+  Maggio si spostava di 0,8 m per un nodo alzato a 3,7 km. `partizione` mette i vertici sulla griglia prima di unire;
 - `build_map.py` si ferma se due classi della stessa cella si sovrappongono (`street_surfaces.sovrapposte`);
   `scripts/verifica_mappa.py` misura le stesse coppie, sede compresa, per riquadro da 800 m;
 - in quota: i tratti degli archi in quota sotto 5 cm (`Q_TERRA`, i piedi delle rampe: un quarto di quello che era
-  asfalto in quota) sono asfalto a terra. Dove la rampa sta sotto 50 cm (`H_RASO`, a raso) le classi a terra le
+  asfalto in quota) sono asfalto a terra. Dove la rampa disegnata sta sotto 15 cm (`H_RASO`) le classi a terra le
   lasciano il posto: l'asfalto e la sede in quota come li disegna il gioco entrano nella partizione del riquadro come
-  una classe prima di tutte che non esce (`rampa` di `partizione`), con i bordi fermi, così la pianta a terra finisce
-  sul bordo della rampa disegnata. Restano fessure di qualche centimetro solo dove un altro bordo della pianta
-  incontra quello della rampa (l'arrotondamento finale sposta quel nodo dal lato della rampa): `raccordi.Pianta`
-  chiude i buchi dell'asfalto larghi in media meno di 10 cm (`FESSURA`). Due prove scartate: tagliare con la geometria esatta delle rampe lasciava fessure
-  fino a 4 cm (i due bordi semplificati per strade diverse), che il controllo dei raccordi prendeva per il bordo della
-  strada (sei svolte nuove senza raccordo sul San Marco e sul Camerini); una fascia di 30 cm di asfalto a terra sotto
-  il bordo della rampa dava un caso nuovo degli strati a Corso Primo Maggio con Via Guizza, dove la quota scritta resta
-  di pochi centimetri per decine di metri e da vicino vinceva l'asfalto a terra. Sopra i 50 cm la rampa passa sopra
-  le strade a terra, come un ponte;
-- la sede in quota è una classe a sé, `surfaces.upSede`: dove il binario è in quota (`_tram_heights`, come gli
-  impalcati) la sede si toglie dall'asfalto in quota, e il gioco la disegna alla quota del binario (`City.quotaSede`,
-  dal profilo `tramH` come `onSede`), con lo stesso materiale dell'asfalto in quota. Asfalto e sede in quota si tagliano
-  sulla griglia della mappa dopo aver semplificato, così hanno lo stesso lato in comune;
+  una classe prima di tutte (`rampa` di `partizione`), con i bordi fermi, così la pianta a terra finisce sul bordo
+  della rampa disegnata. La quota è quella che disegna il gioco (`City.elevHeight`: la più alta tra gli archi in
+  quota entro mezza carreggiata più 1,5 m, `MARGINE_QUOTA`), non quella dell'arco: tagliando con la quota dell'arco la
+  pianta a terra finiva dove la rampa disegnata stava già decimetri più su, e il gradino si vedeva (Chiesanuova,
+  Borgomagno, Grassi). Sopra i 15 cm la rampa passa sopra le classi a terra, come un ponte: sta più in alto e ha lo
+  strato più alto, quindi vince da vicino e da lontano. Restano fessure di qualche centimetro solo dove un altro bordo
+  della pianta incontra quello della rampa (l'arrotondamento finale sposta quel nodo dal lato della rampa):
+  `raccordi.Pianta` chiude i buchi dell'asfalto larghi in media meno di 10 cm (`FESSURA`). Due prove scartate:
+  tagliare con la geometria esatta delle rampe lasciava fessure fino a 4 cm, che il controllo dei raccordi prendeva per
+  il bordo della strada (sei svolte nuove senza raccordo sul San Marco e sul Camerini); una fascia di 30 cm di asfalto
+  a terra sotto il bordo della rampa dava un caso nuovo degli strati a Corso Primo Maggio con Via Guizza, dove la
+  quota resta di pochi centimetri per decine di metri e da vicino vinceva l'asfalto a terra;
+- la sede in quota è una classe a sé, `surfaces.upSede`: la sede sotto ogni carreggiata in quota quasi parallela al
+  binario (una di traverso è un ponte sopra il tram), tolta dall'asfalto in quota. Il gioco la disegna alla quota del
+  binario (`City.quotaSede`, dal profilo `tramH` come `onSede`), mai sopra la strada accanto (`elevHeight`: al
+  Chiesanuova un binario sale già a 0,6 m dove la strada sta a 5 cm), con lo stesso materiale dell'asfalto in quota e
+  con i triangoli divisi dove il terreno si incurva (come `nearSede`). Non conta la quota del binario: sulla rampa del San
+  Marco verso l'Ippodromo il binario sta pochi centimetri sopra il terreno e la strada accanto 0,4-0,8 m (#137), e con
+  la quota stimata dalla strada (`_tram_heights`, come gli impalcati) per uno dei due binari l'asfalto in quota copriva
+  ancora la corsia rossa. Asfalto e sede in quota si tagliano sulla griglia della mappa dopo aver semplificato, così
+  hanno lo stesso lato in comune;
+- facce verticali nuove (`buildSurfaces`, mesh `fianchi`): tra asfalto e sede in quota, da una quota all'altra (fino a
+  mezzo metro all'Ippodromo, #137), e sul bordo delle rampe fino a terra dove la rampa sta sotto 15 cm; sul taglio di
+  traverso alla carreggiata (strada dalle due parti, lato quasi perpendicolare all'arco) tutto il lato, perché lì
+  `elevHeight` prende la quota dell'altra carreggiata se è più alta (al Borgomagno 0,47 m sul taglio a 5 cm) e da sotto
+  si vedeva il terreno della rampa a raso. Senza facce, dal gradino si vedeva il terreno: una riga color prato di
+  traverso a Via Salboro, lungo la corsia all'Ippodromo. Tre dettagli: la faccia segue `elevHeight` dividendo a metà
+  fino a mezzo metro dove si stacca dalla corda, come il bordo disegnato (con le quote dei soli capi spuntava sopra la
+  strada dove la quota salta); ogni quadrilatero c'è due volte, una per verso, con il materiale da un lato solo (con
+  `DoubleSide` three.js gira la normale della faccia vista da dietro, e la faccia usciva nera); le normali sono in su,
+  così una faccia di 5 cm ha la luce della strada e non fa una riga scura a ogni piede di rampa. Le righe di bordo
+  dell'asfalto in quota non si disegnano dove fuori c'è ancora strada (al Mortise una riga attraversava la carreggiata
+  sul taglio). `buildDecks` abbassa il piano dell'impalcato alla quota della sede in quota dove sta sotto di lei: sul
+  San Marco la sede sta fino a 6 cm sotto la strada, e il piano chiaro ci spuntava sopra;
 - nel gioco `buildSurfaces` disegna la sede a terra nella mesh dell'asfalto (corsie rosse e rotaie restano segni sopra,
   `buildTramway`); i lati in comune tra asfalto e sede non hanno cordolo né riga e non contano per `surfaceOff`. Le
   banchine del tram hanno lo strato 9: stanno 18 cm sopra le isole (strato 8) che a volte hanno sotto, e alla fermata

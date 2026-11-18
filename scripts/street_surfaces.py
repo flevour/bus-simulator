@@ -34,7 +34,8 @@ TILE = 200  # m: riquadri dell'export
 CREPA = 0.3  # m: metà della fessura più larga che si chiude tra un parcheggio e la carreggiata
 DECK_MIN = 0.6  # m: da questa quota in su la strada o il tram stanno su un impalcato (sotto è rampa a raso)
 Q_TERRA = 0.05  # m: un tratto di arco in quota più basso di così è asfalto a terra (#126)
-H_RASO = 0.5  # m: sotto questa quota asfalto in quota e classi a terra sono lo stesso piano: ne resta uno solo (#126)
+H_RASO = 0.15  # m: sotto questa quota la rampa disegnata e le classi a terra sono lo stesso piano: ne resta una sola (#126)
+MARGINE_QUOTA = 1.5  # m: il gioco dà a un punto la quota più alta tra gli archi in quota entro mezza carreggiata più questo
 DECK_EDGE = 1.0  # m: l'impalcato sporge oltre la carreggiata (cordolo e parapetto)
 DECK_JOIN = 4.5  # m: impalcati più vicini del doppio di così diventano un corpo unico (Cavalcavia Borgomagno)
 TRAM_HALF = 1.7 + 0.5  # m: metà della corsia di un binario più il cordolo
@@ -320,9 +321,9 @@ def tratti_quota(q, lo, hi=math.inf):
     return out
 
 
-def pezzi_quota(nodes, edges, ks, heights, profili, dichiarati, lo, hi=math.inf):
-    """Carreggiata degli archi ks dove la quota sta tra lo e hi: i tratti allargati a mezza carreggiata con i capi
-    dritti, più il disco del nodo dove la quota del nodo ci sta (come i giunti tondi della carreggiata intera)."""
+def pezzi_quota(nodes, edges, ks, heights, profili, dichiarati, lo, hi=math.inf, margine=0.0):
+    """Carreggiata degli archi ks dove la quota sta tra lo e hi: i tratti allargati a mezza carreggiata (più margine)
+    con i capi dritti, più il disco del nodo dove la quota del nodo ci sta (come i giunti tondi della carreggiata)."""
     parts = []
     for k in ks:
         e = edges[k]
@@ -331,10 +332,10 @@ def pezzi_quota(nodes, edges, ks, heights, profili, dichiarati, lo, hi=math.inf)
         P = lambda t: (A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t)
         for t0, t1 in tratti_quota(q, lo, hi):
             if (t1 - t0) * math.dist(A, B) > 1e-3:
-                parts.append(LineString([P(t0), P(t1)]).buffer(e[3] / 2, cap_style='flat'))
+                parts.append(LineString([P(t0), P(t1)]).buffer(e[3] / 2 + margine, cap_style='flat'))
         for n, h in ((e[0], q[0][1]), (e[1], q[-1][1])):
             if lo <= h < hi:
-                parts.append(Point(nodes[n]).buffer(e[3] / 2, quad_segs=4))
+                parts.append(Point(nodes[n]).buffer(e[3] / 2 + margine, quad_segs=4))
     return parts
 
 
@@ -640,7 +641,13 @@ def partizione(pezzi, b, hfun=None, rampa=()):
     fitte_c = [False] + [c[2] for c in CLASSI]
     cl = [[q for g in p for q in _polys(canonico(g))] for p in pezzi]
     # facce della copertura e classe di ognuna: la prima che ne contiene un punto interno, altrimenti il vuoto (n)
-    linee = shapely.union_all([bx.exterior] + [LineString(r.coords) for ps in cl for p in ps for r in [p.exterior, *p.interiors]], grid_size=NODI)
+    # i vertici sulla griglia prima di unire (#139): l'unione arrotonda i nodi, ma l'incrocio tra due linee lo calcola dai
+    # vertici com'erano, e dove due bordi quasi coincidono (il lato fermo della rampa a raso e quello dell'asfalto a terra
+    # della stessa carreggiata) l'ultima cifra di un vertice sposta l'incrocio di decimetri lungo il lato. L'ultima cifra
+    # dell'asfalto cambia anche lontano da un cambio (le differenze e buffer(0) di tutta la città): nella prova della
+    # località un nodo della rampa a Corso Primo Maggio si spostava di 0,8 m per una quota cambiata a 3,7 km
+    anelli = shapely.set_precision(np.array([LineString(r.coords) for ps in cl for p in ps for r in [p.exterior, *p.interiors]], dtype=object), NODI, mode='pointwise')
+    linee = shapely.union_all([bx.exterior, *anelli], grid_size=NODI)
     facce = [f for f in shapely.get_parts(shapely.polygonize(shapely.get_parts(linee))) if f.area > 1e-9]
     punti = shapely.point_on_surface(np.array(facce, dtype=object))
     classe = np.full(len(facce), n)
@@ -1073,8 +1080,12 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     # la geometria esatta delle rampe, i due bordi venivano semplificati e arrotondati per strade diverse, e tra l'uno e
     # l'altro restavano fessure fino a 4 cm (il controllo dei raccordi le prendeva per il bordo della strada); con una
     # fascia sotto il bordo della rampa, dove la rampa sta pochi centimetri sopra il terreno, da vicino vinceva l'asfalto
-    # a terra (Corso Primo Maggio a Via Guizza)
-    rampa = shapely.difference(unione(_polys(up_a) + _polys(up_s)), up_sopra)
+    # a terra (Corso Primo Maggio a Via Guizza). La quota è quella che il gioco disegna (City.elevHeight): la più alta
+    # tra gli archi in quota entro mezza carreggiata più MARGINE_QUOTA, quindi la rampa sta sopra H_RASO anche dove il
+    # suo arco è più basso ma uno accanto no. Lì le classi a terra restano sotto, come le strade sotto un ponte: con la
+    # quota dell'arco la pianta a terra finiva dove la rampa disegnata stava già decimetri più su, e il gradino si vedeva
+    alto_visto = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, H_RASO, margine=MARGINE_QUOTA))
+    rampa = shapely.difference(unione(_polys(up_a) + _polys(up_s)), alto_visto)
     S = S_tutta.difference(D).difference(up_sopra)
     if lanes:
         islands = islands.difference(S)

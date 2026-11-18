@@ -67,7 +67,6 @@
      "la corsia è fuori dall'asfalto, Via Sant'Andrea > senza nome @ -660,6872",
      "la corsia è fuori dall'asfalto, Via del Plebiscito 1866 > Via del Plebiscito 1866 @ 1675,-2499",
      "la corsia è fuori dall'asfalto, Via del Plebiscito 1866 > Via del Plebiscito 1866 @ 1708,-2367",
-     "la corsia è fuori dall'asfalto, Via del Plebiscito 1866 > Via del Plebiscito 1866 @ 1740,-2239",
      "la corsia è fuori dall'asfalto, Via della Croce Rossa > Via della Croce Rossa @ 2940,-475",
      "la corsia è fuori dall'asfalto, Via della Croce Rossa > Via della Croce Rossa @ 2997,-511",
      "la corsia è fuori dall'asfalto, Via della Croce Rossa > Via della Croce Rossa @ 3001,-514",
@@ -100,6 +99,13 @@
      "la corsia è fuori dall'asfalto, senza nome > senza nome @ 4240,-923",
      "la corsia è fuori dall'asfalto, senza nome > senza nome @ 432,-976",
      "la corsia è fuori dall'asfalto, senza nome > senza nome @ 468,-999"
+    ]
+   },
+   {
+    "perche": "Pianta delle strade come partizione (#126, 18 novembre 2026): corsie che stanno fuori dall'asfalto di 0,12 m (Via Luigi Einaudi, dove prima la curva non c'era e le auto restavano senza uscita) e di 0,33 m (da Via Tiziano Vecellio in Via del Plebiscito, nello stesso nodo del caso di prima tra due rami di Via del Plebiscito): il bordo dell'asfalto, semplificato una volta sola tra due classi e arrotondato sulla griglia da 10 cm, si è spostato di qualche decimetro. Sono corsie disegnate più larghe della carreggiata, come quelle di #133.",
+    "casi": [
+     "la corsia è fuori dall'asfalto, Via Luigi Einaudi > Via Luigi Einaudi @ 3401,-1140",
+     "la corsia è fuori dall'asfalto, Via Tiziano Vecellio > Via del Plebiscito 1866 @ 1740,-2239"
     ]
    }
   ],
@@ -210,7 +216,6 @@
      "curva, Via Ludovico Ariosto @ 1849,387",
      "curva, Via Ludovico Ariosto @ 1854,385",
      "curva, Via Ludovico Ariosto @ 1880,28",
-     "curva, Via Luigi Einaudi @ 3401,-1140",
      "curva, Via Lungargine del Brenta @ 1467,-4546",
      "curva, Via Madonnetta @ -211,412",
      "curva, Via Maria Malibran @ 2729,770",
@@ -382,8 +387,13 @@
    {
     "perche": "La sola svolta delle auto da questa corsia è al raggio minimo (3,8-3,9 m, a destra in una via di 5-6 m), e dopo #139 non sta più nell'asfalto: la pianta semplificata per riquadro ha spostato l'angolo di 16-18 cm. Al limite, come i gomiti del gruppo sopra.",
     "casi": [
-     "curva, Piazzale Centenario Club Ignoranti @ -1731,-1190",
-     "curva, Via Beata Eustochio @ -332,2144"
+     "curva, Piazzale Centenario Club Ignoranti @ -1731,-1190"
+    ]
+   },
+   {
+    "perche": "Pianta delle strade come partizione (#126, 18 novembre 2026): una svolta delle sole auto al raggio minimo che con l'angolo dell'asfalto spostato di qualche decimetro non sta più sull'asfalto (strada senza nome a nord, (-433, 6261)), come i casi di #139; quella di Via Beata Eustochio e quella di Via Luigi Einaudi sono tornate.",
+    "casi": [
+     "curva, senza nome @ -433,6261"
     ]
    }
   ],
