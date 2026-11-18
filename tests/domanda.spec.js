@@ -49,12 +49,12 @@ test('viaggi con origine e destinazione, percorsi che seguono i tempi, auto che 
 });
 
 // La punta c'è. Su tre corridoi dove il GTFS ha le corse più lente alle 7-9 e alle 17-19 (docs/domanda.md, sezione 7),
-// per ogni ora e verso il tempo medio di quattro auto sonda (almeno tre arrivate); per ogni corridoio e ora di punta il rapporto con la
+// per ogni ora e verso il tempo medio di tre auto sonda (almeno due arrivate); per ogni corridoio e ora di punta il rapporto con la
 // morbida (le 11 o le 22, la più lenta) nel verso che la sente di più: la mattina di solito chi va verso il centro, la
 // sera chi ne esce. La media dei tre corridoi alle 8 e alle 18 deve superare 1,08.
 // Una misura aggregata con un margine, non un elenco di casi: gli intrecci esatti di qualche minuto di traffico cambiano
 // tra il Mac e Linux e a ogni piccolo cambiamento (#145), e un corridoio da solo può non sentire la punta (Via Sorio
-// non la sente: sezione 8 di docs/domanda.md, #147). Il 17 novembre sul Mac: 1,21 alle 8 e 1,41 alle 18
+// non la sente: sezione 8 di docs/domanda.md, #147). Il 18 novembre sul Mac: 1,26 alle 8 e 1,39 alle 18
 const SOGLIA_PUNTA = 1.08;
 test('punte del mattino e della sera sui tre corridoi: più lenti alle 8 e alle 18 che alle 11 e alle 22', async ({ pagina, gioco }, info) => {
   tempoMassimo(900);
@@ -64,12 +64,12 @@ test('punte del mattino e della sera sui tre corridoi: più lenti alle 8 e alle 
     const misure = [];
     for (const { ora, partenza } of ORE) {
       await avviaCorsa(pagina, { linea: '10', partenza });
-      misure.push(await pagina.evaluate(misuraCorridoio, { corr, ora, statiFn: corridoioStati.toString(), sonde: 4 }));
+      misure.push(await pagina.evaluate(misuraCorridoio, { corr, ora, statiFn: corridoioStati.toString() }));
     }
     tutte.push({ corridoio: corr.nome, misure });
-    // tempo medio delle sonde arrivate; ne devono arrivare almeno tre su quattro per verso (una che resta indietro più di
+    // tempo medio delle sonde arrivate; ne devono arrivare almeno due su tre per verso (una che resta indietro più di
     // dieci minuti o esce di scena non fa la media, ma due sono un difetto del traffico)
-    for (const m of misure) for (const v of m.tempi) expect(v.filter((x) => x != null).length, `${corr.nome} alle ${m.ora}: sonde arrivate (${JSON.stringify(m.tempi)})`).toBeGreaterThanOrEqual(3);
+    for (const m of misure) for (const v of m.tempi) expect(v.filter((x) => x != null).length, `${corr.nome} alle ${m.ora}: sonde arrivate (${JSON.stringify(m.tempi)})`).toBeGreaterThanOrEqual(2);
     const t = Object.fromEntries(misure.map((m) => [m.ora, m.tempi.map((v) => media(v.filter((x) => x != null)))]));
     for (const h of [8, 18]) punte[h].push(Math.max(...[0, 1].map((v) => t[h][v] / Math.max(t[11][v], t[22][v]))));
     righe.push(`${corr.nome}: ${misure.map((m) => `alle ${m.ora} ${t[m.ora].map(Math.round).join(' e ')} s (disco ${m.raggio} m)`).join('; ')}; punta delle 8 ${punte[8].at(-1).toFixed(2)}, delle 18 ${punte[18].at(-1).toFixed(2)}`);

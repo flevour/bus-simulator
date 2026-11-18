@@ -190,29 +190,33 @@ di casi: gli intrecci esatti di qualche minuto di traffico cambiano tra il Mac e
   Pontecorvo costa più del 10% che con quelli delle 11 (264,7 s contro 222,6); portando l'orologio alle 22:30, senza
   ripartire, il disco si allarga di più di una volta e mezza (da 306 a 1.028 m: #60).
 - Punte: sui tre corridoi della tabella sopra, alle 8, alle 11, alle 18 e alle 22 di un feriale (corsa della 10,
-  poi l'orologio all'ora), chi guida a 900 m e il disco fermo a metà del corridoio, 60 s di riscaldamento e quattro
-  auto sonda per verso, una ogni 20 s, con un viaggio fino all'altro capo. Per ogni corridoio e ora di punta il
+  poi l'orologio all'ora), chi guida a 900 m e il disco fermo a metà del corridoio, 60 s di riscaldamento e tre
+  auto sonda per verso, una ogni 15 s, con un viaggio fino all'altro capo (almeno due arrivate per verso). Per ogni corridoio e ora di punta il
   rapporto tra il tempo medio e quello della morbida più lenta (11 o 22) nel verso che la sente di più; la media dei
   tre corridoi deve superare 1,08 alle 8 e alle 18.
 
-Tempi medi delle auto sonda sul Mac, 17 novembre (quattro per verso; verso il centro, poi verso fuori):
+Tempi medi delle auto sonda sul Mac, 18 novembre (tre per verso; verso il centro, poi verso fuori):
 
 | Corridoio | 8 | 11 | 18 | 22 | punta delle 8 | delle 18 |
 |---|---|---|---|---|---|---|
-| Via Sorio (940 m) | 82 e 114 s | 78 e 119 | 78 e 121 | 78 e 102 | 1,04 | 1,02 |
-| Via Facciolati (990 m) | 172 e 84 | 109 e 94 | 95 e 172 | 94 e 94 | 1,58 | 1,82 |
-| Via Ariosto e Via Gattamelata (1.350 m) | 254 e 152 | 250 e 150 | 347 e 152 | 129 e 156 | 1,02 | 1,39 |
-| media | | | | | 1,21 | 1,41 |
+| Via Sorio (940 m) | 71 e 105 s | 70 e 105 | 70 e 110 | 69 e 103 | 1,02 | 1,04 |
+| Via Facciolati (990 m) | 178 e 90 | 119 e 95 | 93 e 162 | 100 e 104 | 1,50 | 1,55 |
+| Via Ariosto e Via Gattamelata (1.350 m) | 271 e 148 | 214 e 146 | 337 e 146 | 127 e 147 | 1,27 | 1,58 |
+| media | | | | | 1,26 | 1,39 |
+
+In CI la prova con quattro sonde e una ogni 20 s durava 14,7 minuti (serie 44299398661), la più lunga della serie; con
+tre ogni 15 s in locale dura 4,2 minuti invece di 5,8-7,0. Con 45 s di riscaldamento invece di 60 le code non fanno in
+tempo a formarsi e la punta delle 8 scendeva a 1,13.
 
 Da un lancio all'altro, con piccoli cambiamenti del traffico, il rapporto di un corridoio si sposta anche di 0,2 (Via
-Gattamelata alle 8 è stata 1,19 e 1,02); la media dei tre molto meno.
+Gattamelata alle 8 è stata 1,19, 1,02 e 1,27); la media dei tre molto meno.
 
 Via Facciolati ha la punta dove la ha il GTFS: la mattina verso il centro, la sera verso fuori; Via Gattamelata la sera
-verso il centro, come la E073, e la mattina poco. Via Sorio no: nella build il tratto tra Via Col Berretta e
-Piazzale San Giovanni porta 90-290 auto l'ora per verso alle 8, lontano dalla capacità. Sta a 170 m dal bordo della
-mappa, e chi arriva da Tencarola, Selvazzano e Rubano entra dalla porta di Via Sorio, pesata come una secondaria
-(0,35 contro 1 di una trunk), o da Corso Australia e Via Chiesanuova (che alle 8 sono le più cariche della mappa). Il
-GTFS dice +43% alle 8 sulla U12: è il primo posto da guardare per tarare le porte (#147).
+verso il centro, come la E073, e la mattina meno (da 1,02 a 1,27 secondo il lancio). Via Sorio no: nella build il tratto
+tra Via Col Berretta e Piazzale San Giovanni porta 90-290 auto l'ora per verso alle 8, lontano dalla capacità. Sta a 170
+m dal bordo della mappa, e chi arriva da Tencarola, Selvazzano e Rubano entra dalla porta di Via Sorio, pesata come una
+secondaria (0,35 contro 1 di una trunk), o da Corso Australia e Via Chiesanuova (che alle 8 sono le più cariche della
+mappa). Il GTFS dice +43% alle 8 sulla U12: è il primo posto da guardare per tarare le porte (#147).
 
 ## 9. Costo per passo
 

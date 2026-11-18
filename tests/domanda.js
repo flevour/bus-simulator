@@ -51,7 +51,7 @@ export function corridoioStati({ da, a, vie }) {
 // in pagina, con la corsa appena avviata (statiFn: corridoioStati come testo): l'orologio all'ora data, chi guida a 900 m dal corridoio, il disco delle auto
 // fermo a metà; riscaldamento di `warm` secondi, poi `sonde` auto per verso, una ogni `passo` secondi, e il tempo di
 // ognuna fino all'altro capo (null se in 600 s non ci arriva). Restituisce i tempi per verso e lo stato del disco
-export function misuraCorridoio({ corr, ora, statiFn, warm = 60, sonde = 4, passo = 20 }) {
+export function misuraCorridoio({ corr, ora, statiFn, warm = 60, sonde = 3, passo = 15 }) {
   const g = window.__game, T = g.traffic, D = g.domanda, E = g.net.edges;
   const stati = new Function('return ' + statiFn)();
   g.mission.clock = ora * 3600;
