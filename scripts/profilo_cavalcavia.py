@@ -985,9 +985,12 @@ class StradeSotto:
                         else:
                             rhs[q[a]] += peso * valore[b]
             if dentro:
+                # (al decimo di millimetro: le ultime cifre di spsolve cambiano da un processore all'altro, e queste quote
+                # entrano nei franchi del programma lineare, che dove ha più soluzioni dello stesso costo cambia scelta:
+                # la mappa di Docker sul Mac e quella della CI differivano in due archi)
                 x = np.atleast_1d(spsolve(coo_matrix((w, (r, c)), shape=(len(dentro), len(dentro))).tocsc(), rhs))
                 for u, i in q.items():
-                    valore[u] = float(x[i])
+                    valore[u] = round(float(x[i]), 4)
         return {j: [valore[u] for u in ks] for j, ks in chiavi.items()}
 
     def quota(self, j, s):
