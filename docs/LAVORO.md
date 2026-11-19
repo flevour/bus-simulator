@@ -1589,6 +1589,29 @@ come prima (al più un minuto); il bus di chi guida non cambia. Da sapere:
 - elenchi: impronta riscritta; in `code.json` spariscono quattro incroci della coda di #148 (Via Piovese con Via
   Lazzaro Mocenigo, Via Gozzi a (460, -650) e con Via Tommaseo, Via Altinate con Via Falloppio); `moto.json` uguale.
 
+Svolte vicine dei percorsi delle linee (#135, 19 novembre). Regola in [`raccordi.md`](raccordi.md), sezione 3 punto 8 e
+sezione 7. Da sapere prima di toccare `percorsoBus` o i raccordi dei bus:
+
+- `percorsoBus` (`src/world/inseguitore.js`) sceglie raccordi e corsie su tutto il percorso con un cammino di costo
+  minimo sugli stati (tratto, raccordo con cui ci si arriva): un cambio di corsia costa quante corsie, uno senza il
+  posto o due raccordi sovrapposti 100 (`costoCambio`), la corsia a destra un poco meno, ogni arco scavalcato
+  `SCAVALCO` (10), il raccordo delle auto o una curva del gioco `RIPIEGO` (100). Prima prendeva a ogni svolta il
+  raccordo con meno archi scavalcati e poi sceglieva le corsie (Viterbi): tra due svolte vicine non vedeva il raccordo
+  unico che le fa insieme, che spesso la build aveva già (per le auto o per un'altra svolta), e il bus faceva una curva
+  del gioco. I pezzi del percorso e i ripieghi contati restano quelli di prima;
+- `percorso_bus` di `scripts/raccordi.py` rifà la stessa scelta in Python, con gli stessi costi: la usa la build
+  (`slegate`, `lega`: dove due svolte col raccordo del bus non si legano, i soli bus hanno le curve che le legano) e il
+  controllo `corsie_slegate` di `scripts/percorsi.py`. Chi cambia uno dei due cambia l'altro. Il ripiego del gioco in
+  Python non ha la curva: le giunzioni vicine a un ripiego non contano (sono di #134);
+- numeri sulla mappa di main (prima di rigenerare): su tutte le varianti (corsie di `BusSim` costruite in Node) i
+  posti con un ripiego dei bus passano da 234 a 118 (979 passaggi di varianti a 483), `cambio di corsia senza posto`
+  da 15 a 2, `raccordi sovrapposti` da 27 a 7, il raccordo delle auto da 176 a 102 (il bus prende il raccordo suo che
+  scavalca la svolta senza); prova del moto da 71 a 33 posti, imbardata peggiore da 16,7 a 9,1 volte quella ammessa;
+- restano, fuori dalla build: la 16 a Via Marconi nell'avvicinamento al capolinea (`walk` di `src/world/buses.js`, che
+  la build non conosce), e due posti (9, 15B e 42 a (1792, -48), 88 a (-635, 2947)) dove il raccordo prima ha raggio
+  zero e il gioco lo arrotonda con un arco di 30 m e fino a mezzo metro di tangente (`curva`), che finisce dopo l'inizio
+  del raccordo dopo, su un arco di pochi metri.
+
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
 Aperta e chiusa l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
