@@ -30,13 +30,13 @@ from collections import Counter, defaultdict
 
 RADICE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RADICE, 'scripts'))
-from raccordi import AUTO, BUS, BUS12, CORTO, SNODATI, SNODATO, Rete, decodifica_sicura  # noqa: E402
+from raccordi import AUTO, BUS, BUS12, CORTO, SNODATI, SNODATO, Rete, capi, decodifica_sicura, percorso_bus, segmenti  # noqa: E402
 from osm_rete import ECCETTO_BUS, OBBLIGO, SVOLTE  # noqa: E402
 
 MAPPA = os.path.join(RADICE, 'src', 'data', 'padova-map.json')
 ELENCO, COMANDO = 'percorsi', 'python3 scripts/percorsi.py --aggiorna'
 TOLL = 3.0  # m: un caso dell'elenco resta lo stesso se si sposta fino a qui
-CONTROLLI = ('salti', 'contromano', 'inversioni', 'svolte_vietate', 'senza_raccordo')
+CONTROLLI = ('salti', 'contromano', 'inversioni', 'svolte_vietate', 'senza_raccordo', 'corsie_slegate')
 
 
 class Rete_bus:
@@ -82,8 +82,11 @@ def casi_percorsi(M, voci=None):
     if voci is None:
         voci = decodifica_sicura(R, M['raccordi'], defaultdict(list)) if M.get('raccordi') else []
     catene = defaultdict(list)  # primo arco -> [(archi, classi)]
+    partono = defaultdict(list)  # (nodo, arco da) -> raccordi del bus, con i capi (#135)
     for v in voci:
         catene[v['cat'][0][0]].append(([c[0] for c in v['cat']], v['classi']))
+        if v['classi'] & BUS:
+            partono[(v['nodo'], v['cat'][0][0])].append(dict(v, **dict(zip(('s0', 's1'), capi(R, v['cat'], v['v'], v['r'])))))
     nome = lambda k: R.nomi[R.archi[k][4]] or 'senza nome'
     svolte = 0
     for l in M['lines']:
@@ -133,6 +136,16 @@ def casi_percorsi(M, voci=None):
                 da, a = archi[i - 1], archi[i]
                 solo_auto = any(m & AUTO and c[:2] == [da, a] for c, m in catene.get(da, ()))
                 caso('senza_raccordo', f"{'solo auto' if solo_auto else 'senza curva'}, {nome(da)} > {nome(a)}", ns[i], (ns[i], da, a))
+            # corsie (#135): due svolte di fila con il raccordo del mezzo che, con i raccordi che percorsoBus sceglie (lo
+            # rifà percorso_bus di scripts/raccordi.py), stanno su corsie diverse senza il posto per cambiarla o si
+            # sovrappongono: il bus lì farebbe una curva del gioco. Quelle vicine a un ripiego sono di senza_raccordo
+            if not any(k is None for k in archi):
+                mm = percorso_bus(R, partono, segmenti(R, ns), bit)
+                for p, m in zip(mm, mm[1:]):
+                    if p[1] == m[0] and p[3] is None and m[3] is None and m[4] >= 100:
+                        Q, V = p[2], m[2]
+                        caso('corsie_slegate', f"{'raccordi sovrapposti' if m[4] >= 1000 else 'cambio di corsia senza posto'}, {nome(Q['cat'][0][0])} > {nome(V['cat'][-1][0])}",
+                             V['nodo'], (V['nodo'], Q['cat'][0][0], V['cat'][-1][0]))
     return casi, svolte
 
 

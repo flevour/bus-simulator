@@ -540,70 +540,63 @@ const segue = (R, segs, i) => {
   return !!s && s.e === R.a && s.fwd === R.fout;
 };
 
-// segs: [{ e, fwd, n0, n1 }] uno per tratto tra due nodi del percorso. bit: classe del mezzo. Ogni svolta prende un
-// raccordo della build per il mezzo (prima i diretti, poi quelli che scavalcano archi corti); senza, quello delle auto
-// (ripiego "auto": raggio sotto il minimo del bus, #134) o una curva del gioco (ripiego, vedi ripiego()). Le corsie si
-// scelgono su tutto il percorso insieme: meno cambi di corsia, mai senza posto, e a destra quando si può. conta(tipo,
-// nodo) per ogni ripiego. Restituisce il percorso e, per ogni pezzo, i tratti del percorso (k0, k1) e le progressive
-// sui due archi, per chi deve passare dal percorso dei nodi a quello del bus
+// segs: [{ e, fwd, n0, n1 }] uno per tratto tra due nodi del percorso. bit: classe del mezzo. A ogni svolta si prende un
+// raccordo della build per il mezzo; senza, quello delle auto (ripiego "auto": raggio sotto il minimo del bus, #134) o
+// una curva del gioco (ripiego, vedi ripiego()). Raccordi e corsie si scelgono su tutto il percorso insieme, con un
+// cammino di costo minimo: meno cambi di corsia, mai senza posto, a destra quando si può, e i raccordi che scavalcano
+// archi corti solo dove quelli diretti non si legano (SCAVALCO a arco, più di qualche cambio di corsia e meno di uno
+// senza posto), e il raccordo delle auto o una curva del gioco solo dove non c'è altro (RIPIEGO, come un cambio di corsia
+// senza posto: vince il cammino con meno ripieghi). Fino a #135 si prendeva a ogni svolta il raccordo con meno archi scavalcati, e dove la svolta dopo
+// partiva da un'altra corsia a pochi metri il bus faceva una curva del gioco; la build dà lì anche la manovra intera,
+// un raccordo che scavalca l'arco di mezzo (docs/raccordi.md, sezione 3). percorso_bus di scripts/raccordi.py rifà
+// questa scelta per la build e per il controllo dei percorsi: si cambiano insieme. conta(tipo, nodo) per ogni ripiego.
+// Restituisce il percorso e, per ogni pezzo, i tratti del percorso (k0, k1) e le progressive sui due archi, per chi deve
+// passare dal percorso dei nodi a quello del bus
+const SCAVALCO = 10, RIPIEGO = 100;
 export function percorsoBus(net, segs, bit, conta) {
   const N = net.nodes, rac = raccordiDi(net), Rmin = RAGGI[bit];
-  const mosse = [];
-  for (let i = 0; i < segs.length - 1;) {
+  const iniz = corsie(segs[0].e || { width: 0, oneway: 1 }, segs[0].fwd).length - 1;
+  // stati a ogni tratto i: come ci si arriva (il raccordo R che ci porta, o nessuno all'inizio e dopo un salto), con il
+  // costo e lo stato di prima
+  const stati = segs.map(() => []);
+  stati[0].push({ R: null, c: 0, prima: null });
+  const fine = segs.length - 1;
+  const arriva = (k, st) => { if (k <= fine) stati[k].push(st); else stati[fine].push(st); };
+  for (let i = 0; i < fine; i++) {
+    if (!stati[i].length) continue;
     const s = segs[i], t = segs[i + 1];
     // due nodi del percorso senza un arco tra loro (dopo s): lo si salta in linea retta (vuota)
-    if (!s.e) { i++; continue; }
-    if (!t.e) { mosse.push({ i, k: i + 2, racs: [], vuota: true }); i += 2; continue; }
+    if (!s.e) { for (const st of stati[i]) arriva(i + 1, st); continue; }
+    const migliore = stati[i].reduce((a, b) => (b.c < a.c ? b : a));
+    if (!t.e) { arriva(i + 2, { R: null, c: migliore.c, prima: migliore, mossa: { i, k: i + 2, racs: [], vuota: true } }); continue; }
     const qui = rac.at(s.n1).filter((R) => R.da === s.e && segue(R, segs, i));
-    const prendi = (f) => {
-      const ok = qui.filter(f);
-      if (!ok.length) return null;
-      const corti = Math.min(...ok.map((R) => R.via.length));
-      return ok.filter((R) => R.via.length === corti);
-    };
-    let racs = prendi((R) => R.classi & bit), tipo = null;
-    if (!racs) { racs = prendi((R) => R.classi & AUTO); tipo = 'raccordo delle auto'; }
-    if (!racs) {
-      const ci = corsie(s.e, s.fwd).length - 1, co = corsie(t.e, t.fwd).length - 1, prima = mosse[mosse.length - 1];
-      const sDa = prima && prima.k === i && prima.racs.length ? Math.max(...prima.racs.map((R) => R.g.s1)) : 0;
+    let racs = qui.filter((R) => R.classi & bit), tipo = null;
+    if (!racs.length) {
+      // il raccordo delle auto, con meno archi scavalcati
+      const ok = qui.filter((R) => R.classi & AUTO);
+      if (ok.length) { const corti = Math.min(...ok.map((R) => R.via.length)); racs = ok.filter((R) => R.via.length === corti); tipo = 'raccordo delle auto'; }
+    }
+    if (!racs.length) {
+      const ci = corsie(s.e, s.fwd).length - 1, co = corsie(t.e, t.fwd).length - 1;
+      const sDa = Math.max(0, ...stati[i].map((st) => (st.R ? st.R.g.s1 : 0)));
       const R = ripiego(net, s.e, s.fwd, ci, sDa, t.e, t.fwd, co, s.n1);
       racs = [R]; tipo = R.ripiego;
     }
-    for (const R of racs) curva(net, R);
-    const k = i + 1 + racs[0].via.length;
-    mosse.push({ i, k, racs, tipo });
-    i = k;
-  }
-  // corsie: cammino di costo minimo sui raccordi delle svolte (Viterbi)
-  const iniz = corsie(segs[0].e || { width: 0, oneway: 1 }, segs[0].fwd).length - 1;
-  const piene = mosse.filter((m) => !m.vuota);
-  const costi = [], da = [];
-  piene.forEach((m, j) => {
-    const sg = segs[m.k], nOut = sg && sg.e ? corsie(sg.e, sg.fwd).length : 1;
-    costi.push([]); da.push([]);
-    m.racs.forEach((R, a) => {
-      const pref = 0.3 * (nOut - 1 - R.ca); // a destra quando si può
-      if (j === 0) {
-        const s0 = segs[m.i];
-        costi[j][a] = costoCambio(s0.e, s0.fwd, iniz, R.cda, R.g.s0, Rmin) + pref; da[j][a] = -1;
-        return;
+    for (const R of racs) {
+      curva(net, R);
+      const k = i + 1 + R.via.length, sg = segs[k], nOut = sg && sg.e ? corsie(sg.e, sg.fwd).length : 1;
+      let best = null, bc = Infinity;
+      for (const st of stati[i]) {
+        // dalla corsia dove si arriva (o da quella di partenza) alla corsia da cui parte R, nello spazio tra i due
+        const c = st.c + (st.R ? costoCambio(s.e, s.fwd, st.R.ca, R.cda, R.g.s0 - st.R.g.s1, Rmin) : st.mossa ? 0 : costoCambio(s.e, s.fwd, iniz, R.cda, R.g.s0, Rmin));
+        if (c < bc) { bc = c; best = st; }
       }
-      const p = piene[j - 1], sg2 = segs[m.i];
-      let best = Infinity, bi = 0;
-      p.racs.forEach((Q, b) => {
-        const c = costi[j - 1][b] + (p.k === m.i && sg2.e ? costoCambio(sg2.e, sg2.fwd, Q.ca, R.cda, R.g.s0 - Q.g.s1, Rmin) : 0);
-        if (c < best) { best = c; bi = b; }
-      });
-      costi[j][a] = best + pref; da[j][a] = bi;
-    });
-  });
-  const scelta = new Array(piene.length);
-  if (piene.length) {
-    const ult = costi[piene.length - 1];
-    let a = ult.indexOf(Math.min(...ult));
-    for (let j = piene.length - 1; j >= 0; j--) { scelta[j] = piene[j].racs[a]; a = da[j][a]; }
+      arriva(k, { R, c: bc + 0.3 * (nOut - 1 - R.ca) + SCAVALCO * R.via.length + (tipo ? RIPIEGO : 0), prima: best, mossa: { i, k, R, tipo } });
+    }
   }
-  piene.forEach((m, j) => { m.R = scelta[j]; if (m.tipo) conta(m.tipo, N[segs[m.i].n1], m.R); });
+  const mosse = [];
+  for (let st = stati[fine].reduce((a, b) => (b.c < a.c ? b : a), { c: Infinity }); st && st.mossa; st = st.prima) mosse.unshift(st.mossa);
+  for (const m of mosse) if (m.tipo) conta(m.tipo, N[segs[m.i].n1], m.R);
   // pezzi
   const per = new Percorso();
   let cor = iniz, s = 0, k = 0;

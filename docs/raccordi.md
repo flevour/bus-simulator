@@ -82,6 +82,15 @@ dell'asfalto.
    `costoCambio` di `src/world/inseguitore.js`, `cambio_min` qui). Oggi succede in un anello solo, a Via Telemaco
    Signorini (1005, -3864): le due uscite sono una via riservata ai bus e una svolta che OSM vieta alle auto, e le auto
    che entravano non uscivano più.
+8. Svolte vicine dei percorsi delle linee (#135). I raccordi valgono svolta per svolta: sul percorso di una linea, tra
+   due svolte a pochi metri, il raccordo della prima può arrivare su una corsia e quello della seconda partire da
+   un'altra, senza il posto per cambiarla, o cominciare prima che il primo finisca. La build sceglie i raccordi di ogni
+   variante come li sceglie il gioco (`percorso_bus`, rifatto da `percorsoBus` di `src/world/inseguitore.js`) e, dove
+   due svolte con il raccordo del bus non si legano (`slegate`), dà ai soli bus tre curve in più, provate come le altre
+   nello spazio che le corsie hanno già: alla prima una che arriva sulla corsia da cui parte la seconda, alla seconda
+   una che parte da quella su cui arriva la prima, e la manovra intera, che dalla corsia della prima va a quella della
+   seconda scavalcando l'arco di mezzo (fino a `VIA_MAX` archi e `VIA_LUNGO` metri). Quasi sempre il raccordo che
+   scavalca c'era già, per le auto o per un'altra svolta: mancava che il gioco lo prendesse (sezione 7).
 
 Sul percorso di una linea lo stesso movimento può avere due raccordi dalla stessa corsia alla stessa corsia: quello
 delle auto e uno più largo per i bus.
@@ -205,8 +214,14 @@ direzione è la tangente: nei raccordi il mezzo gira con il loro raggio.
   viaggio la svolta dopo è prima di tutto una che dalla sua corsia si fa (`versoArrivo`): chi non è passato in tempo
   alla corsia esterna fa un altro giro. Fino a #143, dove i raccordi entravano nella corsia interna e uscivano solo
   dall'esterna, chi nell'anello non aveva un'uscita dalla sua corsia usciva alla prima con una curva del gioco.
-- I bus prendono per ogni svolta del loro percorso un raccordo con il loro bit (`percorsoBus`), prima quelli diretti,
-  poi quelli che scavalcano archi corti; le corsie si scelgono su tutto il percorso insieme.
+- I bus prendono i raccordi del loro percorso con il loro bit (`percorsoBus`), scegliendo raccordi e corsie su tutto il
+  percorso insieme con un cammino di costo minimo: un cambio di corsia costa quante corsie, uno senza il posto o due
+  raccordi che si sovrappongono 100, la corsia più a destra un poco meno, ogni arco scavalcato 10 (`SCAVALCO`) e il
+  raccordo delle auto o una curva del gioco 100 (`RIPIEGO`). Così i raccordi che scavalcano archi corti si prendono
+  solo dove quelli diretti non si legano, e vince il cammino con meno ripieghi. Fino a #135 si prendeva a ogni svolta il
+  raccordo con meno archi scavalcati, poi si sceglievano le corsie: tra due svolte vicine il bus faceva spesso una
+  curva del gioco anche dove un raccordo unico c'era. `percorso_bus` di `scripts/raccordi.py` rifà la stessa scelta per
+  la build e per `scripts/percorsi.py` (controllo `corsie_slegate`): le due si cambiano insieme.
 - Dove il raccordo per il mezzo non c'è, un ripiego dichiarato, contato e scritto sul pezzo (`p.ripiego`): il
   raccordo delle auto per un bus (`raccordo delle auto`, raggio sotto gli 8,3 m, #134), una curva del gioco tra le due
   rette di corsia (`curva`, `curva stretta`, `esse`, `inversione`, #114 e #134), e una curva del gioco quando due

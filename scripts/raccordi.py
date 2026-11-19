@@ -917,12 +917,173 @@ def senza_trappole(R, voci):
         voci = scavalcati([v for v in voci if v['classi']])
 
 
+# ---------------------------------------------------------------- svolte vicine dei percorsi delle linee (#135)
+
+def segmenti(R, ns):
+    """I tratti di un percorso di nodi, come segs di buildLane in src/world/buses.js: [(arco o None, avanti, da, a)]."""
+    out = []
+    for a, b in zip(ns, ns[1:]):
+        k = next((k for k in R.attorno.get(a, ()) if b in R.archi[k][:2]), None)
+        out.append((k, k is not None and R.archi[k][0] == a, a, b))
+    return out
+
+
+SCAVALCO, RIPIEGO = 10, 100  # costo di ogni arco scavalcato e di un ripiego nella scelta dei raccordi dei bus (src/world/inseguitore.js)
+
+
+def costo_cambio(R, k, avanti, i, j, L, rmin):
+    """costoCambio di src/world/inseguitore.js: 0 sulla stessa corsia, poi le corsie da cambiare, 100 se non c'è il
+    posto per il cambio, 1000 se i due raccordi si sovrappongono."""
+    if L < -0.05:
+        return 1000
+    if i == j:
+        return 0
+    cs = R.marcia(k, avanti)
+    return abs(i - j) + (0 if L >= cambio_min(abs(cs[j][0] - cs[i][0]), rmin) else 100)
+
+
+def percorso_bus(R, partono, segs, bit):
+    """I raccordi che percorsoBus di src/world/inseguitore.js sceglie lungo un percorso: a ogni svolta quelli del mezzo
+    (bit) che seguono il percorso, o quelli delle auto con meno archi scavalcati, o un ripiego; il cammino di costo minimo
+    con i cambi di corsia (costo_cambio), la corsia più a destra, SCAVALCO per ogni arco scavalcato e RIPIEGO per il
+    raccordo delle auto o il ripiego. Il ripiego qui non ha la curva: chi viene dopo parte libero. [(i, k, raccordo o None, tipo, costo del legame con il raccordo di prima)]."""
+    rmin, fine = R_MIN[bit], len(segs) - 1
+    iniz = len(R.marcia(segs[0][0], segs[0][1])) - 1 if segs[0][0] is not None else 0
+    stati = [[] for _ in segs]
+    stati[0].append({'R': None, 'c': 0.0, 'prima': None, 'mossa': None, 'libero': False})
+    for i in range(fine):
+        if not stati[i]:
+            continue
+        s, t = segs[i], segs[i + 1]
+        if s[0] is None:
+            stati[i + 1] += stati[i]
+            continue
+        migliore = min(stati[i], key=lambda st: st['c'])
+        if t[0] is None:
+            stati[min(i + 2, fine)].append({'R': None, 'c': migliore['c'], 'prima': migliore, 'mossa': (i, i + 2, None, 'vuota', 0), 'libero': True})
+            continue
+
+        def segue(v):
+            via = [c[0] for c in v['cat'][1:-1]]
+            j = i + 1 + len(via)
+            return j < len(segs) and [segs[i + 1 + q][0] for q in range(len(via))] == via and segs[j][:2] == v['cat'][-1][:2]
+        qui = [v for v in partono.get((s[3], s[0]), ()) if segue(v)]
+        racs, tipo = [v for v in qui if v['classi'] & bit], None
+        if not racs:
+            ok = [v for v in qui if v['classi'] & AUTO]
+            if ok:
+                corti = min(len(v['cat']) for v in ok)
+                racs, tipo = [v for v in ok if len(v['cat']) == corti], 'auto'
+        if not racs:
+            stati[i + 1].append({'R': None, 'c': migliore['c'] + RIPIEGO, 'prima': migliore, 'mossa': (i, i + 1, None, 'ripiego', 0), 'libero': True})
+            continue
+        for v in racs:
+            k = i + len(v['cat']) - 1
+            best, bc, bl = None, math.inf, 0
+            for st in stati[i]:
+                if st['R'] is not None:
+                    l = costo_cambio(R, s[0], s[1], st['R']['cat'][-1][2], v['cat'][0][2], v['s0'] - st['R']['s1'], rmin)
+                elif st['libero']:
+                    l = 0
+                else:
+                    l = costo_cambio(R, s[0], s[1], iniz, v['cat'][0][2], v['s0'], rmin)
+                if st['c'] + l < bc:
+                    best, bc, bl = st, st['c'] + l, l
+            sg = segs[k] if k <= fine else (None,)
+            n_out = len(R.marcia(sg[0], sg[1])) if sg[0] is not None else 1
+            stati[min(k, fine)].append({'R': v, 'c': bc + 0.3 * (n_out - 1 - v['cat'][-1][2]) + SCAVALCO * (len(v['cat']) - 2) + (RIPIEGO if tipo else 0),
+                                        'prima': best, 'mossa': (i, k, v, tipo, bl), 'libero': False})
+    out, st = [], min(stati[fine], key=lambda x: x['c']) if stati[fine] else None
+    while st and st['mossa']:
+        out.append(st['mossa'])
+        st = st['prima']
+    return out[::-1]
+
+
+def legate(R, Q, V, rmin):
+    """Il raccordo V parte dall'arco dove arriva Q e si fa dopo di lui: stessa corsia senza sovrapporsi, o il posto per
+    cambiarla. Q e V con i capi (s0, s1) come sono scritti."""
+    a, av, ca = Q['cat'][-1]
+    return costo_cambio(R, a, av, ca, V['cat'][0][2], V['s0'] - Q['s1'], rmin) < 100
+
+
+def slegate(R, voci, linee):
+    """Svolte di fila dei percorsi delle linee, tutte e due con il raccordo del mezzo della linea, che con i raccordi
+    scelti da percorso_bus non si legano: [(linea, variante, bit, raccordo della prima, raccordi della prima che
+    arrivano sullo stesso arco, raccordo della seconda, raccordi della seconda)]. voci come le legge chi usa la mappa,
+    con s0 e s1."""
+    partono = defaultdict(list)
+    for v in voci:
+        partono[(v['nodo'], v['cat'][0][0])].append(v)
+    out = []
+    for l in linee:
+        bit = SNODATO if l['id'] in SNODATI else BUS12
+        for va in l['variants']:
+            ns = [n for j, n in enumerate(va['nodes']) if not j or n != va['nodes'][j - 1]]
+            mm = percorso_bus(R, partono, segmenti(R, ns), bit)
+            for p, m in zip(mm, mm[1:]):
+                if p[1] == m[0] and p[3] is None and m[3] is None and m[4] >= 100:
+                    Q, V = p[2], m[2]
+                    prima = [v for v in partono[(Q['nodo'], Q['cat'][0][0])] if v['classi'] & bit and [c[0] for c in v['cat']] == [c[0] for c in Q['cat']]]
+                    seconda = [v for v in partono[(V['nodo'], V['cat'][0][0])] if v['classi'] & bit and [c[0] for c in v['cat']] == [c[0] for c in V['cat']]]
+                    out.append((l['id'], va.get('name') or '', bit, Q, prima, V, seconda))
+    return out
+
+
+def con_capi(R, voci):
+    """I raccordi come li scrive codifica (scritto), con s0 e s1 (capi) e il raccordo da cui vengono (sorgente)."""
+    out = []
+    for v in voci:
+        vr, r, classi = scritto(R, v)
+        w = dict(v, v=vr, r=r, classi=classi, sorgente=v)
+        w['s0'], w['s1'] = capi(R, w['cat'], vr, r)
+        out.append(w)
+    return out
+
+
+def lega(G, voci):
+    """I raccordi che legano le svolte vicine dei percorsi delle linee (slegate), per i soli bus, calcolati e provati
+    contro la pianta come gli altri (G.geometria, G.voci) nello spazio che le corsie hanno già: alla prima svolta uno che
+    arriva sulla corsia da cui parte la seconda, alla seconda uno che parte da quella su cui arriva la prima, e la manovra
+    intera, un raccordo dalla corsia della prima a quella della seconda che scavalca l'arco di mezzo (fino a VIA_MAX archi
+    e VIA_LUNGO metri). Dà i raccordi nuovi, le coppie slegate prima e quelle che restano."""
+    R = G.R
+    coppie = slegate(R, con_capi(R, voci), G.M['lines'])
+    nuovi, fatti = [], set()
+    for _l, _va, bit, _Q, prima, _V, seconda in coppie:
+        for Q in prima:
+            for V in seconda:
+                prove = [(Q['cat'][:-1] + [Q['cat'][-1][:2] + (V['cat'][0][2],)], Q['nodo'], Q),
+                         ([V['cat'][0][:2] + (Q['cat'][-1][2],)] + V['cat'][1:], V['nodo'], V),
+                         (Q['cat'][:-1] + [Q['cat'][-1][:2] + (0,)] + V['cat'][1:], Q['nodo'], None)]
+                for cat, nodo, da in prove:
+                    via = [c[0] for c in cat[1:-1]]
+                    if tuple(cat) in fatti or len(via) > VIA_MAX or sum(R.lung[k] for k in via) > VIA_LUNGO:
+                        continue
+                    fatti.add(tuple(cat))
+                    (k0, av_in, cda), (k1, av_out, ca) = cat[0], cat[-1]
+                    ammessi = da['sorgente']['ammessi'] if da else Q['sorgente']['ammessi'] & V['sorgente']['ammessi']
+                    m = R.marcia(k0, av_in)[cda][1] & R.marcia(k1, av_out)[ca][1] & ammessi & BUS
+                    if not m:
+                        continue
+                    G.prepara(nodo)
+                    for v in G.voci(G.geometria(cat, m)):
+                        if v['esito'] == 'ok' and v['classi'] & BUS:
+                            v['classi'] &= BUS
+                            nuovi.append(v)
+    restano = slegate(R, con_capi(R, voci + nuovi), G.M['lines']) if nuovi else coppie
+    return nuovi, coppie, restano
+
+
 def campo_mappa(M, binari=None):
     """(campo, generatore, voci) per la mappa intera M: lo chiama la build, e --scrivi sulla mappa che c'è."""
     import aree_mappa
     G = Raccordi(M, aree_mappa.tram_tracks(M) if binari is None else binari)
     voci = G.calcola()
-    buone, G.trappole = senza_trappole(G.R, scavalcati([dict(v) for v in voci if v['esito'] == 'ok' and v['classi']]))
+    buone = [dict(v) for v in voci if v['esito'] == 'ok' and v['classi']]
+    nuovi, G.slegate, G.restano = lega(G, buone)
+    buone, G.trappole = senza_trappole(G.R, scavalcati(buone + nuovi))
+    G.legami = len(nuovi)
     return codifica(G.R, buone), G, voci
 
 
@@ -1133,7 +1294,8 @@ def main():
         scrivi(campo)
         print(f'campo {CAMPO} scritto in {os.path.relpath(MAPPA, RADICE)}: da {prima} a {os.path.getsize(MAPPA)} byte')
         print('  movimenti: ' + ', '.join(f'{n} {k}' for k, n in Counter(v['esito'] for v in voci if len(v['cat']) == 2).most_common())
-              + f'; tolte le auto da {G.trappole} raccordi che portano in una corsia di rotonda senza uscita')
+              + f'; tolte le auto da {G.trappole} raccordi che portano in una corsia di rotonda senza uscita'
+              + f'; {G.legami} raccordi dei bus per {len(G.slegate)} svolte vicine dei percorsi che non si legavano, ne restano {len(G.restano)}')
         M = aree_mappa.load(MAPPA)
     _v, _c, errori = rapporto(M, '--elenco' in sys.argv, '--aggiorna' in sys.argv)
     if errori:

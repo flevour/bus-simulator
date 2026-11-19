@@ -20,6 +20,7 @@ Per ogni variante, sul cammino di nodi della mappa (`lines[].variants[].nodes`, 
 | `inversioni` | il percorso torna indietro sullo stesso arco (A-B-A) |
 | `svolte_vietate` | una svolta che OSM vieta anche ai bus, senza `except=psv` o `bus` (campo `svolte`, [osm-dati.md](osm-dati.md) sezione 5): una vietata, o un'altra dove la svolta è obbligata |
 | `senza_raccordo` | una svolta ammessa senza un raccordo di corsia per il mezzo della linea ([raccordi.md](raccordi.md)): lo snodato per le linee di `SNODATI`, il bus da 12 m per le altre. "solo auto" se c'è il raccordo delle auto ma con un raggio sotto quello del bus, "senza curva" se non ce n'è nessuno |
+| `corsie_slegate` | due svolte di fila, tutte e due con il raccordo del mezzo, che con i raccordi che sceglie il gioco (`percorso_bus` di `scripts/raccordi.py`, come `percorsoBus` di `src/world/inseguitore.js`) stanno su corsie diverse senza il posto per cambiarla, o si sovrappongono: lì il bus farebbe una curva del gioco (#135). Le svolte vicine a una senza raccordo non contano: sono di `senza_raccordo` |
 
 Le svolte che già non vanno per un altro controllo (un arco contromano, un'inversione, una svolta vietata) non si
 contano anche come svolte senza raccordo. Le svolte che passano da una via (tre in tutta la mappa) non valgono, come per
