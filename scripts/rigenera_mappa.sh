@@ -2,7 +2,10 @@
 # Rigenera la mappa nell'ambiente di riferimento: Linux, Python 3.12 e le librerie di scripts/requirements-mappa.txt,
 # dentro l'immagine Docker fissata qui sotto (la stessa del job "rigenera" di .github/workflows/verifiche.yml).
 # Su macOS, con le stesse librerie, la mappa esce diversa nei binari del tram (di un millimetro) e in qualche raccordo
-# (la libreria matematica del sistema non è la stessa): da lì si passa sempre da qui. Gli argomenti sono quelli di scripts/rigenera_mappa.py.
+# (la libreria matematica del sistema non è la stessa): da lì si passa sempre da qui. Anche Linux arm64 non dà la mappa
+# della CI (amd64): il programma lineare dei cavalcavia cambia le ultime cifre, e un valore a mezzo millimetro va da una
+# parte o dall'altra (#125). Per questo il container è sempre linux/amd64: sul Mac Docker lo emula (16 minuti il 19
+# novembre, da solo in Docker; con un altro container che occupa 3 GB l'emulazione può finire senza memoria, uscita 137). Gli argomenti sono quelli di scripts/rigenera_mappa.py.
 #
 #   scripts/rigenera_mappa.sh               # riscrive src/data/padova-map.json e public/mappa/aree/
 #   scripts/rigenera_mappa.sh --controlla   # rigenera a parte e confronta con la mappa del repository
@@ -20,7 +23,7 @@ set -e
 case " $* " in *" --localita "*) case " $* " in *" --uscita "*) ;; *) set -- "$@" --uscita .localita/padova-map.json ;; esac ;; esac
 IMMAGINE='python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b'
 cd "$(dirname "$0")/.."
-docker run --rm -v "$PWD":/repo -w /repo -e PYTHONDONTWRITEBYTECODE=1 -e CAVALCAVIA -v bus-simulator-pip:/root/.cache/pip "$IMMAGINE" sh -c '
+docker run --rm --platform linux/amd64 -v "$PWD":/repo -w /repo -e PYTHONDONTWRITEBYTECODE=1 -e CAVALCAVIA -v bus-simulator-pip:/root/.cache/pip "$IMMAGINE" sh -c '
   pip install -q --disable-pip-version-check --root-user-action=ignore --require-hashes -r scripts/requirements-mappa.txt &&
   exec python scripts/rigenera_mappa.py "$@"' sh "$@"
 # La posa dell'arredo (semafori, pali, paline: scripts/posa_arredo.mjs, #109) segue la mappa: dopo una rigenerazione si

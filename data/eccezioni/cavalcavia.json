@@ -6,7 +6,6 @@
     "perche": "Elenco di partenza del 13 novembre 2026 (#105): profili delle strade prima che i cavalcavia seguano la regola di docs/cavalcavia.md. Impalcati a 7 m sopra il terreno spianato a gradini, rampe che scendono fino a 130 m sopra il terreno e lo spianamento che finisce in un fosso ai piedi. Li toglie #84, un cavalcavia alla volta.",
     "casi": [
      "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -210,-2319",
-     "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -233,-2405",
      "Cavalcavia Dalmazia | scarti_dtm | strada senza nome @ -720,-1338",
      "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2900,-2750",
      "Cavalcavia Mortise | scarti_dtm | Cavalcavia Mortise @ 2916,-2754",
@@ -625,25 +624,17 @@
    {
     "perche": "Strutture con il profilo del risolutore (#84): il profilo sta nei limiti della regola e si allontana dal DTM dove il franco della regola sopra la ferrovia (6,90 m più 0,90 di impalcato) è più alto delle spalle che il rilievo vede, o dove la rampa è un manufatto tolto dal DTM. Servono i franchi veri nel registro (#125).",
     "casi": [
-     "Cavalcavia Antonio Grassi | scarti_dtm | Cavalcavia Antonio Grassi @ 1924,-1256",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Cavalcavia Antonio Grassi @ 1928,-1260",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via Antonio Grassi @ 1923,-1071",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via Antonio Grassi @ 1926,-1122",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via Antonio Grassi @ 1931,-1121",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1856,-1340",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1860,-1368",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1862,-1216",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1868,-1318",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1894,-1254",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1913,-1080",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1959,-1240",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 2041,-1200",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 2072,-1190",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via del Plebiscito 1866 @ 1879,-1450",
      "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -197,-2258",
      "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -220,-2286",
      "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -225,-2246",
-     "Cavalcavia Camerini | scarti_dtm | Cavalcavia Camerini @ -262,-2447",
      "Cavalcavia Camerini | scarti_dtm | Via Annibale da Bassano @ -223,-2240",
      "Cavalcavia Camerini | scarti_dtm | Via Giovanni Vianello @ -160,-2245",
      "Cavalcavia Pietro Maroncelli | scarti_dtm | Cavalcavia Pietro Maroncelli @ 2518,-1056",
@@ -668,8 +659,6 @@
    {
     "perche": "Strutture con il profilo del risolutore (#84): il profilo calcolato non ha onde, pendenze o raccordi fuori regola; questi casi stanno dove il terreno del gioco non coincide con il profilo, cioè ai piedi (la struttura incontra una strada che resta sul terreno com'è), accanto alle strade fuori dalla struttura, o dove una strada scende sotto il cavalcavia e risale (#125).",
     "casi": [
-     "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1895,-1330",
-     "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1902,-1330",
      "Cavalcavia Antonio Grassi | onde | Via Carlo Goldoni @ 1571,-1241",
      "Cavalcavia Antonio Grassi | onde | strada senza nome @ 1858,-1557",
      "Cavalcavia Antonio Grassi | raccordi | Via Friburgo @ 1969,-1160",
@@ -709,10 +698,8 @@
    {
     "perche": "Strutture col tram e Cavalcavia Dalmazia, con il profilo del risolutore dal 16 novembre 2026 (#123): il profilo sta nei limiti della regola e si allontana dal DTM dove il franco della regola sopra la ferrovia (6,90 m più 0,90 di impalcato) è più alto delle spalle che il rilievo vede (Borgomagno, fino a +2,2 m sulla rampa verso la stazione; Via Venezia) o dove la rampa è un manufatto tolto dal DTM (rampa ovest del San Marco accanto al viadotto di Corso Irlanda, +3,1 m; rami del Chiesanuova su Corso Australia, +2,8 m). Sotto il mezzo metro in più o in meno stanno i punti accanto a una strada fuori dalla struttura, dove il terreno resta il suo. Servono i franchi veri nel registro (#125).",
     "casi": [
-     "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 18,-1156",
      "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 28,-1153",
      "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 6,-1122",
-     "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 70,-1106",
      "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 85,-1286",
      "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 94,-1284",
      "Cavalcavia Borgomagno | scarti_dtm | Via Niccolò Tommaseo @ 13,-974",
@@ -814,7 +801,6 @@
     "perche": "dalla strada di sotto che tiene la sua quota (#125, passo 1): il franco sopra Via Friburgo, Corso Australia e Via Jacopo Avanzo si misura dalla strada e non dal piano della campata, quindi Grassi, Chiesanuova, Dalmazia e San Marco hanno l'impalcato un poco più basso (Chiesanuova 0,3-0,7 m) e i casi delle rampe si spostano di più di 4 m: scarti dal DTM da 0,52 a 0,68 m dove la rampa scende sul rilevato, e due conche di raggio 430-500 m al piede, dove Via Friburgo e Via Sergio Fraccalanza passano dalla quota della strada di sotto a quella della rampa (il giro contro le onde e i franchi veri sono i passi 2 e 3)",
     "casi": [
      "Cavalcavia Antonio Grassi | raccordi | Via Friburgo @ 1890,-1380",
-     "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ -30,-1075",
      "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -2050,-346",
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -1923,-248",
      "Cavalcavia Dalmazia | scarti_dtm | Via Jacopo Avanzo @ 70,-1255",
@@ -826,7 +812,6 @@
    {
     "perche": "Giro contro le onde (#125, passo 2): casi di prima con il punto peggiore spostato di più di 4 m e più leggeri (Camerini, Via Giovanni Vianello: conca da 0,88 a 0,82 m; Chiesanuova, Via Vicenza: da 0,44 a 0,35 m; Viale della Pace sotto il Ponte dell'Unità d'Italia: due conche da 0,23 m diventano una da 0,17), e punti corti dove il profilo alzato per riempire una conca esce dalla banda del DTM (0,55-0,8 m in 7-10 m: Via Friburgo, Rotonda Tina Lagostena Bassi, Viale della Pace, Corso delle Tre Venezie). Al Grassi la curva di Via Friburgo perde la pendenza del 18,9%, il raccordo di 147 m e la conca di 0,65 m, e resta lo scarto della rampa verso la ferrovia (1,93 m in 138 m, prima 2,02 m in 142: il franco della regola più alto di quello vero, passo 3). Al Dalmazia la rampa si porta dietro Corso delle Tre Venezie, affiancata a 8 m e legata alla stessa quota (1,07 m in 73 m; la conca di 0,77 m si sposta di 16 m): legarle solo con lo stesso nome toglierebbe questi casi, ma lascia in quota l'incrocio a raso ai piedi ovest del Chiesanuova (nota #125 di docs/LAVORO.md).",
     "casi": [
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1899,-1250",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1939,-1100",
      "Cavalcavia Camerini | onde | Via Giovanni Vianello @ -66,-2258",
      "Cavalcavia Chiesanuova | onde | Via Vicenza @ -1943,-492",
@@ -836,6 +821,20 @@
      "Ponte dell'Unità d'Italia (1145, -1143) | onde | Viale della Pace @ 881,-991",
      "Ponte dell'Unità d'Italia (1145, -1143) | scarti_dtm | Rotonda Tina Lagostena Bassi @ 915,-990",
      "Ponte dell'Unità d'Italia (1145, -1143) | scarti_dtm | Viale della Pace @ 890,-992"
+    ]
+   },
+   {
+    "perche": "Franchi veri nel registro (#125, passo 3). Al Grassi la conca tra i due incroci con la ferrovia passa da 1,24-1,29 m a 0,43-0,48 (0,69 su Via Friburgo, la carreggiata accanto): l'impalcato sopra la ferrovia sta alla quota delle spalle, 6,6 m all'incrocio nord invece di 9,3 e 6,6-7,4 a quello sud invece di 7,7-7,8, e tra i due resta una conca più bassa. Ai capi nord del Grassi e del Borgomagno, dove il DTM ha la spalla, gli scarti si spostano con l'impalcato più basso: in Via Antonio Grassi -1,1 m in 56 m e -0,59 in 28 m (prima +1,32 in 17 m e +0,66 in 5 m), sulla rampa del Borgomagno 0,97 m in 24 m e due punti corti da 0,57-0,58 m (prima 1,17 m in 32 m e 1,04 in 31 m). Il passo 3 toglie 15 casi e ne mette 9; il peso dei casi del Grassi scende da 72,8 a 50,5, quello del Camerini da 40,7 a 31,5.",
+    "casi": [
+     "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1920,-1267",
+     "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1924,-1272",
+     "Cavalcavia Antonio Grassi | onde | Via Friburgo @ 1900,-1293",
+     "Cavalcavia Antonio Grassi | scarti_dtm | Cavalcavia Antonio Grassi @ 1889,-1385",
+     "Cavalcavia Antonio Grassi | scarti_dtm | Via Antonio Grassi @ 1924,-1106",
+     "Cavalcavia Antonio Grassi | scarti_dtm | Via Antonio Grassi @ 1929,-1108",
+     "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 0,-1127",
+     "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 25,-1140",
+     "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 39,-1114"
     ]
    }
   ],

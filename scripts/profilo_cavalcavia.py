@@ -653,13 +653,16 @@ class Profili:
             lp.riga([(ia, ca), (ic, cc), (ib, cb), (u, -1)], 0)
             lp.riga([(ia, -ca), (ic, -cc), (ib, -cb), (u, -1)], 0)
             self.v_racc.append((sl, ic, ks))
-        # franchi sopra quello che passa sotto
+        # franchi sopra quello che passa sotto (o, dal registro, la quota minima dell'impalcato all'incrocio)
         self.v_franco = []
         for (k, t, tipo, j, p) in self.incroci:
-            f = self.franco(tipo, p) + IMPALCATO
+            franco, quota = self.franco(tipo, p)
+            f = quota if quota is not None else franco + IMPALCATO
             sl = lp.var(W_FRANCO)
             sopra = self.a_frazione(k, t)
-            if j is not None and j in self.S:
+            if quota is not None:
+                lp.riga([(i, -w) for i, w in sopra] + [(sl, -1)], -quota)
+            elif j is not None and j in self.S:
                 c = _incrocio(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]], R.nodi[R.archi[j][0]], R.nodi[R.archi[j][1]])
                 giu = self.a_frazione(j, c[1])
                 lp.riga([(i, -w) for i, w in sopra] + [(i, w) for i, w in giu] + [(sl, -1)], -f)
@@ -789,11 +792,15 @@ class Profili:
         return out
 
     def franco(self, tipo, p):
+        """(franco, quota) all'incrocio p: dal registro (`franchi`, la prima voce entro il suo `raggio`) il franco sopra
+        quello che passa sotto al posto di quello della regola, oppure la quota minima dell'impalcato (`quota`: quella
+        delle spalle, scripts/spalle_cavalcavia.py, che non dipende dal piano della campata); se no il franco della
+        regola. Uno dei due è None."""
         for st in self.registro.get('strutture', []):
             for f in st.get('franchi', []):
                 if math.dist(p, (f['x'], f['z'])) <= f.get('raggio', 30):
-                    return f['franco']
-        return FRANCO[tipo]
+                    return (None, f['quota']) if 'quota' in f else (f['franco'], None)
+        return FRANCO[tipo], None
 
     def quota(self, k, s):
         """Quota del profilo alla progressiva s dell'arco k."""

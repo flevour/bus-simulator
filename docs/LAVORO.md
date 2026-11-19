@@ -687,6 +687,13 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   programma ha più soluzioni dello stesso costo ne sceglie un'altra. Così 6b158b7 è finito rosso sul lavoro `rigenera`
   (2 archi di `edgeH`), corretto in 7b041a4; sul Mac l'arrotondamento ha spostato il profilo fino a 6 cm in 76 archi,
   tanto il programma è sensibile. Chi aggiunge un termine noto calcolato fa lo stesso;
+- arrotondare non basta per il risultato del programma: HiGHS cambia le ultime cifre tra arm64 e amd64 anche con gli
+  stessi dati, e un valore che cade a mezzo millimetro va da una parte o dall'altra. Dopo il passo 2 (154706b) il lavoro
+  `rigenera` era rosso per un solo valore di `edgeH` (Corso Primo Maggio, arco 15479, a 64 m: 925 mm su arm64, 924 in
+  CI), e con lui la veduta tangenziale-primo-maggio-esperanto. Arrotondare due volte sposta solo il confine. Da allora
+  `scripts/rigenera_mappa.sh` lancia il container `linux/amd64` anche sul Mac (Docker lo emula: 16 minuti da sola in
+  Docker; con un altro container da 3 GB accanto l'emulazione è finita senza memoria, uscita 137), e `rigenera_mappa.py` si ferma se l'architettura non è x86_64. Per provare il passo dei cavalcavia su amd64
+  senza rigenerare tutto: la stessa riga `docker run --platform linux/amd64` con `--uscita` su un file a parte;
 - passo 2: il giro contro le onde (`Profili.onde` e `itinerari`; costanti `W_ONDA`, `ONDA_GIRO`, `ONDA_RESTO`,
   `GIRI_ONDE`, `ONDA_RILIEVO`). Sono richieste morbide, con il costo tra quello del DTM e quello della banda: dove le due
   regole non stanno insieme vince il rilievo, e la conca resta con il suo perché. Il passo dei cavalcavia fa fino a tre
@@ -699,6 +706,10 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   Dalmazia, Mortise, San Marco), ma a quell'incrocio la cella prende la più bassa delle strade accanto e Via Chiesanuova
   e Via Pacinotti restano 14-18 cm in quota anche con i punti del registro: serve prima che la cella di un incrocio a
   raso prenda la quota dell'incrocio;
+- passo 3: i franchi veri nel registro, dalle spalle nel LiDAR e dai cartelli di OSM (`scripts/spalle_cavalcavia.py`,
+  sezione 6 di `cavalcavia.md`). Nel registro una voce di `franchi` può avere `quota` (l'impalcato all'incrocio) al
+  posto di `franco`; `Profili.franco` dà (franco, quota). Lo script serve `pyproj` (come `dtm_grid.py`), fuori dalla
+  build: i numeri si scrivono a mano nel registro, con la fonte nel perché;
 
 #126, pianta delle strade come partizione (18 novembre). Un solo proprietario per ogni metro quadro: chi si vede non lo
 decidono più `polygonOffset` e i centimetri di quota. Da sapere:

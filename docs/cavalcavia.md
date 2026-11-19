@@ -288,7 +288,9 @@ Volta (−1770, 4242, linea 24).
   capi di ogni ponte OSM), `scavalca` (ferrovia, vie).
 * A mano, con il perché: `profilo` (vero: il profilo lo calcola il risolutore; falso: restano le quote della sezione
   3), `punti` (`{x, z, quota}` oppure `{x, z, sopra}`: la quota del profilo in quel punto, assoluta o sopra il
-  terreno), `franchi` (`{x, z, franco}`: metri sopra quello che passa sotto in quel punto, al posto della regola).
+  terreno), `franchi` (`{x, z, franco}` oppure `{x, z, quota}`, con `raggio` e il perché: entro `raggio` metri
+  dall'incrocio, il franco sopra quello che passa sotto al posto di quello della regola, oppure la quota minima
+  dell'impalcato lì, #125).
 
 Una struttura è fatta dei ponti OSM in quota (`bridge` con `layer` da 1 in su) che scavalcano la ferrovia o una strada
 con il layer più basso, e delle strade che ci arrivano: 300 m lungo la strada del ponte e le rampe di svincolo, 60 m
@@ -410,6 +412,30 @@ attive restavano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46
 regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto
 tolto dal DTM, e 79 tra onde, pendenze e raccordi dove il terreno non coincide con il profilo (ai piedi e accanto
 alle strade fuori dalla struttura).
+
+Franchi veri (#125, passo 3). Il franco della regola (5,00 m sopra le strade, 6,90 m sopra la ferrovia, più 0,90 di
+impalcato) è quello delle strade nuove: dove un cavalcavia vero ne ha meno, il profilo saliva sopra il rilevato che il
+rilievo vede, e il controllo trovava le rampe metri sopra il DTM (Camerini 2,4 m, Grassi 2,2 m).
+`scripts/spalle_cavalcavia.py` misura, per ogni incrocio di una campata delle strutture attive, le spalle nel DTM LiDAR
+a 5 m della Regione (`data/lidar5`): la quota più alta del rilievo lungo la strada della struttura da 3 a 25 m oltre la
+fine dei ponti OSM, dove il rilevato arriva alla spalla. La quota dell'impalcato all'incrocio è quella delle spalle
+(tra le due, o quella vicina se l'altra è a più di 40 m: un viadotto lungo non dice la quota in mezzo). Con il cartello
+dell'altezza massima della strada di sotto (`maxheight` di OSM) dice anche il franco del cartello. Nel registro:
+
+* sopra la ferrovia, `quota`: la quota dell'impalcato che danno le spalle, dove il franco della regola la supera di più
+  di 0,3 m e il franco che ne viene sopra i binari (sul terreno della mappa sotto l'incrocio) è almeno 4,5 m. Non il
+  franco: il risolutore lo misura dal piano della campata, che dove nel DTM sotto l'impalcato restano pezzi delle spalle
+  sta più su dei binari (Grassi nord: 1,4-1,6 m contro 0,2-0,5), e il numero non direbbe niente. Camerini (spalle a
+  6,60 e 6,49 m: l'impalcato saliva a 8,32), Grassi (tre incroci con la ferrovia, spalle da 6,55 a 7,51 m: il più a
+  nord saliva a 9,3 m e sta a 6,6), Borgomagno vicino alla spalla nord (5,35-6,08 m, saliva a 7,6-8,0; sui binari in
+  mezzo, a più di 40 m da ogni spalla, resta la regola);
+* sotto un cartello, `franco`: il suo `maxheight` (Via Ca' Rasi sotto Via Madonnina 4,20 m, Corso Australia sotto il
+  Chiesanuova 4,75, Via Venezia sotto il suo viadotto 3,70). Il franco vero non è meno del cartello.
+
+Dove su una strada le spalle darebbero meno di 3,5 m (la strada senza nome sotto il San Marco 2,0 m, Via Ca' Rasi sotto
+la Direttissima 1,7, Via Jacopo Avanzo sotto il Borgomagno 3,1-3,4) non c'è una voce: la strada di sotto passa in una
+trincea sotto il ponte che il gioco non ha (la strada fuori dalla struttura sta sul terreno), e il franco delle spalle
+la farebbe passare sotto un impalcato a 2 m. Restano gli scarti dal DTM con il perché.
 
 Il 16 novembre (#123), con le quattordici strutture attive (34 km, 8.509 incognite), il programma non viola pendenze,
 pendenze dei binari, raggi o franchi. Sui binari, nei dati e nel gioco: nessuno fuori quota (erano 25 nel gioco),

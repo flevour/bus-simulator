@@ -83,7 +83,7 @@ python3 scripts/to_artifact.py dist-single/index.html <uscita>.html   # pagina p
 ```
 
 Rigenerare i dati della mappa (GTFS Busitalia + OSM + Overture + segnaletica e binari OSM). Serve Docker: il comando
-gira su Linux con Python 3.12 e le librerie fissate in `scripts/requirements-mappa.txt` (`shapely`, `numpy`, `scipy`, `pyarrow`);
+gira su Linux amd64 come la CI (sul Mac Docker la emula: circa 16 minuti, da sola in Docker) con Python 3.12 e le librerie fissate in `scripts/requirements-mappa.txt` (`shapely`, `numpy`, `scipy`, `pyarrow`);
 `CAVALCAVIA=registro` davanti al comando riscrive i campi di `data/cavalcavia.json` che vengono dalla rete:
 
 ```bash

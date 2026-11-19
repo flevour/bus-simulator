@@ -3,14 +3,14 @@
  "controlli": {
   "gradini": [
    {
-    "perche": "Carreggiate di archi diversi che si sovrappongono in pianta vicino a un innesto (una rampa che si stacca o si unisce, una strada laterale che entra sulla struttura: Via Vicenza e Via del Cantiere sul Chiesanuova, Via Friburgo e Via Gramsci sul Grassi, Via Montà, Via Pietro Liberi sul Borgomagno): il risolutore dà a ogni arco il suo profilo, e nello stesso punto le due carreggiate stanno a quote assolute diverse (fino a 0,9 m al Grassi, in (1922, -1279), a un metro dal nodo). Il punto passa all'altro arco quando esce dalla sua carreggiata, e la quota salta. quotaStrada non c'entra: è la quota dei due profili nella zona dove si sovrappongono, che va resa uguale nel risolutore (#150).",
+    "perche": "Carreggiate di archi diversi che si sovrappongono in pianta vicino a un innesto (una rampa che si stacca o si unisce, una strada laterale che entra sulla struttura: Via Vicenza e Via del Cantiere sul Chiesanuova, Via Friburgo e Via Gramsci sul Grassi, Via Montà, Via Pietro Liberi sul Borgomagno): il risolutore dà a ogni arco il suo profilo, e nello stesso punto le due carreggiate stanno a quote assolute diverse (fino a 0,9 m al Grassi in (1922, -1279), a un metro dal nodo, sparito con i franchi veri del passo 3 di #125, che abbassano l'impalcato sulla ferrovia). Dal passo 3 anche al Borgomagno in (26, -1150), 0,21 m a 1,25 m dall'asse su un terzo arco: lì le due carreggiate hanno le spalle a quote diverse nel LiDAR (6,06 e 5,37 m) e il registro dà a ognuna la sua. Il punto passa all'altro arco quando esce dalla sua carreggiata, e la quota salta. quotaStrada non c'entra: è la quota dei due profili nella zona dove si sovrappongono, che va resa uguale nel risolutore (#150).",
     "casi": [
      "Cavalcavia Antonio Grassi | gradino @ 1835,-1544",
      "Cavalcavia Antonio Grassi | gradino @ 1868,-1318",
-     "Cavalcavia Antonio Grassi | gradino @ 1922,-1279",
      "Cavalcavia Antonio Grassi | gradino @ 1978,-938",
      "Cavalcavia Antonio Grassi | gradino @ 2098,-1180",
      "Cavalcavia Borgomagno | gradino @ 104,-1332",
+     "Cavalcavia Borgomagno | gradino @ 26,-1150",
      "Cavalcavia Borgomagno | gradino @ 99,-1333",
      "Cavalcavia Chiesanuova | gradino @ -1501,-417",
      "Cavalcavia Chiesanuova | gradino @ -1506,-402",
@@ -44,7 +44,6 @@
      "Cavalcavia Antonio Grassi | gradino @ 1859,-1284",
      "Cavalcavia Borgomagno | gradino @ 11,-1131",
      "Cavalcavia Borgomagno | gradino @ 6,-1137",
-     "Cavalcavia Camerini | gradino @ -215,-2368",
      "Cavalcavia San Marco | gradino @ 4154,-1238",
      "Cavalcavia San Marco | gradino @ 4254,-1119",
      "Cavalcavia San Marco | gradino @ 4424,-1401",

@@ -57,9 +57,11 @@ test('profili dei cavalcavia: il pilota percorre quello del file', async ({ pagi
   const P = JSON.parse(readFileSync(FILE, 'utf8')).strutture;
   await avviaCorsa(pagina, { linea: '24', modo: 'roam' });
   const passaggi = await pagina.evaluate(passaggiDelleLinee, P);
+  // lo stato del bus fermo al capolinea, da rimettere all'inizio di ogni passaggio (parti)
+  const stato0 = await pagina.evaluate(() => Object.fromEntries(Object.entries(window.__game.bus).filter(([, v]) => typeof v === 'number' || typeof v === 'boolean')));
   const righe = [], fuori = [], salti = [], altrove = [], incompleti = [];
   for (const c of passaggi) {
-    await pagina.evaluate(parti, { ...c, profili: P });
+    await pagina.evaluate(parti, { ...c, profili: P, stato0 });
     let r;
     do r = await pagina.evaluate(() => window.__attraversa.avanza(20)); while (!r.fine);
     righe.push(`${c.struttura}: linea ${c.linea}, ${Math.round(r.metri)} m in ${Math.round(r.tempo)} s, quota fino a ${r.max} m, scarto massimo ${r.peggio} m${r.motivo ? `, ${r.motivo}` : ''}`);
@@ -241,6 +243,10 @@ function passaggiDelleLinee(P) {
 function parti(c) {
   const g = window.__game, net = g.net, bus = g.bus, T = g.terrain, dt = 1 / 30, TOLL = 0.02;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // il bus riparte come dal capolinea: pedale, accelerazioni, imbardata, beccheggio e rollio restavano quelli della fine
+  // del passaggio di prima, e l'esito di un cavalcavia dipendeva da quelli attraversati prima (#125: al Chiesanuova,
+  // dopo il Borgomagno con le quote nuove, l'asse dietro passava sulla bretella senza nome al nodo (-2124, -350))
+  Object.assign(bus, c.stato0);
   g.traffic.target = 0; g.traffic.cars.splice(0);
   g.buses.setService([], g.mission.variant);
   if (g.trams.track) g.trams.setService([], g.mission.variant);

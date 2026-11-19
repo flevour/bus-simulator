@@ -5,9 +5,11 @@ scripts/requirements-mappa.txt.
 La mappa dipende da tre cose fuori dagli script. Dalla versione delle librerie: con uno shapely diverso cambiano i
 poligoni di un centinaio di aree. Dal sistema: con le stesse librerie macOS dà binari del tram diversi di un
 millimetro e una decina di raccordi (la libreria matematica non è la stessa; fino a #139 anche 115 celle della pianta e
-20 aree), mentre Linux amd64 e arm64 danno gli stessi file. Dal feed GTFS, che cambia
-ogni giorno. Qui sono fissate tutte e tre: le librerie nel file di lock, il sistema nell'immagine Docker di
-scripts/rigenera_mappa.sh, il feed nella copia data/gtfs-biv.zip (scaricata il 9 novembre 2026). Così la mappa nel
+20 aree). Anche Linux arm64 e amd64 non sono uguali: il programma lineare dei cavalcavia (HiGHS) cambia le ultime cifre
+tra le due, e il 19 novembre (#125) un valore di edgeH a 924,5 mm usciva 925 su arm64 e 924 in CI. Dal feed GTFS, che
+cambia ogni giorno. Qui sono fissate tutte: le librerie nel file di lock, il sistema e l'architettura (Linux amd64, come
+la CI; sul Mac Docker la emula) nell'immagine Docker di scripts/rigenera_mappa.sh, il feed nella copia
+data/gtfs-biv.zip (scaricata il 9 novembre 2026). Così la mappa nel
 repository è quella che questo comando produce, su ogni macchina, e una differenza dopo una modifica viene dalla
 modifica.
 
@@ -43,6 +45,7 @@ import filecmp
 import importlib.metadata
 import json
 import os
+import platform
 import re
 import shutil
 import sys
@@ -75,6 +78,9 @@ def controlla_ambiente():
     errori = []
     if sys.platform != 'linux':
         errori.append('sistema %s invece di linux (da qui: scripts/rigenera_mappa.sh, che passa da Docker)' % sys.platform)
+    if platform.machine().lower() not in ('x86_64', 'amd64'):
+        errori.append('architettura %s invece di x86_64, quella della CI (scripts/rigenera_mappa.sh la chiede a Docker)'
+                      % platform.machine())
     if sys.version_info[:2] != PYTHON:
         errori.append('Python %d.%d invece di %d.%d' % (sys.version_info[:2] + PYTHON))
     for nome, attesa in sorted(versioni_del_lock().items()):
