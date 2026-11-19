@@ -1490,9 +1490,11 @@ punto 7). Da sapere prima di toccare raccordi o scelte delle auto nelle rotonde:
   Ponte Omizzolo verso Via Gozzi, dove i raccordi sono quelli di prima e cambia solo il traffico (stessa causa, per le
   auto con un viaggio, che scelgono la svolta senza guardare la corsia);
 - altre prove del traffico, con i viaggi un poco diversi (la domanda rifatta sui raccordi nuovi cambia `od` e `tempi`):
-  impronta riscritta; `code.json` con il giro auto-tram del Ponte Omizzolo 33 m più su e un incrocio in più della coda
-  di Via Piovese (#148); `traffico.json` con il bus 22 a Riviera dei Ponti Romani (#127, 62 s); `mappa-gioco.json` senza
-  due pali che i bus delle rotonde di Via Gattamelata e di Albignasego non toccano più. `tests/domanda.spec.js` (#116)
+  impronta riscritta; in `code.json` il giro auto-tram del Ponte Omizzolo (#144) non si forma più e cambiano gli
+  incroci dove resta la coda (#148: Via Piovese con Via Lazzaro Mocenigo, Via Gozzi con Via Tommaseo invece di un
+  incrocio più indietro della stessa coda, il nodo di Via Altinate con Via Falloppio); `traffico.json` resta vuoto (la 22
+  a Riviera dei Ponti Romani, #127, si ferma 52 s; sulla mappa di prima di #125 si fermava 62 s); `mappa-gioco.json`
+  senza due pali che i bus delle rotonde di Via Gattamelata e di Albignasego non toccano più. `tests/domanda.spec.js` (#116)
   conta tra le auto con un viaggio anche quelle che l'hanno già finito (`c.arriva`): alle 8:15 la 138 nasce a pochi
   metri dal suo arrivo, in fondo a Via Rismondo, una strada chiusa da cui il viaggio dopo non si fa (`domanda.py` mette
   gli arrivi anche in fondo alle strade chiuse), e resta senza. Su main Via Rismondo è chiusa uguale: alle 8:15

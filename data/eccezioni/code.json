@@ -2,17 +2,10 @@
  "cosa": "Casi noti della prova delle code (tests/code.spec.js, regole in tests/code.js): dieci minuti nelle tre zone della prova del moto con il traffico delle 8:15. sblocchi: auto fatte sparire (sui binari, davanti al tram, davanti a un bus), tram o bus che passano attraverso un bus, bus in coda sorpassati dopo un'attesa; giri_di_attese: Traffic.untangle; incroci_bloccati: auto ferme in coda dentro un incrocio oltre 2 s; fermi: auto, bus o tram fermi oltre 120 s fuori dalle fermate. Chiave: cosa @ x,z del gioco (il nodo dell'incrocio per incroci_bloccati, dove il mezzo si è fermato per i fermi); un caso per posto. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/code.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
   "sblocchi": [],
-  "giri_di_attese": [
-   {
-    "perche": "#144, 18 novembre 2026: al Ponte Omizzolo la corsia delle auto sta sul binario del SIR3 in controsenso, e un'auto e il tram si fermano muso contro muso finché Traffic.untangle li scioglie (una volta, alle 8:16). Con la mappa della pianta come partizione (#126) le auto delle 8:15 nascono e si intrecciano in un altro ordine (impronta riscritta), e il caso di Via Morgagni che #144 descrive si presenta qui, nella coda di Via Gozzi di #148. Sparisce quando le corsie delle auto non stanno più sul binario in controsenso (#144). Con le rotonde di #143 il giro si forma 33 m più su, all'imbocco del Ponte Omizzolo verso Via Gozzi.",
-    "casi": [
-     "auto e tram che si aspettano @ 390,-420"
-    ]
-   }
-  ],
+  "giri_di_attese": [],
   "incroci_bloccati": [
    {
-    "perche": "#148: con la domanda di traffico (#116) alle 8:15 le auto attorno a chi guida hanno la densità vera (un disco di 300-500 m invece di 72 auto sparse fino a 1.700 m), e le code al rosso risalgono gli incroci vicini. In Via Gozzi la coda del semaforo arriva a 90 m dalla linea d'arresto e passa per gli incroci delle traverse; in Via Piovese l'incrocio sta 11-35 m prima della linea; in Via Tommaseo la coda viene da più avanti, senza semaforo. Le auto entrano nel raccordo quando la fila davanti si muove (la regola di #115 guarda dove si fermerà la fila) e ci restano quando il rosso più avanti la ferma. Spariscono quando la regola dell'incrocio da liberare tiene conto del rosso che fermerà la fila. Con le rotonde di #143 si aggiunge un incrocio della stessa coda di Via Piovese, quello con Via Lazzaro Mocenigo a (1935, 3041), 30 m prima di quello a (1951, 3068).",
+    "perche": "#148: con la domanda di traffico (#116) alle 8:15 le auto attorno a chi guida hanno la densità vera (un disco di 300-500 m invece di 72 auto sparse fino a 1.700 m), e le code al rosso risalgono gli incroci vicini. In Via Gozzi la coda del semaforo arriva a 90 m dalla linea d'arresto e passa per gli incroci delle traverse; in Via Piovese l'incrocio sta 11-35 m prima della linea; in Via Tommaseo la coda viene da più avanti, senza semaforo. Le auto entrano nel raccordo quando la fila davanti si muove (la regola di #115 guarda dove si fermerà la fila) e ci restano quando il rosso più avanti la ferma. Spariscono quando la regola dell'incrocio da liberare tiene conto del rosso che fermerà la fila. Con le rotonde di #143 il traffico va diversamente e gli incroci dove la coda resta cambiano: si aggiungono quello di Via Piovese con Via Lazzaro Mocenigo (1935, 3041), 30 m prima di quello a (1951, 3068), quello di Via Gozzi con Via Tommaseo (567, -838) al posto di quello a (506, -787) più indietro nella stessa coda, e il nodo di Via Altinate con Via Falloppio, Via Belzoni e Via Morgagni (622, 0), con lo stesso controllo e non guardato a parte.",
     "casi": [
      "auto in coda nell'incrocio @ 1935,3041",
      "auto in coda nell'incrocio @ 1951,3068",
@@ -22,7 +15,8 @@
      "auto in coda nell'incrocio @ 460,-650",
      "auto in coda nell'incrocio @ 466,-667",
      "auto in coda nell'incrocio @ 497,-749",
-     "auto in coda nell'incrocio @ 506,-787"
+     "auto in coda nell'incrocio @ 567,-838",
+     "auto in coda nell'incrocio @ 622,0"
     ]
    }
   ],

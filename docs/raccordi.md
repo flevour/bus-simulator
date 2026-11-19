@@ -178,7 +178,7 @@ Raccordi con la corsia fuori dall'asfalto della pianta: 99 nodi (#133). Gli altr
 
 Rotonde (#143, 19 novembre, sulla mappa rigenerata): 69.280 raccordi su 23.412 nodi, 5.061 scavalcano un arco corto;
 777 passano a una corsia più esterna dell'anello (600 per le auto, con raggi quasi tutti tra 4 e 10 m). Il campo pesa
-2.133.487 byte, 43 KB in più. Prima i raccordi che portavano un'auto in una corsia dell'anello senza uscita erano 38, in
+2.133.499 byte, 43 KB in più. Prima i raccordi che portavano un'auto in una corsia dell'anello senza uscita erano 38, in
 quattro rotonde (Via Facciolati, Via Gattamelata, Via della Salutare, Via Telemaco Signorini); ora la build ne toglie le
 auto in 12, tutti a Via Telemaco Signorini, e gli altri hanno un'uscita. Corsie da cui un'auto non esce: 9 casi di
 `curva` in meno (corsie dell'anello che ora proseguono), 12 di `accesso` in più (le corsie dell'anello di Via Telemaco
