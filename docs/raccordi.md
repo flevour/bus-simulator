@@ -193,6 +193,10 @@ auto in 12, tutti a Via Telemaco Signorini, e gli altri hanno un'uscita. Corsie 
 `curva` in meno (corsie dell'anello che ora proseguono), 12 di `accesso` in più (le corsie dell'anello di Via Telemaco
 Signorini). Svolte dei percorsi senza il raccordo del bus: 14 in meno ([percorsi.md](percorsi.md)).
 
+Svolte vicine (#135, 19 novembre): con la scelta dei raccordi su tutto il percorso le svolte dei percorsi che non si
+legano erano 3, della 10 a Via San Marco (5618, -2070); la build ci aggiunge 2 raccordi dei soli bus e non ne resta
+nessuna (`corsie_slegate` di `scripts/percorsi.py`). 69.282 raccordi.
+
 ## 7. Nel gioco: l'inseguitore di percorso (#113)
 
 Auto (`Traffic` di `src/world/traffic.js`) e bus automatici (`BusSim` di `src/world/buses.js`) seguono lo stesso

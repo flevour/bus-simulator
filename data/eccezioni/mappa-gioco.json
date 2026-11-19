@@ -116,21 +116,17 @@
     ]
    },
    {
-    "perche": "#113, 16 novembre 2026: il bus automatico sta su una curva di ripiego dell'inseguitore (src/world/inseguitore.js), con il raggio sotto il suo minimo, dove la build non ha il raccordo per lui: corsie che non si legano tra svolte vicine (#135, Albignasego con la 88, Via Chiesanuova e Via San Marco con la 10; da #143 non più la 6 a (916, 659) e un semaforo della 88 ad Albignasego) o svolta senza raccordo (#114 e #134, capolinea di Mandria con la 22). La sagoma passa sul semaforo, sul palo della linea aerea o sulla palina: spariscono con il raccordo giusto.",
+    "perche": "#113, 16 novembre 2026: il bus automatico è messo come un mezzo vero (asse posteriore sul raccordo, direzione della tangente) e in curva il muso esce verso l'esterno, oltre il cordolo: tocca il palo che sta da 0,25 a 0,6 m fuori dall'asfalto (Via Tommaseo con la 3, Via della Provvidenza con la 10, ad Albignasego un semaforo con la 88 e la palina del capolinea con la 3). Prima, con i due assi sulla corsia, era la coda a tagliare l'angolo verso l'interno, con altri pali (Prato della Valle, Due Palazzi, Gramsci 120). L'ingombro dei bus come vincolo della posa è #130. Da #135 (percorsoBus sceglie i raccordi su tutto il percorso, e la build lega le svolte vicine) i bus seguono raccordi della build anche dove prima facevano una curva di ripiego: a Via Chiesanuova (-2254, -355), ad Albignasego con la 88 e a Via San Marco con la 10 (5608, -2072), dove con i raccordi nuovi la sagoma passa anche su un semaforo. Sono casi di questo gruppo.",
     "casi": [
      "linea aerea @ -2254,-355",
-     "linea aerea @ 5608,-2072",
-     "semaforo @ -897,6141",
-     "semaforo @ -905,6159"
-    ]
-   },
-   {
-    "perche": "#113, 16 novembre 2026: il bus automatico è messo come un mezzo vero (asse posteriore sul raccordo, direzione della tangente) e in curva il muso esce verso l'esterno, oltre il cordolo: tocca il palo che sta da 0,25 a 0,6 m fuori dall'asfalto (Via Tommaseo con la 3, Via della Provvidenza con la 10, ad Albignasego un semaforo con la 88 e la palina del capolinea con la 3). Prima, con i due assi sulla corsia, era la coda a tagliare l'angolo verso l'interno, con altri pali (Prato della Valle, Due Palazzi, Gramsci 120). L'ingombro dei bus come vincolo della posa è #130.",
-    "casi": [
      "linea aerea @ -5082,-1480",
      "linea aerea @ 1084,-583",
+     "linea aerea @ 5608,-2072",
      "palina Capolinea Albignasego @ -792,6792",
-     "semaforo @ -903,6162"
+     "semaforo @ -897,6141",
+     "semaforo @ -903,6162",
+     "semaforo @ -905,6159",
+     "semaforo @ 5608,-2072"
     ]
    }
   ],
