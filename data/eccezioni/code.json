@@ -5,18 +5,15 @@
   "giri_di_attese": [],
   "incroci_bloccati": [
    {
-    "perche": "#148: con la domanda di traffico (#116) alle 8:15 le auto attorno a chi guida hanno la densità vera (un disco di 300-500 m invece di 72 auto sparse fino a 1.700 m), e le code al rosso risalgono gli incroci vicini. In Via Gozzi la coda del semaforo arriva a 90 m dalla linea d'arresto e passa per gli incroci delle traverse; in Via Piovese l'incrocio sta 11-35 m prima della linea; in Via Tommaseo la coda viene da più avanti, senza semaforo. Le auto entrano nel raccordo quando la fila davanti si muove (la regola di #115 guarda dove si fermerà la fila) e ci restano quando il rosso più avanti la ferma. Spariscono quando la regola dell'incrocio da liberare tiene conto del rosso che fermerà la fila. Gli incroci dove la coda resta cambiano a ogni cambiamento del traffico: con le rotonde di #143 si erano aggiunti Via Piovese con Via Lazzaro Mocenigo (1935, 3041), Via Gozzi con Via Tommaseo (567, -838) e il nodo di Via Altinate con Via Falloppio, Via Belzoni e Via Morgagni (622, 0); con la sosta breve dei bus alle fermate sulla sede del tram (#127: Via Falloppio, Via Piovese, Ponti Romani) i bus ripartono prima e quei tre, con l'incrocio di Via Gozzi a (460, -650), non si bloccano più nei dieci minuti della prova. Con #135 (i bus automatici scelgono i raccordi su tutto il percorso) nella coda di Via Gozzi l'auto resta nell'incrocio con Via Tommaseo (567, -838) invece che a (427, -558). Con #134 (i bus automatici girano fino a 7,0 m nelle svolte strette) il traffico va un poco diversamente e la coda resta anche negli incroci di Via Piovese con Via Lazzaro Mocenigo (1935, 3041), di Via Gozzi (427, -558) e (460, -650) e di Via Altinate con Via Falloppio (622, 0), già visti in questo gruppo.",
+    "perche": "#49: in Via Gozzi con Via Trieste (427, -558) l'auto di Via Trieste e quella della coda di Via Gozzi entrano insieme nell'incrocio e si uniscono lì dentro (Traffic.immessi fa passare prima chi ci arriva prima, ma quando tutte e due non possono più fermarsi nessuna dà la precedenza all'altra): una cede all'altra dentro l'incrocio e la coda più avanti la ferma. Con #148 le code della prova non restano più negli incroci delle traverse quando la fila si ferma (su main con la mappa di #134 34 casi in 10 posti, ora 2). Sparisce con le precedenze tra chi s'immette (#49).",
     "casi": [
-     "auto in coda nell'incrocio @ 1935,3041",
-     "auto in coda nell'incrocio @ 1951,3068",
-     "auto in coda nell'incrocio @ 2003,3155",
-     "auto in coda nell'incrocio @ 401,-496",
-     "auto in coda nell'incrocio @ 427,-558",
-     "auto in coda nell'incrocio @ 460,-650",
-     "auto in coda nell'incrocio @ 466,-667",
-     "auto in coda nell'incrocio @ 497,-749",
-     "auto in coda nell'incrocio @ 567,-838",
-     "auto in coda nell'incrocio @ 622,0"
+     "auto in coda nell'incrocio @ 427,-558"
+    ]
+   },
+   {
+    "perche": "#148, quello che la previsione non vede: in Via Piovese (2089, 3296) l'auto arriva a 12,6 m/s, quando può ancora fermarsi la fila davanti va a 11 m/s verso il rosso 80 m più avanti e oltre l'incrocio c'è posto (Traffic.postoOltre); poi un'auto davanti si ferma prima dell'incrocio dopo per lasciarlo libero, la fila si ferma 11 m più indietro del previsto e questa resta 4 s con la coda nell'incrocio. Un caso così compare e sparisce a ogni cambiamento del traffico.",
+    "casi": [
+     "auto in coda nell'incrocio @ 2089,3296"
     ]
    }
   ],

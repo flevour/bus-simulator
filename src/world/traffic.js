@@ -1409,7 +1409,10 @@ export class Traffic {
         // (per un incrocio prima della linea il giallo vale come il rosso: entrando ci si fermerebbe lì)
         else if (st === 'Y' && dist > 0) gialla = dist + 1.2;
       }
-      // in fondo a una strada chiusa ci si ferma prima della fine del percorso
+      // in fondo a una strada chiusa ci si ferma prima della fine del percorso (non per l'incrocio da liberare: lì
+      // l'auto, lontano da chi guida, esce di scena; contato, la teneva ferma per sempre prima di un incrocio a pochi
+      // metri dalla fine, ora che la regola vale anche senza nessuno davanti, #148)
+      const fermaPrima = ferma;
       if (c.chiusa) fisso(c.per.fine - qc - 3);
       // spazio davanti al muso fino a dove ci si fermerà, lungo la fila (space till last standing, come in SUMO): con
       // chi c'è davanti fermo (o quasi, sotto 1 m/s), la distanza dalla sua coda; se va, anche i metri che farà ancora
@@ -1428,7 +1431,7 @@ export class Traffic {
           posto = Math.min(posto, this.postoOltre(c, box, fila, qn, v0));
           if (posto < Infinity) posto -= this.immessi(c, box, fila, c.traIncrocio) * (LUNGA + IDM_S0);
         }
-        if (qn + Math.min(posto, ferma, gialla) - box.q1 < LUNGA + IDM_S0 + (fila ? MARGINE : 0.5)) {
+        if (qn + Math.min(posto, fermaPrima, gialla) - box.q1 < LUNGA + IDM_S0 + (fila ? MARGINE : 0.5)) {
           scatola = prima;
           acc = Math.min(acc, idmAuto(c.v, v0, prima, c.v));
         }

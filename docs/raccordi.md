@@ -279,7 +279,8 @@ Sul percorso dell'inseguitore auto e bus automatici guardano chi hanno davanti e
   che la passa prima (lo scarico di una coda al verde), entro il verde che resta (`TrafficLights.verdeRestante`) più un
   secondo. Contano anche le auto di un'altra corsia che vanno nella stessa corsia d'uscita e sono già impegnate
   nell'incrocio o ci arrivano prima (`Traffic.immessi`): chi arriva prima passa prima. Con la vista lunga oltre l'incrocio
-  serve il posto dell'auto (6,4 m) più 3 m (`MARGINE`, per gli errori della previsione) invece di mezzo metro. Prima l'auto guardava solo
+  serve il posto dell'auto (6,4 m) più 3 m (`MARGINE`, per gli errori della previsione) invece di mezzo metro. La regola vale anche senza nessuno
+  davanti; il fondo di una strada chiusa non conta (lì l'auto, lontano da chi guida, esce di scena). Prima l'auto guardava solo
   chi aveva davanti, fino a 20 m più 4 s alla sua velocità, e il suo `spazio`, che passava da un'auto all'altra: oltre
   quella distanza la fila sembrava libera e un verde durava per sempre;
 - un'auto della stessa corsia spostata di lato in un altro modo (fuori dal binario del tram, `tramShift`) è davanti

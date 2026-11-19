@@ -1661,9 +1661,9 @@ Code che risalgono gli incroci (#148, 19 novembre). La regola resta quella di #1
 decide. Regola in [`raccordi.md`](raccordi.md), sezione 8. Da sapere prima di toccare il traffico:
 
 - misura prima della modifica, con lo stato dei mezzi allegato ai casi (`window.__codeInfo`) e la storia degli ultimi
-  4 s di ogni auto prima di entrare in un incrocio. Sulla main di oggi (17cbafa), nei dieci minuti della prova delle
-  code: 25 casi di `auto in coda nell'incrocio` in 6 posti, 42 soste di oltre 2 s dentro un incrocio, 418 secondi in
-  tutto (la più lunga 25,6 s). Quasi sempre, all'ultimo momento in cui poteva ancora fermarsi, l'auto vedeva posto
+  4 s di ogni auto prima di entrare in un incrocio. Sulla main del pomeriggio (17cbafa), nei dieci minuti della prova
+  delle code: 25 casi di `auto in coda nell'incrocio` in 6 posti, 42 soste di oltre 2 s dentro un incrocio, 418 secondi
+  in tutto (la più lunga 25,6 s); con la mappa di #134 (ebf5c1f) 34 casi in 10 posti, 49 soste, 480 s. Quasi sempre, all'ultimo momento in cui poteva ancora fermarsi, l'auto vedeva posto
   oltre l'incrocio. Le cause, guardate dall'alto: in Via Gozzi e in Via Piovese le auto spostate di lato per stare
   fuori dal binario del SIR3 (`tramShift`) non vedevano quelle davanti nella stessa corsia spostate meno (il percorso
   si campiona con lo scostamento di chi guarda, e lo scostamento cambia lungo la strada); in Via Piovese due incroci a
@@ -1686,15 +1686,24 @@ decide. Regola in [`raccordi.md`](raccordi.md), sezione 8. Da sapere prima di to
   l'auto è o entrerà; `c.impegnata` se non può più fermarsi; `c.traIncrocio`, i secondi all'incrocio) prendono posto
   prima di chi ci arriva dopo. Attenzione ai nomi: `c.arriva` è già della domanda (#116, dove l'auto esce di scena);
 - `Traffic.metti`: a pochi metri da un incrocio l'auto nasce abbastanza piano da poter ancora decidere;
-- numeri, stessa macchina, main e ramo in parallelo, prova dei dieci minuti: casi da 25 in 6 posti a 2 in 2 posti, soste
-  dentro un incrocio da 42 a 13, da 418 a 63 secondi; `traffic.update` da 1,09 a 1,23 ms per passo con 60 auto (nel
-  profilo di 60 s alla stazione `davanti` da 0,37 a 0,44 ms, `postoOltre` e `immessi` 0,01 ms ciascuna). Corridoio di
-  Via Querini uguale (non ha incroci): 600, 1.200 e 1.368 auto l'ora, scarico un'auto ogni 2,16 s; punte della domanda
-  1,39 alle 8 e 1,39 alle 18 (soglia 1,08); prova del moto e prove del traffico senza casi nuovi;
-- casi che restano in `code.json`: Via Gozzi con Via Scrovegni (466, -667) e con Via Trieste (427, -558), dove l'auto
-  della traversa e quella della coda entrano insieme e si uniscono dentro l'incrocio (#49: nessuna dà precedenza
-  all'altra); l'auto muso contro muso col SIR3 in Via Morgagni (#144), un intreccio che compare e sparisce a ogni
-  cambiamento del traffico (c'era fino a #139).
+- la regola vale anche senza nessuno davanti (prima solo con un mezzo davanti): conta il rosso oltre l'incrocio, non
+  il fondo di una strada chiusa (`fermaPrima` in `Traffic.update`), dove l'auto lontano da chi guida esce di scena. Con
+  il fondo contato, sul Lungargine Rovetta un'auto restava ferma oltre 120 s prima di un incrocio a pochi metri dalla
+  fine;
+- numeri, stessa macchina, main e ramo in parallelo, prova dei dieci minuti: sulla mappa di #134 casi da 34 in 10 posti
+  a 2 in 2 posti, soste dentro un incrocio da 49 a 13, da 480 a 67 secondi, `traffic.update` da 1,01 a 1,07 ms per
+  passo con 60 auto; su 17cbafa da 25 casi a 2, `traffic.update` da 1,09 a 1,23 ms (nel profilo di 60 s alla stazione
+  `davanti` da 0,37 a 0,44 ms, `postoOltre` e `immessi` 0,01 ms ciascuna). Su 17cbafa anche con 144 auto alle 8:15
+  (da 23 casi a 2, soste da 565 a 246 s, `traffic.update` da 2,05 a 2,20 ms) e alle 17:30 (da 18 a 2, da 288 a 77 s);
+  nessuno fermo oltre 120 s. Corridoio di Via Querini uguale (non ha incroci): 600, 1.200 e 1.368 auto l'ora,
+  scarico un'auto ogni 2,16 s; punte della domanda 1,39 alle 8 e 1,39 alle 18 (soglia 1,08); prova del moto e prove
+  del traffico senza casi nuovi;
+- casi che restano in `code.json`: Via Gozzi con Via Trieste (427, -558), dove l'auto della traversa e quella della
+  coda entrano insieme e si uniscono dentro l'incrocio (#49: nessuna dà precedenza all'altra; a Via Scrovegni succede
+  lo stesso, con questa mappa non nei dieci minuti della prova); Via Piovese a (2089, 3296), un'auto che arriva a
+  12,6 m/s e decide con la fila davanti a 11 m/s, che poi si ferma 11 m più indietro del previsto perché un'auto
+  lascia libero l'incrocio dopo: quello che la previsione non vede. Casi così compaiono e spariscono a ogni
+  cambiamento del traffico.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
