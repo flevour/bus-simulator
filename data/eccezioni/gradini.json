@@ -65,6 +65,44 @@
      "Direttissima per Abano | gradino @ -4034,3568",
      "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 1117,-1256"
     ]
+   },
+   {
+    "perche": "Tangenziali con il profilo del risolutore dal 19 novembre 2026 (#142): 33 gradini da 8 a 22 cm, quasi tutti dove l'asse sta sotto mezzo metro. 23 sono su un terzo arco, cioè dove due carreggiate si sovrappongono all'innesto con profili diversi (#150): le rampe senza nome di Corso Boston con Via Adriatica in (-1300, 2680), il Cavalcavia Tevere su Via Tevere, le rampe di Corso Irlanda verso Viale della Navigazione Interna. Gli altri 10 sono ai piedi, dove la quota passa dal terreno al piano e il terreno cambia sulla larghezza (come nel secondo gruppo, #125), o in curva lontano dall'asse (come nel terzo).",
+    "casi": [
+     "Corso Boston (-2125, 3654) | gradino @ -1232,2645",
+     "Corso Boston (-2125, 3654) | gradino @ -1295,2678",
+     "Corso Boston (-2125, 3654) | gradino @ -1296,2683",
+     "Corso Boston (-2125, 3654) | gradino @ -1299,2672",
+     "Corso Boston (-2125, 3654) | gradino @ -1303,2670",
+     "Corso Boston (-2125, 3654) | gradino @ -1303,2686",
+     "Corso Boston (-2125, 3654) | gradino @ -1308,2685",
+     "Corso Boston (-2125, 3654) | gradino @ -1463,2795",
+     "Corso Boston (-2125, 3654) | gradino @ -1695,2989",
+     "Corso Boston (-2125, 3654) | gradino @ -1914,3189",
+     "Corso Boston (-2125, 3654) | gradino @ -1915,3221",
+     "Corso Boston (-2125, 3654) | gradino @ -1934,3212",
+     "Corso Boston (-2125, 3654) | gradino @ -2013,3318",
+     "Corso Irlanda | gradino @ 3749,-1732",
+     "Corso Irlanda | gradino @ 3758,-1738",
+     "Corso Irlanda | gradino @ 3777,-1665",
+     "Corso Irlanda | gradino @ 4249,-121",
+     "Corso Irlanda | gradino @ 4260,-117",
+     "Corso Irlanda | gradino @ 4261,-356",
+     "Corso Irlanda | gradino @ 4313,-70",
+     "Corso Tredici Giugno | gradino @ -1038,-3838",
+     "Corso Tredici Giugno | gradino @ -1057,-3863",
+     "Corso Tredici Giugno | gradino @ -1063,-3878",
+     "Corso Tredici Giugno | gradino @ -839,-3421",
+     "Corso Tredici Giugno | gradino @ -901,-3911",
+     "Corso Tredici Giugno | gradino @ -911,-3907",
+     "Corso Tredici Giugno | gradino @ 1135,-3302",
+     "Corso Tredici Giugno | gradino @ 1230,-3534",
+     "Corso Tredici Giugno | gradino @ 1351,-3267",
+     "Via del Commercio (5612, -2497) | gradino @ 5334,-2412",
+     "Via del Commercio (5781, -2567) | gradino @ 5944,-2683",
+     "Via del Commercio (5781, -2567) | gradino @ 6273,-2760",
+     "Via del Commercio (5870, -2581) | gradino @ 6217,-2658"
+    ]
    }
   ]
  }

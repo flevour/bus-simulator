@@ -2,18 +2,19 @@
  "cosa": "Casi noti della prova delle code (tests/code.spec.js, regole in tests/code.js): dieci minuti nelle tre zone della prova del moto con il traffico delle 8:15. sblocchi: auto fatte sparire (sui binari, davanti al tram, davanti a un bus), tram o bus che passano attraverso un bus, bus in coda sorpassati dopo un'attesa; giri_di_attese: Traffic.untangle; incroci_bloccati: auto ferme in coda dentro un incrocio oltre 2 s; fermi: auto, bus o tram fermi oltre 120 s fuori dalle fermate. Chiave: cosa @ x,z del gioco (il nodo dell'incrocio per incroci_bloccati, dove il mezzo si è fermato per i fermi); un caso per posto. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/code.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
   "sblocchi": [],
-  "giri_di_attese": [],
+  "giri_di_attese": [
+   {
+    "perche": "Corso Garibaldi (63, -389): un bus fermo davanti al tram SIR2 aspetta proprio quel tram, e il tram aspetta il bus; è un giro di attese che Traffic.untangle scioglie (nessuno resta fermo oltre 120 s). Lo stesso intreccio, con il SIR1, era già stato in questo elenco (#139, #116): compare e sparisce con i piccoli cambiamenti del traffico. Questa volta con le tangenziali sul profilo (#142), che rigenerando la mappa cambiano 106 raccordi attorno alle strutture e la domanda (src/data/padova-domanda.json), quindi i viaggi dei dieci minuti della prova.",
+    "casi": [
+     "tram e bus che si aspettano @ 63,-389"
+    ]
+   }
+  ],
   "incroci_bloccati": [
    {
-    "perche": "#49: in Via Gozzi con Via Trieste (427, -558) l'auto di Via Trieste e quella della coda di Via Gozzi entrano insieme nell'incrocio e si uniscono lì dentro (Traffic.immessi fa passare prima chi ci arriva prima, ma quando tutte e due non possono più fermarsi nessuna dà la precedenza all'altra): una cede all'altra dentro l'incrocio e la coda più avanti la ferma. Con #148 le code della prova non restano più negli incroci delle traverse quando la fila si ferma (su main con la mappa di #134 34 casi in 10 posti, ora 2). Sparisce con le precedenze tra chi s'immette (#49).",
+    "perche": "Via Gozzi (466, -667), un incrocio delle traverse lungo la coda del semaforo: come nei due casi che c'erano prima (#49 in Via Gozzi con Via Trieste, #148 in Via Piovese), un'auto resta qualche secondo con la coda dentro l'incrocio quando la fila davanti si ferma prima di quanto prevedeva. Compare con le tangenziali sul profilo (#142: mappa rigenerata, 106 raccordi attorno alle strutture e domanda rifatta, quindi altri viaggi), mentre i due casi di prima, (427, -558) e (2089, 3296), spariscono. Un caso così compare e sparisce a ogni cambiamento del traffico.",
     "casi": [
-     "auto in coda nell'incrocio @ 427,-558"
-    ]
-   },
-   {
-    "perche": "#148, quello che la previsione non vede: in Via Piovese (2089, 3296) l'auto arriva a 12,6 m/s, quando può ancora fermarsi la fila davanti va a 11 m/s verso il rosso 80 m più avanti e oltre l'incrocio c'è posto (Traffic.postoOltre); poi un'auto davanti si ferma prima dell'incrocio dopo per lasciarlo libero, la fila si ferma 11 m più indietro del previsto e questa resta 4 s con la coda nell'incrocio. Un caso così compare e sparisce a ogni cambiamento del traffico.",
-    "casi": [
-     "auto in coda nell'incrocio @ 2089,3296"
+     "auto in coda nell'incrocio @ 466,-667"
     ]
    }
   ],

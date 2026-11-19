@@ -780,7 +780,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         if edges[k][5] & 16:
             ring_at[edges[k][0]].append(k)
             ring_at[edges[k][1]].append(k)
-    seen, ring_islands, ring_roads = set(), [], []
+    seen, ring_islands, ring_roads, ring_arcs, ring_nodes = set(), [], [], set(), set()
     for k0 in ground:
         if not edges[k0][5] & 16 or k0 in seen:
             continue
@@ -808,6 +808,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             order.append(cur)
         if len(order) != len(ids):
             continue
+        ring_arcs.update(comp)
+        ring_nodes.update(ids)
         w = sum(edges[k][3] for k in comp) / len(comp)
         # quasi circolare (stessa prova del gioco, City.findRoundabouts): corona circolare esatta; altrimenti la mezzeria
         # rientrata di metà carreggiata
@@ -832,6 +834,22 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             if not isl.is_empty and isl.area > 1:
                 ring_islands.append(isl)
     ring_islands = unione(ring_islands) if ring_islands else Polygon()
+    # (la carreggiata delle strade a terra che attraversano l'isola, con l'asse dentro, resta asfalto: un anello
+    # allungato attorno alla strada principale, che passa sopra le due teste dell'anello e in mezzo sta a terra. Gli archi
+    # che si innestano sull'anello, con un capo su un suo nodo, non contano: dove l'isola di un anello quasi circolare è
+    # un cerchio ci entrano di qualche metro, e il gioco ci disegna sopra il suo. Con le quote di prima un pezzo
+    # dell'anello stava in quota e l'isola non nasceva; con il profilo del risolutore copriva 140 m di carreggiata, #142)
+    if not ring_islands.is_empty:
+        shapely.prepare(ring_islands)
+        dentro = []
+        for k in ground:
+            if k in ring_arcs or edges[k][0] in ring_nodes or edges[k][1] in ring_nodes:
+                continue
+            s = seg(edges[k])
+            if ring_islands.intersects(s) and s.intersection(ring_islands).length > 0.5:
+                dentro.append(pieces[k])
+        if dentro:
+            ring_islands = ring_islands.difference(unione(dentro))
     U = unione([U, *ring_roads])
     # buchi prima dei raccordi: la chiusura agli incroci riempirebbe anche le isole vere tra due rami vicini (il
     # triangolo di prato tra i due rami di Via Toti all'ingresso del Rondò Borgomagno diventava asfalto)

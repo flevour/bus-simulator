@@ -839,6 +839,43 @@ sezione 7. Da sapere:
   lontano dall'asse e terreno ripido. Il pilota dei profili confronta la quota letta con quella del file portata nel
   punto con `quotaFuoriAsse`.
 
+#142, tangenziali sul profilo del risolutore (19 novembre). Numeri in [`cavalcavia.md`](cavalcavia.md), sezione 6. Da
+sapere:
+
+- accese nel registro Via del Commercio (tre strutture), Corso Boston (due), Corso Australia, Corso Tredici Giugno (con
+  Via Boves, il Cavalcavia Tevere e una carreggiata di Corso Australia) e Corso Irlanda (con Corso Argentina): tutte le
+  ventinove strutture, e nessun cavalcavia ha più le quote di prima. `overpass_heights`, `vicine_a_quote_di_prima` e
+  `tieni_quote_di_prima` restano per una struttura nuova che entri nel registro spenta. Corso Australia e Corso Tredici
+  Giugno si accendono insieme: si scambiano le carreggiate tra le due strutture, e con una sola accesa Corso Australia
+  sotto Corso Tredici Giugno si staccava di 1 m dalla sua quota;
+- la rigenerazione in amd64 emulato dura di più (23.579 incognite contro 11.286): con il Mac sveglio circa mezz'ora di
+  CPU nel container. Con il Mac a batteria e il coperchio chiuso il container è restato su tre ore (Maintenance Sleep),
+  e le prove delle altre sessioni non aprivano le pagine;
+- fuori dalla mia area, in `scripts/street_surfaces.py` (`surfaces`, isole delle rotatorie): l'isola di un anello
+  `junction=roundabout` non copre più la carreggiata delle strade a terra che la attraversano con l'asse dentro. Tra
+  i due cavalcavia di Corso Tredici Giugno su Corso Australia l'anello allungato dello svincolo gira attorno alla
+  strada principale, che in mezzo sta a terra: con le quote di prima una parte dell'anello era in quota e l'isola non
+  nasceva, con il profilo l'anello è tutto a terra e l'isola copriva 140 m di carreggiata (in partizione l'isola viene
+  prima dell'asfalto). Gli archi che si innestano sull'anello, con un capo su un suo nodo, non contano. Lo trova
+  il conto degli archi con l'asse fuori dall'asfalto (pianta a terra, sede, rampe, asfalto in quota): in tutta la città
+  erano solo quei tre;
+- nel registro i cartelli `maxheight` sotto Corso Tredici Giugno (Via Domenico Leonati 3,70, Cavalcavia Tevere 4,00),
+  come quelli del passo 3 di #125. Il cartello da 2,40 che `scripts/spalle_cavalcavia.py` dà sotto Corso Irlanda in
+  (3925, −3355) è di una strada di servizio senza nome di OSM accanto a Via Giuseppe Garibaldi, non della strada di
+  sotto: non c'è;
+- con Corso Irlanda acceso il San Marco non tiene più il terreno di prima: 12 cm sulla rampa ovest, 7 cm sui binari
+  del SIR2 in un tratto corto, stessi casi. Con Corso Tredici Giugno il Mortise cambia fino a 27 cm su una rampa bassa;
+- Via Antonio Ceron passa nel suo sottopasso (`tunnel`, `layer=-1`) sotto Via Boves, 3,8 m sotto l'impalcato; prima
+  attraversava a raso la cima del rilevato. Sull'asfalto in quota di Via Boves lì restano un filo bianco e un triangolo
+  chiaro (#156); le strade sotto le campate oltre 15 cm dalla loro quota sono in #157;
+- area Verifiche, `tests/profili.spec.js`: gli assi del bus del pilota su un arco in quota che non è del percorso stanno
+  in `data/eccezioni/profili-pilota.json` (controllo `altrove`, un caso per posto entro 15 m) come i salti; prima
+  dovevano essere zero senza elenco. Il caso è all'innesto di una rampa su Via Boves, dove le due carreggiate stanno
+  alla stessa quota entro 3 cm (#150). Il salto noto di Corso Tredici Giugno, con le quote di prima, è sparito;
+- la guida dalla cabina sulle linee 4 e 24 (Corso Tredici Giugno, Corso Boston), 7 (Corso Irlanda), 22 (Mortise), 10
+  (San Marco) e in Esplorazione su Corso Australia, Via del Commercio e Corso Boston ovest legge la quota del file entro
+  8 mm, senza salti oltre quelli degli innesti sovrapposti (#150).
+
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
 - il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e

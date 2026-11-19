@@ -137,7 +137,8 @@ perché un cavalcavia vero ci sta dentro. Per i binari valgono i numeri di [`bin
 ## 3. Come sono fatti i cavalcavia che hanno ancora le quote di prima
 
 Dal 13 novembre 2026 (#84) le strutture attive nel registro hanno il profilo del risolutore (sezione 6). Per le altre
-vale quello che segue. Le quote vengono da `scripts/street_surfaces.py` (`overpass_heights` per i nodi della rete, `terrain_for_game` e
+vale quello che segue. Dal 19 novembre (#142) sono attive tutte e nessun cavalcavia ha più queste quote: la sezione resta
+per una struttura nuova che entri nel registro spenta. Le quote vengono da `scripts/street_surfaces.py` (`overpass_heights` per i nodi della rete, `terrain_for_game` e
 `adjust_heights` per il terreno); il gioco somma la quota del terreno "via" (`src/world/terrain.js`) e quella della rete
 lungo gli archi (`edgeHeight` in `src/data/padova.js`, da `edgeH`). Da qui vengono quasi tutti i casi della sezione 5:
 
@@ -406,8 +407,11 @@ tram, Cavalcavia Borgomagno, Chiesanuova, San Marco e Via Venezia, e il Cavalcav
 Borgomagno. Dal 17 novembre (#124) il Cavalcavia Mortise, accanto a Via Boves, e le cinque strutture di Corso Primo
 Maggio (le due carreggiate verso Via Guizza, i ponti su Via Pietro Bembo e lo svincolo di Corso Esperanto). Dal 17
 novembre (#125) Via Salboro, con Corso Primo Maggio che passa sotto il ponte alla sua quota (ventuno strutture, 45 km,
-11.286 incognite). Spente, con il perché nel registro: le altre tangenziali (#142). Una rampa con le
-quote di prima non può entrare in una struttura attiva: la build si ferma e nomina i nodi. Il 13 novembre sulle nove
+11.286 incognite). Dal 19 novembre (#142) le altre tangenziali: Via del Commercio (tre strutture), Corso Boston (due),
+Corso Australia, Corso Tredici Giugno (con Via Boves, il Cavalcavia Tevere e una carreggiata di Corso Australia) e
+Corso Irlanda (con Corso Argentina). Sono tutte le ventinove strutture del registro, 94,6 km e 23.579 incognite, e
+nessun cavalcavia ha più le quote di prima (sezione 3). Una rampa con le quote di prima non può entrare in una struttura
+attiva: la build si ferma e nomina i nodi. Il 13 novembre sulle nove
 attive restavano 125 casi, con il perché nell'elenco delle eccezioni (#125): 46 scarti dal DTM, dove il franco della
 regola sopra la ferrovia è più alto delle spalle che il rilievo vede (Camerini: 5,8 m) o la rampa è un manufatto
 tolto dal DTM, e 79 tra onde, pendenze e raccordi dove il terreno non coincide con il profilo (ai piedi e accanto
@@ -451,6 +455,24 @@ Venezia). Via Salboro passa da 15 casi a zero. Spariscono la conca in cima al Ch
 sotto il Chiesanuova (0,97 m sopra la corda tra i due lati, ora 0,05) e di Via Friburgo sotto il Grassi (0,88, ora
 0,10), le conche e i raccordi di Via Sergio Fraccalanza sotto il San Marco. Restano otto casi nuovi, leggeri, dove i
 casi delle rampe si spostano con l'impalcato più basso (gruppo con il perché in `data/eccezioni/cavalcavia.json`).
+
+Il 19 novembre (#142), con le tangenziali accese, i casi delle strade passano da 775 a 349 (63 onde, 4 pendenze, 78
+raccordi, 204 scarti dal DTM), quelli dei binari restano 12. Per tangenziale: Via del Commercio da 40 a 17, Corso
+Boston da 76 a 12, Corso Australia e Corso Tredici Giugno insieme da 311 a 102, Corso Irlanda con Corso Argentina da
+179 a 49. Il programma non viola pendenze, raggi o franchi. Le strutture accanto cambiano poco: il San Marco fino a 12
+cm sulla rampa ovest (non tiene più il terreno di Corso Irlanda, `tieni_quote_di_prima`), i binari del SIR2 lì fino a 7
+cm, il Mortise fino a 27 cm su una rampa bassa (Via Boves, che gli passa sotto, è ora della struttura di Corso Tredici
+Giugno). Le strade che passano sotto le campate nuove restano entro 15 cm dalla loro quota, tranne sei: Via
+Domenico Leonati sotto Corso Tredici Giugno ha 0,2 m di avvallamento e poi un gradino di 0,4 m dove esce dall'ombra
+della campata, contro il DTM che subito dopo sale del 30% sull'argine; Via del Commercio sotto le sue rampe, Via Montà,
+Via Po, la strada senza nome sotto Corso Irlanda in (3664, −1776) e Viale della Navigazione Interna si staccano di
+0,17-0,42 m dove una cella sta tra la strada e una rampa della struttura (la cella prende la quota più bassa). Nessuna
+scende di metri come prima di #125, e dove passano linee (Via Montà, 11, 11B, 21) il profilo è più regolare di prima
+(#157).
+I cartelli `maxheight` di Via Domenico Leonati (3,70) e del Cavalcavia Tevere (4,00) sotto Corso Tredici Giugno sono
+nel registro come franchi; oggi non legano niente, perché l'impalcato lì sta 7 m sopra la strada. La quota delle
+spalle sopra la ferrovia per Corso Australia (8,21 m) è stata provata e lasciata: con una carreggiata sola la tiene su
+l'altra, con tutte e due i casi non migliorano.
 
 Per provare una modifica al risolutore non serve rigenerare la mappa (#125): `scripts/prova_risolutore.py` rifà il
 passo dei cavalcavia di `build_map.py` sulla rete di `src/data/padova-map.json`, con le strutture scelte accese da sole
@@ -536,10 +558,10 @@ file ed esce con errore, nominandola, se una struttura è cambiata di più di 1 
 diff dice quali strutture tocca: vanno nominate nel commit. `tests/profili.spec.js` lancia il confronto, controlla che
 il gioco legga quelle quote (terreno più `edgeHeight` e `heightAt` in ogni punto del file, entro 2 cm) e porta il bus
 con un pilota sopra ogni cavalcavia dove passa una linea: la quota letta sotto i due assi a ogni passo è quella del
-file sull'arco dove sta l'asse, portata nel punto dell'asse del bus con `quotaFuoriAsse`, entro 2 cm, senza finire su
-un arco in quota che non è del percorso. I salti della quota che si vede da un passo all'altro sono solo quelli noti
-(`data/eccezioni/profili-pilota.json`: da #137 solo uno, su una rampa di Corso Tredici Giugno con le quote di prima,
-#142). Una quarta prova guarda i gradini su tutte le strutture attive, non solo dove passa una linea: per ogni coppia di
+file sull'arco dove sta l'asse, portata nel punto dell'asse del bus con `quotaFuoriAsse`, entro 2 cm. I salti della
+quota che si vede da un passo all'altro e gli assi su un arco in quota che non è del percorso sono solo quelli noti
+(`data/eccezioni/profili-pilota.json`: da #142 nessun salto; un asse fuori dal percorso, all'innesto di una rampa su
+Via Boves dove le due carreggiate stanno alla stessa quota entro 3 cm e si sovrappongono, #150). Una quarta prova guarda i gradini su tutte le strutture attive, non solo dove passa una linea: per ogni coppia di
 archi di fila (deviazione fino a 60 gradi) un punto percorre linee parallele all'asse, un metro l'una dall'altra su
 tutta la larghezza, da 12 m prima del nodo a 12 m dopo, a passi di 25 cm, e la quota assoluta letta con
 `City.quotaSotto` non deve saltare più di 5 cm più il 10% del passo. Un caso per nodo, chiave `struttura | gradino @

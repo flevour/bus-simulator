@@ -3,12 +3,6 @@
  "controlli": {
   "strati_diversi_da_lontano": [
    {
-    "perche": "Svincolo di Via del Commercio con Via Boves, quote di prima (#124, #142), dopo la pianta come partizione (#126, 18 novembre 2026): ai piedi della rampa, a 0,4 m, la rampa sale proprio accanto all'asfalto a terra e da vicino il suo bordo copre l'asfalto dietro (un'occlusione vera, contata perché la quota differisce meno di 0,5 m; prima di #126 lì i due si sovrapponevano in pianta). Si rivede quando la struttura prende il profilo del risolutore (#142). I due casi dei viadotti di Via Boves alla Fornace (righe alla quota del loro arco sotto l'asfalto in quota, che prende la più alta tra le carreggiate vicine) sono spariti con #137: le righe sugli archi in quota stanno sull'asfalto disegnato.",
-    "casi": [
-     "tangenziale-commercio-boves: strato 3 da vicino, strato 2 da lontano @ 5349,-2417"
-    ]
-   },
-   {
     "perche": "Cavalcavia Mortise con il profilo del risolutore dal 17 novembre 2026 (#124): ai piedi della rampa nord, un arco a terra su un rilevato, le righe della carreggiata (strato 4) e l'asfalto a terra (strato 2) stanno quasi alla stessa quota: da 20 m si vede l'asfalto, da 300 m le righe, su 17 punti su 800. Non è una sovrapposizione di classi della pianta (da #126 non ce ne sono) né la quota fuori asse (#137: l'arco è a terra, e il caso resta uguale): righe e asfalto prendono il terreno ognuno ai suoi vertici, e dove il rilevato si curva tra un vertice e l'altro le righe passano sotto l'asfalto. È il terreno preso a vertici diversi di #149.",
     "casi": [
      "cavalcavia-mortise-rampa: strato 2 da vicino, strato 4 da lontano @ 2871,-2865"
@@ -18,6 +12,12 @@
     "perche": "Corso Primo Maggio verso Via Guizza, piede della rampa (#137, 19 novembre 2026): la rampa a raso (10-14 cm sopra il terreno delle strade) e il prato del fondo, la maglia del terreno da 10 m, si scambiano da 300 m su 8 punti, la soglia di un caso. Con la quota dell'asse su tutta la larghezza la rampa sta 3-8 cm più giù sul lato dove il terreno sale (era a 12-22 cm), e la maglia, che dove il terreno è concavo sta sopra il terreno delle strade, la raggiunge: è la macchia color prato di questa veduta descritta in #149, che va tolta lì.",
     "casi": [
      "tangenziale-primo-maggio-guizza: strato 3 da vicino, fondo da lontano @ -793,4853"
+    ]
+   },
+   {
+    "perche": "Corso Australia sul ponte sopra la ferrovia, con il profilo del risolutore dal 19 novembre 2026 (#142): tra le due carreggiate, su impalcati separati, sotto si vede il prato (verde) sul terreno della campata, portato al piano di quello che passa sotto; da 300 m la maglia del terreno da 10 m (fondo), che dove il terreno è concavo sta sopra il verde, lo copre su 27 punti a 10 m dalla veduta. È il terreno preso a vertici diversi di #149.",
+    "casi": [
+     "tangenziale-australia-nereo-rocco: verde da vicino, fondo da lontano @ -1411,-1987"
     ]
    }
   ]

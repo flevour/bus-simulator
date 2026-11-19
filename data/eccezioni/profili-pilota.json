@@ -1,11 +1,12 @@
 {
- "cosa": "Salti della quota del bus trovati dal pilota di tests/profili.spec.js sopra i cavalcavia dove passa una linea: la quota che si vede sotto un asse (terreno sotto l'asse più quota letta dall'arco) cambia in un passo di più di 5 cm più metà dello spazio percorso. Chiave: struttura | salto @ x,z del gioco. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec.",
+ "cosa": "Il pilota di tests/profili.spec.js sopra i cavalcavia dove passa una linea. Salti della quota del bus: la quota che si vede sotto un asse (terreno sotto l'asse più quota letta dall'arco) cambia in un passo di più di 5 cm più metà dello spazio percorso; chiave struttura | salto @ x,z del gioco. Assi del bus su un arco in quota che non è del percorso (da #142; prima dovevano essere zero, senza elenco): un caso per posto entro 15 m, chiave struttura | altrove @ x,z. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec.",
  "controlli": {
-  "salti": [
+  "salti": [],
+  "altrove": [
    {
-    "perche": "Cavalcavia con le quote di prima (rampe della tangenziale, #124, #142): quote dei soli capi dell'arco sopra un terreno spianato attorno all'asse. Con la quota dell'asse su tutta la larghezza (#137) restano 0,23 m all'asse davanti, al passaggio da un arco al successivo; dalle strutture con il profilo del risolutore i salti sono spariti (Maroncelli, San Marco). Si rivede quando la struttura prende il profilo (#142).",
+    "perche": "Corso Tredici Giugno, innesto della rampa senza nome che si stacca da Via Boves in (1178, -3351), con il profilo del risolutore dal 19 novembre 2026 (#142): per 12 m dopo il nodo le due carreggiate sono affiancate e legate alla stessa quota entro 3 cm, e si sovrappongono (#150). L'asse davanti del bus della linea che va su Via Boves passa per qualche metro sulla rampa, a 5-8 cm sopra il terreno, alla quota del percorso: dalla cabina non si vede niente. Prima, con le quote di prima, qui c'era un salto di 0,23 m. Un punto a terra nel registro sulla rampa tirava giù anche Via Boves fino a 35 cm, con tre casi nuovi del controllo: provato e lasciato.",
     "casi": [
-     "Corso Tredici Giugno (1182, -3448) | salto @ 1186,-3349"
+     "Corso Tredici Giugno | altrove @ 1183,-3350"
     ]
    }
   ]

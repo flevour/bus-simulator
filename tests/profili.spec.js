@@ -7,7 +7,7 @@
 //    del file, entro 2 cm;
 //  * chi guida le percorre: un pilota porta il bus sopra ogni cavalcavia dove passa una linea, e la quota letta a ogni
 //    passo sotto i due assi (city.quotaSotto) è quella del file sull'arco dove sta l'asse, portata nel punto dell'asse
-//    del bus con la regola di quotaStrada (#137), entro 2 cm, senza finire su un arco in quota che non è del percorso; i
+//    del bus con la regola di quotaStrada (#137), entro 2 cm; gli assi su un arco in quota che non è del percorso e i
 //    salti della quota assoluta da un passo all'altro sono solo quelli noti (data/eccezioni/profili-pilota.json);
 //  * nessun gradino da un arco al successivo (#137): su tutte le strutture attive, per ogni coppia di archi di fila e
 //    lungo linee parallele all'asse su tutta la larghezza, la quota che un mezzo legge non salta; i gradini noti sono in
@@ -68,7 +68,13 @@ test('profili dei cavalcavia: il pilota percorre quello del file', async ({ pagi
     if (r.motivo) incompleti.push(`${c.struttura} (linea ${c.linea}): ${r.motivo} a (${r.x}, ${r.z})`);
     fuori.push(...r.fuori.map((t) => `${c.struttura}: ${t}`));
     for (const t of r.salti) { salti.push(`${c.struttura} | salto @ ${t.x},${t.z}`); righe.push(`  salto: ${t.cosa}`); }
-    altrove.push(...r.altrove.map((t) => `${c.struttura}: ${t}`));
+    // un caso per posto: il primo passo con un asse su un arco che non è del percorso, e niente entro 15 m da lui
+    for (const t of r.altrove) {
+      const m = t.match(/\((-?\d+), (-?\d+)\)/), x = Number(m[1]), z = Number(m[2]);
+      if (altrove.some((a) => a.struttura === c.struttura && Math.hypot(a.x - x, a.z - z) < 15)) continue;
+      altrove.push({ struttura: c.struttura, x, z });
+      righe.push(`  asse su un arco che non è del percorso: ${t}`);
+    }
   }
   const testo = righe.join('\n');
   console.log(testo);
@@ -76,13 +82,18 @@ test('profili dei cavalcavia: il pilota percorre quello del file', async ({ pagi
   expect(passaggi.length, 'cavalcavia dove passa una linea').toBeGreaterThan(8);
   expect.soft(incompleti, 'cavalcavia non attraversati fino in fondo').toEqual([]);
   expect.soft(fuori, `quota del bus oltre ${TOLL} m dal profilo del file`).toEqual([]);
-  // i salti noti stanno, caso per caso, in data/eccezioni/profili-pilota.json: un salto fuori dall'elenco o uno
-  // dell'elenco sparito fanno fallire la prova
-  const esito = eccezioni(info, 'profili-pilota', { salti }, 8, '`ECCEZIONI=aggiorna npx playwright test profili.spec`').salti;
-  expect.soft(esito.nuovi, 'salti della quota fuori dall\'elenco data/eccezioni/profili-pilota.json').toEqual([]);
-  expect.soft(esito.spariti, 'salti dell\'elenco spariti: da togliere').toEqual([]);
-  expect.soft(esito.senza_perche, 'salti dell\'elenco senza il perché').toEqual([]);
-  expect.soft(altrove, 'assi del bus su un arco che non è del percorso').toEqual([]);
+  // i salti noti e gli assi su un arco in quota che non è del percorso stanno, caso per caso, in
+  // data/eccezioni/profili-pilota.json: un caso fuori dall'elenco o uno dell'elenco sparito fanno fallire la prova.
+  // (Fino a #142 gli assi fuori dal percorso dovevano essere zero, senza elenco; con le tangenziali accese restano dove
+  // due carreggiate si sovrappongono all'innesto alla stessa quota, #150)
+  const esiti = eccezioni(info, 'profili-pilota', { salti, altrove: altrove.map((a) => `${a.struttura} | altrove @ ${a.x},${a.z}`) }, 8,
+    '`ECCEZIONI=aggiorna npx playwright test profili.spec`');
+  for (const [controllo, cosa] of [['salti', 'salti della quota'], ['altrove', 'assi del bus su un arco che non è del percorso']]) {
+    const esito = esiti[controllo];
+    expect.soft(esito.nuovi, `${cosa}: fuori dall'elenco data/eccezioni/profili-pilota.json`).toEqual([]);
+    expect.soft(esito.spariti, `${cosa}: casi dell'elenco spariti, da togliere`).toEqual([]);
+    expect.soft(esito.senza_perche, `${cosa}: casi dell'elenco senza il perché`).toEqual([]);
+  }
   expect(gioco.errori()).toEqual([]);
 });
 
