@@ -1831,7 +1831,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     print(f"raccordi di corsia: {len(raccordi.decodifica(_gen.R, data['raccordi']))} su {len(data['raccordi']['nodi'])} nodi; movimenti "
           + ', '.join(f'{n} {k}' for k, n in Counter(v['esito'] for v in voci_r if len(v['cat']) == 2).most_common())
           + f'; tolte le auto da {_gen.trappole} raccordi che portano in una corsia di rotonda senza uscita'
-          + f'; {_gen.legami} raccordi dei bus per {len(_gen.slegate)} svolte vicine dei percorsi che non si legavano, ne restano {len(_gen.restano)}')
+          + f'; {_gen.legami} raccordi dei bus per {len(_gen.slegate)} svolte vicine dei percorsi che non si legavano, ne restano {len(_gen.restano)}'
+          + f'; {len(_gen.stretti)} raccordi dei bus a meno di {raccordi.R_BUS} m nelle svolte strette dei percorsi')
     # la rete in out (nel bundle del gioco), edifici, pianta delle strade e alberi per aree (public/mappa/aree)
     print('aree della mappa:', aree_mappa.write(data, out))
     print(f'inversioni a U sostituite da un giro: {uturns_fixed}')

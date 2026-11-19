@@ -10,9 +10,10 @@
 // contato (ripiego()).
 import { laneLayout, quotaStrada } from '../data/padova.js';
 
-// classi di mezzo dei raccordi (bit) e raggi minimi, come nella build (docs/raccordi.md, sezione 2)
+// classi di mezzo dei raccordi (bit) e raggi minimi, come nella build (R_MIN di scripts/raccordi.py, docs/raccordi.md
+// sezione 2): il bus da 12 m automatico gira a 7,0 m come i bus veri (#134); quello di chi guida resta a 8,3 m
 export const AUTO = 1, BUS12 = 2, SNODATO = 4;
-const RAGGI = { [AUTO]: 3.8, [BUS12]: 8.3, [SNODATO]: 8.5 };
+const RAGGI = { [AUTO]: 3.8, [BUS12]: 7.0, [SNODATO]: 8.5 };
 export const raggioMinimo = (bit) => RAGGI[bit];
 // pendenza del cambio di corsia quando c'è posto (metri di lato per metro): 3 m di corsia in 25 m
 const PEND_CAMBIO = 0.12;

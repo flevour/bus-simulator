@@ -31,12 +31,16 @@ MAPPA = os.path.join(RADICE, 'src', 'data', 'padova-map.json')
 CLASSI = ('auto', 'bus12', 'snodato')
 AUTO, BUS12, SNODATO = 1, 2, 4
 BUS = BUS12 | SNODATO
-# raggio minimo (m) del percorso che il mezzo segue con il centro dell'asse posteriore. Bus da 12 m: quello del gioco
-# (src/bus/bus.js: passo 5,9 m, sterzo massimo 0,62 rad: 5,9 / tan 0,62 = 8,26 m). Snodato: la stessa motrice, con lo
-# snodo che a regime non supera 0,87 rad (ART.maxAngle: ralla 1,8 m dietro l'asse, asse del rimorchio 5,2 m dietro la
-# ralla) da 8,4 m in su. Auto: diametro di volta tra marciapiedi di 10,5 m, passo 2,6 m, carreggiata 1,5 m:
-# radice(5,25² - 2,6²) - 0,75 = 3,8 m
-R_MIN = {AUTO: 3.8, BUS12: 8.3, SNODATO: 8.5}
+# raggio minimo (m) del percorso che il mezzo segue con il centro dell'asse posteriore. Bus da 12 m automatico: 7,0 m
+# (#134), tra quello che fanno i bus veri: il Citaro (diametro di volta 22,97 m, sbalzo anteriore 2,8 m, passo 5,9 m)
+# 6,2 m, il limite del Regolamento (UE) 1230/2012 (punto più esterno entro 12,5 m) 7,7 m. Il bus di chi guida resta a
+# 8,3 m (src/bus/bus.js: passo 5,9 m, sterzo massimo 0,62 rad), e così era questo raggio fino a #134. Sotto i 7 m le
+# svolte dei percorsi senza raccordo del bus non scendono quasi più (docs/raccordi.md, sezione 2). Snodato: la stessa
+# motrice, con lo snodo che a regime non supera 0,87 rad (ART.maxAngle: ralla 1,8 m dietro l'asse, asse del rimorchio
+# 5,2 m dietro la ralla) da 8,4 m in su. Auto: diametro di volta tra marciapiedi di 10,5 m, passo 2,6 m, carreggiata
+# 1,5 m: radice(5,25² - 2,6²) - 0,75 = 3,8 m
+R_MIN = {AUTO: 3.8, BUS12: 7.0, SNODATO: 8.5}
+R_BUS = 8.3  # m: il raggio con cui la build cerca la curva del bus da 12 m; sotto, fino a R_MIN, solo dove serve (strette)
 # metà della sagoma (m): quanto asfalto serve dalla parte interna della curva
 MEZZA = {AUTO: 0.9, BUS: 1.275}
 GIOCO = 0.05  # m: una curva può stare più vicina al bordo dell'asfalto di quanto ci stanno le corsie che unisce, di tanto
@@ -292,6 +296,7 @@ class Raccordi:
         self.np, self.sh = self.P.np, self.P.sh
         self.divieti = defaultdict(list)  # (nodo, arco da) -> [(arco a, tipo, eccezioni)]
         self.via = 0
+        self.rbus = R_BUS  # il raggio del bus con cui si cerca la curva; strette() lo abbassa a R_MIN[BUS12] (#134)
         for v in M.get('svolte', []):
             if len(v) > 5:
                 self.via += 1
@@ -555,7 +560,7 @@ class Raccordi:
         sull'asfalto nemmeno con il raggio minimo); se non è ok la curva è quella che ci va più vicino."""
         d_in, d_out, Pi, Po, th = g['d_in'], g['d_out'], g['Pi'], g['Po'], g['th']
         Ai, Ao = self.spazio[g['kin'] + (1,)], self.spazio[g['kout'] + (0,)]
-        minimo = R_MIN[AUTO] if g['m'] & AUTO else R_MIN[BUS12]
+        minimo = R_MIN[AUTO] if g['m'] & AUTO else self.rbus
         self._fuori_sede = not self.tocca_sede(g)
         if abs(th) <= DIRITTO and abs(g['lato']) < 0.03 and not g['via']:
             v = (round((Pi[0] + Po[0]) / 2, 2), round((Pi[1] + Po[1]) / 2, 2))
@@ -639,7 +644,7 @@ class Raccordi:
             return ok and self.passa(pts, mezza)
         giu = lambda r: math.floor(r * 10 + 1e-6) / 10
         rmax = giu(rmax)
-        for lo, mezza, chi in ((R_MIN[BUS12], MEZZA[BUS], AUTO | BUS), (R_MIN[AUTO], MEZZA[AUTO], AUTO)):
+        for lo, mezza, chi in ((self.rbus, MEZZA[BUS], AUTO | BUS), (R_MIN[AUTO], MEZZA[AUTO], AUTO)):
             if rmax < lo or (solo_bus and chi == AUTO):
                 continue
             if prova(rmax, mezza):
@@ -669,7 +674,7 @@ class Raccordi:
         """(manca posto sulla corsia d'arrivo, manca su quella d'uscita) per il raggio minimo di chi ci deve passare."""
         if g['k'] is None:
             return True, True
-        t = (R_MIN[AUTO] if g['m'] & AUTO else R_MIN[BUS12]) * g['k']
+        t = (R_MIN[AUTO] if g['m'] & AUTO else self.rbus) * g['k']
         return self.spazio[g['kin'] + (1,)] + g['s'] < t, self.spazio[g['kout'] + (0,)] - g['u'] < t
 
     def voci(self, g):
@@ -678,51 +683,89 @@ class Raccordi:
                  'esito': esito, 'gradi': math.degrees(g['th']), 'd_in': g['d_in'], 'd_out': g['d_out']} for verts, r, chi in curve]
 
     def calcola(self, nodi=None):
-        """I raccordi dei nodi (tutti, se non detto). Dove a un movimento manca il posto per il raggio minimo perché un
-        arco è corto, il raccordo si allunga: parte dalla corsia prima dell'arco corto, o arriva su quella dopo, e
-        l'arco corto lo scavalca (fino a VIA_MAX archi e VIA_LUNGO metri). Lo stesso per i bus sui percorsi delle
-        linee, dove il raccordo diretto basta solo alle auto."""
+        """I raccordi dei nodi (tutti, se non detto): quelli di ogni movimento (movimento)."""
         out = []
         for n in (sorted(self.mov) if nodi is None else nodi):
             if n not in self.mov:
                 continue
             self.prepara(n)
             for g in self.mov[n]:
-                vv = self.voci(g)
-                out += vv
-                stretto = vv[0]['esito'] == 'stretto'
-                solo = 0 if stretto else BUS  # il raccordo diretto c'è: quelli lunghi servono solo ai bus
-                if not stretto and not (vv[0]['esito'] == 'ok' and self.bus_serve(g) and not any(v['classi'] & BUS for v in vv)):
-                    continue
-                g0 = self.geometria(g['cat'], g['m'] & BUS) if solo else g
-                coda, visti = [g0], {tuple(g['cat'])}
-                while coda:
-                    h = coda.pop(0)
-                    if len(h['cat']) - 2 >= VIA_MAX:
-                        continue
-                    c_in, c_out = self.corto(h)
-                    nuove = []
-                    if c_in:
-                        nuove += [(p['cat'][:1] + h['cat'], p['m'] & h['m']) for p in self.prima[h['kin']]]
-                    if c_out:
-                        nuove += [(h['cat'] + q['cat'][-1:], h['m'] & q['m']) for q in self.dopo[h['kout']]]
-                    for cat, m in nuove:
-                        archi = [c[0] for c in cat]
-                        if not m or tuple(cat) in visti or len(set(archi)) < len(archi) or sum(self.R.lung[k] for k in archi[1:-1]) > VIA_LUNGO:
-                            continue
-                        visti.add(tuple(cat))
-                        h2 = self.geometria(cat, m)
-                        if solo and not self.bus_serve(h2):
-                            continue
-                        v2 = [v for v in self.voci(h2)]
-                        buone = [v for v in v2 if v['esito'] == 'ok' and v['classi'] & (solo or 7)]
-                        if buone:
-                            for v in buone:
-                                v['classi'] &= solo or 7
-                            out += buone
-                        elif v2[0]['esito'] != 'fuori':
-                            coda.append(h2)
+                out += self.movimento(g)
         return out
+
+    def movimento(self, g):
+        """I raccordi di un movimento (il suo nodo già preparato). Dove manca il posto per il raggio minimo perché un arco
+        è corto, il raccordo si allunga: parte dalla corsia prima dell'arco corto, o arriva su quella dopo, e l'arco
+        corto lo scavalca (fino a VIA_MAX archi e VIA_LUNGO metri). Lo stesso per i bus sui percorsi delle linee, dove
+        il raccordo diretto basta solo alle auto."""
+        vv = self.voci(g)
+        out = list(vv)
+        stretto = vv[0]['esito'] == 'stretto'
+        solo = 0 if stretto else BUS  # il raccordo diretto c'è: quelli lunghi servono solo ai bus
+        if not stretto and not (vv[0]['esito'] == 'ok' and self.bus_serve(g) and not any(v['classi'] & BUS for v in vv)):
+            return out
+        g0 = self.geometria(g['cat'], g['m'] & BUS) if solo else g
+        coda, visti = [g0], {tuple(g['cat'])}
+        while coda:
+            h = coda.pop(0)
+            if len(h['cat']) - 2 >= VIA_MAX:
+                continue
+            c_in, c_out = self.corto(h)
+            nuove = []
+            if c_in:
+                nuove += [(p['cat'][:1] + h['cat'], p['m'] & h['m']) for p in self.prima[h['kin']]]
+            if c_out:
+                nuove += [(h['cat'] + q['cat'][-1:], h['m'] & q['m']) for q in self.dopo[h['kout']]]
+            for cat, m in nuove:
+                archi = [c[0] for c in cat]
+                if not m or tuple(cat) in visti or len(set(archi)) < len(archi) or sum(self.R.lung[k] for k in archi[1:-1]) > VIA_LUNGO:
+                    continue
+                visti.add(tuple(cat))
+                h2 = self.geometria(cat, m)
+                if solo and not self.bus_serve(h2):
+                    continue
+                v2 = [v for v in self.voci(h2)]
+                buone = [v for v in v2 if v['esito'] == 'ok' and v['classi'] & (solo or 7)]
+                if buone:
+                    for v in buone:
+                        v['classi'] &= solo or 7
+                    out += buone
+                elif v2[0]['esito'] != 'fuori':
+                    coda.append(h2)
+        return out
+
+    def strette(self, voci):
+        """Svolte strette dei percorsi delle linee (#134): dove dopo il calcolo il percorso di una variante, come lo
+        sceglie il gioco (percorso_bus), prende il raccordo delle auto o una curva del gioco, si rifanno i movimenti di
+        quella svolta con il bus a R_MIN[BUS12] (7,0 m: i bus veri, sezione 2 di docs/raccordi.md) invece che a R_BUS
+        (8,3 m), per i soli bus. Il resto della rete non cambia: il bus gira stretto solo dove largo non ci sta. Dà i
+        raccordi nuovi."""
+        R = self.R
+        partono = defaultdict(list)
+        for v in con_capi(R, voci):
+            partono[(v['nodo'], v['cat'][0][0])].append(v)
+        bersagli = set()
+        for l in self.M['lines']:
+            for va in l['variants']:
+                ns = [n for j, n in enumerate(va['nodes']) if not j or n != va['nodes'][j - 1]]
+                segs = segmenti(R, ns)
+                for i, k, v, tipo, _c in percorso_bus(R, partono, segs, BUS12):
+                    if tipo in ('auto', 'ripiego') and segs[i][0] is not None and segs[i + 1][0] is not None:
+                        bersagli.add((segs[i][3], segs[i][0], segs[i + 1][0]))
+        nuovi = []
+        self.rbus = R_MIN[BUS12]
+        try:
+            for n, da, a in sorted(bersagli):
+                self.prepara(n)
+                for g in self.mov.get(n, ()):
+                    if g['kin'][0] == da and g['kout'][0] == a and g['m'] & BUS:
+                        for v in self.movimento(self.geometria(g['cat'], g['m'] & BUS)):
+                            if v['esito'] == 'ok' and v['classi'] & BUS:
+                                v['classi'] &= BUS
+                                nuovi.append(v)
+        finally:
+            self.rbus = R_BUS
+        return nuovi
 
 
 # ---------------------------------------------------------------- campo della mappa
@@ -1081,6 +1124,8 @@ def campo_mappa(M, binari=None):
     G = Raccordi(M, aree_mappa.tram_tracks(M) if binari is None else binari)
     voci = G.calcola()
     buone = [dict(v) for v in voci if v['esito'] == 'ok' and v['classi']]
+    G.stretti = G.strette(buone)
+    buone += G.stretti
     nuovi, G.slegate, G.restano = lega(G, buone)
     buone, G.trappole = senza_trappole(G.R, scavalcati(buone + nuovi))
     G.legami = len(nuovi)
@@ -1295,7 +1340,8 @@ def main():
         print(f'campo {CAMPO} scritto in {os.path.relpath(MAPPA, RADICE)}: da {prima} a {os.path.getsize(MAPPA)} byte')
         print('  movimenti: ' + ', '.join(f'{n} {k}' for k, n in Counter(v['esito'] for v in voci if len(v['cat']) == 2).most_common())
               + f'; tolte le auto da {G.trappole} raccordi che portano in una corsia di rotonda senza uscita'
-              + f'; {G.legami} raccordi dei bus per {len(G.slegate)} svolte vicine dei percorsi che non si legavano, ne restano {len(G.restano)}')
+              + f'; {G.legami} raccordi dei bus per {len(G.slegate)} svolte vicine dei percorsi che non si legavano, ne restano {len(G.restano)}'
+              + f'; {len(G.stretti)} raccordi dei bus a meno di {R_BUS} m nelle svolte strette dei percorsi')
         M = aree_mappa.load(MAPPA)
     _v, _c, errori = rapporto(M, '--elenco' in sys.argv, '--aggiorna' in sys.argv)
     if errori:

@@ -30,8 +30,21 @@ dei bus, e non vanno contromano; i bus vanno anche in controsenso dove la via lo
 | Classe | Bit | Raggio minimo | Da dove viene |
 |---|---|---|---|
 | `auto` | 1 | 3,8 m | diametro di volta tra marciapiedi di 10,5 m, passo 2,6 m, carreggiata 1,5 m |
-| `bus12` | 2 | 8,3 m | il bus del gioco (`src/bus/bus.js`): passo 5,9 m, sterzo massimo 0,62 rad, 5,9 / tan 0,62 = 8,26 m |
+| `bus12` | 2 | 7,0 m | i bus veri (#134): il Citaro (diametro di volta 22,97 m) 6,2 m, il limite del Regolamento (UE) 1230/2012 7,7 m. La build cerca prima la curva a 8,3 m (`R_BUS`, il bus di chi guida: `src/bus/bus.js`, passo 5,9 m, sterzo massimo 0,62 rad), e scende fino a 7,0 m solo nelle svolte strette dei percorsi (sezione 3, punto 9) |
 | `snodato` | 4 | 8,5 m | la stessa motrice; lo snodo a regime non supera 0,87 rad (`ART.maxAngle`) da 8,4 m in su |
+
+Il raggio del bus da 12 m (#134). Con passo 5,9 m, sbalzo anteriore 2,8 m e larghezza 2,55 m, il punto più esterno
+davanti sta a √((R + 1,275)² + 8,7²) dal centro della curva. Il Regolamento (UE) 1230/2012 (allegato I, parte C) vuole un
+bus che giri dentro un cerchio di 12,5 m: R = 7,7 m al più; il Citaro gira in 22,97 m di diametro: R = 6,2 m. Il bus
+del gioco, a 8,3 m, girava più largo di qualunque bus omologato, e le rotonde piccole restavano senza il suo raccordo.
+Con il raggio abbassato a 7,0 m dappertutto le svolte dei percorsi senza il raccordo del bus scendevano da 296 a 141,
+e più sotto quasi non scendevano; ma la ricerca della build cambiava anche dove il raccordo del bus c'era già (la 10 ne
+perdeva una trentina). Così la build cerca come prima a 8,3 m e prova i 7,0 m solo dove al bus il raccordo manca: le
+svolte senza scendono a 105. Quello che resta (mini-rotonde, Largo Europa) chiede una curva che faccia tutta la
+manovra. Sulla foto aerea la pianta delle
+strade di quelle rotonde segue la carreggiata vera: il difetto non era della pianta. Lo sterzo di chi guida non cambia,
+e nemmeno lo snodato, che lo tiene il modello dello snodo (nel gioco anche la 10 automatica segue i raccordi del bus da
+12 m).
 
 Il raggio è quello della curva che il mezzo segue con il centro dell'asse posteriore, con la direzione tangente alla
 curva. Con questo riferimento il muso di un bus da 12 m esce dalla curva verso l'esterno (fino a 2,3 m oltre il
@@ -91,6 +104,11 @@ dell'asfalto.
    una che parte da quella su cui arriva la prima, e la manovra intera, che dalla corsia della prima va a quella della
    seconda scavalcando l'arco di mezzo (fino a `VIA_MAX` archi e `VIA_LUNGO` metri). Quasi sempre il raccordo che
    scavalca c'era già, per le auto o per un'altra svolta: mancava che il gioco lo prendesse (sezione 7).
+9. Svolte strette dei percorsi delle linee (#134). Il bus da 12 m si cerca prima a 8,3 m (`R_BUS`). Dove poi il
+   percorso di una variante, come lo sceglie il gioco (`percorso_bus`), prende il raccordo delle auto o una curva del
+   gioco, la build rifà i movimenti di quella svolta per i soli bus con il raggio minimo vero, 7,0 m (`R_MIN`,
+   sezione 2), compresi i raccordi che scavalcano archi corti (`strette`). Il resto della rete non cambia: il bus gira
+   stretto solo dove largo non ci sta.
 
 Sul percorso di una linea lo stesso movimento può avere due raccordi dalla stessa corsia alla stessa corsia: quello
 delle auto e uno più largo per i bus.

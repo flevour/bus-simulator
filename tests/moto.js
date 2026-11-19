@@ -17,7 +17,8 @@
 // in pagina: comincia a guardare. window.__moto.fine() smette e dà casi, conti e valori peggiori
 export function osservaMoto({ dt = 1 / 30 } = {}) {
   const g = window.__game, B = g.buses;
-  const RMIN = { auto: 3.8, bus: 8.3 }, ASSE = { auto: 1.35, bus: 2.6 };
+  // raggi minimi della build (campo raccordi della mappa, R_MIN di scripts/raccordi.py): bus da 12 m 7,0 m da #134
+  const RG = g.net.raccordi && g.net.raccordi.raggi, RMIN = { auto: RG ? RG[0] : 3.8, bus: RG ? RG[1] : 7.0 }, ASSE = { auto: 1.35, bus: 2.6 };
   const prima = new Map(), aperti = new Map(), ultimoArco = new Map();
   const casi = [], conti = { traverso: 0, salto: 0, imbardata: 0, inversione: 0 };
   const peggio = { traverso: 0, salto: 0, imbardata: 0 };
