@@ -92,6 +92,10 @@ Contate per linea, come faceva `bus_senza_raccordo` di `scripts/raccordi.py`, le
 solo auto, 18 senza curva, 66 svolte non ammesse, 5 inversioni) e sono 133, tutte nei due gruppi di #134: nessuna è
 nuova.
 
+Con le rotonde di #143 (19 novembre: nell'anello si prosegue da ogni corsia e si passa alla corsia esterna) le svolte
+senza raccordo per variante sono 296 (262 solo auto, 34 senza curva): 14 in meno, nelle rotonde di Via della Salutare
+(13), Via Facciolati (14 e 16), Via Bembo (3) e in quella a (-894, 6153) sulla 88.
+
 I percorsi cambiati, 27 varianti (più le 33 che passano da Corso del Popolo, con gli stessi nodi e il controsenso dei
 bus sui tre archi):
 

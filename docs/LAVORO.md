@@ -1483,7 +1483,20 @@ punto 7). Da sapere prima di toccare raccordi o scelte delle auto nelle rotonde:
 - bus: con la prosecuzione da ogni corsia e i passaggi alla corsia esterna anche i bus automatici hanno più raccordi
   nelle rotonde. Su tutte le varianti (corsie di `BusSim`, in Node) i posti con un ripiego passano da 281 a 234; ne
   compaiono 8 dove le corsie di due svolte vicine non si legano (#135) e uno a Via Telemaco Signorini, dove la 4 usava
-  il raccordo delle auto tolto e ora fa una curva del gioco (#134).
+  il raccordo delle auto tolto e ora fa una curva del gioco (#134);
+- prova del moto (`data/eccezioni/moto.json`): spariscono i 5 casi delle auto nella rotonda di Via Marconi e 19 di bus
+  negli anelli (17 di #135, 2 di #134); ne arrivano 7 di bus nelle rotonde di Via Marconi, Via Facciolati e Corso delle
+  Tre Venezie, dove il bus ha ora il raccordo suo ma la svolta dopo parte da un'altra corsia (#135), e 2 di auto al
+  Ponte Omizzolo verso Via Gozzi, dove i raccordi sono quelli di prima e cambia solo il traffico (stessa causa, per le
+  auto con un viaggio, che scelgono la svolta senza guardare la corsia);
+- altre prove del traffico, con i viaggi un poco diversi (la domanda rifatta sui raccordi nuovi cambia `od` e `tempi`):
+  impronta riscritta; `code.json` con il giro auto-tram del Ponte Omizzolo 33 m più su e un incrocio in più della coda
+  di Via Piovese (#148); `traffico.json` con il bus 22 a Riviera dei Ponti Romani (#127, 62 s); `mappa-gioco.json` senza
+  due pali che i bus delle rotonde di Via Gattamelata e di Albignasego non toccano più. `tests/domanda.spec.js` (#116)
+  conta tra le auto con un viaggio anche quelle che l'hanno già finito (`c.arriva`): alle 8:15 la 138 nasce a pochi
+  metri dal suo arrivo, in fondo a Via Rismondo, una strada chiusa da cui il viaggio dopo non si fa (`domanda.py` mette
+  gli arrivi anche in fondo alle strade chiuse), e resta senza. Su main Via Rismondo è chiusa uguale: alle 8:15
+  nessuna auto ci nasceva vicino al suo arrivo.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

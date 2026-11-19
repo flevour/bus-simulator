@@ -12,7 +12,10 @@ test('viaggi con origine e destinazione, percorsi che seguono i tempi, auto che 
   await avviaCorsa(pagina, { linea: '3' });
   const r = await pagina.evaluate(() => {
     const g = window.__game, T = g.traffic, D = g.domanda, E = g.net.edges;
-    const alle8 = { auto: T.cars.length, conViaggio: T.cars.filter((c) => c.viaggio && c.viaggio.o != null && c.viaggio.d != null && c.viaggio.arrivo != null).length, raggio: T.raggio, quante: T.quante };
+    // un'auto che nasce a pochi metri dall'arrivo del suo viaggio può averlo già finito (c.arriva: lontano da chi guida
+    // esce di scena lì): se l'arrivo è in fondo a una strada chiusa, come in Via Rismondo, il viaggio dopo non si fa e
+    // resta senza (#143: la 138 delle 8:15, con i raccordi delle rotonde e la domanda rifatta su di loro)
+    const alle8 = { auto: T.cars.length, conViaggio: T.cars.filter((c) => (c.viaggio && c.viaggio.o != null && c.viaggio.d != null && c.viaggio.arrivo != null) || c.arriva != null).length, raggio: T.raggio, quante: T.quante };
     g.sim(30, 1 / 30, false);
     // un'auto con un viaggio e un nodo davanti con due movimenti che arrivano: il ritardo sul migliore fa scegliere l'altro
     let cambio = null;

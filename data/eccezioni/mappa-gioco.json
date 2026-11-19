@@ -116,13 +116,11 @@
     ]
    },
    {
-    "perche": "#113, 16 novembre 2026: il bus automatico sta su una curva di ripiego dell'inseguitore (src/world/inseguitore.js), con il raggio sotto il suo minimo, dove la build non ha il raccordo per lui: corsie che non si legano tra svolte vicine (#135, Albignasego con la 88, Via Chiesanuova e Via San Marco con la 10, la 6 a (916, 659)) o svolta senza raccordo (#114 e #134, capolinea di Mandria con la 22). La sagoma passa sul semaforo, sul palo della linea aerea o sulla palina: spariscono con il raccordo giusto.",
+    "perche": "#113, 16 novembre 2026: il bus automatico sta su una curva di ripiego dell'inseguitore (src/world/inseguitore.js), con il raggio sotto il suo minimo, dove la build non ha il raccordo per lui: corsie che non si legano tra svolte vicine (#135, Albignasego con la 88, Via Chiesanuova e Via San Marco con la 10; da #143 non più la 6 a (916, 659) e un semaforo della 88 ad Albignasego) o svolta senza raccordo (#114 e #134, capolinea di Mandria con la 22). La sagoma passa sul semaforo, sul palo della linea aerea o sulla palina: spariscono con il raccordo giusto.",
     "casi": [
      "linea aerea @ -2254,-355",
      "linea aerea @ 5608,-2072",
-     "linea aerea @ 916,659",
      "semaforo @ -897,6141",
-     "semaforo @ -903,6141",
      "semaforo @ -905,6159"
     ]
    },

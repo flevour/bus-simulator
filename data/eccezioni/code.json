@@ -4,16 +4,17 @@
   "sblocchi": [],
   "giri_di_attese": [
    {
-    "perche": "#144, 18 novembre 2026: al Ponte Omizzolo la corsia delle auto sta sul binario del SIR3 in controsenso, e un'auto e il tram si fermano muso contro muso finché Traffic.untangle li scioglie (una volta, alle 8:16). Con la mappa della pianta come partizione (#126) le auto delle 8:15 nascono e si intrecciano in un altro ordine (impronta riscritta), e il caso di Via Morgagni che #144 descrive si presenta qui, nella coda di Via Gozzi di #148. Sparisce quando le corsie delle auto non stanno più sul binario in controsenso (#144).",
+    "perche": "#144, 18 novembre 2026: al Ponte Omizzolo la corsia delle auto sta sul binario del SIR3 in controsenso, e un'auto e il tram si fermano muso contro muso finché Traffic.untangle li scioglie (una volta, alle 8:16). Con la mappa della pianta come partizione (#126) le auto delle 8:15 nascono e si intrecciano in un altro ordine (impronta riscritta), e il caso di Via Morgagni che #144 descrive si presenta qui, nella coda di Via Gozzi di #148. Sparisce quando le corsie delle auto non stanno più sul binario in controsenso (#144). Con le rotonde di #143 il giro si forma 33 m più su, all'imbocco del Ponte Omizzolo verso Via Gozzi.",
     "casi": [
-     "auto e tram che si aspettano @ 390,-453"
+     "auto e tram che si aspettano @ 390,-420"
     ]
    }
   ],
   "incroci_bloccati": [
    {
-    "perche": "#148: con la domanda di traffico (#116) alle 8:15 le auto attorno a chi guida hanno la densità vera (un disco di 300-500 m invece di 72 auto sparse fino a 1.700 m), e le code al rosso risalgono gli incroci vicini. In Via Gozzi la coda del semaforo arriva a 90 m dalla linea d'arresto e passa per gli incroci delle traverse; in Via Piovese l'incrocio sta 11-35 m prima della linea; in Via Tommaseo la coda viene da più avanti, senza semaforo. Le auto entrano nel raccordo quando la fila davanti si muove (la regola di #115 guarda dove si fermerà la fila) e ci restano quando il rosso più avanti la ferma. Spariscono quando la regola dell'incrocio da liberare tiene conto del rosso che fermerà la fila.",
+    "perche": "#148: con la domanda di traffico (#116) alle 8:15 le auto attorno a chi guida hanno la densità vera (un disco di 300-500 m invece di 72 auto sparse fino a 1.700 m), e le code al rosso risalgono gli incroci vicini. In Via Gozzi la coda del semaforo arriva a 90 m dalla linea d'arresto e passa per gli incroci delle traverse; in Via Piovese l'incrocio sta 11-35 m prima della linea; in Via Tommaseo la coda viene da più avanti, senza semaforo. Le auto entrano nel raccordo quando la fila davanti si muove (la regola di #115 guarda dove si fermerà la fila) e ci restano quando il rosso più avanti la ferma. Spariscono quando la regola dell'incrocio da liberare tiene conto del rosso che fermerà la fila. Con le rotonde di #143 si aggiunge un incrocio della stessa coda di Via Piovese, quello con Via Lazzaro Mocenigo a (1935, 3041), 30 m prima di quello a (1951, 3068).",
     "casi": [
+     "auto in coda nell'incrocio @ 1935,3041",
      "auto in coda nell'incrocio @ 1951,3068",
      "auto in coda nell'incrocio @ 2003,3155",
      "auto in coda nell'incrocio @ 401,-496",

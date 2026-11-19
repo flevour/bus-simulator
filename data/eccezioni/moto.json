@@ -19,7 +19,6 @@
      "bus imbardata (raccordo delle auto) @ -228,-797",
      "bus imbardata (raccordo delle auto) @ -3626,-4143",
      "bus imbardata (raccordo delle auto) @ -3639,-4143",
-     "bus imbardata (raccordo delle auto) @ -41,-1005",
      "bus imbardata (raccordo delle auto) @ -415,4389",
      "bus imbardata (raccordo delle auto) @ -4160,3512",
      "bus imbardata (raccordo delle auto) @ -428,1824",
@@ -55,37 +54,26 @@
      "bus imbardata (raccordo delle auto) @ 607,819",
      "bus imbardata (raccordo delle auto) @ 613,825",
      "bus imbardata (raccordo delle auto) @ 65,-1944",
-     "bus imbardata (raccordo delle auto) @ 693,967",
      "bus imbardata (raccordo delle auto) @ 71,1618",
      "bus imbardata (raccordo delle auto) @ 777,360",
      "bus imbardata (raccordo delle auto) @ 9,-371"
     ]
    },
    {
-    "perche": "#135: i raccordi della build valgono svolta per svolta. Su un arco corto tra due svolte del percorso il raccordo che arriva finisce in una corsia e quello che riparte comincia da un'altra (o prima della fine del primo), senza posto per cambiare corsia: l'inseguitore fa una curva sua dalla corsia e dal punto dove il bus si trova (ripiego), con il raggio che ci sta.",
+    "perche": "#135: i raccordi della build valgono svolta per svolta. Su un arco corto tra due svolte del percorso il raccordo che arriva finisce in una corsia e quello che riparte comincia da un'altra (o prima della fine del primo), senza posto per cambiare corsia: l'inseguitore fa una curva sua dalla corsia e dal punto dove il bus si trova (ripiego), con il raggio che ci sta. Con #143 (passaggi alla corsia esterna negli anelli delle rotonde) ne sono spariti 17 dentro gli anelli e ne sono comparsi 7 nelle rotonde di Via Marconi, Via Facciolati e Corso delle Tre Venezie, dove il bus ora ha il raccordo suo invece di quello delle auto ma la svolta dopo parte da un'altra corsia.",
     "casi": [
      "bus imbardata (cambio di corsia senza posto) @ -1077,928",
      "bus imbardata (cambio di corsia senza posto) @ -1081,922",
-     "bus imbardata (cambio di corsia senza posto) @ -1591,3310",
-     "bus imbardata (cambio di corsia senza posto) @ -160,-851",
-     "bus imbardata (cambio di corsia senza posto) @ -199,-2276",
-     "bus imbardata (cambio di corsia senza posto) @ -2261,-356",
-     "bus imbardata (cambio di corsia senza posto) @ -420,4395",
-     "bus imbardata (cambio di corsia senza posto) @ -436,4396",
-     "bus imbardata (cambio di corsia senza posto) @ -442,4393",
-     "bus imbardata (cambio di corsia senza posto) @ -67,-989",
-     "bus imbardata (cambio di corsia senza posto) @ -702,-1330",
-     "bus imbardata (cambio di corsia senza posto) @ 1261,5216",
-     "bus imbardata (cambio di corsia senza posto) @ 1780,-1976",
-     "bus imbardata (cambio di corsia senza posto) @ 1807,-1938",
-     "bus imbardata (cambio di corsia senza posto) @ 1887,-142",
-     "bus imbardata (cambio di corsia senza posto) @ 2659,-1260",
+     "bus imbardata (cambio di corsia senza posto) @ -713,-1297",
+     "bus imbardata (cambio di corsia senza posto) @ 2515,3597",
+     "bus imbardata (cambio di corsia senza posto) @ 2526,3600",
      "bus imbardata (cambio di corsia senza posto) @ 5619,-2071",
      "bus imbardata (cambio di corsia senza posto) @ 5620,-2044",
-     "bus imbardata (cambio di corsia senza posto) @ 913,654",
+     "bus imbardata (cambio di corsia senza posto) @ 683,955",
+     "bus imbardata (cambio di corsia senza posto) @ 698,989",
      "bus imbardata (raccordi sovrapposti) @ -1046,-500",
-     "bus imbardata (raccordi sovrapposti) @ -2274,-361",
-     "bus imbardata (raccordi sovrapposti) @ -698,-1308",
+     "bus imbardata (raccordi sovrapposti) @ 2532,3600",
+     "bus imbardata (raccordi sovrapposti) @ 699,965",
      "bus imbardata (raccordi sovrapposti) @ 909,642",
      "bus imbardata (raccordi sovrapposti) @ 931,641"
     ]
@@ -101,14 +89,10 @@
     ]
    },
    {
-    "perche": "#143: auto che escono da una rotonda con l'anello a due corsie dove i raccordi della build entrano solo nella corsia interna ed escono solo dall'esterna, con archi di 5-7 m: il cambio di corsia non ci sta. Da #115 Traffic.chooseNext le fa uscire alla prima uscita con una curva del gioco (ripiego cambio di corsia senza posto o raccordi sovrapposti) invece di farle girare per sempre nell'anello (a Via Bembo con Via Marinelli l'anello si riempiva e fermava il bus della 3). Spariscono quando la build dà a ogni corsia d'ingresso un'uscita raggiungibile. Con la domanda di traffico (#116) le auto passano da altre rotonde: restano quelle di Via Marconi (2510, 3590), con i posti spostati di qualche metro. Con le quote del passo 2 di #125 su Corso Primo Maggio, accanto (fino a 22 cm), i tempi del traffico cambiano di poco e un'auto in più esce dall'anello a (2465, 3561).",
+    "perche": "#135 per le auto: al Ponte Omizzolo verso Via Gozzi (archi di 3 e 19 m a due corsie) i raccordi di due svolte vicine stanno su corsie diverse e il secondo comincia prima che finisca il primo. Un'auto con un viaggio sceglie la svolta dopo senza guardare la corsia (versoArrivo, #116) e lì fa una curva del gioco. I raccordi sono quelli di prima: il caso compare perché con #143 il traffico va diversamente.",
     "casi": [
-     "auto imbardata (cambio di corsia senza posto) @ 2461,3572",
-     "auto imbardata (cambio di corsia senza posto) @ 2465,3561",
-     "auto imbardata (cambio di corsia senza posto) @ 2535,3603",
-     "auto imbardata (cambio di corsia senza posto) @ 2537,3582",
-     "auto imbardata (raccordi sovrapposti) @ 2535,3605",
-     "auto imbardata (raccordi sovrapposti) @ 2541,3580"
+     "auto imbardata (raccordi sovrapposti) @ 385,-442",
+     "auto imbardata (raccordi sovrapposti) @ 389,-440"
     ]
    }
   ],
