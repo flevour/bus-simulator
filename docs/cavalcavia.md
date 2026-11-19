@@ -464,12 +464,33 @@ Nella mappa, da `scripts/quote_rete.py` (solo libreria standard; `build_map.py` 
 
 Nel gioco:
 
-* `edgeHeight(e, s)` (`src/data/padova.js`) legge `e.hs`; `TramTrack.heightAt(dir, s)` (`src/tram/tram.js`) legge il
-  profilo del suo binario, portato dalla progressiva dei dati a quella del percorso (`heightProfile`: il percorso
-  segue il binario dei dati punto per punto, e ogni vertice sa a che progressiva dei dati sta).
-* Auto e pedoni leggono la quota dal loro arco alla loro progressiva (`Traffic.carHeight`: in curva da quella di fine
-  corsia a quella d'inizio della corsia dopo); i bus automatici dall'arco del punto della loro corsia (`laneHeight` in
-  `src/world/buses.js`); i tram, di chi guida e automatici, dal binario.
+* `edgeHeight(e, s)` (`src/data/padova.js`) legge `e.hs`: la quota sopra il terreno sull'asse dell'arco.
+  `TramTrack.heightAt(dir, s)` (`src/tram/tram.js`) legge il profilo del suo binario, portato dalla progressiva dei dati
+  a quella del percorso (`heightProfile`: il percorso segue il binario dei dati punto per punto, e ogni vertice sa a che
+  progressiva dei dati sta).
+* La quota in un punto della carreggiata fuori dall'asse (#137) la dà una sola funzione, `quotaStrada(e, s, x, z)` di
+  `src/data/padova.js`: la quota assoluta dell'asse alla progressiva s (terreno "via" sull'asse più `edgeHeight`) meno
+  il terreno del punto. La carreggiata sta in piano sulla larghezza, come la sede del tram (`tramH` ha già la quota
+  assoluta della strada), anche dove il terreno sotto non lo è: alle spalle, sotto le campate, accanto a una strada che
+  resta a livello strada il terreno cambia fino a 3 m sulla larghezza della carreggiata. Prima la quota dell'asse si
+  sommava al terreno del punto: l'asfalto in quota si piegava, l'impalcato ci spuntava sopra (Mortise, Borgomagno,
+  Maroncelli) e un mezzo che passava da un arco al successivo vedeva il terreno di un altro punto dell'asse (gradini
+  fino a 0,8 m). Ai piedi delle rampe la pianta delle strade disegna i tratti sotto 5 cm come asfalto a terra (`Q_TERRA`,
+  lo stesso di `scripts/street_surfaces.py`), che segue il terreno: da lì la carreggiata passa al piano man mano che la
+  quota dell'asse sale fino a 0,5 m (`PIANO`; `quotaFuoriAsse` è la regola, data la quota sull'asse). Il terreno è quello
+  del gioco (`Terrain.at`, come lo somma il vertex shader), che `City` passa con `usaTerreno`.
+* La usano tutti i lettori: il disegno (`City.elevHeight` per asfalto in quota, righe di bordo e facce dei gradini; le
+  righe sugli archi in quota, che stanno sull'asfalto disegnato se è entro mezzo metro dalla quota del loro arco; il piano
+  degli impalcati, 6 cm sotto l'asfalto disegnato; le pile), il bus di chi guida (`City.quotaSotto`, `City.arcoIn`), le
+  auto (`Traffic.carHeight`; nei raccordi `Curva.quota` va dalla quota dell'arco d'arrivo a quella dell'arco d'uscita,
+  tutte e due lette nel punto dell'auto), i bus automatici (`laneHeight` di `src/world/buses.js`, nel punto del bus) e i
+  pedoni. I tram, di chi guida e automatici, leggono il binario, e la sede in quota (`City.quotaSede`) resta alla quota
+  sopra il terreno del binario come corsie rosse e rotaie.
+* `City.elevHeight` prende tra gli archi in quota entro mezza carreggiata più 1,5 m il più alto, ma prima quelli su cui
+  il punto cade tra i due capi: il capo dell'arco successivo, prima del nodo, ha la quota del nodo, e su una rampa in
+  salita il massimo la prendeva da lì, con un ripiano di mezzo metro attorno al nodo (Maroncelli). `GeoBuilder.polygonH`
+  divide i triangoli dove la quota assoluta (quota più terreno) si stacca dalla corda, non quella sopra il terreno: una
+  carreggiata in piano su un terreno che si incurva non chiede triangoli in più.
 * Il bus di chi guida non ha un percorso obbligato: `City.quotaSotto` tiene, per ognuno dei due assi, l'arco su cui
   sta. A ogni passo guarda quell'arco e quelli che lo toccano a un nodo e prende il più vicino al punto, meglio se nella
   direzione del mezzo. Da un arco a quello dopo la quota è continua, e la strada che passa sotto o sopra senza un nodo
@@ -488,9 +509,15 @@ file ed esce con errore, nominandola, se una struttura è cambiata di più di 1 
 diff dice quali strutture tocca: vanno nominate nel commit. `tests/profili.spec.js` lancia il confronto, controlla che
 il gioco legga quelle quote (terreno più `edgeHeight` e `heightAt` in ogni punto del file, entro 2 cm) e porta il bus
 con un pilota sopra ogni cavalcavia dove passa una linea: la quota letta sotto i due assi a ogni passo è quella del
-file sull'arco dove sta l'asse, entro 2 cm, senza finire su un arco in quota che non è del percorso. I salti della
-quota che si vede da un passo all'altro sono solo quelli noti (`data/eccezioni/profili-pilota.json`: tre, dove il
-terreno non è uguale su tutta la larghezza della carreggiata, #125 e #124).
+file sull'arco dove sta l'asse, portata nel punto dell'asse del bus con `quotaFuoriAsse`, entro 2 cm, senza finire su
+un arco in quota che non è del percorso. I salti della quota che si vede da un passo all'altro sono solo quelli noti
+(`data/eccezioni/profili-pilota.json`: da #137 solo uno, su una rampa di Corso Tredici Giugno con le quote di prima,
+#142). Una quarta prova guarda i gradini su tutte le strutture attive, non solo dove passa una linea: per ogni coppia di
+archi di fila (deviazione fino a 60 gradi) un punto percorre linee parallele all'asse, un metro l'una dall'altra su
+tutta la larghezza, da 12 m prima del nodo a 12 m dopo, a passi di 25 cm, e la quota assoluta letta con
+`City.quotaSotto` non deve saltare più di 5 cm più il 10% del passo. Un caso per nodo, chiave `struttura | gradino @
+nodo`; i casi noti sono in `data/eccezioni/gradini.json`, con il perché (prima di #137 i nodi con un gradino erano 100,
+28 oltre 20 cm, fino a 0,83 m; dopo 49, 13 oltre 20 cm).
 
 ```bash
 python3 scripts/quote_rete.py                    # i tratti in quota dei binari

@@ -1,14 +1,17 @@
 // Quote lette per arco e per binario (#107). I profili dei cavalcavia stanno, struttura per struttura, in
 // data/profili-cavalcavia.json (scripts/profili_strutture.py): quota assoluta in centimetri lungo gli archi e lungo i
-// binari. Tre prove:
+// binari. Quattro prove:
 //  * la mappa ha i profili del file: una modifica che cambia le quote di una struttura senza riscriverlo (--aggiorna,
 //    con la struttura nominata nel commit) fallisce, e dice quale;
 //  * il gioco legge quelle quote: terreno più quota dell'arco (edgeHeight) e del binario (TramTrack.heightAt) nei punti
 //    del file, entro 2 cm;
 //  * chi guida le percorre: un pilota porta il bus sopra ogni cavalcavia dove passa una linea, e la quota letta a ogni
-//    passo sotto i due assi (city.quotaSotto) è quella del file sull'arco dove sta l'asse, entro 2 cm, senza finire su un
-//    arco in quota che non è del percorso; i salti della quota assoluta da un passo all'altro sono solo quelli noti
-//    (data/eccezioni/profili-pilota.json).
+//    passo sotto i due assi (city.quotaSotto) è quella del file sull'arco dove sta l'asse, portata nel punto dell'asse
+//    del bus con la regola di quotaStrada (#137), entro 2 cm, senza finire su un arco in quota che non è del percorso; i
+//    salti della quota assoluta da un passo all'altro sono solo quelli noti (data/eccezioni/profili-pilota.json);
+//  * nessun gradino da un arco al successivo (#137): su tutte le strutture attive, per ogni coppia di archi di fila e
+//    lungo linee parallele all'asse su tutta la larghezza, la quota che un mezzo legge non salta; i gradini noti sono in
+//    data/eccezioni/gradini.json.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { test as base, expect as baseExpect } from '@playwright/test';
@@ -16,6 +19,22 @@ import { test, expect, avviaCorsa } from './gioco.js';
 
 const FILE = 'data/profili-cavalcavia.json';
 const TOLL = 0.02; // m
+// le strutture con il profilo del risolutore: quelle della mappa (cavalcavia), con i loro archi dal file dei profili
+const strutture = () => {
+  const P = JSON.parse(readFileSync(FILE, 'utf8')).strutture;
+  const M = JSON.parse(readFileSync('src/data/padova-map.json', 'utf8'));
+  return Object.fromEntries(M.cavalcavia.map((c) => [c.id, P[c.id].archi.map((a) => a.slice(0, 4))]));
+};
+// i casi di una prova contro il loro elenco in data/eccezioni/ (scripts/eccezioni.py): l'esito per controllo
+function eccezioni(info, elenco, casi, toll, comando) {
+  const fileCasi = info.outputPath(`${elenco}-casi.json`), fileEsito = info.outputPath(`${elenco}-esito.json`);
+  writeFileSync(fileCasi, JSON.stringify(casi));
+  const argomenti = ['scripts/eccezioni.py', elenco, fileCasi, '--toll', String(toll), '--json', fileEsito, '--comando', comando];
+  if (process.env.ECCEZIONI === 'aggiorna') argomenti.push('--aggiorna');
+  const e = spawnSync('python3', argomenti, { encoding: 'utf8' });
+  console.log(e.stdout + e.stderr);
+  return JSON.parse(readFileSync(fileEsito, 'utf8'));
+}
 
 base('profili dei cavalcavia: la mappa ha quelli scritti nel repository', async () => {
   const r = spawnSync('python3', ['scripts/profili_strutture.py'], { encoding: 'utf8' });
@@ -55,15 +74,9 @@ test('profili dei cavalcavia: il pilota percorre quello del file', async ({ pagi
   expect(passaggi.length, 'cavalcavia dove passa una linea').toBeGreaterThan(8);
   expect.soft(incompleti, 'cavalcavia non attraversati fino in fondo').toEqual([]);
   expect.soft(fuori, `quota del bus oltre ${TOLL} m dal profilo del file`).toEqual([]);
-  // i salti noti (gradini tra carreggiate affiancate dei cavalcavia con le quote di prima) stanno, caso per caso, in
-  // data/eccezioni/profili-pilota.json: un salto fuori dall'elenco o uno dell'elenco sparito fanno fallire la prova
-  const fileCasi = info.outputPath('casi.json'), fileEsito = info.outputPath('eccezioni.json');
-  writeFileSync(fileCasi, JSON.stringify({ salti }));
-  const argomenti = ['scripts/eccezioni.py', 'profili-pilota', fileCasi, '--toll', '8', '--json', fileEsito, '--comando', '`ECCEZIONI=aggiorna npx playwright test profili.spec`'];
-  if (process.env.ECCEZIONI === 'aggiorna') argomenti.push('--aggiorna');
-  const e = spawnSync('python3', argomenti, { encoding: 'utf8' });
-  console.log(e.stdout + e.stderr);
-  const esito = JSON.parse(readFileSync(fileEsito, 'utf8')).salti;
+  // i salti noti stanno, caso per caso, in data/eccezioni/profili-pilota.json: un salto fuori dall'elenco o uno
+  // dell'elenco sparito fanno fallire la prova
+  const esito = eccezioni(info, 'profili-pilota', { salti }, 8, '`ECCEZIONI=aggiorna npx playwright test profili.spec`').salti;
   expect.soft(esito.nuovi, 'salti della quota fuori dall\'elenco data/eccezioni/profili-pilota.json').toEqual([]);
   expect.soft(esito.spariti, 'salti dell\'elenco spariti: da togliere').toEqual([]);
   expect.soft(esito.senza_perche, 'salti dell\'elenco senza il perché').toEqual([]);
@@ -71,7 +84,80 @@ test('profili dei cavalcavia: il pilota percorre quello del file', async ({ pagi
   expect(gioco.errori()).toEqual([]);
 });
 
+test('profili dei cavalcavia: nessun gradino da un arco al successivo', async ({ pagina, gioco }, info) => {
+  await avviaCorsa(pagina, { linea: '24', modo: 'roam' });
+  const r = await pagina.evaluate(gradini, strutture());
+  const righe = r.casi.map((c) => `${c.chiave}: ${c.h} m, da ${c.da} a ${c.a} in (${c.px}, ${c.pz}), a ${c.l} m dall'asse, tra ${c.archi}`);
+  console.log(`${r.coppie} coppie di archi, ${r.linee} linee, ${r.ms} ms; gradini: ${r.casi.length}\n${righe.join('\n')}`);
+  writeFileSync(info.outputPath('gradini.json'), JSON.stringify(r.casi, null, 1));
+  info.annotations.push({ type: 'gradini', description: righe.join('\n') });
+  expect(r.coppie, 'coppie di archi di fila sulle strutture attive').toBeGreaterThan(1000);
+  const esito = eccezioni(info, 'gradini', { gradini: r.casi.map((c) => c.chiave) }, 8, '`ECCEZIONI=aggiorna npx playwright test profili.spec -g gradino`').gradini;
+  expect.soft(esito.nuovi, 'gradini fuori dall\'elenco data/eccezioni/gradini.json').toEqual([]);
+  expect.soft(esito.spariti, 'gradini dell\'elenco spariti: da togliere').toEqual([]);
+  expect.soft(esito.senza_perche, 'gradini dell\'elenco senza il perché').toEqual([]);
+  expect(gioco.errori()).toEqual([]);
+});
+
 // Le funzioni qui sotto girano nella pagina: devono bastare a sé stesse (Playwright le passa come testo).
+
+// Gradini da un arco al successivo sulle strutture attive (#137): per ogni coppia di archi di fila, di cui almeno uno
+// della struttura e in quota, con una deviazione fino a 60 gradi (chi va dall'uno all'altro senza svoltare), un punto
+// percorre linee parallele all'asse, un metro l'una dall'altra su tutta la larghezza (l'angolo sulla bisettrice), da
+// 12 m prima del nodo a 12 m dopo, a passi di 25 cm. A ogni passo la quota sotto il punto la legge city.quotaSotto,
+// come per un asse del bus di chi guida, partendo dal primo arco; la quota assoluta (più il terreno del punto) non deve
+// cambiare più di 5 cm più il 10% del passo. Un caso per nodo: il salto più alto, con l'arco da cui e su cui il punto
+// passa (lo stesso arco, l'altro della coppia o un terzo arco che si sovrappone).
+function gradini(S) {
+  const g = window.__game, net = g.net, T = g.terrain, N = net.nodes, city = g.city, PASSO = 0.25, LUNGO = 12;
+  const k4 = (e) => { const A = N[e.a], B = N[e.b]; return `${A.x},${A.z},${B.x},${B.z}`; };
+  const byKey = new Map(net.edges.map((e) => [k4(e), e]));
+  const casi = [];
+  let coppie = 0, linee = 0;
+  const t0 = performance.now();
+  for (const [id, archi] of Object.entries(S)) {
+    const E = archi.map((a) => byKey.get(a.join(','))).filter((e) => e && e.hs), visti = new Set();
+    for (const e1 of E) for (const n of [e1.a, e1.b]) {
+      const C = N[n], ux = n === e1.b ? e1.dx : -e1.dx, uz = n === e1.b ? e1.dz : -e1.dz;
+      for (const e2 of C.edges) {
+        if (e2 === e1 || e2.ped || e2.width < 3) continue;
+        const vx = n === e2.a ? e2.dx : -e2.dx, vz = n === e2.a ? e2.dz : -e2.dz;
+        if (ux * vx + uz * vz < 0.5 || visti.has(`${e1.id}>${e2.id}`)) continue;
+        visti.add(`${e1.id}>${e2.id}`);
+        coppie++;
+        const w = Math.min(e1.width, e2.width) / 2 - 1, L1 = Math.min(LUNGO, e1.len), L2 = Math.min(LUNGO, e2.len);
+        // linee a destra di chi va per l > 0: normale (-dz, dx) di ognuno dei due archi, l'angolo sulla bisettrice
+        const bx = -uz - vz, bz = ux + vx, bl = Math.hypot(bx, bz) || 1, cs = (-bx * uz + bz * ux) / bl || 1;
+        let peggio = null;
+        for (let l = -w; l <= w + 1e-6; l += 1) {
+          const cx = C.x + (bx / bl) * (l / cs), cz = C.z + (bz / bl) * (l / cs), st = { e: e1 };
+          let prima = null, ePrima = e1;
+          linee++;
+          for (let s = -L1; s <= L2; s += PASSO) {
+            const [dx, dz] = s < 0 ? [ux, uz] : [vx, vz], x = cx + dx * s, z = cz + dz * s;
+            const H = city.quotaSotto(st, x, z, dx, dz) + T.at(x, z);
+            const d = prima == null ? 0 : Math.abs(H - prima);
+            if (d > 0.05 + 0.1 * PASSO && (!peggio || d > peggio.h)) peggio = { h: d, da: prima, a: H, x, z, l, eDa: ePrima, eA: st.e };
+            prima = H; ePrima = st.e;
+          }
+        }
+        if (peggio) {
+          const r = (v, k = 10) => Math.round(v * k) / k, nome = (e) => (e ? e.name || 'senza nome' : 'fuori strada');
+          const tipo = peggio.eDa === peggio.eA ? 'sullo stesso arco' : [e1, e2].includes(peggio.eDa) && [e1, e2].includes(peggio.eA) ? "da un arco all'altro" : 'su un terzo arco';
+          // quota dell'arco sull'asse e terreno sulla larghezza (punto contro asse) dove salta: per il perché dei casi
+          const e = peggio.eA || e1, A = N[e.a], t = Math.max(0, Math.min(e.len, (peggio.x - A.x) * e.dx + (peggio.z - A.z) * e.dz));
+          const asse = g.edgeHeight(e, t), terreno = T.at(peggio.x, peggio.z) - T.at(A.x + e.dx * t, A.z + e.dz * t);
+          const c = { chiave: `${id} | gradino @ ${Math.round(C.x)},${Math.round(C.z)}`, h: r(peggio.h, 100), da: r(peggio.da, 100), a: r(peggio.a, 100), px: r(peggio.x), pz: r(peggio.z), l: r(peggio.l, 100), tipo, asse: r(asse, 100), terreno: r(terreno, 100), archi: `${nome(e1)} e ${nome(e2)}, ${tipo} (da ${nome(peggio.eDa)} a ${nome(peggio.eA)}; quota dell'asse ${r(asse, 100)} m, terreno ${r(terreno, 100)} m rispetto all'asse)` };
+          const i = casi.findIndex((o) => o.chiave === c.chiave);
+          if (i < 0) casi.push(c);
+          else if (c.h > casi[i].h) casi[i] = c;
+        }
+      }
+    }
+  }
+  casi.sort((a, b) => b.h - a.h);
+  return { coppie, linee, ms: Math.round(performance.now() - t0), casi };
+}
 
 // Quote del gioco nei punti del file: archi (terreno sull'asse più edgeHeight) e binari (terreno sotto il binario più
 // TramTrack.heightAt alla progressiva del percorso che corrisponde a quella dei dati).
@@ -231,13 +317,15 @@ function parti(c) {
           let atteso = 0;
           if (f) {
             // profilo del file alla progressiva dell'asse: nei due punti del file attorno, la quota assoluta meno il
-            // terreno sull'asse della strada lì; in mezzo lineare (tra due punti il terreno non lo è)
+            // terreno sull'asse della strada lì; in mezzo lineare (tra due punti il terreno non lo è). Poi nel punto
+            // dove il gioco l'ha letta (st.x, st.z), con la regola della quota fuori asse (quotaFuoriAsse, #137)
             const ss = f[4], qs = f[5], L = ss[ss.length - 1] || 1, x = (st.s / st.e.len) * L;
             let k = 0;
             while (k < ss.length - 2 && ss[k + 1] < x) k++;
             const w = clamp((x - ss[k]) / ((ss[k + 1] - ss[k]) || 1), 0, 1);
             const sopra = (i) => qs[i] / 100 - T.at(a.x + (b.x - a.x) * (ss[i] / L), a.z + (b.z - a.z) * (ss[i] / L));
-            atteso = sopra(k) + (sopra(k + 1) - sopra(k)) * w;
+            const t = st.s / st.e.len;
+            atteso = g.quotaFuoriAsse(sopra(k) + (sopra(k + 1) - sopra(k)) * w, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, st.x, st.z);
           }
           const d = Math.abs(q - atteso);
           A.peggio = Math.max(A.peggio, Math.round(d * 1000) / 1000);
@@ -246,7 +334,7 @@ function parti(c) {
         }
         // salti: sulla quota assoluta dell'asse (terreno sotto l'asse più quota letta), quella che si vede: vicino alle
         // spalle la quota sopra il terreno cambia in fretta perché sale il terreno
-        const pr = A.prima[i], k = i ? -2.6 : 3.3, ass = q + T.at(bus.x + Math.sin(bus.h) * k, bus.z + Math.cos(bus.h) * k);
+        const pr = A.prima[i], ass = q + T.at(st.x, st.z);
         if (pr && Math.abs(ass - pr.ass) > 0.05 + 0.5 * Math.hypot(bus.x - pr.x, bus.z - pr.z) && !A.salti.some((o) => Math.hypot(o.x - bus.x, o.z - bus.z) < 15)) A.salti.push({ x: Math.round(bus.x), z: Math.round(bus.z), cosa: `${dove}: da ${pr.ass.toFixed(2)} a ${ass.toFixed(2)}` });
         A.prima[i] = { ass, x: bus.x, z: bus.z, e: st.e && st.e.id, s: (st.s || 0).toFixed(1), l: st.e && st.e.len.toFixed(1) };
       });

@@ -1,0 +1,73 @@
+{
+ "cosa": "Gradini della quota che un mezzo vede passando da un arco al successivo sulle strutture con il profilo del risolutore (tests/profili.spec.js, prova \"nessun gradino da un arco al successivo\", #137): per ogni coppia di archi di fila, su linee parallele all'asse lungo tutta la larghezza, la quota assoluta letta con City.quotaSotto non deve saltare più di 5 cm più il 10% del passo di 25 cm. Un caso per nodo. Chiave: struttura | gradino @ x,z del nodo. Prima di #137 i nodi con un gradino erano 100 (28 oltre 20 cm), fino a 0,83 m. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec -g gradino.",
+ "controlli": {
+  "gradini": [
+   {
+    "perche": "Carreggiate di archi diversi che si sovrappongono in pianta vicino a un innesto (una rampa che si stacca o si unisce, una strada laterale che entra sulla struttura: Via Vicenza e Via del Cantiere sul Chiesanuova, Via Friburgo e Via Gramsci sul Grassi, Via Montà, Via Pietro Liberi sul Borgomagno): il risolutore dà a ogni arco il suo profilo, e nello stesso punto le due carreggiate stanno a quote assolute diverse (fino a 0,9 m al Grassi, in (1922, -1279), a un metro dal nodo). Il punto passa all'altro arco quando esce dalla sua carreggiata, e la quota salta. quotaStrada non c'entra: è la quota dei due profili nella zona dove si sovrappongono, che va resa uguale nel risolutore (#150).",
+    "casi": [
+     "Cavalcavia Antonio Grassi | gradino @ 1835,-1544",
+     "Cavalcavia Antonio Grassi | gradino @ 1868,-1318",
+     "Cavalcavia Antonio Grassi | gradino @ 1922,-1279",
+     "Cavalcavia Antonio Grassi | gradino @ 1978,-938",
+     "Cavalcavia Antonio Grassi | gradino @ 2098,-1180",
+     "Cavalcavia Borgomagno | gradino @ 104,-1332",
+     "Cavalcavia Borgomagno | gradino @ 99,-1333",
+     "Cavalcavia Chiesanuova | gradino @ -1501,-417",
+     "Cavalcavia Chiesanuova | gradino @ -1506,-402",
+     "Cavalcavia Chiesanuova | gradino @ -1869,-337",
+     "Cavalcavia Chiesanuova | gradino @ -1945,-344",
+     "Cavalcavia Chiesanuova | gradino @ -2001,-345",
+     "Cavalcavia Chiesanuova | gradino @ -2018,-353",
+     "Cavalcavia Chiesanuova | gradino @ -2023,-345",
+     "Cavalcavia Chiesanuova | gradino @ -2028,-405",
+     "Cavalcavia Chiesanuova | gradino @ -2030,-413",
+     "Cavalcavia Chiesanuova | gradino @ -2124,-350",
+     "Cavalcavia Montà | gradino @ -3224,-3317",
+     "Cavalcavia Mortise | gradino @ 2894,-2756",
+     "Cavalcavia Pietro Maroncelli | gradino @ 2603,-1160",
+     "Cavalcavia San Marco | gradino @ 4206,-1200",
+     "Cavalcavia San Marco | gradino @ 4442,-1412",
+     "Cavalcavia San Marco | gradino @ 4582,-1505",
+     "Cavalcavia San Marco | gradino @ 4592,-1530",
+     "Cavalcavia San Marco | gradino @ 4605,-1521",
+     "Cavalcavia San Marco | gradino @ 4618,-1532",
+     "Cavalcavia San Marco | gradino @ 4630,-1551",
+     "Direttissima per Abano | gradino @ -4052,3635",
+     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 622,-978",
+     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 892,-1188",
+     "Via Alessandro Volta | gradino @ -1611,4113"
+    ]
+   },
+   {
+    "perche": "Ai piedi delle rampe la quota dell'asse sta tra 5 e 50 cm, dove quotaStrada passa dal terreno (sotto 5 cm la pianta disegna asfalto a terra) al piano, e il terreno cambia da 0,3 a 1,5 m sulla larghezza della carreggiata: la parte di terreno che resta nella quota segue la quota dell'asse, che lì sale e scende con le celle del terreno sotto l'asse (al Borgomagno in (11, -1131) da 0,16 a 0,5 m in 2 m). Prima di #137 il gradino c'era su tutta la rampa, più alto. Sparisce quando il terreno sotto la carreggiata delle strutture attive sta alla quota della strada su tutta la larghezza (#125).",
+    "casi": [
+     "Cavalcavia Antonio Grassi | gradino @ 1859,-1284",
+     "Cavalcavia Antonio Grassi | gradino @ 1953,-1147",
+     "Cavalcavia Borgomagno | gradino @ 11,-1131",
+     "Cavalcavia Borgomagno | gradino @ 6,-1137",
+     "Cavalcavia Camerini | gradino @ -215,-2368",
+     "Cavalcavia San Marco | gradino @ 4154,-1238",
+     "Cavalcavia San Marco | gradino @ 4254,-1119",
+     "Cavalcavia San Marco | gradino @ 4424,-1401",
+     "Direttissima per Abano | gradino @ -4039,3592",
+     "Ponte dell'Unità d'Italia (1205, -1152) | gradino @ 1189,-1288",
+     "Ponte dell'Unità d'Italia (1205, -1152) | gradino @ 1208,-1292"
+    ]
+   },
+   {
+    "perche": "Il resto, piccolo (da 8 a 18 cm): in curva lontano dall'asse (8,4 m al Maroncelli in (2517, -972), 3,3 m al Mortise in (2884, -2721)) il punto, passando da un arco al successivo, salta di qualche metro di progressiva, e sulla rampa al 5-6% fa un gradino; dove la quota sta sotto 5 cm la strada segue il terreno, che al piede di un rilevato sale fino al 30% tra due celle.",
+    "casi": [
+     "Cavalcavia Antonio Grassi | gradino @ 1884,-1360",
+     "Cavalcavia Antonio Grassi | gradino @ 1894,-1355",
+     "Cavalcavia Antonio Grassi | gradino @ 1952,-1251",
+     "Cavalcavia Chiesanuova | gradino @ -2028,-410",
+     "Cavalcavia Mortise | gradino @ 2884,-2721",
+     "Cavalcavia Pietro Maroncelli | gradino @ 2517,-972",
+     "Corso Primo Maggio (1809, 3974) | gradino @ 2169,3936",
+     "Direttissima per Abano | gradino @ -4034,3568",
+     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 1117,-1256"
+    ]
+   }
+  ]
+ }
+}

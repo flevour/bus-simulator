@@ -3,8 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32, rngAt, circleVsOBB } from './spatial.js';
 import * as TX from './textures.js';
 import { stopDetails } from '../game/routes.js';
-import { LINES, TRAM_LINES, TRAM_DEPOTS, laneLayout, laneSpan, parseBuilding, edgeHeight, profileAt } from '../data/padova.js';
-export { edgeHeight };
+import { LINES, TRAM_LINES, TRAM_DEPOTS, laneLayout, laneSpan, parseBuilding, edgeHeight, quotaStrada, quotaFuoriAsse, usaTerreno, profileAt, Q_TERRA } from '../data/padova.js';
+export { edgeHeight, quotaStrada };
 import { AREA_SIZE, AREA_KEYS, areaData, requestArea, dropArea, areaKeysNear, loadAllAreas } from '../data/aree.js';
 import { TrackPath, TRAM, CATENARY_HEIGHT, TramTrack, TramNet, TramYard, tramLength } from '../tram/tram.js';
 import { TRAM_STOP_AHEAD } from '../game/routes.js';
@@ -191,18 +191,23 @@ class GeoBuilder {
   // Camerini, con un lato di 170 m, spuntava sopra l'asfalto), e dove è piana o dritta resta com'è. La quota si guarda a
   // metà dei lati fino a 10 m e ogni 10 m su quelli più lunghi: in un corridoio stretto un lato di 700 m con i capi e la
   // metà sul viadotto a 7 m passava sopra la rampa a 0,75 m che corre accanto, e da lì si vedeva un filo nel cielo (#124)
-  polygonH(rings, yFn, uvScale = 20, tol = 0) {
+  // ter(x, z): il terreno che il vertex shader somma a ogni vertice. Con ter la corda si misura sulla quota assoluta
+  // (yFn più il terreno), quella che si vede tra i vertici: una carreggiata in piano sulla larghezza sopra un terreno che
+  // si incurva (quotaStrada, #137) non chiede triangoli in più, e una che si incurva dove il terreno no li chiede
+  polygonH(rings, yFn, uvScale = 20, tol = 0, ter = null) {
     const b = this.pos.length / 3, t0 = this.idx.length;
     this.polygon(rings, 0, uvScale);
     const P = this.pos;
     for (let i = b * 3; i < P.length; i += 3) P[i + 1] = yFn(P[i], P[i + 2]);
     if (!tol) return;
+    const Y = ter ? (x, z) => yFn(x, z) + ter(x, z) : yFn;
     this.refine(t0, yFn, uvScale, (l2, ax, az, bx, bz, ya, yb) => {
       if (l2 <= 1) return false;
       const n = Math.max(1, Math.ceil(Math.sqrt(l2) / 10));
+      const A = ter ? ya + ter(ax, az) : ya, B = ter ? yb + ter(bx, bz) : yb;
       for (let i = 1; i < 2 * n; i += 2) {
         const t = i / (2 * n);
-        if (Math.abs(yFn(ax + (bx - ax) * t, az + (bz - az) * t) - (ya + (yb - ya) * t)) > tol) return true;
+        if (Math.abs(Y(ax + (bx - ax) * t, az + (bz - az) * t) - (A + (B - A) * t)) > tol) return true;
       }
       return false;
     });
@@ -259,9 +264,11 @@ class GeoBuilder {
       const t0 = k / n, t1 = (k + 1) / n;
       const x0 = ax + dx * t0, z0 = az + dz * t0, x1 = ax + dx * t1, z1 = az + dz * t1;
       const va = v0 + (l * t0) / vScale, vb = v0 + (l * t1) / vScale;
-      const y0 = y + (hFn ? hFn(x0, z0) : 0), y1 = y + (hFn ? hFn(x1, z1) : 0);
+      // la quota in ogni vertice, non solo sulla linea di mezzo: in quota la corsia del tram (3 m) sta in piano sulla
+      // larghezza (quotaFuoriAsse, #137), e con la quota del mezzo su tutti e due i lati si piegava col terreno
+      const Y = (px, pz) => y + (hFn ? hFn(px, pz) : 0);
       // u: 0 sinistra -> 1 destra rispetto alla direzione
-      this.quad([x0 - nx, y0, z0 - nz], [x0 + nx, y0, z0 + nz], [x1 - nx, y1, z1 - nz], [x1 + nx, y1, z1 + nz], [0, va, 1, va, 0, vb, 1, vb]);
+      this.quad([x0 - nx, Y(x0 - nx, z0 - nz), z0 - nz], [x0 + nx, Y(x0 + nx, z0 + nz), z0 + nz], [x1 - nx, Y(x1 - nx, z1 - nz), z1 - nz], [x1 + nx, Y(x1 + nx, z1 + nz), z1 + nz], [0, va, 1, va, 0, vb, 1, vb]);
     }
   }
   disc(x, z, r, y, seg = 16, uvScale = 20) {
@@ -417,6 +424,8 @@ const PAL_OUT = ['#e8dcc3', '#d5c4a1', '#c9c1b3', '#e9e4da', '#b8ab95', '#d4a373
 export class City {
   constructor(scene, net, opts = {}) {
     this.terrain = opts.terrain || null; // quote del terreno (Terrain di terrain.js), per l'asfalto vicino alla sede del tram
+    // e per la quota di un punto della carreggiata fuori dall'asse (quotaStrada di padova.js, #137)
+    usaTerreno(this.terrain);
     // arredo posato dalla build (src/data/arredo.js); nella build è il posatore (src/world/posa.js), con gli stessi metodi
     this.arredo = opts.arredo || new Arredo();
     this.scene = scene;
@@ -814,7 +823,10 @@ export class City {
       if (e.elev) {
         let ra = trimAt(A, e), rb = trimAt(B, e);
         if (ra + rb > e.len - 0.2) { const k = Math.max(0, e.len - 0.2) / (ra + rb); ra *= k; rb *= k; }
-        const hFn = (x, z) => edgeHeight(e, (x - A.x) * e.dx + (z - A.z) * e.dz);
+        // le righe sono sull'asfalto disegnato (elevHeight: dove due carreggiate in quota si sovrappongono, la più alta):
+        // alla quota del loro arco, dove l'altra sta qualche decimetro più su, ne spuntavano pezzi o le copriva
+        // (#137; i viadotti di Via Boves, #142). Una strada che passa sopra a un altro livello no
+        const hFn = (x, z) => { const h = quotaStrada(e, (x - A.x) * e.dx + (z - A.z) * e.dz, x, z), d = this.elevHeight(x, z); return Math.abs(d - h) < 0.5 ? d : h; };
         if (surf && this.net.surfaces.up) {
           // asfalto in quota e righe di bordo dalla pianta delle strade (buildSurfaces): qui la mezzeria, alla quota della
           // rampa, e le pile
@@ -1082,7 +1094,7 @@ export class City {
     // più all'asfalto a terra ai piedi delle rampe (#126): i tratti sotto 5 cm sono asfalto a terra, e sotto quelli fino a
     // 50 cm le classi a terra non ci sono
     const upA = new GeoBuilder();
-    for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.004, 20, 0.02);
+    for (const rings of S.up || []) upA.polygonH(rings, (x, z) => Y_ROAD + this.elevHeight(x, z) + 0.004, 20, 0.02, ter);
     // sede del tram in quota (#126): una classe a sé, tolta dall'asfalto in quota, alla quota del binario come corsie
     // rosse e rotaie (quotaSede): prima l'asfalto in quota la copriva a chiazze, perché prende la quota dell'asse della
     // strada e dove il terreno cambia sulla larghezza della carreggiata si piega (#85, #137)
@@ -1102,7 +1114,7 @@ export class City {
     };
     for (const rings of S.upSede || []) {
       const t0 = upA.idx.length;
-      upA.polygonH(rings, quotaSu, 20, 0.02);
+      upA.polygonH(rings, quotaSu, 20, 0.02, ter);
       upA.refine(t0, quotaSu, 20, curvaSu);
     }
     const latiSedeSu = lati(S.upSede || []);
@@ -1331,8 +1343,11 @@ export class City {
           const px = cx - e.dz * side * (e.width / 2 - 1), pz = cz + e.dx * side * (e.width / 2 - 1);
           // niente pile sulla carreggiata che passa sotto
           if (this.segGrid.query(px, pz, 20, this._qp || (this._qp = [])).some((it) => it.kind === 'road' && it.ref && !it.ref.elev && distToSeg(px, pz, it.ax, it.az, it.bx, it.bz).d < it.hw + 1.5)) continue;
-          const pl = new THREE.BoxGeometry(1.2, hm - 0.6, 1.2);
-          pl.translate(px, (hm - 0.6) / 2, pz);
+          // fino all'impalcato sopra la pila, che sta in piano sulla larghezza (quotaStrada)
+          const hp = quotaStrada(e, s + 5, px, pz);
+          if (hp < 1.5) continue;
+          const pl = new THREE.BoxGeometry(1.2, hp - 0.6, 1.2);
+          pl.translate(px, (hp - 0.6) / 2, pz);
           deck.push(pl);
         }
       }
@@ -1352,17 +1367,26 @@ export class City {
   }
 
   // quota sopra il terreno della strada in quota più alta in un punto (cavalcavia), 0 altrove: una ricerca per punto,
-  // solo per costruire la scena e per le prove. I mezzi leggono la quota dall'arco o dal binario su cui sono
+  // solo per costruire la scena e per le prove. I mezzi leggono la quota dall'arco o dal binario su cui sono. Con la
+  // quota dell'asse su tutta la larghezza (quotaStrada) può stare sotto zero, dove il terreno del punto sta più su
+  // della strada. Valgono prima gli archi su cui il punto cade tra i due capi: prima del nodo, dove la carreggiata
+  // dell'arco dopo (allargata di 1,5 m) arriva col suo capo, il capo è la quota del nodo, e su una rampa in salita il
+  // massimo la prendeva da lì, con un ripiano attorno al nodo (#137, Maroncelli: 0,5 m). Il capo conta solo dove il
+  // punto non cade dentro nessun arco (fuori dalla curva, oltre i capi dei due archi)
   elevHeight(x, z) {
-    let h = 0;
+    let h = -Infinity, hc = -Infinity;
     for (const it of this.elevGrid.query(x, z, 12, this._qeh || (this._qeh = []))) {
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
-      if (r.d <= it.hw + 1.5) h = Math.max(h, edgeHeight(it.ref, r.t * it.ref.len));
+      if (r.d > it.hw + 1.5) continue;
+      const q = quotaStrada(it.ref, r.t * it.ref.len, x, z);
+      if (r.t > 0 && r.t < 1) h = Math.max(h, q);
+      else hc = Math.max(hc, q);
     }
-    return h;
+    return h > -Infinity ? h : hc > -Infinity ? hc : 0;
   }
   // Quota sopra il terreno della strada sotto un punto che si muove (un asse del bus di chi guida), letta dall'arco su
-  // cui il punto sta. st = { e, s, q }: l'arco, la progressiva e la quota dell'ultima volta (st.e null: da cercare);
+  // cui il punto sta. st = { e, s, q, x, z }: l'arco, la progressiva, la quota e il punto dell'ultima volta (st.e null:
+  // da cercare); la quota è quella di quotaStrada nel punto (#137);
   // (hx, hz): la direzione del mezzo. Il punto resta sul suo arco finché è nella sua carreggiata, poi passa a uno che
   // lo tocca a un nodo: da un arco a
   // quello dopo la quota è continua, e la strada che passa sotto o sopra senza un nodo in comune non si prende mai. Tra
@@ -1394,8 +1418,8 @@ export class City {
       }
     }
     if (!best) { const r = this.arcoIn(x, z, e0 ? st.q : null); if (r) { best = r.e; bt = r.s; } }
-    st.e = best; st.s = bt;
-    st.q = best ? edgeHeight(best, bt) : 0;
+    st.e = best; st.s = bt; st.x = x; st.z = z;
+    st.q = best ? quotaStrada(best, bt, x, z) : 0;
     return st.q;
   }
   // L'arco sotto un punto di cui non si sa su che arco sta: { e, s } o null fuori strada. Senza cur (quota di prima)
@@ -1409,7 +1433,7 @@ export class City {
       const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz);
       if (!e.elev) { if (r.d <= it.hw && r.d < gd) { gd = r.d; ground = { e, s: r.t * e.len }; } continue; }
       if (r.d > it.hw + 1.5) continue;
-      const s = r.t * e.len, he = edgeHeight(e, s);
+      const s = r.t * e.len, he = quotaStrada(e, s, x, z);
       const sc = cur == null ? -he : Math.abs(he - cur) + 0.5 * r.d;
       if (sc < bs) { bs = sc; best = { e, s, he }; }
     }
@@ -1506,17 +1530,28 @@ export class City {
         const T = this.terrain && this.terrain.ok ? (x, z) => this.terrain.at(x, z) : null;
         const ta = T && T(a.x, a.z), tb = T && T(b.x, b.z);
         const curved = T && l > 4 && [0.25, 0.5, 0.75].some((t) => Math.abs(T(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t) - ta - (tb - ta) * t) > 0.01);
-        const hFn = ha || hb ? (x, z) => ha + (hb - ha) * Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l)) : curved ? () => 0 : null;
+        // in quota corsia, rotaia e cordoli stanno in piano sulla larghezza, alla quota del binario nel punto del binario
+        // (quotaFuoriAsse, la regola della strada, #137): con la quota del binario sopra il terreno di ogni vertice, dove
+        // il terreno cambia sulla larghezza (sul San Marco verso l'Ippodromo fino a 2,6 m sulla carreggiata) la corsia
+        // si piegava e finiva sotto l'asfalto in piano accanto
+        // La quota è il profilo del binario nel punto (TramTrack.heightAt), non la retta tra i capi del pezzo: in cima al San
+        // Marco i pezzi sono lunghi, e la corda stava fino a 10 cm sotto la sede in quota, che prende il profilo
+        const hFn = ha || hb ? (x, z) => { const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / l)); return quotaFuoriAsse(track.heightAt(dir, sa + l * t), a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, x, z); } : curved ? () => 0 : null;
         const off = (o) => [a.x + nx * o, a.z + nz * o, b.x + nx * o, b.z + nz * o];
         // corsia rossa, rotaia di guida al centro, cordolo esterno (e interno dove il binario è singolo)
         R.ribbon(a.x, a.z, b.x, b.z, L * 2, Y_ROAD + 0.03, 8, 0, hFn);
         // disco di raccordo nei giunti: solo in piano, in rampa sporgerebbe sopra la corsia. In tinta unita come il centro
         // della corsia: con le uv del mondo mostrava pezzi storti delle righe bianche dei bordi (i "trattini" sparsi sulla
         // sede segnalati l'11 novembre); un po' più in basso, così dove si sovrappone vince la corsia
-        if (Math.abs(hb - ha) < 0.02) {
-          const u0 = R.uv.length;
+        // in piano: in quota sulla quota assoluta, come si disegna la corsia (in cima al San Marco il profilo è piano e il
+        // terreno sotto no: senza dischi, tra un pezzo e l'altro della corsia si vedeva la sede)
+        const inPiano = T && Math.max(ha, hb) > Q_TERRA ? Math.abs(hb + tb - ha - ta) < 0.02 : Math.abs(hb - ha) < 0.02;
+        if (inPiano) {
+          const u0 = R.uv.length, p0 = R.pos.length;
           R.disc(b.x, b.z, L, Y_ROAD + 0.025 + hb, 8, 8);
           for (let i = u0; i < R.uv.length; i += 2) R.uv[i] = 0.5;
+          // in quota anche il disco in piano, come la corsia
+          if (hb) for (let i = p0; i < R.pos.length; i += 3) R.pos[i + 1] += quotaFuoriAsse(hb, b.x, b.z, R.pos[i], R.pos[i + 2]) - hb;
         }
         rail.ribbon(a.x, a.z, b.x, b.z, 0.22, Y_ROAD + 0.05, 8, 0, hFn);
         kerb.ribbon(...off(L), 0.3, Y_ROAD + 0.06, 8, 0, hFn);
@@ -1892,12 +1927,18 @@ export class City {
       }
     }
     const near = (x, z) => {
-      let best = Infinity, h = 0, cross = false;
+      let best = Infinity, h = 0, cross = false, bi = null, bt = 0;
       for (const it of this.elevGrid.query(x, z, 16, q)) {
         const r = distToSeg(x, z, it.ax, it.az, it.bx, it.bz), sc = Math.max(0, r.d - it.hw);
         if (r.d < it.hw + 0.6) cross = true;
-        if (sc < best) { best = sc; h = edgeHeight(it.ref, r.t * it.ref.len); }
+        if (sc < best) { best = sc; bi = it; bt = r.t; }
       }
+      // la quota della strada più vicina, come prima di #137, ma mai sopra l'asfalto che si disegna lì (elevHeight prende
+      // prima gli archi su cui il punto cade tra i capi: il capo di quello più vicino può stare più su). Con la quota
+      // disegnata dappertutto, tra due carreggiate a quote diverse (Corso Argentina) il piano saltava da un livello
+      // all'altro a denti
+      if (bi) h = quotaStrada(bi.ref, bt * bi.ref.len, x, z);
+      if (best <= 1.5) h = Math.min(h, this.elevHeight(x, z));
       // binario più vicino in ogni verso, entro 16 m (come TrackPath.project sui soli tratti vicini)
       const pr = { 1: { d: 16 }, [-1]: { d: 16 } };
       for (const { d, P, i } of tg.query(x, z, 16, qt)) {
@@ -1908,7 +1949,7 @@ export class City {
         if (pr[d].s === undefined) continue;
         const sc = Math.max(0, pr[d].d - TRAM.lane - 0.3);
         if (pr[d].d < TRAM.lane + 0.9) cross = true;
-        if (sc < best) { best = sc; h = track.heightAt(d, pr[d].s); }
+        if (sc < best) { best = sc; const p = track.path(d).at(pr[d].s); h = quotaFuoriAsse(track.heightAt(d, pr[d].s), p.x, p.z, x, z); }
       }
       // sotto la sede del tram di qualunque linea il piano sta sotto la sede in quota, che è una superficie a sé alla quota
       // del binario (#126): sul San Marco sta fino a 6 cm sotto la strada, e con la quota della strada il piano chiaro ci
@@ -1918,8 +1959,10 @@ export class City {
     };
     const top = new GeoBuilder(), side = new GeoBuilder(), par = new GeoBuilder();
     const H = new Map(), at = (x, z) => { const k = x + ',' + z; if (!H.has(k)) H.set(k, near(x, z)); return H.get(k); };
+    // il piano sta 6 cm sotto la strada: si divide dove si stacca dalla corda la quota assoluta, come l'asfalto in quota
+    const ter = this.terrain && this.terrain.ok ? (x, z) => this.terrain.at(x, z) : null;
     for (const rings of D) {
-      top.polygonH(rings, (x, z) => Y_ROAD + at(x, z).h - 0.06, 8, 0.03);
+      top.polygonH(rings, (x, z) => Y_ROAD + at(x, z).h - 0.06, 8, 0.03, ter);
       for (const r of rings) for (let i = 0; i < r.length; i += 2) {
         const j = (i + 2) % r.length, ax = r[i], az = r[i + 1], bx = r[j], bz = r[j + 1];
         const A = at(ax, az), B = at(bx, bz), ya = Y_ROAD + A.h - 0.06, yb = Y_ROAD + B.h - 0.06;
@@ -1963,14 +2006,16 @@ export class City {
     return false;
   }
   // quota sopra il terreno della sede del tram in (x, z): quella del binario più vicino, dal profilo scritto dalla build
-  // come in onSede. La sede in quota della pianta delle strade (#126) la prende da qui, come corsie rosse e rotaie
+  // come in onSede, portata nel punto con la regola della strada (quotaFuoriAsse, #137): in quota la sede sta in piano
+  // sulla larghezza, come la carreggiata accanto e come corsie rosse, rotaie e cordoli (buildTramway). La sede in quota
+  // della pianta delle strade (#126) la prende da qui
   quotaSede(x, z) {
-    let best = Infinity, h = 0;
+    let best = Infinity, h = 0, px = x, pz = z;
     for (const t of this.tramGrid.query(x, z, 6, this._qsq || (this._qsq = []))) {
       const r = distToSeg(x, z, t.ax, t.az, t.bx, t.bz);
-      if (r.d < best) { best = r.d; h = t.ref ? profileAt(t.ref.q, (t.ref.s + t.ref.l * r.t) * 100) : 0; }
+      if (r.d < best) { best = r.d; h = t.ref ? profileAt(t.ref.q, (t.ref.s + t.ref.l * r.t) * 100) : 0; px = t.ax + (t.bx - t.ax) * r.t; pz = t.az + (t.bz - t.az) * r.t; }
     }
-    return h;
+    return quotaFuoriAsse(h, px, pz, x, z);
   }
   // pezzi della spezzata pts (spostata di lato di off, come GeoBuilder.strip) fuori dalla sede del tram: le righe della
   // strada che la attraversano o la affiancano si fermano al suo bordo. hAt(x, z): quota della riga sopra il terreno

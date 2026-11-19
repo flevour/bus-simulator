@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { buildNetwork, LINES, TRAM_LINES, fmtHM, toXZ, LANDMARKS, laneLayout, driveOffset } from './data/padova.js';
+import { buildNetwork, LINES, TRAM_LINES, fmtHM, toXZ, LANDMARKS, laneLayout, driveOffset, quotaFuoriAsse } from './data/padova.js';
 import { loadAreasNear } from './data/aree.js';
 import { Tram, tramRoute, TRAM, TramNet } from './tram/tram.js';
-import { City, zoneOf, edgeHeight } from './world/city.js';
+import { City, zoneOf, edgeHeight, quotaStrada } from './world/city.js';
 import { TrafficLights, Traffic, Walkers, TramSim, TramSignals } from './world/traffic.js';
 import { Domanda } from './world/domanda.js';
 import { BusSim } from './world/buses.js';
@@ -2086,7 +2086,7 @@ setTimeout(async () => {
   $('loading').style.display = 'none';
   // illuminazione diurna per lo sfondo del menu
   city.setNight(0);
-  window.__game = { get hud() { return hud; }, get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get domanda() { return domanda; }, get walkers() { return walkers; }, set veduta(v) { veduta = v; }, get tramSignals() { return tramSignals; }, city, net, lights, edgeHeight, laneLayout, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
+  window.__game = { get hud() { return hud; }, get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get domanda() { return domanda; }, get walkers() { return walkers; }, set veduta(v) { veduta = v; }, get tramSignals() { return tramSignals; }, city, net, lights, edgeHeight, quotaStrada, quotaFuoriAsse, laneLayout, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot, tramSwitchAhead,
     pad, mirrorAdj, audio, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
   loop();

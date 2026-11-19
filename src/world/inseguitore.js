@@ -8,7 +8,7 @@
 // (src/world/traffic.js) e bus automatici (src/world/buses.js) usano questo modulo: cambiano solo il modo in cui
 // scelgono la strada. Dove la build non ha un raccordo per il mezzo il percorso usa un ripiego, dichiarato sul pezzo e
 // contato (ripiego()).
-import { laneLayout, edgeHeight } from '../data/padova.js';
+import { laneLayout, quotaStrada } from '../data/padova.js';
 
 // classi di mezzo dei raccordi (bit) e raggi minimi, come nella build (docs/raccordi.md, sezione 2)
 export const AUTO = 1, BUS12 = 2, SNODATO = 4;
@@ -242,14 +242,13 @@ export class Curva {
     out.nx = -out.dz; out.nz = out.dx; out.bx = out.dx; out.bz = out.dz;
     return out;
   }
-  // quota sopra il terreno a u metri: tra quella del capo sull'arco d'arrivo e quella del capo sull'arco d'uscita
-  quota(u) {
-    if (this.h0 === undefined) {
-      const R = this.R, g = this.g;
-      this.h0 = R.da ? edgeHeight(R.da, R.fin ? g.s0 : R.da.len - g.s0) : 0;
-      this.h1 = R.a ? edgeHeight(R.a, R.fout ? g.s1 : R.a.len - g.s1) : 0;
-    }
-    return this.h0 + (this.h1 - this.h0) * (this.len > 0 ? Math.max(0, Math.min(1, u / this.len)) : 1);
+  // quota sopra il terreno a u metri, nel punto (x, z) del mezzo: tra quella dell'arco d'arrivo al capo e quella
+  // dell'arco d'uscita al capo, tutte e due lette nel punto (quotaStrada), così ai capi è quella dell'arco
+  quota(u, x, z) {
+    const R = this.R, g = this.g;
+    const h0 = R.da ? quotaStrada(R.da, R.fin ? g.s0 : R.da.len - g.s0, x, z) : 0;
+    const h1 = R.a ? quotaStrada(R.a, R.fout ? g.s1 : R.a.len - g.s1, x, z) : 0;
+    return h0 + (h1 - h0) * (this.len > 0 ? Math.max(0, Math.min(1, u / this.len)) : 1);
   }
 }
 

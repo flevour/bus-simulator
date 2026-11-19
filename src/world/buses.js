@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight } from './city.js';
+import { Y_ROAD, TRAM_HW, zoneOf, quotaStrada } from './city.js';
 import { mulberry32, distToSeg } from './spatial.js';
 import { ledTexture } from './textures.js';
 import { TrackPath } from '../tram/tram.js';
@@ -212,12 +212,12 @@ function buildLane(net, city, v, tramSignals, conta = () => {}) {
   return { P, per, shift: sm, stops, signals, tram, vlim, segOf, segs, cum, CS, ids, leadLen, exitLen, dest: v.stops[v.stops.length - 1].name };
 }
 
-// quota della strada sotto il punto i della corsia (cavalcavia)
-function laneHeight(L, i) {
+// quota della strada sotto il bus, nel punto i della corsia e in (x, z) (cavalcavia: quotaStrada di padova.js)
+function laneHeight(L, i, x, z) {
   const k = L.segOf[i], g = L.segs[k];
   if (!g || !g.e || !g.e.elev) return 0;
   const d = L.CS[i] - L.cum[k];
-  return edgeHeight(g.e, g.fwd ? d : g.e.len - d);
+  return quotaStrada(g.e, g.fwd ? d : g.e.len - d, x, z);
 }
 
 // corse dall'orario: day 'feriale' | 'festivo'
@@ -926,7 +926,7 @@ export class BusSim {
       const m = b.model;
       if (!m) continue;
       const i = b.L.P.seg(Math.max(0, Math.min(b.L.P.len, b.s)));
-      b.y = laneHeight(b.L, i);
+      b.y = laneHeight(b.L, i, b.x, b.z);
       M.compose(V.set(b.x, Y_ROAD + b.y, b.z), Q.setFromAxisAngle(UP, b.h), ONE);
       const I = this.inst[m.liv];
       for (const k of ['body', 'lights', 'glass', 'inner']) I[k].setMatrixAt(m.slot, M);

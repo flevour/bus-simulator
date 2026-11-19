@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
-import { Y_ROAD, TRAM_HW, zoneOf, edgeHeight, layer } from './city.js';
+import { Y_ROAD, TRAM_HW, zoneOf, quotaStrada, layer } from './city.js';
 import { ledTexture } from './textures.js';
 import { TRAM, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
@@ -903,11 +903,12 @@ export class Traffic {
     }
     return v;
   }
-  // quota dell'auto sopra il terreno: dall'arco su cui è alla sua progressiva; nel raccordo, tra i due archi
+  // quota dell'auto sopra il terreno nel suo punto: dall'arco su cui è alla sua progressiva; nel raccordo, tra i due
+  // archi (quotaStrada di padova.js, come il disegno della strada)
   carHeight(c) {
     const p = c.pz;
-    if (p && p.tipo === 'raccordo') return p.quota(c.q + ASSE - p.q0);
-    return edgeHeight(c.edge, c.fwd ? c.s : c.edge.len - c.s);
+    if (p && p.tipo === 'raccordo') return p.quota(c.q + ASSE - p.q0, c.x, c.z);
+    return quotaStrada(c.edge, c.fwd ? c.s : c.edge.len - c.s, c.x, c.z);
   }
   // un'auto per le prove, sull'arco e (verso fwd) col centro a s metri dal nodo di partenza, che seguirà gli archi dati
   // ([{ edge }], anche quelli che un raccordo scavalca) e poi quelli che sceglie
@@ -1473,7 +1474,7 @@ export class Walkers {
     const { M, Q, Y, S, P } = this;
     this.list.forEach((p, i) => {
       Q.setFromAxisAngle(Y, Math.atan2(p.e.dx * p.dir, p.e.dz * p.dir));
-      M.compose(P.set(p.x, 0.1 + edgeHeight(p.e, p.s) + Math.abs(Math.sin(p.ph)) * 0.05, p.z), Q, S.set(p.sc, p.sc, p.sc));
+      M.compose(P.set(p.x, 0.1 + quotaStrada(p.e, p.s, p.x, p.z) + Math.abs(Math.sin(p.ph)) * 0.05, p.z), Q, S.set(p.sc, p.sc, p.sc));
       this.mesh.setMatrixAt(i, M);
       this.mesh.setColorAt(i, p.col);
     });

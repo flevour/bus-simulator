@@ -353,7 +353,8 @@ export function buildNetwork() {
     const e = byK[k];
     if (!e) continue;
     e.elev = true;
-    e.hs = { s: ss, q: qs, L: ss[ss.length - 1] || 1 };
+    // (ax, az): il nodo a, da cui si ricava il punto dell'asse per la quota fuori asse (quotaStrada)
+    e.hs = { s: ss, q: qs, L: ss[ss.length - 1] || 1, ax: nodes[e.a].x, az: nodes[e.a].z };
     for (const [n, q] of [[nodes[e.a], qs[0]], [nodes[e.b], qs[qs.length - 1]]]) n.h = Math.max(n.h || 0, Math.round(q / 10) / 100);
   }
   // segnaletica reale dai nodi OSM; null se la mappa è stata generata senza (il gioco la deduce dal tipo di strada)
@@ -475,6 +476,42 @@ export function profileAt(p, x) {
 export function edgeHeight(e, s) {
   const p = e.hs;
   return p ? profileAt(p, Math.max(0, Math.min(1, s / e.len)) * p.L) : 0;
+}
+
+// Quota fuori asse (#137). edgeHeight è la quota sopra il terreno "via" sull'asse dell'arco: il terreno di un punto
+// della carreggiata a qualche metro dall'asse non è lo stesso (alle spalle, sotto le campate, accanto a una strada che
+// resta a livello strada: fino a 3 m sulla larghezza), e sommare la quota dell'asse al terreno del punto piegava la
+// carreggiata con il terreno. Il terreno lo dà City (usaTerreno), lo stesso che il vertex shader somma a ogni vertice
+// (src/world/terrain.js); senza terreno la quota è quella dell'asse dappertutto.
+let terreno = null;
+export function usaTerreno(T) {
+  terreno = T && T.ok ? T : null;
+}
+// sotto Q_TERRA l'arco è asfalto a terra nella pianta delle strade (Q_TERRA di scripts/street_surfaces.py) e segue il
+// terreno; da PIANO in su la carreggiata sta in piano sulla larghezza; in mezzo passa dall'uno all'altro con la quota.
+// H_RASO è quello della pianta: sopra, la rampa passa sopra le classi a terra come un ponte
+export const Q_TERRA = 0.05, PIANO = 0.5, H_RASO = 0.15;
+// Quota sopra il terreno in un punto (x, z) della carreggiata dell'arco e, alla progressiva s (m dal nodo a): la quota
+// assoluta dell'asse lì (terreno sull'asse più edgeHeight) meno il terreno del punto, così la carreggiata sta in piano
+// sulla larghezza e la quota non salta passando da un arco al successivo; ai piedi delle rampe, tra Q_TERRA e PIANO,
+// solo in parte. Zero sugli archi a terra. È la sola funzione per la quota di un punto della strada: la usano il disegno
+// (City.elevHeight, righe e impalcati), il bus di chi guida (City.quotaSotto), le auto e i loro raccordi, i bus
+// automatici e i pedoni
+export function quotaStrada(e, s, x, z) {
+  const p = e.hs;
+  if (!p) return 0;
+  const t = Math.max(0, Math.min(e.len, s));
+  return quotaFuoriAsse(profileAt(p, (t / e.len) * p.L), p.ax + e.dx * t, p.az + e.dz * t, x, z);
+}
+// la regola, per una strada che nel punto (ax, az) del suo asse sta h sopra il terreno (le prove la usano con le quote
+// di data/profili-cavalcavia.json). Dove il terreno del punto sta più su della strada (accanto a una strada a livello
+// strada, a Via San Marco verso l'Ippodromo) la quota non scende sotto quella su cui conta la pianta delle strade: sopra
+// H_RASO la rampa passa sopra le classi a terra, quindi almeno H_RASO sopra il terreno del punto; sotto, almeno la quota
+// dell'asse. Lì la carreggiata si piega quanto basta: in piano, l'asfalto a terra della strada accanto ci spuntava sopra
+export function quotaFuoriAsse(h, ax, az, x, z) {
+  if (!terreno || h <= Q_TERRA) return h;
+  const k = h >= PIANO ? 1 : (h - Q_TERRA) / (PIANO - Q_TERRA);
+  return Math.max(h + k * (terreno.at(ax, az) - terreno.at(x, z)), Math.min(h, H_RASO));
 }
 
 export function parseHM(s) {

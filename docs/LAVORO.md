@@ -770,6 +770,41 @@ decidono più `polygonOffset` e i centimetri di quota. Da sapere:
   banchine del tram hanno lo strato 9: stanno 18 cm sopra le isole (strato 8) che a volte hanno sotto, e alla fermata
   Santa Croce del SIR1 da 30 m l'isola spuntava sulla banchina.
 
+#137, quota dell'asse su tutta la larghezza della carreggiata (19 novembre). Regola in [`cavalcavia.md`](cavalcavia.md),
+sezione 7. Da sapere:
+
+- la quota di un punto della carreggiata di un arco in quota la dà solo `quotaStrada(e, s, x, z)` di
+  `src/data/padova.js`: quota assoluta dell'asse alla progressiva s (terreno "via" sull'asse più `edgeHeight`) meno il
+  terreno del punto. `edgeHeight` resta la quota sull'asse (prove, profili, impalcati vecchi). Il terreno lo passa `City`
+  (`usaTerreno(this.terrain)` nel costruttore): è uno stato del modulo, quindi una `City` costruita con un altro terreno
+  lo cambia per tutti. La differenza di terreno tra l'asse e il bordo della carreggiata arriva a 3 m (San Marco), e in un
+  punto su sei degli archi in quota delle strutture attive supera i 20 cm;
+- ai piedi la pianta disegna come asfalto a terra i tratti sotto 5 cm (`Q_TERRA`, lo stesso nome di
+  `scripts/street_surfaces.py`), che seguono il terreno: la quota passa dal terreno al piano tra 5 cm e 0,5 m di quota
+  dell'asse (`PIANO`). Con il piano da subito il taglio a 5 cm faceva un muro fino a 2,5 m sul lato; con `PIANO` a 0,15
+  i gradini dei mezzi erano di più (105 coppie di archi contro 79), a 1,0 poco di meno (oltre 20 cm 14 contro 19) ma con
+  più rampa piegata. Dove la quota dell'asse sale e scende con le celle del terreno sotto l'asse, in quella fascia una
+  parte del terreno resta nella quota: sono i casi del secondo gruppo di `data/eccezioni/gradini.json`, che spariscono
+  quando il terreno sotto la carreggiata sta alla quota della strada (#125);
+- fuori dalla mia area. `src/world/traffic.js`: `Traffic.carHeight` e i pedoni leggono `quotaStrada` nel punto
+  dell'auto o del pedone. `src/world/inseguitore.js`: `Curva.quota(u, x, z)` va dalla quota dell'arco d'arrivo a quella
+  dell'arco d'uscita, tutte e due lette nel punto dell'auto, senza più `h0` e `h1` in cache. `src/world/buses.js`:
+  `laneHeight(L, i, x, z)` nel punto del bus. Il moto di auto e bus automatici non cambia (la quota li disegna e basta):
+  l'impronta del traffico è la stessa;
+- in `src/world/city.js`: `elevHeight` prende prima gli archi su cui il punto cade tra i due capi (col capo dell'arco
+  dopo, prima del nodo, il massimo faceva un ripiano di mezzo metro al Maroncelli) e può stare sotto zero; `quotaSotto`
+  tiene in `st.x`, `st.z` il punto letto; le righe sugli archi in quota stanno sull'asfalto disegnato se è entro mezzo
+  metro dalla quota del loro arco (ai viadotti di Via Boves le copriva, due casi degli strati spariti); il piano degli
+  impalcati prende 6 cm sotto l'asfalto disegnato; `GeoBuilder.polygonH(rings, yFn, uvScale, tol, ter)` con `ter`
+  divide dove si stacca dalla corda la quota assoluta. `quotaSede` no: la sede in quota resta alla quota sopra il terreno
+  del binario come corsie rosse e rotaie, che con la sede in piano finivano sotto di lei dove il terreno scende verso il
+  bordo;
+- prova nuova in `tests/profili.spec.js`, "nessun gradino da un arco al successivo", su tutte le strutture attive (non
+  solo dove passa una linea), con l'elenco `data/eccezioni/gradini.json` in tre gruppi: carreggiate che si
+  sovrappongono agli innesti con profili diversi (#150, dati del risolutore), passaggio al piano ai piedi (#125), curve
+  lontano dall'asse e terreno ripido. Il pilota dei profili confronta la quota letta con quella del file portata nel
+  punto con `quotaFuoriAsse`.
+
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
 - il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e

@@ -3,21 +3,9 @@
  "controlli": {
   "salti": [
    {
-    "perche": "Strutture con il profilo del risolutore (#84): la quota letta dall'arco è quella del file, ma vicino alle spalle il terreno non è uguale su tutta la larghezza della carreggiata, e dove l'asse del bus passa da un arco al successivo in curva, a qualche metro dall'asse della strada, la progressiva cambia di un metro o due e la quota che si vede fa un gradino di 0,2-0,4 m. Lungo l'asse il profilo è continuo. È il terreno ai piedi e accanto alle strade di #125.",
-    "casi": [
-     "Cavalcavia Pietro Maroncelli | salto @ 2514,-977"
-    ]
-   },
-   {
     "perche": "Cavalcavia con le quote di prima (rampe della tangenziale, #124): terreno spianato solo attorno all'asse, stesso gradino al passaggio da un arco al successivo.",
     "casi": [
      "Corso Tredici Giugno (1182, -3448) | salto @ 1186,-3349"
-    ]
-   },
-   {
-    "perche": "Cavalcavia San Marco con il profilo del risolutore (#123): sulla rampa verso Ippodromo l'asse dietro del bus della 10 scende di 0,17 m passando da un arco al successivo. La quota letta è quella del file; lì Via San Marco corre a livello strada a pochi metri dalla rampa, le celle del terreno accanto restano le sue, e sotto la carreggiata il terreno non è uguale su tutta la larghezza, come nei casi di #84 (#125).",
-    "casi": [
-     "Cavalcavia San Marco | salto @ 4615,-1528"
     ]
    }
   ]
