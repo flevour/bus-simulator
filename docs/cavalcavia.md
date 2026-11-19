@@ -308,7 +308,21 @@ intorno), fino a 1,2 km in più. `layer` dice solo chi sta sopra.
    al 5,4% dava al binario il 7,5%);
 3. carreggiate affiancate alla stessa quota, entro 3 cm;
 4. fuori dai ponti, il DTM: lo scarto si minimizza, oltre 0,44 m costa quaranta volte tanto. Insieme si minimizzano i
-   saliscendi (variazione totale) e le variazioni di pendenza, di più sulle campate.
+   saliscendi (variazione totale) e le variazioni di pendenza, di più sulle campate;
+5. nessuna onda (#125): dopo ogni soluzione il giro contro le onde (`Profili.onde`) cerca le conche del profilo come le
+   conta il controllo (un minimo tra due massimi, profondo almeno 8 cm, con la discesa o la salita attorno più corta di
+   100 m), lungo le strade delle strutture (da ogni piede, a ogni nodo l'arco più dritto) e lungo i binari, e chiede di
+   riempirle fino a 5 cm sotto il più basso dei due massimi. La richiesta costa 20 per metro che manca: più dello scarto
+   dal DTM (1) e meno della banda oltre la tolleranza (40). Così una conca si riempie finché la strada resta entro 0,44 m
+   dal DTM, e resta dove il rilievo la vede (la strada vera scende e risale: tra due rampe sotto il San Marco, ai piedi
+   del Mortise in Via Antonino Cascino, tra due campate sulla ferrovia al Grassi, dove la regola chiede un franco più alto
+   di quello vero: sezione 6 più sotto, franchi). Si riempiono solo i punti dove la strada (per un binario, tutte le
+   strade da cui prende la quota) sta già almeno 0,3 m sopra il terreno com'è, o su un ponte: a raso una conca è il
+   terreno, e riempita lasciava la strada qualche centimetro in quota sopra le celle delle strade accanto, che non
+   salgono (nel piazzale della stazione cambiavano lanterne del tram e paline). Le conche lunghe dei binari che restano
+   hanno il fondo a raso: il piazzale della stazione ai piedi del Borgomagno, i piedi del San Marco verso Via Sergio
+   Fraccalanza, la strada di servizio che attraversa il SIR2 in Via Venezia. Al più due giri dopo la prima soluzione, in
+   ognuno dei due giri del terreno; le richieste restano per i giri dopo.
 
 Sotto un ponte OSM il DTM dice se c'è una campata o un rilevato: dove sta più di 1,5 m sopra il piano intorno la strada
 sta sul rilevato come fuori dai ponti (Via Boves ha 280 m di "ponte" su un terrapieno di 8 m). Il 13 novembre il
@@ -354,7 +368,10 @@ Il terreno segue il profilo, perché la quota di ogni cosa nel gioco è terreno 
   l'impalcato di 0,3-0,7 m, e la conca in cima tra le due campate sparisce;
 * entro 90 m dalla struttura la variante "via" non riempie: la chiusura morfologica alzava la strada che passa tra due
   rilevati fino alla loro quota (Corso Australia sotto il Cavalcavia Chiesanuova: +3,8 m);
-* una cella vicina a più strade prende la quota più bassa. Le celle attorno a una strada fuori dalla struttura (entro
+* una cella vicina a più strade prende la quota più bassa. Oltre il capo di un arco a terra della struttura che non è un
+  piede, le celle che nessun altro arco a terra copre prendono la quota del nodo (#125): all'esterno di una curva
+  accanto a una campata restava il piano della campata, più alto della strada che passa a terra (Via Friburgo sul
+  Grassi saliva di 1,3 m, con una pendenza del 13%). Le celle attorno a una strada fuori dalla struttura (entro
   14 m dal suo asse) non salgono mai: quella strada sta sul terreno e salirebbe con loro. Scendono alla quota del
   profilo se l'asse della struttura è più vicino del suo (#123): dove il rilevato del DTM è più alto del profilo
   restava una gobba sotto la carreggiata e sotto la sede del tram, che sopra il terreno si possono alzare e sotto no

@@ -45,7 +45,7 @@ from scipy.sparse.csgraph import connected_components
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from binari_tram import Griglia  # noqa: E402
-from cavalcavia import AFFIANCA, DTM_TOLL, PARALLELO, PENDENZA, PONTE_VICINO, R_CONCA, R_DOSSO, Griglia10, Via, arco_accanto, punto, tipo_di  # noqa: E402
+from cavalcavia import AFFIANCA, DTM_TOLL, ONDA, PARALLELO, PENDENZA, PONTE_VICINO, R_CONCA, R_DOSSO, TRATTO, Griglia10, Via, arco_accanto, estremi, punto, tipo_di  # noqa: E402
 
 RADICE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRO = os.path.join(RADICE, 'data/cavalcavia.json')
@@ -92,6 +92,16 @@ W_PENDENZA = 1.0e5
 W_RACCORDO = 1.0e7
 W_FRANCO = 1.0e5
 W_ACCANTO = 20.0   # carreggiate affiancate a quote diverse (oltre ACCANTO_TOLL)
+# giro contro le onde (Profili.onde): una conca del profilo calcolato si riempie fino a ONDA_RESTO sotto il più basso dei
+# due massimi, per metro di quota che manca W_ONDA. Più del DTM (la conca si riempie dove la strada resta entro la
+# tolleranza) e meno della banda oltre la tolleranza (dove il DTM vede la conca, la strada lo segue: rilievo prima della
+# regola delle onde); pendenze, raggi e franchi contano molto di più
+W_ONDA = 20.0
+ONDA_GIRO = 0.08   # m: le conche da qui in su (il controllo conta da ONDA, sul profilo più i gradini del terreno)
+ONDA_RESTO = 0.05  # m: quanto resta di una conca riempita
+GIRI_ONDE = 2      # giri contro le onde dopo la prima soluzione
+ONDA_BINARIO = 2   # m tra i punti di un binario dove si chiede di riempire una conca
+ONDA_RILIEVO = 0.3  # m sopra il terreno com'è: solo da qui (o vicino a un ponte) una conca si riempie
 ACCANTO = 8.0      # m oltre le due mezze carreggiate: fin qui due archi quasi paralleli sono la stessa piattaforma
 ACCANTO_TOLL = 0.03
 FITTO = 50         # cm tra i punti provati lungo un arco per la quota sopra il terreno (quote_archi)
@@ -525,15 +535,16 @@ class Profili:
         w = f - i
         return [(idx[i], 1 - w), (idx[i + 1], w)]
 
-    def risolvi(self, piani, fissi=None):
+    def risolvi(self, piani, onde=None):
         """piani: funzione (arco, frazione, arco di sotto o None, punto) -> quota di quello che passa sotto una campata
-        (il piano della campata, o la strada di sotto). fissi: [(incognita, quota minima)] aggiunti dai giri contro le
-        onde."""
+        (il piano della campata, o la strada di sotto). onde: {chiave: ([(incognita, peso)], quota minima)}, le conche
+        da riempire trovate dai giri contro le onde (onde())."""
         R, N = self.R, self.N
         lp = LP(N)
         lp.lo, lp.hi = [-60.0] * N, [150.0] * N
         dtm = [self.dtm.at(*p) for p in self.xz]
         nat = [self.nat.at(*p) for p in self.xz]
+        self._nat = nat
         # piedi alla quota del terreno
         for nd in self.piedi:
             i = self.di_nodo[nd]
@@ -656,7 +667,10 @@ class Profili:
                 lp.riga([(i, -w) for i, w in sopra] + [(sl, -1)], -(piani(k, t, j, p) + f))
             self.v_franco.append((sl, k, t, tipo, p, f))
         # carreggiate affiancate (i due sensi di un viale, la corsia di bus e tram accanto alla strada): stessa quota
-        # alla stessa altezza della strada, così il terreno della piattaforma è un piano solo per corsie e binari
+        # alla stessa altezza della strada, così il terreno della piattaforma è un piano solo per corsie e binari. Anche due
+        # strade con nomi diversi: la rampa del Dalmazia si porta dietro Corso delle Tre Venezie, a 8 m, fino a 1 m sopra il
+        # DTM, ma slegate, all'incrocio a raso ai piedi ovest del Chiesanuova Via Chiesanuova e Via Pacinotti restavano
+        # 14-18 cm in quota (nota #125 di docs/LAVORO.md)
         g_s = Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in sorted(self.S)], 30.0)
         ordine = sorted(self.S)
         fatti = set()
@@ -683,8 +697,11 @@ class Profili:
                     altro = self.a_frazione(j, t)
                     lp.riga([(i, 1)] + [(a, -w) for a, w in altro] + [(sl, -1)], ACCANTO_TOLL)
                     lp.riga([(i, -1)] + [(a, w) for a, w in altro] + [(sl, -1)], ACCANTO_TOLL)
-        for i, q in fissi or []:
-            lp.lo[i] = max(lp.lo[i], min(q, lp.hi[i]))
+        # conche da riempire (giri contro le onde): quota (o media pesata, lungo un binario) almeno fino al livello, con
+        # una variabile di scarto
+        for _ch, (termini, q) in sorted((onde or {}).items()):
+            sl = lp.var(W_ONDA)
+            lp.riga([(i, -w) for i, w in termini] + [(sl, -1)], -q)
         x = lp.risolvi()
         self.h = x[:N]
         self.violazioni = {
@@ -694,6 +711,82 @@ class Profili:
             'franchi': [(round(p[0]), round(p[1]), tipo, round(float(x[sl]), 2)) for sl, _k, _t, tipo, p, _f in self.v_franco if x[sl] > 0.01],
         }
         return self.h
+
+    def itinerari(self):
+        """Le strade delle strutture come le percorre il controllo (scripts/cavalcavia.py, itinerari): da ogni piede lungo
+        ogni arco, a ogni nodo l'arco più dritto (R.seguiti) della struttura, fin dove la struttura finisce. Una volta
+        sola per insieme di archi. [(incognite, progressive in metri)]"""
+        R, out, visti = self.R, [], set()
+        for nd in sorted(self.piedi):
+            for k0 in sorted(R.at[nd]):
+                if k0 not in self.S:
+                    continue
+                inc, ss, archi, n, k, s0 = [], [], [], nd, k0, 0.0
+                while k is not None:
+                    archi.append(k)
+                    idx, s = self.nodi_arco[k], self.s_arco[k]
+                    L = R.lung[k]
+                    seq = list(zip(idx, s)) if R.archi[k][0] == n else [(i, L - v) for i, v in zip(reversed(idx), reversed(s))]
+                    for i, v in seq[1 if inc else 0:]:
+                        inc.append(i)
+                        ss.append(s0 + v)
+                    s0 += L
+                    n = R.altro(k, n)
+                    dopo = [j for j in R.seguiti(k, n) if j in self.S and j not in archi]
+                    k = dopo[0] if dopo else None
+                ch = frozenset(archi)
+                if len(inc) >= 3 and ch not in visti:
+                    visti.add(ch)
+                    out.append((inc, ss))
+        return out
+
+    def onde(self):
+        """Le conche del profilo calcolato, come le conta il controllo (scripts/cavalcavia.py, onde: un minimo tra due
+        massimi, profondo almeno ONDA_GIRO, con la discesa o la salita attorno più corta di TRATTO), lungo le strade e
+        lungo i binari; per ognuna, nei punti più bassi del più basso dei due massimi meno ONDA_RESTO, la quota minima
+        da chiedere al giro dopo. {chiave: ([(incognita, peso)], quota minima)}"""
+        h, out = self.h, {}
+        # si riempie solo dove la strada sta già sul suo rilevato o vicino a un ponte, dove il terreno sale con lei: a raso
+        # le celle delle strade accanto non salgono, e la strada riempita restava sospesa qualche centimetro sopra, in
+        # quota (al piazzale della stazione cambiavano lanterne del tram e paline, ai piedi ovest del Chiesanuova
+        # l'incrocio con il SIR2 perdeva le lanterne). Lì una conca è il terreno com'è, e resta con il suo perché
+        rilievo = lambda i: self.sul_ponte[i] or h[i] - self._nat[i] >= ONDA_RILIEVO
+
+        def conche(q, ss):
+            E = estremi(q, 0, len(q) - 1, ONDA_GIRO)
+            for n in range(1, len(E) - 1):
+                i, verso = E[n]
+                sx, dx = E[n - 1][0], E[n + 1][0]
+                if verso != -1 or min(q[sx], q[dx]) - q[i] < ONDA_GIRO or min(ss[i] - ss[sx], ss[dx] - ss[i]) >= TRATTO:
+                    continue
+                yield sx, dx, round(min(q[sx], q[dx]) - ONDA_RESTO, 4)
+        # (quote al decimo di millimetro, come la rete delle strade sotto le campate: le ultime cifre della soluzione
+        # possono cambiare da un processore all'altro, e queste soglie diventano termini noti del programma)
+        for inc, ss in self.itinerari():
+            q = [round(float(h[i]), 4) for i in inc]
+            for sx, dx, livello in conche(q, ss):
+                for m in range(sx + 1, dx):
+                    if q[m] < livello and rilievo(inc[m]):
+                        ch = ('strada', inc[m])
+                        out[ch] = ([(inc[m], 1.0)], max(livello, out.get(ch, (None, -1e9))[1]))
+        for r, riga in enumerate(self.lungo_binari):
+            n = 0
+            while n < len(riga):
+                if riga[n] is None:
+                    n += 1
+                    continue
+                a = n
+                while n < len(riga) and riga[n] is not None:
+                    n += 1
+                termini = [self.a_frazione(*riga[m]) for m in range(a, n)]
+                q = [round(sum(float(h[i]) * w for i, w in t), 4) for t in termini]
+                ss = [m * BINARIO_PASSO for m in range(len(q))]
+                for sx, dx, livello in conche(q, ss):
+                    for m in range(sx + 1, dx, ONDA_BINARIO):
+                        if q[m] < livello and all(rilievo(i) for i, _w in termini[m]):
+                            ch = ('binario', r, a + m)
+                            out[ch] = (termini[m], max(livello, out.get(ch, (None, -1e9))[1]))
+        return out
 
     def franco(self, tipo, p):
         for st in self.registro.get('strutture', []):
@@ -1087,6 +1180,8 @@ def adatta_terreno(R, P, T, piano, solo_campate=False, sotto=None):
     g_fuori = sotto.g_fuori if sotto else Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in fuori] or [((1e9, 1e9), (1e9, 1e9))], 40.0)
     scelta = {}  # cella -> (priorità, distanza, quota, ponte a terra)
     nucleo = {}  # cella -> (quota, campata, ponte a terra): la più bassa tra gli archi che le passano entro NUCLEO
+    nucleo_oltre = {}  # come nucleo, oltre i capi degli archi: conta dove nessun arco a terra della struttura copre la cella
+    a_terra = set()
     asse = {}    # cella -> metri dall'asse più vicino di un arco della struttura che le passa accanto
     for k in sorted(P.campate if solo_campate else P.S):
         e = R.archi[k]
@@ -1121,12 +1216,25 @@ def adatta_terreno(R, P, T, piano, solo_campate=False, sotto=None):
             pr = (0 if campata_qui and dentro else 1 if dentro else 2 if not campata_qui else 3, d)
             if c not in scelta or pr < scelta[c][0]:
                 scelta[c] = (pr, quota, campata_qui, bool(e[5] & 4))
-            # (solo dove la cella si proietta dentro l'arco: oltre i capi la quota del nodo non è quella della strada lì)
-            if dentro and d <= nuc:
-                asse[c] = min(d, asse.get(c, 1e9))
-                v = nucleo.get(c)
+            # (solo dove la cella si proietta dentro l'arco: oltre i capi la quota del nodo non è quella della strada lì.
+            # Oltre un capo che non è un piede, su un arco che non è una campata, sì: lì la strada prosegue nella
+            # struttura, e le celle all'esterno della curva che nessun arco copre restavano al piano della campata accanto,
+            # più alto della strada che passa a terra: Via Friburgo sul Grassi saliva di 1,3 m)
+            oltre = not dentro and k not in P.campate and R.archi[k][0 if t < 0 else 1] not in P.piedi
+            if (dentro or oltre) and d <= nuc:
+                nc = nucleo if dentro else nucleo_oltre
+                if dentro:
+                    asse[c] = min(d, asse.get(c, 1e9))
+                    if k not in P.campate:
+                        a_terra.add(c)
+                v = nc.get(c)
                 # sotto una campata la cella resta "sotto una campata" anche se la quota più bassa è di un'altra strada
-                nucleo[c] = (min(quota, v[0]) if v else quota, campata_qui or bool(v and v[1]), bool(e[5] & 4) if not v or quota < v[0] else v[2])
+                nc[c] = (min(quota, v[0]) if v else quota, campata_qui or bool(v and v[1]), bool(e[5] & 4) if not v or quota < v[0] else v[2])
+    for c, v in nucleo_oltre.items():
+        if c in a_terra:
+            continue
+        u = nucleo.get(c)
+        nucleo[c] = v if not u else (min(u[0], v[0]), u[1] or v[1], v[2] if v[0] < u[0] else u[2])
     for c, v in nucleo.items():
         scelta[c] = (None, *v)
     # (non salgono mai: la strada di fuori sta sul terreno e si alzerebbe con loro. Scendono al profilo se l'asse della
@@ -1376,10 +1484,22 @@ def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua
         return v if v is not None else sum(piano[i] * w for i, w in P.a_frazione(k, t))
     # due giri: il terreno adattato al profilo cambia un poco la quota ai piedi (le celle accanto alle strade fuori dalla
     # struttura restano com'erano, ma la chiusura attorno cambia), e il secondo giro parte da lì
+    # in ogni giro, dopo la prima soluzione, fino a GIRI_ONDE giri contro le onde: le conche trovate si chiedono riempite
+    # (Profili.onde) e si risolve di nuovo; le richieste restano per i giri dopo
+    onde = {}
     for giro in range(2):
-        P.risolvi(piano_di)
+        P.risolvi(piano_di, onde)
+        trovate = len(P.onde())
+        for _g in range(GIRI_ONDE):
+            nuove = P.onde()
+            if not nuove:
+                break
+            for ch, (t, q) in nuove.items():
+                onde[ch] = (t, max(q, onde.get(ch, (None, -1e9))[1]))
+            P.risolvi(piano_di, onde)
         log(f'cavalcavia: {len(strutture)} strutture, {len(S)} archi ({sum(R.lung[k] for k in S) / 1000:.1f} km), {P.N} incognite; '
-            f"oltre la regola: pendenze {P.violazioni['pendenze']}, pendenze dei binari {P.violazioni['binari']}, raccordi {P.violazioni['raccordi']}, franchi {P.violazioni['franchi']}")
+            f"oltre la regola: pendenze {P.violazioni['pendenze']}, pendenze dei binari {P.violazioni['binari']}, raccordi {P.violazioni['raccordi']}, franchi {P.violazioni['franchi']}; "
+            f'punti nelle conche: {trovate} prima dei giri contro le onde, {len(P.onde())} dopo')
         T = Terreno(terreno)
         fatte = adatta_terreno(R, P, T, piano, sotto=sotto)
         n = len(fatte)

@@ -101,9 +101,10 @@
     ]
    },
    {
-    "perche": "#143: auto che escono da una rotonda con l'anello a due corsie dove i raccordi della build entrano solo nella corsia interna ed escono solo dall'esterna, con archi di 5-7 m: il cambio di corsia non ci sta. Da #115 Traffic.chooseNext le fa uscire alla prima uscita con una curva del gioco (ripiego cambio di corsia senza posto o raccordi sovrapposti) invece di farle girare per sempre nell'anello (a Via Bembo con Via Marinelli l'anello si riempiva e fermava il bus della 3). Spariscono quando la build dà a ogni corsia d'ingresso un'uscita raggiungibile. Con la domanda di traffico (#116) le auto passano da altre rotonde: restano quelle di Via Marconi (2510, 3590), con i posti spostati di qualche metro.",
+    "perche": "#143: auto che escono da una rotonda con l'anello a due corsie dove i raccordi della build entrano solo nella corsia interna ed escono solo dall'esterna, con archi di 5-7 m: il cambio di corsia non ci sta. Da #115 Traffic.chooseNext le fa uscire alla prima uscita con una curva del gioco (ripiego cambio di corsia senza posto o raccordi sovrapposti) invece di farle girare per sempre nell'anello (a Via Bembo con Via Marinelli l'anello si riempiva e fermava il bus della 3). Spariscono quando la build dà a ogni corsia d'ingresso un'uscita raggiungibile. Con la domanda di traffico (#116) le auto passano da altre rotonde: restano quelle di Via Marconi (2510, 3590), con i posti spostati di qualche metro. Con le quote del passo 2 di #125 su Corso Primo Maggio, accanto (fino a 22 cm), i tempi del traffico cambiano di poco e un'auto in più esce dall'anello a (2465, 3561).",
     "casi": [
      "auto imbardata (cambio di corsia senza posto) @ 2461,3572",
+     "auto imbardata (cambio di corsia senza posto) @ 2465,3561",
      "auto imbardata (cambio di corsia senza posto) @ 2535,3603",
      "auto imbardata (cambio di corsia senza posto) @ 2537,3582",
      "auto imbardata (raccordi sovrapposti) @ 2535,3605",

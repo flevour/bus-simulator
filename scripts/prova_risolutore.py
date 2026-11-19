@@ -200,6 +200,8 @@ def main():
           f"franchi {len(v['franchi'])}")
     if v['pendenze'] or v['binari'] or v['raccordi'] or v['franchi']:
         errori.append('il programma viola pendenze, raggi o franchi')
+    # (dopo i giri contro le onde restano le conche che il DTM vede: lì la strada lo segue, il rilievo prima delle onde)
+    print(f'punti nelle conche del profilo calcolato, dopo i giri contro le onde: {len(P.onde())}')
     sotto = strade_sotto(D, ris, terreno)
     print(f'strade sotto le campate: {len(sotto)}; scarto più grande dalla quota della rete nell\'ombra (e dalla corda tra i '
           f'punti fuori dall\'ombra):')

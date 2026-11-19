@@ -625,8 +625,6 @@
    {
     "perche": "Strutture con il profilo del risolutore (#84): il profilo sta nei limiti della regola e si allontana dal DTM dove il franco della regola sopra la ferrovia (6,90 m più 0,90 di impalcato) è più alto delle spalle che il rilievo vede, o dove la rampa è un manufatto tolto dal DTM. Servono i franchi veri nel registro (#125).",
     "casi": [
-     "Cavalcavia Antonio Grassi | scarti_dtm | Cavalcavia Antonio Grassi @ 1889,-1385",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Cavalcavia Antonio Grassi @ 1890,-1343",
      "Cavalcavia Antonio Grassi | scarti_dtm | Cavalcavia Antonio Grassi @ 1924,-1256",
      "Cavalcavia Antonio Grassi | scarti_dtm | Cavalcavia Antonio Grassi @ 1928,-1260",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Antonio Grassi @ 1923,-1071",
@@ -636,10 +634,8 @@
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1860,-1368",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1862,-1216",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1868,-1318",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1890,-1330",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1894,-1254",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1913,-1080",
-     "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1953,-1148",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1959,-1240",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 2041,-1200",
      "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 2072,-1190",
@@ -675,10 +671,7 @@
      "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1895,-1330",
      "Cavalcavia Antonio Grassi | onde | Cavalcavia Antonio Grassi @ 1902,-1330",
      "Cavalcavia Antonio Grassi | onde | Via Carlo Goldoni @ 1571,-1241",
-     "Cavalcavia Antonio Grassi | onde | Via Friburgo @ 1948,-1140",
      "Cavalcavia Antonio Grassi | onde | strada senza nome @ 1858,-1557",
-     "Cavalcavia Antonio Grassi | pendenze | Via Friburgo @ 1957,-1151",
-     "Cavalcavia Antonio Grassi | raccordi | Via Friburgo @ 1953,-1148",
      "Cavalcavia Antonio Grassi | raccordi | Via Friburgo @ 1969,-1160",
      "Cavalcavia Antonio Grassi | raccordi | Via del Plebiscito 1866 @ 1829,-1772",
      "Cavalcavia Camerini | onde | Cavalcavia Camerini @ -205,-2246",
@@ -686,7 +679,6 @@
      "Cavalcavia Camerini | raccordi | Via Giovanni Vianello @ -10,-2274",
      "Cavalcavia Camerini | raccordi | Via Giovanni Vianello @ -30,-2268",
      "Cavalcavia Camerini | raccordi | Via Giovanni Vianello @ 2,-2257",
-     "Cavalcavia Montà | onde | Cavalcavia Montà @ -3177,-2915",
      "Cavalcavia Pietro Maroncelli | onde | Cavalcavia Pietro Maroncelli @ 2617,-1170",
      "Cavalcavia Pietro Maroncelli | onde | Cavalcavia Pietro Maroncelli @ 2635,-1230",
      "Cavalcavia Pietro Maroncelli | raccordi | Arco di Giano @ 2553,-1324",
@@ -701,7 +693,6 @@
      "Direttissima per Abano | raccordi | Direttissima per Abano @ -4099,3165",
      "Direttissima per Abano | raccordi | Direttissima per Abano @ -4101,3190",
      "Ponte dell'Unità d'Italia (1145, -1143) | onde | Viale della Pace @ 635,-976",
-     "Ponte dell'Unità d'Italia (1145, -1143) | onde | Viale della Pace @ 876,-991",
      "Ponte dell'Unità d'Italia (1145, -1143) | raccordi | Viale della Pace @ 570,-970",
      "Ponte dell'Unità d'Italia (1145, -1143) | raccordi | Viale della Pace @ 589,-956",
      "Ponte dell'Unità d'Italia (1145, -1143) | raccordi | Viale della Pace @ 611,-958"
@@ -724,7 +715,6 @@
      "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 70,-1106",
      "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 85,-1286",
      "Cavalcavia Borgomagno | scarti_dtm | Cavalcavia Borgomagno @ 94,-1284",
-     "Cavalcavia Borgomagno | scarti_dtm | Via Niccolò Tommaseo @ 10,-983",
      "Cavalcavia Borgomagno | scarti_dtm | Via Niccolò Tommaseo @ 13,-974",
      "Cavalcavia Chiesanuova | scarti_dtm | Cavalcavia Chiesanuova @ -2120,-350",
      "Cavalcavia Chiesanuova | scarti_dtm | Corso Australia @ -1967,-349",
@@ -736,7 +726,6 @@
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -2010,-455",
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -2020,-406",
      "Cavalcavia Chiesanuova | scarti_dtm | strada senza nome @ -2030,-370",
-     "Cavalcavia Dalmazia | scarti_dtm | Corso delle Tre Venezie @ -299,-1376",
      "Cavalcavia Dalmazia | scarti_dtm | Corso delle Tre Venezie @ -460,-1490",
      "Cavalcavia San Marco | scarti_dtm | Cavalcavia San Marco @ 4576,-1500",
      "Cavalcavia San Marco | scarti_dtm | Cavalcavia San Marco @ 4624,-1537",
@@ -758,12 +747,9 @@
      "Cavalcavia Borgomagno | onde | Piazzale della Stazione @ 200,-1045",
      "Cavalcavia Borgomagno | pendenze | Piazza Alcide De Gasperi @ 40,-945",
      "Cavalcavia Borgomagno | raccordi | Piazza Alcide De Gasperi @ 42,-950",
-     "Cavalcavia Chiesanuova | onde | Via Vicenza @ -1942,-499",
-     "Cavalcavia Chiesanuova | onde | Via del Cantiere @ -2110,-363",
      "Cavalcavia Chiesanuova | raccordi | Via Vicenza @ -1944,-451",
      "Cavalcavia Chiesanuova | raccordi | Via del Cantiere @ -2060,-362",
      "Cavalcavia Chiesanuova | raccordi | Via del Cantiere @ -2080,-362",
-     "Cavalcavia Dalmazia | onde | Corso delle Tre Venezie @ -344,-1407",
      "Cavalcavia Dalmazia | onde | Corso delle Tre Venezie @ -525,-1540",
      "Cavalcavia Dalmazia | onde | Corso delle Tre Venezie @ -534,-1548",
      "Cavalcavia Dalmazia | onde | Via Fra' Paolo Sarpi @ -733,-1342",
@@ -775,13 +761,10 @@
    {
     "perche": "Strutture con il profilo del risolutore da #84, dopo che le celle accanto alle strade fuori dalla struttura scendono alla quota del profilo (#123): sulle nove strutture i casi passano da 132 a 93. Questi sono casi di prima con il punto peggiore spostato di più di 4 m (Via Friburgo sotto il Grassi, conca di 1,1 m; Via Vianello sotto il Camerini, 0,88 m) e conche o raccordi lievi, di peso fino a 2,3, ai piedi dove il terreno non coincide con il profilo (#125).",
     "casi": [
-     "Cavalcavia Antonio Grassi | onde | Via Friburgo @ 1891,-1326",
-     "Cavalcavia Camerini | onde | Via Giovanni Vianello @ -80,-2256",
      "Direttissima per Abano | onde | Direttissima per Abano @ -4120,3764",
      "Direttissima per Abano | raccordi | Direttissima per Abano @ -4137,3791",
      "Direttissima per Abano | raccordi | strada senza nome @ -4088,3733",
      "Ponte dell'Unità d'Italia (1145, -1143) | onde | Via Carlo Goldoni @ 1006,-1041",
-     "Ponte dell'Unità d'Italia (1145, -1143) | onde | Viale della Pace @ 871,-1000",
      "Ponte dell'Unità d'Italia (1145, -1143) | raccordi | Via Giuseppe Impastato @ 814,-896",
      "Via Madonnina | onde | Via Madonnina @ -4123,3896"
     ]
@@ -820,7 +803,6 @@
      "Corso Primo Maggio (1809, 3974) | raccordi | Corso Primo Maggio @ 460,4545",
      "Corso Primo Maggio (1809, 3974) | raccordi | strada senza nome @ 2246,3886",
      "Corso Primo Maggio (1809, 3974) | raccordi | strada senza nome @ 2252,3882",
-     "Corso Primo Maggio (1809, 3974) | scarti_dtm | Corso Primo Maggio @ 2223,3890",
      "Corso Primo Maggio (1809, 3974) | scarti_dtm | Corso Primo Maggio @ 2236,3879",
      "Corso Primo Maggio (1809, 3974) | scarti_dtm | strada senza nome @ 2170,3935",
      "Corso Primo Maggio (1809, 3974) | scarti_dtm | strada senza nome @ 2199,3916",
@@ -840,11 +822,26 @@
      "Cavalcavia San Marco | raccordi | Via Sergio Fraccalanza @ 4463,-1448",
      "Cavalcavia San Marco | scarti_dtm | strada senza nome @ 4342,-1095"
     ]
+   },
+   {
+    "perche": "Giro contro le onde (#125, passo 2): casi di prima con il punto peggiore spostato di più di 4 m e più leggeri (Camerini, Via Giovanni Vianello: conca da 0,88 a 0,82 m; Chiesanuova, Via Vicenza: da 0,44 a 0,35 m; Viale della Pace sotto il Ponte dell'Unità d'Italia: due conche da 0,23 m diventano una da 0,17), e punti corti dove il profilo alzato per riempire una conca esce dalla banda del DTM (0,55-0,8 m in 7-10 m: Via Friburgo, Rotonda Tina Lagostena Bassi, Viale della Pace, Corso delle Tre Venezie). Al Grassi la curva di Via Friburgo perde la pendenza del 18,9%, il raccordo di 147 m e la conca di 0,65 m, e resta lo scarto della rampa verso la ferrovia (1,93 m in 138 m, prima 2,02 m in 142: il franco della regola più alto di quello vero, passo 3). Al Dalmazia la rampa si porta dietro Corso delle Tre Venezie, affiancata a 8 m e legata alla stessa quota (1,07 m in 73 m; la conca di 0,77 m si sposta di 16 m): legarle solo con lo stesso nome toglierebbe questi casi, ma lascia in quota l'incrocio a raso ai piedi ovest del Chiesanuova (nota #125 di docs/LAVORO.md).",
+    "casi": [
+     "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1899,-1250",
+     "Cavalcavia Antonio Grassi | scarti_dtm | Via Friburgo @ 1939,-1100",
+     "Cavalcavia Camerini | onde | Via Giovanni Vianello @ -66,-2258",
+     "Cavalcavia Chiesanuova | onde | Via Vicenza @ -1943,-492",
+     "Cavalcavia Dalmazia | onde | Corso delle Tre Venezie @ -360,-1418",
+     "Cavalcavia Dalmazia | scarti_dtm | Corso delle Tre Venezie @ -183,-1321",
+     "Cavalcavia Dalmazia | scarti_dtm | Corso delle Tre Venezie @ -317,-1388",
+     "Ponte dell'Unità d'Italia (1145, -1143) | onde | Viale della Pace @ 881,-991",
+     "Ponte dell'Unità d'Italia (1145, -1143) | scarti_dtm | Rotonda Tina Lagostena Bassi @ 915,-990",
+     "Ponte dell'Unità d'Italia (1145, -1143) | scarti_dtm | Viale della Pace @ 890,-992"
+    ]
    }
   ],
   "binari dati": [
    {
-    "perche": "Binari sulle strutture con il profilo del risolutore (#123): quota della strada punto per punto, nessun binario fuori quota e nessuna pendenza oltre il 6%. Restano le conche della strada che affiancano: lunghe e basse sul piazzale della stazione (SIR1, SIR2 e SIR3, da 0,1 a 0,21 m in 90-320 m, dove strada e binari stanno sul terreno com'è), in Via Venezia e Via San Marco (0,11-0,28 m in 235-373 m), ai piedi del San Marco (0,15 m) e in cima al Chiesanuova (0,18 m in 137 m, il rilevato del DTM tra le due campate). Stesse cause dei casi delle strade (#125).",
+    "perche": "Binari sulle strutture con il profilo del risolutore (#123): quota della strada punto per punto, nessun binario fuori quota e nessuna pendenza oltre il 6%. Restano conche lunghe e basse con il fondo a raso, dove strada e binari stanno sul terreno com'è: il piazzale della stazione (SIR1, SIR2 e SIR3, da 0,1 a 0,21 m in 90-320 m), la strada di servizio che attraversa il SIR2 in Via Venezia (0,28 m), i piedi del San Marco verso Via Sergio Fraccalanza (0,14-0,18 m). Il giro contro le onde (#125) riempie solo sul rilevato: a raso il binario riempito starebbe qualche centimetro sopra le strade che attraversa, in quota, e gli incroci perderebbero le lanterne del tram. In Via Venezia verso il viadotto (0,13-0,16 m in 323-377 m) la conca nel programma, dove il binario ha la quota media delle strade da cui la prende, è di 5 cm, sotto la soglia del giro (8 cm).",
     "casi": [
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 180,-1066",
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 196,-1028",
@@ -863,7 +860,7 @@
   ],
   "binari gioco": [
    {
-    "perche": "Binari nel gioco sulle strutture con il profilo del risolutore (#123), misurati ogni metro: gli stessi casi dei binari nei dati. Nessun binario fuori quota (erano 25) e nessuna pendenza oltre il 6% (erano 32); restano le conche lunghe e basse della strada che affiancano, sul piazzale della stazione, in Via Venezia e Via San Marco, ai piedi del San Marco e in cima al Chiesanuova (#125).",
+    "perche": "Binari nel gioco sulle strutture con il profilo del risolutore (#123), misurati ogni metro: gli stessi casi dei binari nei dati. Nessun binario fuori quota (erano 25) e nessuna pendenza oltre il 6% (erano 32); restano le conche lunghe e basse con il fondo a raso, sul piazzale della stazione, in Via Venezia e ai piedi del San Marco, e quella di Via Venezia verso il viadotto (#125, perché nei binari dei dati).",
     "casi": [
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 180,-1066",
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 196,-1028",

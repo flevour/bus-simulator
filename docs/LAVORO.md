@@ -682,6 +682,23 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   dati cambiati; la posa di 49 pali della linea aerea su Borgomagno, Chiesanuova, Via Venezia e San Marco (stessi punti,
   altra altezza); in `data/eccezioni/verifica-mappa.json` le misure della pianta di cinque riquadri delle strutture
   toccate (marciapiedi stretti e verde coperto, da 30 a 250 m²).
+- le quote calcolate che entrano nel programma lineare come termine noto (la rete delle strade sotto le campate, da
+  `spsolve`) si arrotondano a 0,1 mm: le ultime cifre cambiano tra arm64 (Docker sul Mac) e amd64 (CI), e dove il
+  programma ha più soluzioni dello stesso costo ne sceglie un'altra. Così 6b158b7 è finito rosso sul lavoro `rigenera`
+  (2 archi di `edgeH`), corretto in 7b041a4; sul Mac l'arrotondamento ha spostato il profilo fino a 6 cm in 76 archi,
+  tanto il programma è sensibile. Chi aggiunge un termine noto calcolato fa lo stesso;
+- passo 2: il giro contro le onde (`Profili.onde` e `itinerari`; costanti `W_ONDA`, `ONDA_GIRO`, `ONDA_RESTO`,
+  `GIRI_ONDE`, `ONDA_RILIEVO`). Sono richieste morbide, con il costo tra quello del DTM e quello della banda: dove le due
+  regole non stanno insieme vince il rilievo, e la conca resta con il suo perché. Il passo dei cavalcavia fa fino a tre
+  soluzioni per giro del terreno, ma per parti: le strutture senza conche si risolvono come prima. Si riempie solo sul
+  rilevato (0,3 m sopra il terreno) o sui ponti: a raso bastano 5,5 cm per fare in quota un arco (`IN_QUOTA`), e il
+  gioco toglie la lanterna del tram a un incrocio con una strada in quota (`TramSignals`), anche se l'arco è in quota
+  solo in un punto. Per lo stesso motivo un punto nel registro tiene a terra l'incrocio a raso del SIR2 ai piedi ovest
+  del Chiesanuova. Con il passo, il nucleo oltre i capi interni degli archi a terra della struttura (sezione 6 di
+  `cavalcavia.md`). Provato e lasciato: carreggiate affiancate solo con lo stesso nome (sul Mac 776 casi contro 791,
+  Dalmazia, Mortise, San Marco), ma a quell'incrocio la cella prende la più bassa delle strade accanto e Via Chiesanuova
+  e Via Pacinotti restano 14-18 cm in quota anche con i punti del registro: serve prima che la cella di un incrocio a
+  raso prenda la quota dell'incrocio;
 
 #126, pianta delle strade come partizione (18 novembre). Un solo proprietario per ogni metro quadro: chi si vede non lo
 decidono più `polygonOffset` e i centimetri di quota. Da sapere:
