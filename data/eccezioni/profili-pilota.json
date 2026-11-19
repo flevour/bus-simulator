@@ -3,7 +3,7 @@
  "controlli": {
   "salti": [
    {
-    "perche": "Cavalcavia con le quote di prima (rampe della tangenziale, #124): terreno spianato solo attorno all'asse, stesso gradino al passaggio da un arco al successivo.",
+    "perche": "Cavalcavia con le quote di prima (rampe della tangenziale, #124, #142): quote dei soli capi dell'arco sopra un terreno spianato attorno all'asse. Con la quota dell'asse su tutta la larghezza (#137) restano 0,23 m all'asse davanti, al passaggio da un arco al successivo; dalle strutture con il profilo del risolutore i salti sono spariti (Maroncelli, San Marco). Si rivede quando la struttura prende il profilo (#142).",
     "casi": [
      "Corso Tredici Giugno (1182, -3448) | salto @ 1186,-3349"
     ]

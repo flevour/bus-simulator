@@ -484,8 +484,9 @@ Nel gioco:
   degli impalcati, 6 cm sotto l'asfalto disegnato; le pile), il bus di chi guida (`City.quotaSotto`, `City.arcoIn`), le
   auto (`Traffic.carHeight`; nei raccordi `Curva.quota` va dalla quota dell'arco d'arrivo a quella dell'arco d'uscita,
   tutte e due lette nel punto dell'auto), i bus automatici (`laneHeight` di `src/world/buses.js`, nel punto del bus) e i
-  pedoni. I tram, di chi guida e automatici, leggono il binario, e la sede in quota (`City.quotaSede`) resta alla quota
-  sopra il terreno del binario come corsie rosse e rotaie.
+  pedoni. I tram, di chi guida e automatici, leggono il binario; in quota la sede (`City.quotaSede`), le corsie rosse, le
+  rotaie e i cordoli stanno in piano sulla larghezza con la stessa regola (`quotaFuoriAsse` nel punto del binario), come
+  la carreggiata accanto.
 * `City.elevHeight` prende tra gli archi in quota entro mezza carreggiata più 1,5 m il più alto, ma prima quelli su cui
   il punto cade tra i due capi: il capo dell'arco successivo, prima del nodo, ha la quota del nodo, e su una rampa in
   salita il massimo la prendeva da lì, con un ripiano di mezzo metro attorno al nodo (Maroncelli). `GeoBuilder.polygonH`
@@ -517,7 +518,7 @@ archi di fila (deviazione fino a 60 gradi) un punto percorre linee parallele all
 tutta la larghezza, da 12 m prima del nodo a 12 m dopo, a passi di 25 cm, e la quota assoluta letta con
 `City.quotaSotto` non deve saltare più di 5 cm più il 10% del passo. Un caso per nodo, chiave `struttura | gradino @
 nodo`; i casi noti sono in `data/eccezioni/gradini.json`, con il perché (prima di #137 i nodi con un gradino erano 100,
-28 oltre 20 cm, fino a 0,83 m; dopo 49, 13 oltre 20 cm).
+29 oltre 20 cm, fino a 0,83 m; dopo 50, 13 oltre 20 cm).
 
 ```bash
 python3 scripts/quote_rete.py                    # i tratti in quota dei binari

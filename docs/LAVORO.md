@@ -795,10 +795,17 @@ sezione 7. Da sapere:
   dopo, prima del nodo, il massimo faceva un ripiano di mezzo metro al Maroncelli) e può stare sotto zero; `quotaSotto`
   tiene in `st.x`, `st.z` il punto letto; le righe sugli archi in quota stanno sull'asfalto disegnato se è entro mezzo
   metro dalla quota del loro arco (ai viadotti di Via Boves le copriva, due casi degli strati spariti); il piano degli
-  impalcati prende 6 cm sotto l'asfalto disegnato; `GeoBuilder.polygonH(rings, yFn, uvScale, tol, ter)` con `ter`
-  divide dove si stacca dalla corda la quota assoluta. `quotaSede` no: la sede in quota resta alla quota sopra il terreno
-  del binario come corsie rosse e rotaie, che con la sede in piano finivano sotto di lei dove il terreno scende verso il
-  bordo;
+  impalcati prende la quota della strada più vicina ma mai sopra l'asfalto disegnato (con la quota disegnata dappertutto,
+  tra le carreggiate di Corso Argentina saliva a denti); `GeoBuilder.polygonH(rings, yFn, uvScale, tol, ter)` con `ter`
+  divide dove si stacca dalla corda la quota assoluta; `GeoBuilder.ribbon` calcola la quota in ogni vertice, non solo
+  sulla linea di mezzo (le righe e le corsie del tram larghe 3 m prendevano la quota del mezzo su tutti e due i lati);
+- fuori dalla mia area, del tram: in quota la sede (`City.quotaSede`), le corsie rosse, le rotaie, i cordoli e i dischi
+  dei giunti di `buildTramway` seguono la stessa regola (`quotaFuoriAsse`, col punto del binario) e il profilo del
+  binario in ogni vertice (`TramTrack.heightAt`, non la retta tra i capi del pezzo: in cima al San Marco la corda stava
+  10 cm sotto la sede); i dischi dei giunti si mettono dove il binario è in piano sulla quota assoluta. Corsie e sede
+  stanno in piano sulla larghezza come la carreggiata accanto; prima si piegavano col terreno. Il tram, come ogni mezzo,
+  resta alzato vertice per vertice dal vertex shader: dove il terreno sotto cambia molto sulla larghezza si deforma un
+  poco con lui;
 - prova nuova in `tests/profili.spec.js`, "nessun gradino da un arco al successivo", su tutte le strutture attive (non
   solo dove passa una linea), con l'elenco `data/eccezioni/gradini.json` in tre gruppi: carreggiate che si
   sovrappongono agli innesti con profili diversi (#150, dati del risolutore), passaggio al piano ai piedi (#125), curve

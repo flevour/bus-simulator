@@ -1,5 +1,5 @@
 {
- "cosa": "Gradini della quota che un mezzo vede passando da un arco al successivo sulle strutture con il profilo del risolutore (tests/profili.spec.js, prova \"nessun gradino da un arco al successivo\", #137): per ogni coppia di archi di fila, su linee parallele all'asse lungo tutta la larghezza, la quota assoluta letta con City.quotaSotto non deve saltare più di 5 cm più il 10% del passo di 25 cm. Un caso per nodo. Chiave: struttura | gradino @ x,z del nodo. Prima di #137 i nodi con un gradino erano 100 (28 oltre 20 cm), fino a 0,83 m. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec -g gradino.",
+ "cosa": "Gradini della quota che un mezzo vede passando da un arco al successivo sulle strutture con il profilo del risolutore (tests/profili.spec.js, prova \"nessun gradino da un arco al successivo\", #137): per ogni coppia di archi di fila, su linee parallele all'asse lungo tutta la larghezza, la quota assoluta letta con City.quotaSotto non deve saltare più di 5 cm più il 10% del passo di 25 cm. Un caso per nodo. Chiave: struttura | gradino @ x,z del nodo. Prima di #137 i nodi con un gradino erano 100 (29 oltre 20 cm), fino a 0,83 m. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec -g gradino.",
  "controlli": {
   "gradini": [
    {
@@ -17,11 +17,11 @@
      "Cavalcavia Chiesanuova | gradino @ -1869,-337",
      "Cavalcavia Chiesanuova | gradino @ -1945,-344",
      "Cavalcavia Chiesanuova | gradino @ -2001,-345",
-     "Cavalcavia Chiesanuova | gradino @ -2018,-353",
      "Cavalcavia Chiesanuova | gradino @ -2023,-345",
      "Cavalcavia Chiesanuova | gradino @ -2028,-405",
      "Cavalcavia Chiesanuova | gradino @ -2030,-413",
      "Cavalcavia Chiesanuova | gradino @ -2124,-350",
+     "Cavalcavia Dalmazia | gradino @ -747,-1318",
      "Cavalcavia Montà | gradino @ -3224,-3317",
      "Cavalcavia Mortise | gradino @ 2894,-2756",
      "Cavalcavia Pietro Maroncelli | gradino @ 2603,-1160",
@@ -42,7 +42,6 @@
     "perche": "Ai piedi delle rampe la quota dell'asse sta tra 5 e 50 cm, dove quotaStrada passa dal terreno (sotto 5 cm la pianta disegna asfalto a terra) al piano, e il terreno cambia da 0,3 a 1,5 m sulla larghezza della carreggiata: la parte di terreno che resta nella quota segue la quota dell'asse, che lì sale e scende con le celle del terreno sotto l'asse (al Borgomagno in (11, -1131) da 0,16 a 0,5 m in 2 m). Prima di #137 il gradino c'era su tutta la rampa, più alto. Sparisce quando il terreno sotto la carreggiata delle strutture attive sta alla quota della strada su tutta la larghezza (#125).",
     "casi": [
      "Cavalcavia Antonio Grassi | gradino @ 1859,-1284",
-     "Cavalcavia Antonio Grassi | gradino @ 1953,-1147",
      "Cavalcavia Borgomagno | gradino @ 11,-1131",
      "Cavalcavia Borgomagno | gradino @ 6,-1137",
      "Cavalcavia Camerini | gradino @ -215,-2368",
