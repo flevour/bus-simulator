@@ -12,7 +12,7 @@
   {"nome": "cavalcavia-mortise-rampa", "x": 2870.6, "z": -2865.3, "verso": 29, "perche": "Cavalcavia Mortise: ai piedi della rampa, verso la cima"},
   {"nome": "cavalcavia-mortise-cima", "x": 2864.9, "z": -2617.1, "verso": 169, "perche": "Cavalcavia Mortise: in cima, lungo la discesa"},
   {"nome": "cavalcavia-monta-rampa", "x": -2979.6, "z": -2784.1, "verso": -112, "perche": "Cavalcavia Montà: ai piedi della rampa, verso la cima"},
-  {"nome": "cavalcavia-camerini-rampa", "x": -207.5, "z": -2318.9, "verso": -179, "perche": "Cavalcavia Camerini: ai piedi della rampa, verso la cima"},
+  {"nome": "cavalcavia-camerini-rampa", "x": -212.0, "z": -2360.0, "verso": -170, "perche": "Cavalcavia Camerini: sulla rampa nord, verso la cima (40 m prima, ai piedi, mezzeria e asfalto a terra stanno alla stessa profondità, e tra macOS e Linux cambiava quale dei due si vede: #152)"},
   {"nome": "cavalcavia-maroncelli-rampa", "x": 2332.7, "z": -890.7, "verso": 100, "perche": "Cavalcavia Pietro Maroncelli: ai piedi della rampa, verso la cima"},
   {"nome": "cavalcavia-unita-d-italia-cima", "x": 1162.2, "z": -1243.2, "verso": -9, "perche": "Ponte dell'Unità d'Italia: in cima, lungo la discesa"},
   {"nome": "cavalcavia-corso-australia-rampa", "x": -938.2, "z": -3660.1, "verso": 22, "perche": "Corso Australia: ai piedi della rampa, verso la cima"},
