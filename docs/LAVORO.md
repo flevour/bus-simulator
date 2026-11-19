@@ -1656,6 +1656,46 @@ sezione 2 e sezione 3 punto 9. Da sapere:
   vera sulla foto aerea: le 105 svolte che restano senza il raccordo del bus chiedono una manovra intera o l'isola
   sormontabile (#155).
 
+Code che risalgono gli incroci (#148, 19 novembre). La regola resta quella di #115, in un posto solo
+(`incrocioDavanti` di `src/world/inseguitore.js` e `scatola` in `Traffic.update`); cambia quello che l'auto sa quando
+decide. Regola in [`raccordi.md`](raccordi.md), sezione 8. Da sapere prima di toccare il traffico:
+
+- misura prima della modifica, con lo stato dei mezzi allegato ai casi (`window.__codeInfo`) e la storia degli ultimi
+  4 s di ogni auto prima di entrare in un incrocio. Sulla main di oggi (17cbafa), nei dieci minuti della prova delle
+  code: 25 casi di `auto in coda nell'incrocio` in 6 posti, 42 soste di oltre 2 s dentro un incrocio, 418 secondi in
+  tutto (la più lunga 25,6 s). Quasi sempre, all'ultimo momento in cui poteva ancora fermarsi, l'auto vedeva posto
+  oltre l'incrocio. Le cause, guardate dall'alto: in Via Gozzi e in Via Piovese le auto spostate di lato per stare
+  fuori dal binario del SIR3 (`tramShift`) non vedevano quelle davanti nella stessa corsia spostate meno (il percorso
+  si campiona con lo scostamento di chi guarda, e lo scostamento cambia lungo la strada); in Via Piovese due incroci a
+  4,7 m l'uno dall'altro (8,7 m di corsia) valevano come due, e chi decideva al primo non si fermava più prima del
+  secondo; la fila oltre i 20 m più 4 s di chi stava davanti sembrava libera, e un verde durava per sempre; le auto di
+  Via Scrovegni e di Via Trieste s'immettevano nella stessa corsia contando lo stesso posto; un'auto nasceva già
+  lanciata a un passo da un incrocio;
+- `Traffic.davanti(c, D, ctx, pl, fila, lungo)`: con `fila` guarda fino a `lungo` m e mette lì tutti i mezzi trovati;
+  il primo mezzo, e con lui la guida, resta quello entro D. Un'auto della stessa corsia con un altro scostamento è
+  davanti se l'asse della sua corsia sta entro 1,7 m da quello dell'auto (`inCorsia`), fuori dai sorpassi. La
+  proiezione salta i blocchi di 8 tratti lontani (stesso risultato, meno conti);
+- `incrocioDavanti`: due incroci tra cui un'auto ferma non ci sta (`TRA_INCROCI`, 6,9 m tra gli incroci allargati)
+  sono uno solo, fuori dagli anelli delle rotonde; dà anche `R0` e `R1`, il primo e l'ultimo raccordo. Vale anche per
+  i bus automatici, che con incroci più lunghi si fermano prima dove non c'è posto per 12 m;
+- `Traffic.postoOltre`: dove si fermerà la fila oltre l'incrocio, guardando fino a 92 m (mezzi fermi, `spazio` di chi
+  va, la prima linea d'arresto oltre l'incrocio col rosso, col giallo e col verde che finisce prima che la fila passi:
+  `TrafficLights.verdeRestante`, scarico di un'auto ogni 2,2 s). Lo calcola solo chi può ancora fermarsi, negli ultimi
+  20 m prima di non poterlo più fare; con la vista lunga oltre l'incrocio vuole il suo posto più 3 m (`MARGINE`);
+- `Traffic.immessi`: le auto di un'altra corsia dirette alla stessa corsia d'uscita (`c.uscita`, l'incrocio dove
+  l'auto è o entrerà; `c.impegnata` se non può più fermarsi; `c.traIncrocio`, i secondi all'incrocio) prendono posto
+  prima di chi ci arriva dopo. Attenzione ai nomi: `c.arriva` è già della domanda (#116, dove l'auto esce di scena);
+- `Traffic.metti`: a pochi metri da un incrocio l'auto nasce abbastanza piano da poter ancora decidere;
+- numeri, stessa macchina, main e ramo in parallelo, prova dei dieci minuti: casi da 25 in 6 posti a 2 in 2 posti, soste
+  dentro un incrocio da 42 a 13, da 418 a 63 secondi; `traffic.update` da 1,09 a 1,23 ms per passo con 60 auto (nel
+  profilo di 60 s alla stazione `davanti` da 0,37 a 0,44 ms, `postoOltre` e `immessi` 0,01 ms ciascuna). Corridoio di
+  Via Querini uguale (non ha incroci): 600, 1.200 e 1.368 auto l'ora, scarico un'auto ogni 2,16 s; punte della domanda
+  1,39 alle 8 e 1,39 alle 18 (soglia 1,08); prova del moto e prove del traffico senza casi nuovi;
+- casi che restano in `code.json`: Via Gozzi con Via Scrovegni (466, -667) e con Via Trieste (427, -558), dove l'auto
+  della traversa e quella della coda entrano insieme e si uniscono dentro l'incrocio (#49: nessuna dà precedenza
+  all'altra); l'auto muso contro muso col SIR3 in Via Morgagni (#144), un intreccio che compare e sparisce a ogni
+  cambiamento del traffico (c'era fino a #139).
+
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
 Aperta e chiusa l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli
