@@ -1609,7 +1609,10 @@ sezione 7. Da sapere prima di toccare `percorsoBus` o i raccordi dei bus:
   posti con un ripiego dei bus passano da 234 a 118 (979 passaggi di varianti a 483), `cambio di corsia senza posto`
   da 15 a 2, `raccordi sovrapposti` da 27 a 7, il raccordo delle auto da 176 a 102 (il bus prende il raccordo suo che
   scavalca la svolta senza); prova del moto da 71 a 33 posti, imbardata peggiore da 16,7 a 9,1 volte quella ammessa
-  (in `moto.json` restano la 10 nell'uscita dopo Ponte di Brenta per #135, 27 raccordi delle auto per #134);
+  (in `moto.json` restano la 10 nell'uscita dopo Ponte di Brenta per #135, 27 raccordi delle auto per #134). Altri
+  elenchi: in `mappa-gioco.json` i pali che i bus su curva di ripiego toccavano (Via Chiesanuova, Albignasego, Via San
+  Marco) ora li tocca il muso sui raccordi della build (#130), più un semaforo della 10 a Via San Marco; in `code.json`
+  la coda di Via Gozzi resta nell'incrocio con Via Tommaseo invece che a (427, -558); impronta riscritta;
 - restano, fuori dalla build: la 16 a Via Marconi nell'avvicinamento al capolinea (`walk` di `src/world/buses.js`, che
   la build non conosce), e due posti (9, 15B e 42 a (1792, -48), 88 a (-635, 2947)) dove il raccordo prima ha raggio
   zero e il gioco lo arrotonda con un arco di 30 m e fino a mezzo metro di tangente (`curva`), che finisce dopo l'inizio
