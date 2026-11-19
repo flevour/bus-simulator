@@ -1248,7 +1248,7 @@ giravano nell'anello per sempre, con la coda ferma sulla strada d'ingresso. Come
 
 Bus automatici in anticipo (segnalazione dell'11 novembre, "in Prato della Valle a 20 all'ora"): vanno al più il 15%
 sotto il limite e recuperano l'anticipo in fermata: oltre 40 s avanti si fermano anche senza prenotazioni, fino
-all'orario (al più un minuto). Dal 12 novembre (#64) anche i tram automatici in anticipo vanno all'andatura normale e
+all'orario (al più un minuto). Dal 19 novembre non alle fermate sulla sede del tram (#127, nota "Sosta breve" sotto). Dal 12 novembre (#64) anche i tram automatici in anticipo vanno all'andatura normale e
 aspettano in fermata (nota del tram, "Turni e stazione"): a Largo Europa passano le linee d'arresto a 8,5 m/s (prima
 3,8) e la fase tram con un tram solo dura 8-10 s (prima 15,5). Non nelle fermate dove il tram fermo sta sopra un
 incrocio: `TramSim.onCrossing` ripete le condizioni di `TramSignals.update` per chi è in sosta, e se cambiano lì va
@@ -1552,6 +1552,42 @@ punto 7). Da sapere prima di toccare raccordi o scelte delle auto nelle rotonde:
   metri dal suo arrivo, in fondo a Via Rismondo, una strada chiusa da cui il viaggio dopo non si fa (`domanda.py` mette
   gli arrivi anche in fondo alle strade chiuse), e resta senza. Su main Via Rismondo è chiusa uguale: alle 8:15
   nessuna auto ci nasceva vicino al suo arrivo.
+
+Sosta breve alle fermate sulla sede del tram (#127, 19 novembre). Decisione nell'issue: dove la corsia della fermata è
+anche il binario, un bus automatico in anticipo fa solo salita e discesa e riparte; alle altre fermate aspetta l'orario
+come prima (al più un minuto); il bus di chi guida non cambia. Da sapere:
+
+- il dato è `st.sede` delle fermate di una corsia (`L.stops`), calcolato una volta in `buildLane` di
+  `src/world/buses.js`: il bus fermo (muso a `fs`, scostato di `extra` più lo spostamento dai binari `L.shift`, messo
+  con `posa` come lo mettono `move` e `place`) ha uno dei suoi pezzi (`PEZZI`, gli stessi di `updateParts`) a meno di
+  `ASSE_SUL_BINARIO` da un binario di `city.tramLanes`. `ASSE_SUL_BINARIO` (2,2 m, in `src/tram/tram.js`) è la regola
+  con cui `TramSim.move` guarda chi ha davanti: prima era un 2,2 scritto lì, ora è la costante, e chi la cambia cambia
+  anche le fermate sulla sede;
+- perché non nella build: dove si ferma un bus automatico (corsia del percorso, accosto, spostamento dai binari) lo sa
+  solo `buildLane`. La palina della posa (`allStopPlacements`) ha la retta del cordolo dove si ferma il bus di chi
+  guida (`stopPose`): con lo stesso controllo dava l'altra risposta su 14 fermate (Tito Livio 43 sulla sede con la
+  palina, a 2,58 m dal binario col bus automatico; Piovese 241 il contrario). Chi cambia corsie, accosto o `L.shift`
+  (#134, #135, #138) cambia anche il dato, senza rifare niente;
+- `BusSim.move`: alle fermate con `s0.sede` la sosta è `8 + rnd · 12` s (con lo stesso numero estratto di prima, la
+  sequenza di `rnd` non cambia), più chi sta ancora salendo (`paxBusy`, fino a 20 s); senza prenotazioni, anche con più
+  di 40 s di anticipo, il bus non si ferma (alle altre fermate si ferma per recuperare l'anticipo). Capolinea di
+  partenza (fino all'orario) e ultima fermata (18 s) come prima;
+- prova: in "Tito Livio e Ponti Romani" di `tests/traffico.spec.js` il controllo `tram_dietro_la_sosta`
+  (`data/eccezioni/traffico.json`, a zero): un tram fermo, tenuto fermo da un bus (`busT`), con sul suo binario fino a
+  60 m davanti un bus in fermata da più di 22,6 s (la salita più lunga, le porte e il passo dell'osservazione) senza
+  nessuno che sale o scende. La prova stampa anche le code intere dei tram dietro le soste (per #47). Su main
+  (1db659b) il SIR1 restava 42 s dietro le soste della 88 e della 3 a Ponti Romani 6 (38 s oltre la salita) e 31 s
+  dietro la 88 a Ponti Romani 68; ora nessun tram si ferma dietro una sosta in tutta la corsa;
+- fermate col dato vero il 19 novembre: 22 (163 fermate di corsia su 3.237), guardate dall'alto e da 2,5 m col bus
+  fermo dove lo mette `buildLane`. SIR1: Ponti Romani 6 e 68, Vittorio Emanuele 21 e 159; SIR3: Falloppio 36, i due
+  Falloppio 69, Giustiniani Ospedale (linea 6, a 2,05 m: la palina sta oltre la sede, il bus si ferma nella corsia
+  accanto e ci sporge), Sografi 26, 31 e 44, Piovese 213, 224 e 241, Leopardi 1; SIR2: San Marco fr. Palasport, San
+  Marco (Casello Autostrada), San Marco 274, Via San Marco - San Lazzaro, Provvidenza 68, fr. via S. Antonio e incr.
+  via Lazio. San Marco (Casello Autostrada) è sul Cavalcavia San Marco, dove la 10 corre a 1,5 m dal SIR2 (#131): il
+  dato cambia quando cambia la corsia. Restano fuori di poco San Marco 196 (2,22 m) e Giustiniani Ospedale della 4
+  (2,27 m): il tram passa;
+- elenchi: impronta riscritta; in `code.json` spariscono quattro incroci della coda di #148 (Via Piovese con Via
+  Lazzaro Mocenigo, Via Gozzi a (460, -650) e con Via Tommaseo, Via Altinate con Via Falloppio); `moto.json` uguale.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

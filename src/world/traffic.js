@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Grid, distToSeg, mulberry32 } from './spatial.js';
 import { Y_ROAD, TRAM_HW, zoneOf, quotaStrada, layer } from './city.js';
 import { ledTexture } from './textures.js';
-import { TRAM, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
+import { TRAM, ASSE_SUL_BINARIO, tramLength, buildTramConvoy, setPantograph, YardRun } from '../tram/tram.js';
 import { driverFigure, setWave } from './driver.js';
 import { raccordiDi, curva, Curva, Percorso, posa, punto, scosta, corsie, costoCambio, tratto, ripiego, AUTO, raggioMinimo, idm, IDM_AUTO, incrocioDavanti } from './inseguitore.js';
 import { turni } from '../game/turni.js';
@@ -2013,12 +2013,12 @@ export class TramSim {
           }
           if (a === Infinity) continue;
         } else if (P.projectNear) {
-          const pr = P.projectNear(o.x, o.z, 2.2);
+          const pr = P.projectNear(o.x, o.z, ASSE_SUL_BINARIO);
           if (!pr) continue;
           a = pr.s - tr.s;
         } else {
           a = rx * head.fx + rz * head.fz;
-          if (Math.abs(rx * -head.fz + rz * head.fx) >= 2.2) continue;
+          if (Math.abs(rx * -head.fz + rz * head.fx) >= ASSE_SUL_BINARIO) continue;
         }
         const v2 = Math.max(0, (a - 7) * 0.5);
         if (a > min && a < 30 && v2 < vt) { vt = v2; byBus = bus ? o.bus : null; byCar = o.car ? o : null; spazio = Math.min(spazio, Math.max(0, a - 7)); }

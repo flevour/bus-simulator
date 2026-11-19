@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Y_ROAD, TRAM_HW, zoneOf, quotaStrada } from './city.js';
 import { mulberry32, distToSeg } from './spatial.js';
 import { ledTexture } from './textures.js';
-import { TrackPath } from '../tram/tram.js';
+import { TrackPath, ASSE_SUL_BINARIO } from '../tram/tram.js';
 import { buildRoute, alignStops, busCan } from '../game/routes.js';
 import { scheduleFor, isPeak, Crowd } from '../game/mission.js';
 import { driverGeometry, ARM_PIVOT, setWave } from './driver.js';
@@ -23,6 +23,7 @@ const LEAD = 260, EXIT = 320; // metri di strada prima del capolinea di partenza
 const VLEAD = 7; // velocità media stimata per entrare e uscire di linea (m/s)
 const FRONT = 6; // dal centro del bus al muso
 const ASSE = 2.6; // dal centro del bus all'asse posteriore, che segue il percorso
+const PEZZI = [-4.4, -1.5, 1.5, 4.4]; // pezzi del bus lungo l'asse, dal centro: collisioni, auto e tram che lo guardano
 const STEP = 2; // passo dei punti della corsia (m); nei raccordi 1 m
 // scostamento di lato (fermate, sorpasso, fuori dai binari): al più K metri per metro, con la curva entro metà del
 // raggio minimo del bus (src/world/inseguitore.js)
@@ -166,6 +167,21 @@ function buildLane(net, city, v, tramSignals, conta = () => {}) {
       wx: st.x, wz: st.z, dx: st.dx, dz: st.dz, rx: st.rx, rz: st.rz,
     };
   });
+  // fermate sulla sede del tram (#127): il bus fermo (muso a fs, scostato di extra più lo spostamento dai binari, come lo
+  // mettono move e place) ha un pezzo sulla strada del tram (ASSE_SUL_BINARIO, la regola con cui il tram guarda chi ha
+  // davanti, su tutti i binari): un tram che arriva dietro non ha posto per passare e aspetta tutta la sosta. Il dato è
+  // di questa funzione e non della build perché dove si ferma un bus automatico lo sa solo lei: corsia del percorso,
+  // accosto (extra) e spostamento dai binari (L.shift). La palina della posa ha la retta del cordolo dove si ferma il bus
+  // di chi guida (stopPose), e su 14 fermate dava l'altra risposta
+  const fermo = { pend: 0 };
+  for (const st of stops) {
+    const s = Math.max(0, Math.min(P.len, st.fs - FRONT));
+    fermo.q = Math.max(0, s - ASSE);
+    fermo.lat = st.extra + sm[P.seg(s)];
+    posa(per, fermo, ASSE);
+    const fx = Math.sin(fermo.h), fz = Math.cos(fermo.h);
+    st.sede = !!city.tramLanes && PEZZI.some((l) => city.tramLanes.some((T) => T.projectNear(fermo.x + fx * l, fermo.z + fz * l, ASSE_SUL_BINARIO)));
+  }
   // semafori: linea d'arresto prima del nodo, solo dove c'è una lanterna per chi arriva da quell'arco
   const signals = [];
   for (let k = 1; k < N.length; k++) {
@@ -547,10 +563,11 @@ export class BusSim {
         // in anticipo sull'orario si va appena più piano (al più il 15% sotto il limite) e l'anticipo si recupera in
         // fermata: più di 40 s avanti ci si ferma anche senza prenotazioni, fino all'orario. Prima si scendeva fino a
         // 18 km/h e, col traffico leggero, i bus erano quasi sempre in anticipo: in Prato della Valle andavano in media a
-        // 19 km/h dove il limite era 32
+        // 19 km/h dove il limite era 32. Non dove il bus fermo sta sulla sede del tram (s0.sede, #127): lì l'orario non si
+        // aspetta, e senza prenotazioni non ci si ferma
         const left = b.run.times[b.k] - clock;
         if (b.phase === 'line' && b.k > 0 && left > 4 && d > 15) vt = Math.min(vt, Math.max(vt * 0.85, (d / left) * 1.1));
-        if (b.phase === 'line' && b.k > 0 && b.k < st.length - 1 && !b.serve[b.k] && left > 40 && d < 80) b.serve[b.k] = true;
+        if (b.phase === 'line' && b.k > 0 && b.k < st.length - 1 && !b.serve[b.k] && !s0.sede && left > 40 && d < 80) b.serve[b.k] = true;
         if (b.serve[b.k]) {
           vt = Math.min(vt, Math.sqrt(2 * 1.2 * Math.max(0, d)) + (d > 0.6 ? 0.25 : 0));
           spazio = Math.max(0, d);
@@ -558,9 +575,12 @@ export class BusSim {
           if (d < 0.6) {
             // fermo dov'è (a meno di 60 cm dalla fine della fermata): prima saltava lì
             b.v = 0; b.atStop = true; b.doorTarget = 1;
-            // salita e discesa; in anticipo si aspetta l'orario (al massimo un minuto); al capolinea l'orario
+            // salita e discesa; in anticipo si aspetta l'orario (al massimo un minuto); al capolinea l'orario. Dove il bus
+            // fermo sta sulla sede del tram (s0.sede) solo salita e discesa, anche in anticipo: il tram che arriva dietro
+            // non ha posto per passare e aspettava tutta la sosta, fino a un minuto (#127). L'anticipo si recupera alla
+            // fermata dopo
             const T = b.run.times[b.k];
-            b.wait = b.k === 0 ? Math.max(5, b.run.t - clock) : b.k === st.length - 1 ? 18 : Math.max(8 + this.rnd() * 12, Math.min(60, T - clock));
+            b.wait = b.k === 0 ? Math.max(5, b.run.t - clock) : b.k === st.length - 1 ? 18 : s0.sede ? 8 + this.rnd() * 12 : Math.max(8 + this.rnd() * 12, Math.min(60, T - clock));
             this.doorsStep(b, dt);
             continue;
           }
@@ -805,10 +825,10 @@ export class BusSim {
   updateParts() {
     this.parts.length = 0;
     for (const b of this.buses) {
-      if (!b.parts) b.parts = [-4.4, -1.5, 1.5, 4.4].map(() => ({ x: 0, z: 0, h: 0, v: 0, isBus: true, bus: b, bump: 0 }));
+      if (!b.parts) b.parts = PEZZI.map(() => ({ x: 0, z: 0, h: 0, v: 0, isBus: true, bus: b, bump: 0 }));
       if (!b.circles) b.circles = [-4.9, -2.45, 0, 2.45, 4.9].map(() => ({ x: 0, z: 0 }));
       const s = Math.sin(b.h), c = Math.cos(b.h);
-      [-4.4, -1.5, 1.5, 4.4].forEach((lz, i) => Object.assign(b.parts[i], { x: b.x + s * lz, z: b.z + c * lz, h: b.h, v: b.v }));
+      PEZZI.forEach((lz, i) => Object.assign(b.parts[i], { x: b.x + s * lz, z: b.z + c * lz, h: b.h, v: b.v }));
       [-4.9, -2.45, 0, 2.45, 4.9].forEach((lz, i) => { b.circles[i].x = b.x + s * lz; b.circles[i].z = b.z + c * lz; });
       for (const p of b.parts) this.parts.push(p);
     }

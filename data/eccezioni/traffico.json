@@ -1,6 +1,7 @@
 {
- "cosa": "Casi noti delle prove del traffico (tests/traffico.spec.js). Chiave: chi @ x,z del gioco, dove è rimasto fermo. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
+ "cosa": "Casi noti delle prove del traffico (tests/traffico.spec.js). fermi_oltre_un_ciclo: chi @ x,z del gioco, dove è rimasto fermo oltre 60 s fuori dalle fermate; tram_dietro_la_sosta: tram fermo dietro un bus in fermata oltre la salita e la discesa, @ x,z del bus (#127). Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
-  "fermi_oltre_un_ciclo": []
+  "fermi_oltre_un_ciclo": [],
+  "tram_dietro_la_sosta": []
  }
 }

@@ -7,22 +7,43 @@ import { guidaFermate } from './guida.js';
 // I casi di un controllo contro l'elenco dei casi noti data/eccezioni/traffico.json (scripts/eccezioni.py, #105): i
 // nuovi, quelli spariti dall'elenco e i gruppi senza il perché. Lo stato di partenza di una corsa è fissato (#122), quindi
 // i casi sono gli stessi a ogni lancio, sul Mac e in CI.
-function controEccezioni(info, controllo, casi, toll = 3) {
+// casi: { controllo: [chiavi] }, tutti i controlli della prova in una volta; dà { controllo: esito }
+function controEccezioni(info, casi, toll = 3) {
   const fileCasi = info.outputPath('casi.json'), fileEsito = info.outputPath('eccezioni.json');
-  writeFileSync(fileCasi, JSON.stringify({ [controllo]: casi }));
+  writeFileSync(fileCasi, JSON.stringify(casi));
   const argomenti = ['scripts/eccezioni.py', 'traffico', fileCasi, '--toll', String(toll), '--json', fileEsito, '--comando', '`ECCEZIONI=aggiorna npx playwright test tests/traffico.spec.js`'];
   if (process.env.ECCEZIONI === 'aggiorna') argomenti.push('--aggiorna');
   let diversi = '';
   try { execFileSync('python3', argomenti, { encoding: 'utf8' }); } catch (e) { diversi = `${e.stdout || ''}${e.stderr || ''}`; }
-  return { ...JSON.parse(readFileSync(fileEsito, 'utf8'))[controllo], diversi };
+  const esiti = JSON.parse(readFileSync(fileEsito, 'utf8'));
+  return Object.fromEntries(Object.keys(casi).map((c) => [c, { ...esiti[c], diversi }]));
 }
+
+// La sosta più lunga di un bus automatico per far salire e scendere (BusSim.move: 8-20 s), più le porte che si
+// chiudono (1,6 s) e il passo di un secondo dell'osservazione. Oltre, se nessuno sta salendo o scendendo (paxBusy), il
+// bus in fermata aspetta l'orario (#127)
+const SALITA = 20 + 1.6 + 1;
 
 // Ogni secondo di gioco: chi è fermo da quanto (bus fuori dalle fermate, tram fuori dalle soste) nel cerchio (cx, cz, r).
 // Si aggancia a __game.sim, che il pilota chiama a ogni passo; window.__fermi() dà i fermi più lunghi.
-function osservaFermi({ cx, cz, r }) {
-  const g = window.__game, sim = g.sim, da = new Map(), peggio = new Map();
+// In più (#127) i tram in coda dietro un bus in sosta: tram fermo fuori dalle sue soste, tenuto fermo da un bus (busT
+// di TramSim.move), con davanti sul suo binario un bus in fermata (un pezzo del bus a meno di 2,2 m, come guarda il
+// tram, fino a 60 m dal muso: anche con un bus in coda in mezzo). window.__codaSosta() dà, per tram e bus in sosta, i
+// secondi di coda oltre la salita: con il bus in fermata da più di SALITA secondi senza nessuno che sale o scende.
+// window.__codaTutta() le code intere dietro le soste, dalla prima all'ultima sosta di una fila di bus (#47).
+function osservaFermi({ cx, cz, r, salita }) {
+  const g = window.__game, sim = g.sim, da = new Map(), peggio = new Map(), inSosta = new Map(), coda = new Map();
+  const inCoda = new Map(), code = [];
   let t = 0;
   const hm = (s) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+  // i bus in sosta davanti al tram tr, sul suo binario
+  const soste = (tr) => {
+    const P = tr.track.path(tr.dir);
+    return g.buses.buses.filter((b) => b.atStop && b.near !== false && b.parts && b.parts.some((p) => {
+      const pr = P.projectNear(p.x, p.z, 2.2);
+      return pr && pr.s - tr.s > 0 && pr.s - tr.s < 60;
+    }));
+  };
   const segna = (o, fermo, x, z, chi) => {
     if (!fermo || Math.hypot(x - cx, z - cz) > r) { da.delete(o); return; }
     const k = da.get(o) ?? g.mission.clock;
@@ -34,11 +55,32 @@ function osservaFermi({ cx, cz, r }) {
     sim(sec, dt, draw);
     if ((t += sec) < 1) return;
     t = 0;
-    for (const b of g.buses.buses) segna(b, b.v < 0.1 && !b.atStop, b.x, b.z, `bus ${b.run.L.id}`);
-    for (const tr of g.trams.trams) if (tr.parts.length) segna(tr, tr.v < 0.1 && tr.wait <= 0, tr.parts[0].x, tr.parts[0].z, `tram ${tr.line}`);
+    for (const b of g.buses.buses) {
+      segna(b, b.v < 0.1 && !b.atStop, b.x, b.z, `bus ${b.run.L.id}`);
+      if (!b.atStop) inSosta.delete(b);
+      else if (!inSosta.has(b)) inSosta.set(b, g.mission.clock);
+    }
+    for (const tr of g.trams.trams) {
+      if (!tr.parts.length) continue;
+      segna(tr, tr.v < 0.1 && tr.wait <= 0, tr.parts[0].x, tr.parts[0].z, `tram ${tr.line}`);
+      const davanti = tr.v < 0.1 && tr.wait <= 0 && tr.busT > 0 && Math.hypot(tr.parts[0].x - cx, tr.parts[0].z - cz) <= r ? soste(tr) : [];
+      // la coda intera: finisce quando il tram riparte o davanti non ha più un bus in sosta
+      const q = inCoda.get(tr);
+      if (!davanti.length) { if (q) { code.push(q); inCoda.delete(tr); } continue; }
+      if (q) { q.s++; for (const b of davanti) if (!q.bus.includes(b.run.L.id)) q.bus.push(b.run.L.id); }
+      else inCoda.set(tr, { tram: tr.line, s: 1, dalle: hm(g.mission.clock), x: Math.round(davanti[0].x), z: Math.round(davanti[0].z), bus: davanti.map((b) => b.run.L.id) });
+      const b = davanti.find((o) => g.mission.clock - inSosta.get(o) > salita && !o.paxBusy);
+      if (!b) continue;
+      // chiave: tram e bus, il posto è quello del bus in fermata
+      const k = `tram ${tr.line} dietro la sosta del bus ${b.run.L.id} @ ${Math.round(b.x)},${Math.round(b.z)}`, c = coda.get(k);
+      if (c) c.s++;
+      else coda.set(k, { chiave: k, s: 1, dalle: hm(g.mission.clock), fermata: b.L.stops[b.k] && b.L.stops[b.k].name });
+    }
     segna(g.bus, Math.abs(g.bus.v) < 0.1 && !g.bus.doorsAnyOpen, g.bus.x, g.bus.z, 'giocatore');
   };
   window.__fermi = () => [...peggio.values()].sort((a, b) => b.s - a.s);
+  window.__codaSosta = () => [...coda.values()].sort((a, b) => b.s - a.s);
+  window.__codaTutta = () => [...code, ...inCoda.values()].sort((a, b) => b.s - a.s);
 }
 
 // Segnalazione del 9 novembre dalla linea 3 alle 8:54, in Riviera dei Ponti Romani: "si bloccano gli autobus che a
@@ -55,15 +97,26 @@ test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo s
   tempoMassimo(630);
   const corsa = await avviaCorsa(pagina, { linea: '3', verso: 1, partenza: '08:27' });
   expect(corsa.prima).toMatch(/^Capolinea Lion/);
-  await pagina.evaluate(osservaFermi, { cx: 30, cz: -20, r: 380 });
+  await pagina.evaluate(osservaFermi, { cx: 30, cz: -20, r: 380, salita: SALITA });
   const esiti = await guidaFermate(pagina, { fermate: 27, traffico: true });
-  const fermi = await pagina.evaluate(() => window.__fermi());
+  const fermi = await pagina.evaluate(() => window.__fermi()), coda = await pagina.evaluate(() => window.__codaSosta());
+  // le code intere dei tram dietro le soste dei bus, per #47 (Ponti Romani 68): si misurano, il limite è sopra
+  console.log(`code dei tram dietro le soste dei bus: ${JSON.stringify(await pagina.evaluate(() => window.__codaTutta()))}`);
   const ultima = esiti[esiti.length - 1];
-  const e = controEccezioni(info, 'fermi_oltre_un_ciclo', fermi.filter((f) => f.s > 60).map((f) => `${f.chi} @ ${f.x},${f.z}`));
+  const E = controEccezioni(info, {
+    fermi_oltre_un_ciclo: fermi.filter((f) => f.s > 60).map((f) => `${f.chi} @ ${f.x},${f.z}`),
+    // il tram non resta in coda dietro un bus in sosta più della salita e della discesa (#127): a zero
+    tram_dietro_la_sosta: coda.map((c) => c.chiave),
+  });
+  const e = E.fermi_oltre_un_ciclo, q = E.tram_dietro_la_sosta;
   const lunghi = `fermi più lunghi: ${JSON.stringify(fermi.slice(0, 6))}\n${e.diversi}`;
   expect.soft(e.nuovi, `fermi oltre i 60 s fuori dall'elenco data/eccezioni/traffico.json; ${lunghi}`).toEqual([]);
   expect.soft(e.spariti, `casi spariti, da togliere dall'elenco data/eccezioni/traffico.json; ${lunghi}`).toEqual([]);
   expect.soft(e.senza_perche, 'casi dell\'elenco senza il perché').toEqual([]);
+  const code = `tram in coda dietro un bus in sosta oltre ${SALITA} s (secondi di coda oltre la salita): ${JSON.stringify(coda)}`;
+  expect.soft(q.nuovi, `${code}\n${q.diversi}`).toEqual([]);
+  expect.soft(q.spariti, `casi spariti, da togliere dall'elenco data/eccezioni/traffico.json; ${code}`).toEqual([]);
+  expect.soft(q.senza_perche, 'casi dell\'elenco senza il perché').toEqual([]);
   expect(ultima.nome, `fermate: ${esiti.map((e) => `${e.nome} ${e.motivo}`).join(', ')}`).toBe('Garibaldi giardini');
   expect(ultima.arrivato).toBe(true);
   expect(gioco.errori()).toEqual([]);

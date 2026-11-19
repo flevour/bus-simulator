@@ -6,6 +6,10 @@ import { RainGlass, WIPER_PARK, wiperPhase } from '../bus/rainglass.js';
 // Tram su gomma a guida vincolata (Translohr del SIR1): moduli articolati che seguono la rotaia centrale.
 // Misure in metri. Con 3 moduli ~25 m (STE3), con 4 moduli ~33 m (linee future).
 export const TRAM = { width: 2.2, cab: 8.2, mid: 7.6, gap: 0.45, lane: 1.7, ref: 6 };
+// chi non è un'auto (bus, mezzo di chi gioca, altri tram) sta sulla strada del tram se un punto del suo asse passa a meno
+// di tanti metri dal binario: il tram lo aspetta (TramSim.move in src/world/traffic.js). I bus automatici lo usano per
+// sapere quali fermate sono sulla sede del tram (#127, buildLane in src/world/buses.js)
+export const ASSE_SUL_BINARIO = 2.2;
 export const tramLength = (n) => 2 * TRAM.cab + Math.max(0, n - 2) * TRAM.mid + (n - 1) * TRAM.gap;
 
 // ---------- tracciato ----------
