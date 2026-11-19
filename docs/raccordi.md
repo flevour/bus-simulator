@@ -266,7 +266,22 @@ Sul percorso dell'inseguitore auto e bus automatici guardano chi hanno davanti e
 - la velocità la regola l'IDM con la differenza di velocità (`idm`, `IDM_AUTO`, `IDM_BUS` in `src/world/inseguitore.js`),
   per chi c'è davanti e per i punti dove fermarsi (semaforo, binari, fine della strada), come ostacoli fermi;
 - l'incrocio davanti (`incrocioDavanti`): il raccordo a un nodo con tre o più vie, allargato a metà della via più larga
-  che lo taglia, dalla linea d'arresto se c'è; raccordi separati da meno di 6 m di corsia sono un incrocio solo; dentro
-  l'anello di una rotonda si è già nell'incrocio. Un'auto non ci entra se oltre, fino a dove si fermerà la fila davanti
-  (`spazio` di auto, bus e tram), non c'è posto per lei; un bus non ci entra se non ci sta tutto (12 m). La fermata del
-  bus non conta: è dove deve arrivare.
+  che lo taglia, dalla linea d'arresto se c'è; due incroci tra cui un'auto ferma non ci sta (meno di 6,9 m da dove
+  finisce l'uno, allargato, a dove comincia l'altro: `TRA_INCROCI`) sono un incrocio solo, e nell'anello di una rotonda
+  restano i raccordi separati da meno di 6 m di corsia; dentro l'anello si è già nell'incrocio. Un'auto non ci entra se
+  oltre, fino a dove si fermerà la fila davanti, non c'è posto per lei; un bus non ci entra se non ci sta tutto (12 m).
+  La fermata del bus non conta: è dove deve arrivare;
+- dove si fermerà la fila (#148): finché può ancora fermarsi con una frenata comoda, e negli ultimi 20 m prima di non
+  poterlo più fare, l'auto guarda tutta la fila sul suo percorso fino a 92 m (`Traffic.postoOltre`): ogni mezzo fermo è
+  un punto dove la fila si ferma, ogni mezzo che va si fermerà dove dice il suo `spazio`, e chi sta in mezzo ci si mette
+  in coda (6,4 m un'auto). La prima linea d'arresto oltre l'incrocio ferma la fila col rosso e col giallo, e col verde
+  se l'auto non la passa prima che finisca: chi è davanti passa la linea quando ci arriva da solo o 2,2 s dopo quello
+  che la passa prima (lo scarico di una coda al verde), entro il verde che resta (`TrafficLights.verdeRestante`) più un
+  secondo. Contano anche le auto di un'altra corsia che vanno nella stessa corsia d'uscita e sono già impegnate
+  nell'incrocio o ci arrivano prima (`Traffic.immessi`): chi arriva prima passa prima. Con la vista lunga oltre l'incrocio
+  serve il posto dell'auto (6,4 m) più 3 m (`MARGINE`, per gli errori della previsione) invece di mezzo metro. Prima l'auto guardava solo
+  chi aveva davanti, fino a 20 m più 4 s alla sua velocità, e il suo `spazio`, che passava da un'auto all'altra: oltre
+  quella distanza la fila sembrava libera e un verde durava per sempre;
+- un'auto della stessa corsia spostata di lato in un altro modo (fuori dal binario del tram, `tramShift`) è davanti
+  anche se il suo centro è lontano dal percorso campionato con lo scostamento di chi guarda: conta l'asse della sua
+  corsia (`davanti`, #148). In Via Gozzi e in Via Piovese le auto spostate non vedevano quelle davanti non spostate.

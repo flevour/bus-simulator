@@ -382,15 +382,23 @@ export function entro(per, o) {
   }
 }
 
+// tra due incroci più vicini di così un'auto non sta ferma senza occuparne uno (4,4 m, 2 m da chi ha davanti e mezzo
+// metro): sono un incrocio solo (#148)
+const TRA_INCROCI = 6.9;
+
 // L'incrocio davanti lungo il percorso per, se il muso (qn, progressiva del percorso) non c'è ancora entrato: { q0, q1 }
 // progressive (#115). È il raccordo della build a un nodo con tre o più vie (o che scavalca archi corti), allungato a metà
 // della via più larga che lo taglia quando è più corto (un raccordo dritto può essere lungo zero), e col semaforo
-// comincia alla linea d'arresto (linea, progressiva) se è dentro il raccordo, che può cominciare prima; i raccordi
-// separati da meno di 6 m di corsia sono un incrocio solo. Nella rotonda l'incrocio è l'ingresso: si entra se c'è posto
-// nell'anello subito dopo, non dopo la propria uscita (con l'anello di Via Bembo con Via Marinelli lungo una
-// quarantina di metri e pieno, le auto non entravano più e la coda arrivava a chi guida la 3). null se il muso è già
-// dentro (anche nell'anello) o non c'è un incrocio entro `fino` m. Lo usano auto e bus automatici per non entrare in un
-// incrocio che non possono liberare
+// comincia alla linea d'arresto (linea, progressiva) se è dentro il raccordo, che può cominciare prima. Due incroci
+// separati da meno di TRA_INCROCI m (da dove finisce l'uno, allungato, a dove comincia l'altro) sono un incrocio solo:
+// fino al 19 novembre contava la corsia tra i due raccordi, meno di 6 m, e in Via Piovese due incroci a 4,7 m l'uno
+// dall'altro (con 8,7 m di corsia) erano due; chi decideva al primo non poteva più fermarsi prima del secondo e ci
+// restava dentro (#148). Nell'anello di una rotonda resta la corsia tra i due raccordi. Nella rotonda l'incrocio è
+// l'ingresso: si entra se c'è posto nell'anello subito dopo, non dopo la propria uscita (con l'anello di Via Bembo con
+// Via Marinelli lungo una quarantina di metri e pieno, le auto non entravano più e la coda arrivava a chi guida la 3).
+// null se il muso è già dentro (anche nell'anello) o non c'è un incrocio entro `fino` m; R0 e R1 sono il primo e l'ultimo
+// raccordo dell'incrocio (da quale corsia si entra, in quale si esce). Lo usano auto e bus automatici per non entrare in
+// un incrocio che non possono liberare
 export function incrocioDavanti(net, per, qn, fino, linea = null) {
   const P = per.pezzi, N = net.nodes;
   // dentro una rotonda si è già nell'incrocio: la regola vale prima di entrare, per tutto il passaggio. Rifatta a ogni
@@ -405,6 +413,9 @@ export function incrocioDavanti(net, per, qn, fino, linea = null) {
     if (p.tipo === 'corsia') {
       if (!box) continue;
       if (p.len < 6) continue;
+      // (l'incrocio dopo, se c'è, comincia prima della fine della corsia di metà della via più larga che lo taglia, al
+      // più una decina di metri: si guarda dov'è)
+      if (!p.e.roundabout && p.q0 + p.len - box.q1 < TRA_INCROCI + 10) { box.forse = true; continue; }
       break;
     }
     if (p._box === undefined) {
@@ -423,8 +434,9 @@ export function incrocioDavanti(net, per, qn, fino, linea = null) {
       if (q1 <= qn) continue;
       if (linea != null && linea > q0 && linea < q1) q0 = linea;
       if (q0 < qn) return null;
-      box = { q0, q1 };
-    } else box.q1 = Math.max(box.q1, q1);
+      box = { q0, q1, forse: false, R0: p.R, R1: p.R };
+    } else if (box.forse && q0 - box.q1 >= TRA_INCROCI) break;
+    else { box.q1 = Math.max(box.q1, q1); box.forse = false; box.R1 = p.R; }
   }
   return box;
 }

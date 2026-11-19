@@ -397,6 +397,16 @@ export class TrafficLights {
     }
     return base;
   }
+  // secondi di verde che restano alla fase (0 se non è verde). Dal ciclo; quando il verde lo dà una chiamata del tram, o
+  // la fine di una chiamata, quanto dura non si sa: Infinity, come se restasse
+  verdeRestante(sig, phase) {
+    if (this.stateOf(sig, phase) !== 'G') return 0;
+    if (sig.tramT > 0 || sig.postT > 0 || this.cycleState(sig, phase) !== 'G') return Infinity;
+    let t = (this.time + sig.offset) % sig.total, k = 0;
+    const c = sig.cycle;
+    while (k < 5 && t > c[k]) { t -= c[k]; k++; }
+    return c[k] - t;
+  }
   cycleState(sig, phase) {
     let t = (this.time + sig.offset) % sig.total;
     const c = sig.cycle;
@@ -467,6 +477,20 @@ const idmAuto = (v, v0, s, dv) => idm(IDM_AUTO, v, v0, s, dv);
 const LUNGA = 4.4;
 // metri dal centro al muso
 const MUSO = 2.1;
+// chi decide se entrare in un incrocio guarda la fila fino a FILA m davanti al centro (fin dove arriva il percorso,
+// estendi), e prevede chi passa la prossima linea d'arresto prima del rosso (postoOltre, #148): una coda ferma al rosso
+// si scarica al verde con un'auto ogni SCARICO s (2,16 s nel corridoio di Via Querini, tests/code.spec.js), e col giallo
+// passa chi è a meno di 1,2 s dalla linea (GIALLO_PASSA: un secondo, per stare larghi). Oltre l'incrocio vuole il suo
+// posto più MARGINE m: la previsione sbaglia di qualche metro (la fila davanti frena più del previsto, qualcuno
+// s'immette): con mezzo metro, come prima, nei dieci minuti della prova delle code restavano dentro un incrocio da 3 a
+// 5 auto, con 3 m una
+const FILA = 92, SCARICO = 2.2, GIALLO_PASSA = 1, MARGINE = 3;
+// secondi per fare d metri partendo a v m/s e accelerando come l'IDM fino a v0, senza nessuno davanti
+function arrivo(d, v, v0) {
+  if (d <= 0) return 0;
+  const a = IDM_A, vm = Math.max(v0, v, 1), sa = (vm * vm - v * v) / (2 * a);
+  return d <= sa ? (Math.sqrt(v * v + 2 * a * d) - v) / a : (vm - v) / a + (d - sa) / vm;
+}
 const CAR_COLORS = ['#c0c0c0', '#202020', '#f5f5f5', '#8a1c1c', '#1c3d8a', '#3a3a3a', '#6b6b6b', '#d8d0b8', '#2d5a3a', '#b5651d', '#e6c229', '#4a6fa5', '#9e9e9e', '#f0f0f0'];
 
 function carGeometry() {
@@ -659,6 +683,10 @@ export class Traffic {
     const zone = zoneOf(x, z);
     car.vmax = (zone === 0 || !e.main ? 9 : 14) * (0.9 + this.rnd() * 0.2);
     car.v = Math.min(car.vmax * 0.7, this.vCurva(car));
+    // a pochi metri da un incrocio nasce abbastanza piano da poter ancora decidere se entrarci (frenata comoda): già
+    // lanciata ci entrava comunque, anche con la coda oltre, e ci restava (#148)
+    const box = this.incrocioDavanti(car, car.q + ASSE + MUSO, 60);
+    if (box) car.v = Math.min(car.v, Math.sqrt(8 * Math.max(0, box.q0 - car.q - ASSE - MUSO - 0.3)));
     car.color = new THREE.Color(CAR_COLORS[Math.floor(this.rnd() * CAR_COLORS.length)]);
     cars.push(car);
     return car;
@@ -1023,48 +1051,99 @@ export class Traffic {
   // di `lat` m dall'asse: 1,7 m un'auto, 2,6 m un bus (i punti sono sul suo asse), per i tram come prima. Chi viene
   // incontro non conta, nemmeno fermo di sbieco. Dà { gap: dal muso alla sua coda, v: la sua velocità lungo il
   // percorso, o, tipo } o null
-  davanti(c, D, ctx, pl) {
+  // Con `fila` (un array) guarda fino a `lungo` m e ci mette tutti i mezzi trovati, uno per punto (gap, v, mezzo: i bus
+  // e i tram ne danno più d'uno), per postoOltre (#148); il primo mezzo resta quello entro D, come senza
+  davanti(c, D, ctx, pl, fila = null, lungo = 0) {
     const S = this._camp || (this._camp = new Float64Array(5 * 48)), Q = this._qd || (this._qd = {});
+    // (l'asse della corsia, senza lo scostamento: per le auto della stessa corsia spostate di lato in un altro modo, #148)
+    const A = this._asse || (this._asse = new Float64Array(2 * 48));
     const qc = c.q + ASSE;
-    D = Math.max(2, Math.min(D, c.per.fine - qc, 2 * 46));
+    const Dv = D;
+    D = Math.max(2, Math.min(Math.max(D, fila ? lungo : 0), c.per.fine - qc, 2 * 46));
     let n = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (let u = 0; ; u = Math.min(D, u + 2)) {
       punto(c.per, qc + u, Q);
       const x = Q.x + Q.nx * c.lat, z = Q.z + Q.nz * c.lat, k = n * 5;
       S[k] = x; S[k + 1] = z; S[k + 2] = u; S[k + 3] = Q.dx; S[k + 4] = Q.dz;
+      A[2 * n] = Q.x; A[2 * n + 1] = Q.z;
       n++;
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
       if (u >= D) break;
+    }
+    // i tratti a blocchi di 8 col loro riquadro: chi è fuori dal riquadro di un blocco (più lim) non è più vicino di lim a
+    // nessuno dei suoi tratti, e il blocco si salta. Lo stesso risultato di prima, con meno conti: con la fila fino a
+    // 92 m (#148) i tratti sono 46
+    const B = this._blocchi || (this._blocchi = new Float64Array(4 * 6)), nb = Math.ceil((n - 1) / 8);
+    for (let j = 0; j < nb; j++) {
+      let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+      for (let i = 8 * j; i <= Math.min(8 * j + 8, n - 1); i++) {
+        const x = S[i * 5], z = S[i * 5 + 1];
+        if (x < a0) a0 = x; if (x > a1) a1 = x; if (z < b0) b0 = z; if (z > b1) b1 = z;
+      }
+      B[4 * j] = a0; B[4 * j + 1] = a1; B[4 * j + 2] = b0; B[4 * j + 3] = b1;
     }
     // il punto più vicino del percorso a (px, pz), entro lim m: progressiva dal centro e tangente lì
     const R = this._rd || (this._rd = {});
     const proietta = (px, pz, lim) => {
       if (px < x0 - lim || px > x1 + lim || pz < z0 - lim || pz > z1 + lim) return null;
       let bd = lim, bi = -1, bt = 0;
-      for (let i = 0; i < n - 1; i++) {
-        const k = i * 5, ax = S[k], az = S[k + 1], ex = S[k + 5] - ax, ez = S[k + 6] - az, l2 = ex * ex + ez * ez;
-        const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((px - ax) * ex + (pz - az) * ez) / l2)) : 0;
-        const d = Math.hypot(px - ax - ex * t, pz - az - ez * t);
-        if (d < bd) { bd = d; bi = i; bt = t; }
+      for (let j = 0; j < nb; j++) {
+        if (px < B[4 * j] - lim || px > B[4 * j + 1] + lim || pz < B[4 * j + 2] - lim || pz > B[4 * j + 3] + lim) continue;
+        for (let i = 8 * j; i < Math.min(8 * j + 8, n - 1); i++) {
+          const k = i * 5, ax = S[k], az = S[k + 1], ex = S[k + 5] - ax, ez = S[k + 6] - az, l2 = ex * ex + ez * ez;
+          const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((px - ax) * ex + (pz - az) * ez) / l2)) : 0;
+          const d = Math.hypot(px - ax - ex * t, pz - az - ez * t);
+          if (d < bd) { bd = d; bi = i; bt = t; }
+        }
       }
       if (bi < 0) return null;
       const k = bi * 5;
       R.u = S[k + 2] + (S[k + 7] - S[k + 2]) * bt; R.tx = S[k + 3]; R.tz = S[k + 4];
       return R;
     };
-    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, r = Math.hypot(x1 - x0, z1 - z0) / 2 + 3;
+    // un'auto della stessa corsia, spostata di lato diversamente (lo scostamento cambia lungo la strada, fuori dai binari
+    // del tram, tramShift: chi guarda col suo scostamento di adesso non la vede): il punto dell'asse della sua corsia
+    // all'altezza del suo centro sta a meno di 1,7 m dall'asse della corsia dell'auto. Non in sorpasso (lì lo
+    // scostamento è l'altra corsia). In Via Gozzi e in Via Piovese, col SIR3, le auto della coda non vedevano quelle
+    // davanti nella stessa corsia, entravano negli incroci e ci restavano
+    const Qa = this._qa || (this._qa = {});
+    const inCorsia = (o) => {
+      if (c.passT > 0 || o.passT > 0 || Math.abs(c.lat - o.lat) < 0.3) return null;
+      punto(o.per, o.q + ASSE, Qa);
+      // (l'asse sta entro |lat| dai punti campionati: i riquadri dei blocchi si allargano di tanto)
+      const px = Qa.x, pz = Qa.z, lim = 1.7 + Math.abs(c.lat);
+      let bd = 1.7, bi = -1, bt = 0;
+      for (let j = 0; j < nb; j++) {
+        if (px < B[4 * j] - lim || px > B[4 * j + 1] + lim || pz < B[4 * j + 2] - lim || pz > B[4 * j + 3] + lim) continue;
+        for (let i = 8 * j; i < Math.min(8 * j + 8, n - 1); i++) {
+          const ax = A[2 * i], az = A[2 * i + 1], ex = A[2 * i + 2] - ax, ez = A[2 * i + 3] - az, l2 = ex * ex + ez * ez;
+          const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((px - ax) * ex + (pz - az) * ez) / l2)) : 0;
+          const d = Math.hypot(px - ax - ex * t, pz - az - ez * t);
+          if (d < bd) { bd = d; bi = i; bt = t; }
+        }
+      }
+      if (bi < 0) return null;
+      const k = bi * 5;
+      R.u = S[k + 2] + (S[k + 7] - S[k + 2]) * bt; R.tx = S[k + 3]; R.tz = S[k + 4];
+      return R;
+    };
+    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, r = Math.hypot(x1 - x0, z1 - z0) / 2 + 3 + Math.abs(c.lat);
     let best = null;
-    const tieni = (gap, v, o, tipo) => { if (!best || gap < best.gap) best = { gap, v, o, tipo }; };
+    // (u: progressiva del punto dal centro dell'auto; il primo mezzo si cerca entro Dv)
+    const tieni = (gap, v, o, tipo, u) => {
+      if (fila) fila.push(gap, v, o);
+      if (u <= Dv && (!best || gap < best.gap)) best = { gap, v, o, tipo };
+    };
     let through = false;
     for (const o of this.grid.query(mx, mz, r, this._nd || (this._nd = []))) {
       if (o === c || !o.car) continue;
-      const p = proietta(o.x, o.z, 1.7);
+      const p = proietta(o.x, o.z, 1.7) || inCorsia(o);
       if (!p) continue;
       const cos = Math.sin(o.h) * p.tx + Math.cos(o.h) * p.tz;
       if (cos < -0.3) continue;
       // chi esce da un giro di attese (untangle) passa davanti all'auto che aspettava, finché non l'ha superata, anche se
       // sono unite
-      if (o === c.through) { through = true; continue; }
+      if (o === c.through) { if (p.u <= Dv) through = true; continue; }
       // due auto una sopra l'altra nello stesso verso (si sono unite nello stesso punto, nella rotonda o in una svolta,
       // e nessuna ha l'altra davanti): passa quella nata prima, l'altra (se non le sta davanti) si ferma finché non si
       // sono separate. Restavano unite per sempre: le auto in coda sovrapposte di Corso Milano (#80), le pile
@@ -1072,7 +1151,7 @@ export class Traffic {
       // vera delle 8 (#116), la più giovane cedeva alla più vecchia, che la vedeva un metro davanti e la aspettava, e la
       // coda di Via Sorio restava ferma oltre dieci minuti
       if (p.u <= 0.5) {
-        if (cos > 0.7 && o.n < c.n && o.aspetta !== c && (o.x - c.x) * Math.sin(c.h) + (o.z - c.z) * Math.cos(c.h) > -0.5) tieni(p.u - LUNGA, 0, o, 'auto');
+        if (cos > 0.7 && o.n < c.n && o.aspetta !== c && (o.x - c.x) * Math.sin(c.h) + (o.z - c.z) * Math.cos(c.h) > -0.5) tieni(p.u - LUNGA, 0, o, 'auto', p.u);
         continue;
       }
       // tra due auto che svoltano verso lo stesso arco passa chi ha meno curva da fare (a Lion, entrando in Via Mascagni
@@ -1086,7 +1165,7 @@ export class Traffic {
         const suo = Math.abs((c.x - o.x) * Math.cos(o.h) - (c.z - o.z) * Math.sin(o.h));
         if (mio > suo || (mio === suo && c.n < o.n)) continue;
       }
-      tieni(p.u - LUNGA, o.v * Math.max(0, cos), o, 'auto');
+      tieni(p.u - LUNGA, o.v * Math.max(0, cos), o, 'auto', p.u);
     }
     if (!through) c.through = null;
     // i bus (automatici e di chi gioca) si guardano anche in sorpasso solo se non sono quelli sorpassati
@@ -1094,7 +1173,7 @@ export class Traffic {
       const big = (pts, who, h) => {
         for (const q of pts) {
           const p = proietta(q.x, q.z, 2.6);
-          if (p && p.u > 0) tieni(p.u - 3.6, Math.abs(who.v) * Math.max(0, Math.sin(h) * p.tx + Math.cos(h) * p.tz), who, who.player ? 'giocatore' : 'bus');
+          if (p && p.u > 0) tieni(p.u - 3.6, Math.abs(who.v) * Math.max(0, Math.sin(h) * p.tx + Math.cos(h) * p.tz), who, who.player ? 'giocatore' : 'bus', p.u);
         }
       };
       if (Math.abs(pl.x - mx) < r + 40 && Math.abs(pl.z - mz) < r + 40) big(pl.pts, pl.who, pl.h);
@@ -1112,13 +1191,93 @@ export class Traffic {
       // (prima di proiettare non si sa la tangente: si riprova con la fascia giusta)
       const lim = tv < 0.3 ? 1.4 : cos > -0.3 ? 2.6 : 1.6;
       if (lim < 2.6 && !proietta(q.x, q.z, lim)) continue;
-      tieni(R.u - LUNGA, cos > 0.7 ? tv * cos : 0, q.tram || q, 'tram');
+      tieni(R.u - LUNGA, cos > 0.7 ? tv * cos : 0, q.tram || q, 'tram', R.u);
     }
     return best;
   }
 
   // l'incrocio davanti all'auto lungo il suo percorso (src/world/inseguitore.js), con la prossima linea d'arresto
   incrocioDavanti(c, qn, fino) { return incrocioDavanti(this.net, c.per, qn, fino, c.ev[0] ? c.ev[0].q : null); }
+
+  // Dove si fermerà la fila oltre l'incrocio box, per l'auto c che può ancora decidere se entrarci (#148): metri dal suo
+  // muso (qn) all'ostacolo che il muso avrà davanti a fila ferma, come `spazio`; Infinity se entro FILA m la fila non si
+  // ferma. fila: i mezzi sul percorso fino a FILA m (davanti). Ogni mezzo fermo (sotto 1 m/s) è un punto dove la fila si
+  // ferma, ogni mezzo che va si fermerà dove dice il suo `spazio` (se ce l'ha), e chi sta tra l'auto e quel punto ci si
+  // mette in coda: 6,4 m un'auto, la sua lunghezza più 3 m un bus o un tram. La prima linea d'arresto oltre l'incrocio
+  // ferma la fila col rosso e col giallo, e col verde se l'auto non la passa prima che finisca: i mezzi davanti passano
+  // la linea quando ci arrivano da soli (accelerando come l'IDM, senza frenare) o SCARICO s dopo quello che la passa
+  // prima, e chi non ci arriva entro il verde più un secondo di giallo resta in coda.
+  // Prima si guardava solo chi c'era davanti, fino a 20 m più 4 s alla sua velocità, e il suo `spazio`, che passava da
+  // un'auto all'altra: oltre quella distanza la fila sembrava libera, e un verde durava per sempre. In Via Gozzi le auto
+  // entravano negli incroci delle traverse quando la fila si muoveva e restavano dentro quando il rosso, 40-100 m più
+  // avanti, la fermava
+  postoOltre(c, box, fila, qn, v0) {
+    // i mezzi della fila: il punto più vicino e il più lontano di ognuno e la sua velocità lungo il percorso, dal più vicino
+    const M = this._mezzi || (this._mezzi = []);
+    let n = 0;
+    for (let i = 0; i < fila.length; i += 3) {
+      const g = fila[i], o = fila[i + 2];
+      let k = 0;
+      while (k < n && M[k].o !== o) k++;
+      if (k < n) { M[k].g0 = Math.min(M[k].g0, g); M[k].g1 = Math.max(M[k].g1, g); continue; }
+      const m = M[n] || (M[n] = {});
+      m.o = o; m.g0 = m.g1 = g; m.v = Math.abs(fila[i + 1]);
+      n++;
+    }
+    for (let i = 1; i < n; i++) for (let k = i; k > 0 && M[k].g0 < M[k - 1].g0; k--) { const t = M[k]; M[k] = M[k - 1]; M[k - 1] = t; }
+    let posto = Infinity, coda = 0;
+    for (let k = 0; k < n; k++) {
+      const m = M[k], o = m.o, auto = !!o.car;
+      // posto in coda: un'auto la sua lunghezza (più 20 cm) e 2 m; un bus o un tram dal punto più vicino al più lontano,
+      // più la parte oltre l'ultimo punto, e 3 m
+      m.coda = auto ? LUNGA + IDM_S0 : m.g1 - m.g0 + LUNGA + 3;
+      const s0 = auto ? IDM_S0 : 3;
+      const fine = m.v < 1 ? m.g0 : o.spazio != null && o.spazio < Infinity ? m.g0 + Math.max(0, o.spazio - s0) : Infinity;
+      posto = Math.min(posto, fine - coda);
+      coda += m.coda;
+    }
+    // la prima linea d'arresto oltre l'incrocio (come `ferma`: il muso si ferma un metro prima)
+    let X = null;
+    for (const e of c.ev) if (e.q >= box.q1 - 0.5) { X = e; break; }
+    if (!X) return posto;
+    const gX = X.q - qn + 1, ap = X.sl.ap, sig = ap.node.signal;
+    if (gX >= posto) return posto;
+    const verde = this.lights.verdeRestante(sig, ap.phase) + GIALLO_PASSA;
+    // chi resta prima della linea: col rosso e col giallo tutti; col verde chi non la passa in tempo, dal più vicino
+    let resta = 0, t = -Infinity;
+    for (let k = n - 1; k >= 0; k--) {
+      const m = M[k];
+      if (m.g0 >= gX) continue;
+      if (verde > GIALLO_PASSA) {
+        t = Math.max(arrivo(gX - 1 - m.g1 - LUNGA, m.v, m.o.vmax || 9), t + SCARICO);
+        if (t <= verde) continue;
+      }
+      resta += m.coda;
+    }
+    if (verde > GIALLO_PASSA && Math.max(arrivo(gX - 1, c.v, v0), t + SCARICO) <= verde) return posto;
+    return Math.min(posto, gX - resta);
+  }
+
+  // Le auto che da un'altra corsia vanno nello stesso incrocio di c (box) verso la sua stessa corsia d'uscita e non sono
+  // già nella fila davanti: quelle impegnate (ci entrano comunque) e quelle che ci arrivano prima di c (tra `tra`
+  // secondi), che prendono posto prima di lei (#148). Due corsie che si uniscono nell'incrocio, o una traversa che
+  // s'immette, non si vedono nella fila finché i percorsi non si toccano: in Via Gozzi le auto di Via Scrovegni e di Via
+  // Trieste entravano insieme a quelle della coda, contando lo stesso posto, e una restava nell'incrocio. Chi arriva
+  // prima passa prima: tra due che si aspettano a vicenda una ha sempre l'altra dopo
+  immessi(c, box, fila, tra) {
+    const R = box.R1, Q = this._qi || (this._qi = {});
+    punto(c.per, (box.q0 + box.q1) / 2, Q);
+    let n = 0;
+    for (const o of this.near(Q.x, Q.z, (box.q1 - box.q0) / 2 + 30)) {
+      const u = o.uscita;
+      if (o === c || !o.car || !u || u.R0 === box.R0 || !(o.impegnata || o.traIncrocio < tra || (o.traIncrocio === tra && o.n < c.n))) continue;
+      if (u.R1.a !== R.a || u.R1.fout !== R.fout || u.R1.ca !== R.ca) continue;
+      let gia = false;
+      for (let i = 2; i < fila.length && !gia; i += 3) gia = fila[i] === o;
+      if (!gia) n++;
+    }
+    return n;
+  }
 
   // l'arco ha la sede del tram a meno di 3 m dalla carreggiata (in memoria sull'arco)
   vicinoTram(e) {
@@ -1204,7 +1363,21 @@ export class Traffic {
       const qc = c.q + ASSE, qn = qc + MUSO;
       // l'incrocio davanti, entro 60 m, e il primo mezzo lungo il percorso, guardando fin oltre l'incrocio
       const box = this.incrocioDavanti(c, qn, 60);
-      const L = this.davanti(c, Math.max(20 + 4 * c.v, box ? box.q1 - qc + 12 : 0), ctx, pl);
+      // chi può ancora fermarsi prima dell'incrocio con una frenata comoda (4 m/s²) decide se entrarci; negli ultimi 20 m
+      // prima di non poterlo più fare guarda tutta la fila sul percorso (postoOltre, #148), prima solo chi ha davanti
+      const prima = box ? box.q0 - qn - 0.3 : -1, frenata = (c.v * c.v) / 8;
+      const decide = !!box && prima > 0 && prima >= frenata;
+      const fila = decide && prima < frenata + 20 ? this._fila || (this._fila = []) : null;
+      if (fila) fila.length = 0;
+      const L = this.davanti(c, Math.max(20 + 4 * c.v, box ? box.q1 - qc + 12 : 0), ctx, pl, fila, FILA);
+      // l'incrocio in cui l'auto è, o in cui entra comunque perché non fa più in tempo a fermarsi (impegnata): chi
+      // s'immette nella stessa corsia d'uscita da un'altra corsia la conta (immessi)
+      // (traIncrocio: tra quanti secondi ci arriva, a quell'andatura, se può ancora fermarsi)
+      if (box) { c.uscita = box; c.impegnata = !decide; c.traIncrocio = prima / Math.max(c.v, 1); }
+      else if (c.uscita) {
+        if (qn - LUNGA > c.uscita.q1 || qn < c.uscita.q0 - 1) c.uscita = null;
+        else c.impegnata = true;
+      }
       const gapL = L ? L.gap : Infinity, vL = L ? L.v : Infinity;
       // IDM: l'accelerazione più bassa tra quella per chi c'è davanti e quelle per i punti dove fermarsi (fermi: Δv = v)
       // (v / v0)⁴ con le moltiplicazioni: Math.pow(x, 4) cambia all'ultimo bit tra arm64 e amd64 (idm, #145)
@@ -1244,13 +1417,18 @@ export class Traffic {
       // fine della strada o un incrocio da liberare, e un bus o un tram alla fermata. Senza, quanto fa frenando
       const fermo = L && Math.abs(vL) < 1;
       const spazio = !L ? Infinity : fermo ? gapL : gapL + Math.max(0, (L.o.spazio ?? (vL * vL) / (2 * IDM_AUTO.b)) - IDM_S0);
-      // una coda non entra in un incrocio che non può liberare (#115): se tra la fine dell'incrocio e il primo mezzo
-      // fermo davanti non c'è posto per l'auto, ci si ferma prima dell'incrocio, quando si fa in tempo con una frenata
-      // comoda (4 m/s²; se no si passa). Prima si entrava e ci si fermava dentro, in mezzo a chi lo taglia
+      // una coda non entra in un incrocio che non può liberare (#115): se tra la fine dell'incrocio e dove si fermerà la
+      // fila davanti (postoOltre: tutta la fila fino a 92 m, e il rosso che la fermerà, #148) non c'è posto per l'auto,
+      // ci si ferma prima dell'incrocio, quando si fa in tempo con una frenata comoda (4 m/s²; se no si passa). Prima si
+      // entrava e ci si fermava dentro, in mezzo a chi lo taglia
       let scatola = Infinity;
-      if (box && L) {
-        const prima = box.q0 - qn - 0.3;
-        if (qn + Math.min(spazio, ferma, gialla) - box.q1 < LUNGA + IDM_S0 + 0.5 && prima > 0 && prima >= (c.v * c.v) / 8) {
+      if (decide) {
+        let posto = spazio;
+        if (fila) {
+          posto = Math.min(posto, this.postoOltre(c, box, fila, qn, v0));
+          if (posto < Infinity) posto -= this.immessi(c, box, fila, c.traIncrocio) * (LUNGA + IDM_S0);
+        }
+        if (qn + Math.min(posto, ferma, gialla) - box.q1 < LUNGA + IDM_S0 + (fila ? MARGINE : 0.5)) {
           scatola = prima;
           acc = Math.min(acc, idmAuto(c.v, v0, prima, c.v));
         }
