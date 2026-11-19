@@ -1634,6 +1634,28 @@ sezione 7. Da sapere prima di toccare `percorsoBus` o i raccordi dei bus:
   zero e il gioco lo arrotonda con un arco di 30 m e fino a mezzo metro di tangente (`curva`), che finisce dopo l'inizio
   del raccordo dopo, su un arco di pochi metri.
 
+Svolte strette dei bus (#134, 19 novembre). Misure, fonti e decisione nell'issue; regola in [`raccordi.md`](raccordi.md),
+sezione 2 e sezione 3 punto 9. Da sapere:
+
+- il raggio minimo del bus da 12 m automatico è 7,0 m (`R_MIN` di `scripts/raccordi.py`, `RAGGI` di
+  `src/world/inseguitore.js`, il campo `raggi` della mappa): i bus veri girano tra 6,2 m (Citaro) e 7,7 m (limite del
+  Regolamento UE 1230/2012), quello del gioco a 8,3 m girava più largo di tutti. Lo sterzo del bus di chi guida
+  (`src/bus/bus.js`) non cambia, e nemmeno lo snodato (8,5 m, `ART.maxAngle`); nel gioco anche la 10 automatica segue
+  i raccordi del bus da 12 m;
+- la build cerca la curva del bus come prima a 8,3 m (`R_BUS`, `self.rbus` nella ricerca) e scende a 7,0 m solo nelle
+  svolte dove il percorso di una variante, come lo sceglie il gioco, prenderebbe il raccordo delle auto o una curva
+  del gioco (`strette`, dopo `calcola` e prima di `lega`). Abbassare il raggio dentro la ricerca cambiava anche come la
+  build classifica i movimenti (stretto o fuori) e quando prova la svolta larga e i raccordi che scavalcano: la 10
+  perdeva una trentina di raccordi dello snodato e la 88 uno a (-654, 2939). Chi cambia la ricerca guardi
+  `python3 scripts/percorsi.py`: un caso nuovo lì è una svolta che aveva il raccordo e l'ha perso;
+- la soglia della prova del moto per i bus (`tests/moto.js`) la legge dal campo `raggi` della mappa. Prova del moto da
+  33 a 15 posti, imbardata peggiore da 9,1 a 7,7 volte quella ammessa: i casi del raccordo delle auto da 27 a 11; a
+  Largo Europa il bus fa ora una curva del gioco a 3 m da dove prendeva il raccordo delle auto; spariscono, con il
+  traffico cambiato, i 2 casi delle auto al Ponte Omizzolo;
+- la pianta delle mini-rotonde rimaste (Piazzale Pontecorvo, Via Ca' Rasi, Rotonda Lina Merlin) segue la carreggiata
+  vera sulla foto aerea: le 105 svolte che restano senza il raccordo del bus chiedono una manovra intera o l'isola
+  sormontabile (#155).
+
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 
 Aperta e chiusa l'11 novembre 2026. Comandi e veicolo di chi gioca (IDEE, "Veicoli e guida"). File: `src/bus/bus.js`, gli

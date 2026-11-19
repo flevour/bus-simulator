@@ -5,36 +5,19 @@
   "salti": [],
   "imbardata": [
    {
-    "perche": "#134: svolte dei percorsi delle linee (e delle strade per arrivarci) dove la build ha solo il raccordo delle auto, con il raggio sotto gli 8,3 m del bus da 12 m. L'inseguitore lo usa come ripiego dichiarato (percorsoBus di src/world/inseguitore.js): il bus gira più stretto di quanto può. Spariscono quando la build dà a quelle svolte il raccordo del bus. Con #135 (percorsoBus sceglie i raccordi su tutto il percorso) il bus prende dove c'è il raccordo suo che scavalca la svolta senza: da 50 a 27 posti; quello a (602, 819) è il caso di prima a (607, 819), 5 m più in là.",
+    "perche": "#134: svolte dei percorsi delle linee (e delle strade per arrivarci) dove la build ha solo il raccordo delle auto, con il raggio sotto gli 8,3 m del bus da 12 m. L'inseguitore lo usa come ripiego dichiarato (percorsoBus di src/world/inseguitore.js): il bus gira più stretto di quanto può. Spariscono quando la build dà a quelle svolte il raccordo del bus. Con #135 (percorsoBus sceglie i raccordi su tutto il percorso) il bus prende dove c'è il raccordo suo che scavalca la svolta senza: da 50 a 27 posti; quello a (602, 819) è il caso di prima a (607, 819), 5 m più in là. Con #134 il bus automatico gira fino a 7,0 m dove largo non ci sta (strette in scripts/raccordi.py): da 27 a 11 posti; quelli che restano chiedono una manovra intera o l'isola sormontabile (#155).",
     "casi": [
      "bus imbardata (raccordo delle auto) @ -10,-381",
      "bus imbardata (raccordo delle auto) @ -108,-1425",
-     "bus imbardata (raccordo delle auto) @ -1096,61",
-     "bus imbardata (raccordo delle auto) @ -1135,3138",
      "bus imbardata (raccordo delle auto) @ -1415,4006",
      "bus imbardata (raccordo delle auto) @ -4160,3512",
-     "bus imbardata (raccordo delle auto) @ -428,1824",
-     "bus imbardata (raccordo delle auto) @ -486,-4515",
      "bus imbardata (raccordo delle auto) @ -86,486",
-     "bus imbardata (raccordo delle auto) @ -96,-1414",
-     "bus imbardata (raccordo delle auto) @ 1117,-569",
-     "bus imbardata (raccordo delle auto) @ 1272,450",
-     "bus imbardata (raccordo delle auto) @ 1298,5429",
-     "bus imbardata (raccordo delle auto) @ 1302,5413",
-     "bus imbardata (raccordo delle auto) @ 1490,-4636",
-     "bus imbardata (raccordo delle auto) @ 1559,6173",
-     "bus imbardata (raccordo delle auto) @ 160,-1033",
-     "bus imbardata (raccordo delle auto) @ 1980,-722",
      "bus imbardata (raccordo delle auto) @ 2182,0",
      "bus imbardata (raccordo delle auto) @ 2858,-2220",
      "bus imbardata (raccordo delle auto) @ 343,-889",
      "bus imbardata (raccordo delle auto) @ 4094,-578",
      "bus imbardata (raccordo delle auto) @ 4105,-573",
-     "bus imbardata (raccordo delle auto) @ 4964,-2451",
-     "bus imbardata (raccordo delle auto) @ 58,1606",
-     "bus imbardata (raccordo delle auto) @ 602,819",
-     "bus imbardata (raccordo delle auto) @ 65,-1944",
-     "bus imbardata (raccordo delle auto) @ 9,-371"
+     "bus imbardata (raccordo delle auto) @ 65,-1944"
     ]
    },
    {
@@ -44,17 +27,11 @@
     ]
    },
    {
-    "perche": "#114 e #134: svolte dei percorsi delle linee senza nessun raccordo, nemmeno per le auto: contromano o vietate anche ai bus, corsie riservate senza raccordo, inversioni sullo stesso arco (#114), gomiti dove nessuna curva sta sull'asfalto (#134). L'inseguitore fa una curva sua tra le due rette di corsia (ripiego) con il raggio che ci sta.",
+    "perche": "#114 e #134: svolte dei percorsi delle linee senza nessun raccordo, nemmeno per le auto: contromano o vietate anche ai bus, corsie riservate senza raccordo, inversioni sullo stesso arco (#114), gomiti dove nessuna curva sta sull'asfalto (#134). L'inseguitore fa una curva sua tra le due rette di corsia (ripiego) con il raggio che ci sta. Da #134 a Largo Europa (12, -371) il bus fa una curva del gioco dove prima prendeva il raccordo delle auto (9, -371): stesso posto, tra quelli di #155.",
     "casi": [
      "bus imbardata (curva stretta) @ 79,794",
+     "bus imbardata (curva) @ 12,-371",
      "bus imbardata (inversione) @ -22,-386"
-    ]
-   },
-   {
-    "perche": "#135 per le auto: al Ponte Omizzolo verso Via Gozzi (archi di 3 e 19 m a due corsie) i raccordi di due svolte vicine stanno su corsie diverse e il secondo comincia prima che finisca il primo. Un'auto con un viaggio sceglie la svolta dopo senza guardare la corsia (versoArrivo, #116) e lì fa una curva del gioco. I raccordi sono quelli di prima: il caso compare perché con #143 il traffico va diversamente.",
-    "casi": [
-     "auto imbardata (raccordi sovrapposti) @ 385,-442",
-     "auto imbardata (raccordi sovrapposti) @ 389,-440"
     ]
    }
   ],
