@@ -210,7 +210,8 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   `tests/strati.spec.js` guarda gli strati sullo stesso piano (`layer()` in `src/world/city.js`) da 20 m e da 300 m nei
   punti delle vedute, con i casi noti in `data/eccezioni/strati.json`; `tests/aree.spec.js` confronta la scena con il
   conto per area della build. Dettagli in `docs/LAVORO.md`, nota #110 della Mappa.
-* `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw)`, `press(code)`, `keys`,
+* `window.__game` espone lo stato per i test, tra cui `startMission()`, `sim(sec, dt, draw, hud)` (il HUD si ridisegna
+  alla fine, non a ogni passo; `hud` false per chi chiama sim a ogni passo e non legge il HUD), `press(code)`, `keys`,
   `setCam(n)`, `teleport(x, z)`, `settings`, `lines`, `wx`, `city`, `net`, `edgeHeight(e, s)`. Disattiva il loop con
   `window.requestAnimationFrame = () => 0` e avanza con `sim`.
 * Edifici, marciapiedi, verde e alberi arrivano per aree attorno al bus (`src/data/aree.js`): dopo `startMission`

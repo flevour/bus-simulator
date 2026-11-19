@@ -1977,20 +1977,24 @@ export class TramSim {
       // sempre)
       const head = this.lanePoint(tr.s, tr.dir, T);
       const ahead = (o) => (o.x - head.x) * head.fx + (o.z - head.z) * head.fz;
+      // conta solo chi è entro 40 m dal muso (il filtro sul quadrato nel ciclo sotto): gli altri si scartano subito, con
+      // la stessa condizione. I bus accanto al muso si cercano entro 80 m, perché le parti di uno stesso bus distano
+      // meno di 20 m: una parte entro i 40 m ha le altre lì. Esiti uguali a prima, con meno lavoro (#121)
+      const fuori = (o, r) => Math.abs(o.x - head.x) > r || Math.abs(o.z - head.z) > r;
       const obst = [], beside = new Set();
-      for (const o of others) if (o && o.isBus && ahead(o) < 1.5) beside.add(o.bus);
+      for (const o of others) if (o && o.isBus && !fuori(o, 80) && ahead(o) < 1.5) beside.add(o.bus);
       tr.ignoreBusT = Math.max(0, (tr.ignoreBusT || 0) - dt);
       for (const o of others) {
         // lontano dal giocatore i bus non guardano chi hanno davanti (nessuno li vede): nemmeno il tram guarda loro,
         // altrimenti aspetta dietro i bus alle fermate sul binario mentre gli altri bus gli passano attraverso
         if (!o || (o.isBus && (beside.has(o.bus) || tr.ignoreBusT > 0 || o.bus.near === false))) continue;
         if (o.isTram && o.trackPoints) for (const p of o.trackPoints()) obst.push({ p, min: -2 });
-        else obst.push({ p: o, min: -2, bus: o.isBus });
+        else if (!fuori(o, 40)) obst.push({ p: o, min: -2, bus: o.isBus });
       }
       // gli altri tram contano se hanno il muso davanti al nostro (agli scambi cede chi arriva dietro); se ognuno vede
       // l'altro davanti (incroci a raso, rami che si uniscono) cede il tram entrato in servizio dopo
       for (const t2 of this.trams) {
-        if (t2 === tr || !t2.parts.length || ahead(t2.parts[0]) < -0.5) continue;
+        if (t2 === tr || !t2.parts.length || ahead(t2.parts[0]) < -0.5 || t2.parts.every((p) => fuori(p, 40))) continue;
         const h2 = this.lanePoint(t2.s, t2.dir, t2.track);
         if (t2.id > tr.id && (head.x - h2.x) * h2.fx + (head.z - h2.z) * h2.fz > -0.5 && Math.hypot(head.x - h2.x, head.z - h2.z) < 30) continue;
         for (const p of t2.parts) obst.push({ p, min: -2 });

@@ -238,6 +238,22 @@ cause erano due.
   832abd0, bf4f044) Tito Livio dura 630, 300, 540 e 510 s, i turni dei tram 444, 222, 366 e 336 s, i segnali del tram
   414, 192, 348 e 306 s. I valori di `tempoMassimo` sono i più lunghi di queste serie, quindi il limite è almeno il
   triplo anche sulla macchina più lenta vista.
+- **Il job `prove` oltre i 60 minuti (#121, 19 novembre).** Con la domanda di #116 le serie sono passate a 40-50
+  minuti, e la stessa serie va da 40 a oltre 60 minuti secondo la macchina: 2f8e820 40,5 il 18 e 50,6 il 19, 2618bf2
+  annullata tre volte al limite con tutte le prove verdi. Le prove non sono cambiate di durata per i commit di quei
+  giorni (misure A/B di #126). Le prove si sono accorciate senza togliere controlli:
+  - il HUD (minimappa, quadro, pannelli) si disegnava a ogni passo di `step`, anche in `sim` senza disegno: un quarto del
+    tempo delle prove. Ora `drawHud` di `src/main.js` va una volta per fotogramma e alla fine di `sim`; il pilota di
+    `tests/guida.js`, che chiama `sim` a ogni passo, passa `hud` false;
+  - `TramSim.move` scartava le auto e i bus oltre 40 m dal muso solo dopo averli messi in elenco, per ogni tram e a ogni
+    passo: ora li scarta prima, con la stessa condizione;
+  - gli incroci semaforizzati sulla sede e i segnali del tram facevano gli stessi 20 minuti di gioco dallo stesso stato
+    in due prove: ora una sola simulazione (`contaIncroci` con `segnali`).
+
+  `tests/impronta.spec.js` è rimasta uguale ai bit: le modifiche non cambiano il traffico. Misura sul Mac, 120 s di gioco
+  in Via Altinate senza disegno: da 15,3 a 9,4 s. Chi aggiunge lavoro a ogni passo che non serve alla simulazione (disegno,
+  statistiche) lo mette in `drawHud` o in `render`, non in `step`; chi guarda tutti i mezzi della città da ogni mezzo
+  scarta prima quelli lontani.
 - La prima serie in CI con le prove del traffico verdi (4cb1cb8) è finita rossa per una veduta: al capolinea Stazione
   sud del SIR3 una colonnina di ricarica lasciata da una corsa in servizio di prima (`Chargers` ne tiene sei nella scena,
   ai capolinea delle ultime corse). Con le prove che non scadono più i worker non ripartono, e le vedute arrivano su una

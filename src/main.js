@@ -1852,7 +1852,7 @@ const world = {
   obstaclesNear: (x, z, r) => city.obstacles.query(x, z, r, world._o || (world._o = [])),
   carsNear: (x, z, r) => { const a = traffic ? traffic.near(x, z, r) : []; return trams ? a.concat(trams.near(x, z, r)) : a; },
 };
-let envTimer = 0, frame = 0, hudStreet = '', saveTimer = 0, kerbT = 0;
+let envTimer = 0, frame = 0, hudStreet = '', hudLimit = 50, saveTimer = 0, kerbT = 0;
 let lastT = performance.now();
 
 // posizione dei tram lungo la sede (per gli incroci): automatici e, se c'è, quello del giocatore
@@ -1957,7 +1957,14 @@ function step(dt) {
   audio.update(dt, bus, { interior: camMode === 0 || camMode === 2, rain: wx.rain });
   const ri = frame % 6 === 0 ? city.roadInfo(bus.x, bus.z) : null;
   if (ri && ri.edge) hudStreet = ri.edge.name;
-  hud.update(bus, mission, { speedLimit, net, traffic, lights, buses, street: hudStreet });
+  hudLimit = speedLimit;
+}
+
+// HUD (pannelli, quadro, minimappa) e cruscotto del mezzo: solo disegno, una volta per fotogramma e alla fine di sim,
+// non a ogni passo. Nelle prove sim fa migliaia di passi senza disegnare e la minimappa ne prendeva un quarto (#121).
+function drawHud() {
+  if (!mission) return;
+  hud.update(bus, mission, { speedLimit: hudLimit, net, traffic, lights, buses, street: hudStreet });
   if (frame % 10 === 0) bus.drawDash({ doors: bus.doorsAnyOpen, request: mission.request });
 }
 
@@ -2028,6 +2035,7 @@ function loop() {
     // sotto-passi per una fisica stabile
     const n = dt > 0.025 ? 2 : 1;
     for (let i = 0; i < n; i++) step(dt / n);
+    drawHud();
     render(dt);
   } else {
     // in pausa e nel menu il gamepad serve ancora: Start riprende la corsa, si impostano volante e pedali
@@ -2088,6 +2096,6 @@ setTimeout(async () => {
   city.setNight(0);
   window.__game = { get hud() { return hud; }, get terrain() { return terrain; }, get bus() { return bus; }, get mission() { return mission; }, get traffic() { return traffic; }, get domanda() { return domanda; }, get walkers() { return walkers; }, set veduta(v) { veduta = v; }, get tramSignals() { return tramSignals; }, city, net, lights, edgeHeight, quotaStrada, quotaFuoriAsse, laneLayout, startMission, settings, keys, scene, camera, renderer, wx, lines: LINES, setCam: (m) => (camMode = m),
     teleport: (x, z) => teleportTo(x, z), get trams() { return trams; }, get buses() { return buses; }, get greet() { return greet; }, get turno() { return turno; }, depot, turnoOf, canLeaveDepot, tramSwitchAhead,
-    pad, mirrorAdj, audio, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (draw) render(dt); }, press: onKeyPress };
+    pad, mirrorAdj, audio, get chargers() { return chargers; }, sim: (sec, dt = 1 / 30, draw = true, hud = true) => { for (let t = 0; t < sec - 1e-6; t += dt) step(dt); if (hud) drawHud(); if (draw) render(dt); }, press: onKeyPress };
   loop();
 }, 50);

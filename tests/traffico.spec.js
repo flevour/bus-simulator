@@ -51,8 +51,8 @@ function osservaFermi({ cx, cz, r, salita }) {
     const s = g.mission.clock - k, w = peggio.get(o);
     if (!w || s > w.s) peggio.set(o, { chi, s: Math.round(s), x: Math.round(x), z: Math.round(z), dalle: hm(k) });
   };
-  g.sim = (sec, dt, draw) => {
-    sim(sec, dt, draw);
+  g.sim = (sec, dt, draw, hud) => {
+    sim(sec, dt, draw, hud);
     if ((t += sec) < 1) return;
     t = 0;
     for (const b of g.buses.buses) {
@@ -126,12 +126,29 @@ test('Tito Livio e Ponti Romani: bus e tram non restano fermi più di un ciclo s
 // incrocio col tram vicino ai punti scelti (col semaforo se sem, senza se è false, tutti se è null): il tram copre il
 // binario all'altezza dell'auto (dal muso alla coda, 1 m di margine) e un'auto che taglia i binari ha il muso entro mezzo
 // tram dall'asse (3,2 m dal centro).
-function contaIncroci({ punti, sec, sem = true, r = 40 }) {
-  const g = window.__game, xs = g.tramSignals.list.filter((x) => (sem == null || !!x.sig === sem) && punti.some(([px, pz]) => Math.hypot(x.px - px, x.pz - pz) < r));
+// Con segnali, negli stessi passi, anche i segnali del tram di tutta la rete (barre agli incroci e lanterne stradali sul
+// binario): il tempo più lungo che un tram resta fermo davanti a un segnale chiamato senza via libera, e le lanterne
+// disegnate diverse dallo stato che la logica usa (controllate ogni 5 s, ignorando il passo in cui cambiano). Era una
+// prova a parte con gli stessi 20 minuti di gioco dallo stesso stato: una simulazione in meno (#121).
+function contaIncroci({ punti, sec, sem = true, r = 40, segnali = false }) {
+  const g = window.__game, ts = g.tramSignals, xs = ts.list.filter((x) => (sem == null || !!x.sig === sem) && punti.some(([px, pz]) => Math.hypot(x.px - px, x.pz - pz) < r));
   const insieme = [];
   let passaggi = 0, auto = 0;
+  const tutti = [...ts.list, ...ts.lanterns], da = new Map();
+  const acceso = (ap) => { const a = g.lights.lamps.instanceColor.array, i = ap.lampIdx * 3; return a[i] > 0.5 ? 'R' : a[i + 3] > 0.5 ? 'Y' : a[i + 7] > 0.5 ? 'G' : '?'; };
+  const diverse = () => ts.lanterns.filter((l) => l.ap.lampN && acceso(l.ap) !== g.lights.stateOf(l.sig, l.ap.phase));
+  let peggio = { s: 0 }, sbagliate = [];
   for (let t = 0; t < sec * 5; t++) {
     g.sim(0.2, 1 / 30, false);
+    if (segnali) {
+      for (const x of tutti) {
+        const fermo = x.who && x.who.some((tr) => tr.v < 0.1 && !(tr.wait > 0)) && x.state !== 'V';
+        if (!fermo) { da.delete(x); continue; }
+        const k = da.get(x) ?? g.mission.clock;
+        da.set(x, k);
+        if (g.mission.clock - k > peggio.s) peggio = { s: Math.round(g.mission.clock - k), dove: `${x.ap ? 'lanterna di ' + x.ap.edge.name : 'barre di ' + x.e.name} (${x.track.id})` };
+      }
+    }
     for (const x of xs) {
       for (const c of g.traffic.cars) if (Math.hypot(c.x - x.px, c.z - x.pz) < 25) auto++;
       let tram = null, d = 0;
@@ -148,22 +165,28 @@ function contaIncroci({ punti, sec, sem = true, r = 40 }) {
         insieme.push(`${x.e.name} (${Math.round(x.px)}, ${Math.round(x.pz)}) alle ${Math.floor(g.mission.clock / 3600)}:${String(Math.floor((g.mission.clock % 3600) / 60)).padStart(2, '0')}: tram ${tram.line}, auto a ${c.v.toFixed(1)} m/s`);
       }
     }
+    if (segnali && t % 25 === 0 && diverse().length) { g.sim(1 / 30, 1 / 30, false); sbagliate.push(...diverse().map((l) => l.ap.edge.name)); }
   }
-  return { incroci: xs.length, passaggi, auto, insieme };
+  return { incroci: xs.length, passaggi, auto, insieme, lanterne: ts.lanterns.length, peggio, sbagliate };
 }
 
 // Chiesto da chi gioca l'11 novembre: se il tram ha il passaggio, auto e bus si fermano prima della sede. Giocatore fermo
 // in Via Altinate, 20 minuti di gioco alle 8:15 attorno ai semafori di Riviera Tito Livio, di Riviera dei Ponti Romani
 // con Via Battisti, di Largo Europa e di Piazza Garibaldi (per posizione: gli id dei nodi cambiano con la mappa).
-test('incroci semaforizzati sulla sede: tram e auto mai dentro insieme', async ({ pagina, gioco }) => {
-  tempoMassimo(366);
+// Negli stessi 20 minuti i segnali di tutti i tram automatici (segnalazione dell'11 novembre, sotto): nessun tram fermo
+// più di un ciclo davanti a un segnale chiamato, lanterne disegnate come lo stato della logica.
+test('incroci semaforizzati sulla sede e segnali del tram: tram e auto mai dentro insieme, verde entro un ciclo, lanterna disegnata uguale allo stato', async ({ pagina, gioco }) => {
+  tempoMassimo(426);
   await avviaCorsa(pagina, { linea: '3' });
   await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });
-  const r = await pagina.evaluate(contaIncroci, { punti: [[24, 149], [58, 65], [53, -333], [9, -195]], sec: 1200 });
+  const r = await pagina.evaluate(contaIncroci, { punti: [[24, 149], [58, 65], [53, -333], [9, -195]], sec: 1200, segnali: true });
   expect(r.incroci).toBeGreaterThan(4);
   expect(r.passaggi, 'nessun tram è passato dagli incroci').toBeGreaterThan(200);
   expect(r.auto, 'nessuna auto vicino agli incroci').toBeGreaterThan(200);
   expect(r.insieme).toEqual([]);
+  expect(r.lanterne).toBeGreaterThan(10);
+  expect(r.peggio.s, `fermo più lungo a un segnale del tram: ${JSON.stringify(r.peggio)}`).toBeLessThanOrEqual(60);
+  expect(r.sbagliate).toEqual([]);
   expect(gioco.errori()).toEqual([]);
 });
 
@@ -280,41 +303,12 @@ test('incroci col tram nelle rotonde e in curva: tram e auto mai dentro insieme'
   expect(gioco.errori()).toEqual([]);
 });
 
-// Segnali del tram (barre agli incroci e lanterne stradali sul binario) per sec secondi: il tempo più lungo che un tram
-// resta fermo davanti a un segnale chiamato senza via libera, e le lanterne disegnate diverse dallo stato che la logica
-// usa (controllate ogni 5 s, ignorando il passo in cui cambiano)
-function attesaSegnali({ sec }) {
-  const g = window.__game, ts = g.tramSignals, tutti = [...ts.list, ...ts.lanterns], da = new Map();
-  const acceso = (ap) => { const a = g.lights.lamps.instanceColor.array, i = ap.lampIdx * 3; return a[i] > 0.5 ? 'R' : a[i + 3] > 0.5 ? 'Y' : a[i + 7] > 0.5 ? 'G' : '?'; };
-  const diverse = () => ts.lanterns.filter((l) => l.ap.lampN && acceso(l.ap) !== g.lights.stateOf(l.sig, l.ap.phase));
-  let peggio = { s: 0 }, sbagliate = [];
-  for (let t = 0; t < sec * 5; t++) {
-    g.sim(0.2, 1 / 30, false);
-    for (const x of tutti) {
-      const fermo = x.who && x.who.some((tr) => tr.v < 0.1 && !(tr.wait > 0)) && x.state !== 'V';
-      if (!fermo) { da.delete(x); continue; }
-      const k = da.get(x) ?? g.mission.clock;
-      da.set(x, k);
-      if (g.mission.clock - k > peggio.s) peggio = { s: Math.round(g.mission.clock - k), dove: `${x.ap ? 'lanterna di ' + x.ap.edge.name : 'barre di ' + x.e.name} (${x.track.id})` };
-    }
-    if (t % 25 === 0 && diverse().length) { g.sim(1 / 30, 1 / 30, false); sbagliate.push(...diverse().map((l) => l.ap.edge.name)); }
-  }
-  return { lanterne: ts.lanterns.length, peggio, sbagliate };
-}
-
 // Segnalazione dell'11 novembre: il SIR3 di chi gioca fermo prima di Pace davanti a lanterne rosse che non diventavano
 // mai verdi, e passandoci col rosso nessuna penalità. Erano le lanterne stradali della corsia riservata di Via Tommaseo,
 // su cui corre il binario: nessuna logica del tram le guardava. Ora sono il segnale del tram: il tram che arriva chiama
-// il verde, i tram automatici col rosso si fermano, chi gioca passando col rosso perde 60 punti.
-test('segnali del tram: verde entro un ciclo, lanterna disegnata uguale allo stato, rosso a Pace penalizzato', async ({ pagina, gioco }) => {
-  tempoMassimo(414);
-  // tutti i tram automatici (il giocatore su un bus fermo in Via Altinate, fuori dai binari), 20 minuti
-  await avviaCorsa(pagina, { linea: '3' });
-  await pagina.evaluate(() => { window.__game.teleport(230, -132); window.__game.sim(1, 1 / 30, false); });
-  const r = await pagina.evaluate(attesaSegnali, { sec: 1200 });
-  expect(r.lanterne).toBeGreaterThan(10);
-  expect(r.peggio.s, `fermo più lungo a un segnale del tram: ${JSON.stringify(r.peggio)}`).toBeLessThanOrEqual(60);
-  expect(r.sbagliate).toEqual([]);
+// il verde, i tram automatici col rosso si fermano (con i 20 minuti degli incroci semaforizzati, sopra), chi gioca
+// passando col rosso perde 60 punti.
+test('segnali del tram: verde a Pace entro un ciclo, rosso a Pace penalizzato', async ({ pagina, gioco }) => {
   // il SIR3 di chi gioca verso Voltabarozzo, prima di Pace
   await avviaCorsa(pagina, { linea: 'SIR3', tram: true });
   const pace = await pagina.evaluate(() => {

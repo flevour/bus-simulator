@@ -186,7 +186,9 @@ function installaPilota({ fermaAlPrimoUrto, traffico }) {
         if (st.delay !== undefined) return P.esito(true, 'arrivato');
         if (P.t - P.ta > 6) return P.esito(false, 'porte aperte fuori dalla zona di fermata');
       } else return P.esito(false, 'pilota fermo dopo un errore');
-      g.sim(dt, dt, false);
+      // un passo senza disegnare il HUD (minimappa, quadro): il pilota non lo legge, e a ogni passo costava un quarto
+      // del tempo (#121). Il prossimo sim della prova lo ridisegna
+      g.sim(dt, dt, false, false);
       P.t += dt;
       const hit = bus.lastHit;
       if (hit && hit.kind !== 'car' && hit.kind !== 'tram') {
