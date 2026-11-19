@@ -1696,8 +1696,9 @@ decide. Regola in [`raccordi.md`](raccordi.md), sezione 8. Da sapere prima di to
   `davanti` da 0,37 a 0,44 ms, `postoOltre` e `immessi` 0,01 ms ciascuna). Su 17cbafa anche con 144 auto alle 8:15
   (da 23 casi a 2, soste da 565 a 246 s, `traffic.update` da 2,05 a 2,20 ms) e alle 17:30 (da 18 a 2, da 288 a 77 s);
   nessuno fermo oltre 120 s. Corridoio di Via Querini uguale (non ha incroci): 600, 1.200 e 1.368 auto l'ora,
-  scarico un'auto ogni 2,16 s; punte della domanda 1,39 alle 8 e 1,39 alle 18 (soglia 1,08); prova del moto e prove
-  del traffico senza casi nuovi;
+  scarico un'auto ogni 2,16 s; punte della domanda 1,39 alle 8 e 1,39 alle 18 (soglia 1,08); prove del traffico senza
+  casi nuovi. In `moto.json` tornano le due auto al Ponte Omizzolo verso Via Gozzi (raccordi sovrapposti, gruppo "#135
+  per le auto", tolte con #134): le code di Via Gozzi cambiano i ritardi misurati, e qualche auto riprende quella svolta;
 - casi che restano in `code.json`: Via Gozzi con Via Trieste (427, -558), dove l'auto della traversa e quella della
   coda entrano insieme e si uniscono dentro l'incrocio (#49: nessuna dà precedenza all'altra; a Via Scrovegni succede
   lo stesso, con questa mappa non nei dieci minuti della prova); Via Piovese a (2089, 3296), un'auto che arriva a
