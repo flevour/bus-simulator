@@ -309,7 +309,8 @@ intorno), fino a 1,2 km in più. `layer` dice solo chi sta sopra.
    quota della strada nel punto dell'asse più vicino, e all'interno di una curva, o dove passa da una carreggiata
    all'altra, fa meno metri della strada per la stessa salita (sulla rampa del Borgomagno verso la stazione la strada
    al 5,4% dava al binario il 7,5%);
-3. carreggiate affiancate alla stessa quota, entro 3 cm;
+3. carreggiate affiancate alla stessa quota, entro 3 cm; dove le carreggiate di due archi con un nodo in comune si
+   sovrappongono in pianta, agli innesti, la stessa quota assoluta nei punti dove si sovrappongono (#150, più sotto);
 4. fuori dai ponti, il DTM: lo scarto si minimizza, oltre 0,44 m costa quaranta volte tanto. Insieme si minimizzano i
    saliscendi (variazione totale) e le variazioni di pendenza, di più sulle campate;
 5. nessuna onda (#125): dopo ogni soluzione il giro contro le onde (`Profili.onde`) cerca le conche del profilo come le
@@ -344,6 +345,35 @@ uno del San Marco (3 cm), con gli stessi casi del controllo. Dove il profilo res
 uguale la scelta cambia anche con i decimali: il tratto cieco di strada di servizio che da Via San Marco attraversa il
 SIR2 in (3372, −934) saliva di 32 cm sopra i binari e l'incrocio perdeva la lanterna del tram. Lo tiene sul terreno un
 punto nel registro (`sopra: 0`).
+
+Carreggiate che si sovrappongono (#150). Vicino a un innesto la carreggiata di un arco sta dentro quella di un altro per
+qualche metro: una rampa che si stacca a pochi gradi, una strada laterale per mezza carreggiata della strada in cui entra,
+lo spicchio all'interno di una svolta. Il programma dava a ogni arco il suo profilo, e il bus di chi guida
+(`City.quotaSotto`), che passa a un arco accanto quando esce dalla sua carreggiata, saltava: 0,45 m su Via Vicenza al
+Chiesanuova, 0,3 m al Mortise e al San Marco. Ora ogni incognita chiede la quota dell'altro arco dove un punto della sua
+sezione (l'asse e i due bordi: la carreggiata sta in piano sulla larghezza) cade entro mezza carreggiata più 1,5 m dal suo
+asse, lo stesso margine con cui `City.quotaSotto` passa a un arco (`SOVRAPPOSTE`, tolleranza 2 cm). Vale tra archi delle
+strutture con un nodo in comune, perché il bus passa solo a un arco che tocca il suo; non tra archi che si incrociano, non
+tra due archi senza nodi in comune (in Via Boves la rampa scende accanto al ponte che sale, con le carreggiate di OSM che
+in pianta si toccano: lì resta il legame delle carreggiate affiancate) e non con l'arco che prosegue lo stesso oltre il
+nodo, dove il bordo interno di una piega cade sull'arco dopo e il legame chiedeva pendenza zero a ogni piega delle rampe.
+Il peso (`W_SOVRAPPOSTE`, 50 per metro) è una richiesta: più del DTM e delle onde, meno dei piedi, di pendenze, raggi e
+franchi. Sul Mac, con il registro, i gradini della prova scendevano da 79 a 52 con 50, a 51 con 100, a 56 con 200 e a
+57-63 con 1000, mentre il peso dei casi del controllo passava da 801 a 816, 828, 843 e 881-920: dove una rampa che sale
+si stacca a pochi gradi da una strada che resta a raso (Mortise, 15 gradi, 25 m di sovrapposizione) o una strada entra
+in piano in una che sale del 7,5% (Via Antonio Gramsci in Via Friburgo, al Grassi), un legame forte sposta tutta la
+salita e fa nascere conche e scarti dal DTM attorno; al San Marco spostava di 0,5 m la campata per 7 cm al bivio sulla
+rampa. Lì il gradino resta, con il suo perché in `data/eccezioni/gradini.json`. Un punto del registro sul terreno
+(`sopra` fino a 5 cm) vale come un piede: le strade che ci arrivano seguono il terreno negli ultimi `ARRIVO` metri, con un
+peso più alto del legame. Senza, all'incrocio a raso con il SIR2 ai piedi ovest del Chiesanuova il legame con la rampa,
+che parte dallo stesso nodo di Via Pacinotti, alzava l'incrocio di 8 cm con il suo terreno, Via Pacinotti contava come in
+quota e l'incrocio perdeva la lanterna del tram. Con la mappa rigenerata i gradini passano da 82 a 54 (sette
+sovrapposizioni, dove l'innesto sta su una salita o una rampa si stacca a pochi gradi e sale; gli altri vengono dal
+terreno sulla larghezza, dalle pieghe tra archi di fila e da un arco fuori dalla struttura), i casi delle strade del
+controllo da 361 a 377 (peso da 792 a 816: conche corte e scarti dal DTM poco oltre la tolleranza dove la strada della
+struttura va incontro a quella che entra), quelli dei binari da 12 a 13. Le quote cambiano fino a 0,47 m (Corso Tredici
+Giugno), quasi sempre sotto 0,4; 47 archi passano da terra a in quota, quasi tutti strade laterali che salgono di qualche
+centimetro incontro alla rampa, e 99 tornano a terra.
 
 Il terreno segue il profilo, perché la quota di ogni cosa nel gioco è terreno più quota sopra il terreno:
 
@@ -567,7 +597,8 @@ archi di fila (deviazione fino a 60 gradi) un punto percorre linee parallele all
 tutta la larghezza, da 12 m prima del nodo a 12 m dopo, a passi di 25 cm, e la quota assoluta letta con
 `City.quotaSotto` non deve saltare più di 5 cm più il 10% del passo. Un caso per nodo, chiave `struttura | gradino @
 nodo`; i casi noti sono in `data/eccezioni/gradini.json`, con il perché (prima di #137 i nodi con un gradino erano 100,
-29 oltre 20 cm, fino a 0,83 m; dopo 50, 13 oltre 20 cm).
+29 oltre 20 cm, fino a 0,83 m; dopo 50, 13 oltre 20 cm; con le tangenziali 82, dei quali 54 su un terzo arco che si
+sovrappone; con il legame delle carreggiate sovrapposte di #150 54, sette dei quali sovrapposizioni rimaste).
 
 ```bash
 python3 scripts/quote_rete.py                    # i tratti in quota dei binari

@@ -2,15 +2,7 @@
  "cosa": "Casi noti della prova delle code (tests/code.spec.js, regole in tests/code.js): dieci minuti nelle tre zone della prova del moto con il traffico delle 8:15. sblocchi: auto fatte sparire (sui binari, davanti al tram, davanti a un bus), tram o bus che passano attraverso un bus, bus in coda sorpassati dopo un'attesa; giri_di_attese: Traffic.untangle; incroci_bloccati: auto ferme in coda dentro un incrocio oltre 2 s; fermi: auto, bus o tram fermi oltre 120 s fuori dalle fermate. Chiave: cosa @ x,z del gioco (il nodo dell'incrocio per incroci_bloccati, dove il mezzo si è fermato per i fermi); un caso per posto. Un caso fuori dall'elenco o un caso dell'elenco sparito fanno fallire la prova. Si riscrive con ECCEZIONI=aggiorna npx playwright test tests/code.spec.js; i casi nuovi finiscono in un gruppo con il perché vuoto, da scrivere.",
  "controlli": {
   "sblocchi": [],
-  "giri_di_attese": [
-   {
-    "perche": "Auto sulle corsie sopra il binario del SIR3 in controsenso (#144): in Via Morgagni (389, -376), sull'arco 4857 dell'issue, e all'incrocio di Via Tommaseo con Via Gozzi (576, -837) un'auto e il tram si fermano muso contro muso e ognuno aspetta l'altro; Traffic.untangle scioglie il giro (nessuno resta fermo oltre 120 s). Con i pendolari ISTAT per porta (#147) il traffico dei dieci minuti è un altro: compaiono questi due e sparisce il giro tra bus e SIR2 in Corso Garibaldi (63, -389). Compaiono e spariscono a ogni cambiamento del traffico finché #144 non toglie le corsie dal binario in controsenso.",
-    "casi": [
-     "auto e tram che si aspettano @ 389,-376",
-     "auto e tram che si aspettano @ 576,-837"
-    ]
-   }
-  ],
+  "giri_di_attese": [],
   "incroci_bloccati": [
    {
     "perche": "Via Gozzi (466, -667), un incrocio delle traverse lungo la coda del semaforo: come nei due casi che c'erano prima (#49 in Via Gozzi con Via Trieste, #148 in Via Piovese), un'auto resta qualche secondo con la coda dentro l'incrocio quando la fila davanti si ferma prima di quanto prevedeva. Compare con le tangenziali sul profilo (#142: mappa rigenerata, 106 raccordi attorno alle strutture e domanda rifatta, quindi altri viaggi), mentre i due casi di prima, (427, -558) e (2089, 3296), spariscono. Un caso così compare e sparisce a ogni cambiamento del traffico.",

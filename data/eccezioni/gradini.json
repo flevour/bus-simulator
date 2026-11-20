@@ -1,107 +1,109 @@
 {
- "cosa": "Gradini della quota che un mezzo vede passando da un arco al successivo sulle strutture con il profilo del risolutore (tests/profili.spec.js, prova \"nessun gradino da un arco al successivo\", #137): per ogni coppia di archi di fila, su linee parallele all'asse lungo tutta la larghezza, la quota assoluta letta con City.quotaSotto non deve saltare più di 5 cm più il 10% del passo di 25 cm. Un caso per nodo. Chiave: struttura | gradino @ x,z del nodo. Prima di #137 i nodi con un gradino erano 100 (29 oltre 20 cm), fino a 0,83 m. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec -g gradino.",
+ "cosa": "Gradini della quota che un mezzo vede passando da un arco al successivo sulle strutture con il profilo del risolutore (tests/profili.spec.js, prova \"nessun gradino da un arco al successivo\", #137): per ogni coppia di archi di fila, su linee parallele all'asse lungo tutta la larghezza, la quota assoluta letta con City.quotaSotto non deve saltare più di 5 cm più il 10% del passo di 25 cm. Un caso per nodo. Chiave: struttura | gradino @ x,z del nodo. Prima di #137 i nodi con un gradino erano 100 (29 oltre 20 cm), fino a 0,83 m; con le tangenziali (#142) 82, dei quali 54 con il punto passato a un terzo arco che si sovrappone; con le carreggiate sovrapposte legate nel risolutore (#150) 54: 7 sovrapposizioni rimaste, dove l'innesto sta su una salita o una rampa si stacca a pochi gradi e sale, 30 dal terreno sulla larghezza, 16 pieghe tra archi di fila e 1 con un arco fuori dalla struttura. Divisi per meccanismo: prima le sovrapposizioni rimaste, una per una, poi il terreno sulla larghezza, le pieghe tra archi di fila e gli archi fuori dalla struttura. Si riscrive con ECCEZIONI=aggiorna npx playwright test profili.spec -g gradino.",
  "controlli": {
   "gradini": [
    {
-    "perche": "Carreggiate di archi diversi che si sovrappongono in pianta vicino a un innesto (una rampa che si stacca o si unisce, una strada laterale che entra sulla struttura: Via Vicenza e Via del Cantiere sul Chiesanuova, Via Friburgo e Via Gramsci sul Grassi, Via Montà, Via Pietro Liberi sul Borgomagno): il risolutore dà a ogni arco il suo profilo, e nello stesso punto le due carreggiate stanno a quote assolute diverse (fino a 0,9 m al Grassi in (1922, -1279), a un metro dal nodo, sparito con i franchi veri del passo 3 di #125, che abbassano l'impalcato sulla ferrovia). Dal passo 3 anche al Borgomagno in (26, -1150), 0,21 m a 1,25 m dall'asse su un terzo arco: lì le due carreggiate hanno le spalle a quote diverse nel LiDAR (6,06 e 5,37 m) e il registro dà a ognuna la sua. Il punto passa all'altro arco quando esce dalla sua carreggiata, e la quota salta. quotaStrada non c'entra: è la quota dei due profili nella zona dove si sovrappongono, che va resa uguale nel risolutore (#150).",
+    "perche": "Carreggiate che si sovrappongono (#150), legame del risolutore aperto: Via Antonio Gramsci entra quasi ad angolo retto (86 gradi) in Via Friburgo, larga 9,9 m, che lì sale del 7,5% verso il Grassi mentre Via Gramsci scende del 7%; nei primi metri il bordo di Via Friburgo cade nella carreggiata di Via Gramsci. Con la carreggiata in piano sulla larghezza un incrocio su una salita non si rappresenta: le quote coincidono solo con l'incrocio in piano, e la salita di Via Friburgo non lo lascia (il legame resta aperto di 0,6 m al bordo). 0,14 m (0,22 prima di #150).",
     "casi": [
-     "Cavalcavia Antonio Grassi | gradino @ 1835,-1544",
-     "Cavalcavia Antonio Grassi | gradino @ 1868,-1318",
-     "Cavalcavia Antonio Grassi | gradino @ 1978,-938",
-     "Cavalcavia Antonio Grassi | gradino @ 2098,-1180",
-     "Cavalcavia Borgomagno | gradino @ 104,-1332",
-     "Cavalcavia Borgomagno | gradino @ 26,-1150",
-     "Cavalcavia Borgomagno | gradino @ 99,-1333",
-     "Cavalcavia Chiesanuova | gradino @ -1501,-417",
-     "Cavalcavia Chiesanuova | gradino @ -1506,-402",
-     "Cavalcavia Chiesanuova | gradino @ -1869,-337",
-     "Cavalcavia Chiesanuova | gradino @ -1945,-344",
-     "Cavalcavia Chiesanuova | gradino @ -2001,-345",
-     "Cavalcavia Chiesanuova | gradino @ -2023,-345",
-     "Cavalcavia Chiesanuova | gradino @ -2028,-405",
-     "Cavalcavia Chiesanuova | gradino @ -2030,-413",
-     "Cavalcavia Chiesanuova | gradino @ -2124,-350",
-     "Cavalcavia Dalmazia | gradino @ -747,-1318",
-     "Cavalcavia Montà | gradino @ -3224,-3317",
-     "Cavalcavia Mortise | gradino @ 2894,-2756",
-     "Cavalcavia Pietro Maroncelli | gradino @ 2603,-1160",
-     "Cavalcavia San Marco | gradino @ 4206,-1200",
-     "Cavalcavia San Marco | gradino @ 4442,-1412",
-     "Cavalcavia San Marco | gradino @ 4582,-1505",
-     "Cavalcavia San Marco | gradino @ 4592,-1530",
-     "Cavalcavia San Marco | gradino @ 4605,-1521",
-     "Cavalcavia San Marco | gradino @ 4618,-1532",
-     "Cavalcavia San Marco | gradino @ 4630,-1551",
-     "Direttissima per Abano | gradino @ -4052,3635",
-     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 622,-978",
-     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 892,-1188",
-     "Via Alessandro Volta | gradino @ -1611,4113"
+     "Cavalcavia Antonio Grassi | gradino @ 1868,-1318"
     ]
    },
    {
-    "perche": "Ai piedi delle rampe la quota dell'asse sta tra 5 e 50 cm, dove quotaStrada passa dal terreno (sotto 5 cm la pianta disegna asfalto a terra) al piano, e il terreno cambia da 0,3 a 1,5 m sulla larghezza della carreggiata: la parte di terreno che resta nella quota segue la quota dell'asse, che lì sale e scende con le celle del terreno sotto l'asse (al Borgomagno in (11, -1131) da 0,16 a 0,5 m in 2 m). Prima di #137 il gradino c'era su tutta la rampa, più alto. Sparisce quando il terreno sotto la carreggiata delle strutture attive sta alla quota della strada su tutta la larghezza (#125).",
+    "perche": "Carreggiate che si sovrappongono (#150), legame del risolutore aperto per pochi centimetri: Via Pietro Liberi, un tratto di 4 m, entra ad angolo retto nella strada di servizio del Borgomagno, che lì scende del 3%; Via Pietro Liberi resta in piano. 0,08 m, poco sopra la soglia (0,09 prima di #150).",
     "casi": [
-     "Cavalcavia Antonio Grassi | gradino @ 1859,-1284",
-     "Cavalcavia Borgomagno | gradino @ 11,-1131",
-     "Cavalcavia Borgomagno | gradino @ 6,-1137",
-     "Cavalcavia San Marco | gradino @ 4154,-1238",
-     "Cavalcavia San Marco | gradino @ 4254,-1119",
-     "Cavalcavia San Marco | gradino @ 4424,-1401",
-     "Direttissima per Abano | gradino @ -4039,3592",
-     "Ponte dell'Unità d'Italia (1205, -1152) | gradino @ 1189,-1288",
-     "Ponte dell'Unità d'Italia (1205, -1152) | gradino @ 1208,-1292"
+     "Cavalcavia Borgomagno | gradino @ 104,-1332"
     ]
    },
    {
-    "perche": "Il resto, piccolo (da 8 a 18 cm): in curva lontano dall'asse (8,4 m al Maroncelli in (2517, -972), 3,3 m al Mortise in (2884, -2721)) il punto, passando da un arco al successivo, salta di qualche metro di progressiva, e sulla rampa al 5-6% fa un gradino; dove la quota sta sotto 5 cm la strada segue il terreno, che al piede di un rilevato sale fino al 30% tra due celle.",
+    "perche": "Carreggiate che si sovrappongono (#150), legame del risolutore aperto: dal nodo (2893, -2771) la rampa del Mortise (arco 5753) si stacca a 15 gradi dalla carreggiata che resta bassa (5754) e sale; le due carreggiate si sovrappongono per circa 25 m, e a 16 m dal nodo la rampa è già 0,25 m più su. Tenerle alla stessa quota vuol dire spostare la salita della rampa: con un legame forte (peso 1000 invece di 50) si chiudeva, ma nascevano conche in Via Antonino Cascino e in Via Torre. 0,28 m a 2 m dall'asse (0,30 prima di #150).",
+    "casi": [
+     "Cavalcavia Mortise | gradino @ 2894,-2756"
+    ]
+   },
+   {
+    "perche": "Carreggiate che si sovrappongono (#150), legame del risolutore aperto per pochi centimetri: due rampe senza nome si incontrano nel nodo (-1296, 2683) con una piega di 63 gradi, appena oltre i 60 delle coppie di fila; una scende del 6,7%, l'altra sale. Nello spicchio interno le carreggiate si sovrappongono e le quote coincidono solo con l'incrocio in piano. 0,08 m (0,22 prima di #150).",
+    "casi": [
+     "Corso Boston (-2125, 3654) | gradino @ -1296,2683"
+    ]
+   },
+   {
+    "perche": "Carreggiate che si sovrappongono (#150), legame del risolutore aperto: due strade di servizio senza nome si incontrano nel nodo (1350, -3267) con una piega di 60 gradi, sul colmo: una scende del 9,5%, l'altra sale del 4,5%. Con la carreggiata in piano sulla larghezza (quotaStrada), nello spicchio dove le due carreggiate si sovrappongono le quote coincidono solo se l'incrocio sta in piano, contro le pendenze delle due strade. 0,15 m (0,14 prima di #150).",
+    "casi": [
+     "Corso Tredici Giugno | gradino @ 1351,-3267"
+    ]
+   },
+   {
+    "perche": "Carreggiate che si sovrappongono (#150), legame del risolutore aperto per pochi centimetri: le due carreggiate di Viale della Pace si separano a 42 gradi nel nodo (622, -978); una (a senso unico, 5 m) resta in piano a 13-14 cm sopra il terreno, l'altra scende dell'1,5%, e a 8 m dal nodo stanno 10 cm più in basso. 0,09 m, poco sopra la soglia (0,11 prima di #150).",
+    "casi": [
+     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 622,-978"
+    ]
+   },
+   {
+    "perche": "Carreggiate che si sovrappongono (#150), legame del risolutore aperto: Via del Commercio si stacca a 8 gradi da Via Arrigoni nel nodo (6241, -2753), tutte e due a raso; 30 m dopo Via del Commercio comincia a salire verso la struttura mentre Via Arrigoni resta sul terreno, e a 8 gradi le due carreggiate si sovrappongono ancora (fino a circa 60 m dal nodo). Come al Mortise, chiuderlo vuol dire spostare la salita. 0,19 m a 3 m dall'asse (0,16 prima di #150).",
+    "casi": [
+     "Via del Commercio (5781, -2567) | gradino @ 6273,-2760"
+    ]
+   },
+   {
+    "perche": "Gli assi dei due archi stanno alla stessa quota entro 5 cm (o lo scarto tra gli assi è meno di metà del salto): il gradino viene dal terreno sulla larghezza della carreggiata. Dove la quota dell'asse sta tra 5 e 50 cm quotaStrada passa dal terreno (sotto 5 cm la pianta disegna asfalto a terra) al piano, e la parte di terreno che resta nella quota segue le celle: sullo stesso arco quando la quota dell'asse sale e scende con il terreno sotto l'asse (al Borgomagno in (11, -1131) da 0,16 a 0,5 m in 2 m); tra due archi quando uno sta sotto 5 cm e segue il terreno e l'altro sta più su, in piano (Chiesanuova in (-2023, -345): assi a 5,13 m tutti e due, terreno che scende di 0,3 m in 3 m sotto la carreggiata). Le celle del terreno vicine a più strade della struttura prendono la quota più bassa (docs/cavalcavia.md, sezione 6), e sotto una carreggiata il terreno può stare decimetri sotto la strada. Sparisce quando il terreno sotto la carreggiata delle strutture attive sta alla quota della strada su tutta la larghezza (#125).",
     "casi": [
      "Cavalcavia Antonio Grassi | gradino @ 1884,-1360",
      "Cavalcavia Antonio Grassi | gradino @ 1894,-1355",
      "Cavalcavia Antonio Grassi | gradino @ 1952,-1251",
-     "Cavalcavia Chiesanuova | gradino @ -2028,-410",
-     "Cavalcavia Mortise | gradino @ 2884,-2721",
-     "Cavalcavia Pietro Maroncelli | gradino @ 2517,-972",
+     "Cavalcavia Borgomagno | gradino @ 11,-1131",
+     "Cavalcavia Borgomagno | gradino @ 6,-1137",
+     "Cavalcavia Chiesanuova | gradino @ -2023,-345",
+     "Cavalcavia Chiesanuova | gradino @ -2124,-350",
+     "Cavalcavia San Marco | gradino @ 4154,-1238",
+     "Cavalcavia San Marco | gradino @ 4206,-1200",
+     "Cavalcavia San Marco | gradino @ 4254,-1119",
+     "Cavalcavia San Marco | gradino @ 4424,-1401",
+     "Cavalcavia San Marco | gradino @ 4442,-1412",
+     "Cavalcavia San Marco | gradino @ 4582,-1505",
+     "Cavalcavia San Marco | gradino @ 4605,-1521",
+     "Cavalcavia San Marco | gradino @ 4618,-1532",
+     "Cavalcavia San Marco | gradino @ 4630,-1551",
+     "Corso Irlanda | gradino @ 3777,-1665",
+     "Corso Irlanda | gradino @ 4313,-70",
      "Corso Primo Maggio (1809, 3974) | gradino @ 2169,3936",
+     "Corso Tredici Giugno | gradino @ -1038,-3838",
+     "Corso Tredici Giugno | gradino @ -1057,-3863",
+     "Corso Tredici Giugno | gradino @ -839,-3421",
+     "Corso Tredici Giugno | gradino @ 1320,-3297",
      "Direttissima per Abano | gradino @ -4034,3568",
-     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 1117,-1256"
+     "Direttissima per Abano | gradino @ -4039,3592",
+     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 625,-963",
+     "Ponte dell'Unità d'Italia (1205, -1152) | gradino @ 1189,-1288",
+     "Ponte dell'Unità d'Italia (1205, -1152) | gradino @ 1208,-1292",
+     "Via del Commercio (5612, -2497) | gradino @ 5334,-2412",
+     "Via del Commercio (5870, -2581) | gradino @ 6217,-2658"
     ]
    },
    {
-    "perche": "Tangenziali con il profilo del risolutore dal 19 novembre 2026 (#142): 33 gradini da 8 a 22 cm, quasi tutti dove l'asse sta sotto mezzo metro. 23 sono su un terzo arco, cioè dove due carreggiate si sovrappongono all'innesto con profili diversi (#150): le rampe senza nome di Corso Boston con Via Adriatica in (-1300, 2680), il Cavalcavia Tevere su Via Tevere, le rampe di Corso Irlanda verso Viale della Navigazione Interna. Gli altri 10 sono ai piedi, dove la quota passa dal terreno al piano e il terreno cambia sulla larghezza (come nel secondo gruppo, #125), o in curva lontano dall'asse (come nel terzo).",
+    "perche": "Tra due archi di fila della stessa strada con una piega (deviazione fino a 60 gradi): un punto lontano dall'asse, passando da un arco al successivo, salta di qualche metro di progressiva (8,4 m al Maroncelli in (2517, -972)), e dove la strada sale o scende la quota fa un gradino, come in una curva a spezzata. Il risolutore non lega le due carreggiate all'interno della piega (#150): il legame chiedeva pendenza zero a ogni piega delle rampe (Maroncelli, carreggiate da 18 m). Sparisce con una carreggiata che segua la curva, non con il profilo.",
     "casi": [
-     "Corso Boston (-2125, 3654) | gradino @ -1232,2645",
-     "Corso Boston (-2125, 3654) | gradino @ -1295,2678",
-     "Corso Boston (-2125, 3654) | gradino @ -1296,2683",
-     "Corso Boston (-2125, 3654) | gradino @ -1299,2672",
-     "Corso Boston (-2125, 3654) | gradino @ -1303,2670",
-     "Corso Boston (-2125, 3654) | gradino @ -1303,2686",
-     "Corso Boston (-2125, 3654) | gradino @ -1308,2685",
-     "Corso Boston (-2125, 3654) | gradino @ -1463,2795",
-     "Corso Boston (-2125, 3654) | gradino @ -1695,2989",
-     "Corso Boston (-2125, 3654) | gradino @ -1914,3189",
-     "Corso Boston (-2125, 3654) | gradino @ -1915,3221",
-     "Corso Boston (-2125, 3654) | gradino @ -1934,3212",
-     "Corso Boston (-2125, 3654) | gradino @ -2013,3318",
+     "Cavalcavia Antonio Grassi | gradino @ 1859,-1284",
+     "Cavalcavia Chiesanuova | gradino @ -2018,-353",
+     "Cavalcavia Chiesanuova | gradino @ -2028,-405",
+     "Cavalcavia Chiesanuova | gradino @ -2028,-410",
+     "Cavalcavia Chiesanuova | gradino @ -2030,-413",
+     "Cavalcavia Mortise | gradino @ 2884,-2721",
+     "Cavalcavia Pietro Maroncelli | gradino @ 2517,-972",
+     "Corso Boston (-2125, 3654) | gradino @ -1930,3221",
      "Corso Irlanda | gradino @ 3749,-1732",
      "Corso Irlanda | gradino @ 3758,-1738",
-     "Corso Irlanda | gradino @ 3777,-1665",
      "Corso Irlanda | gradino @ 4249,-121",
      "Corso Irlanda | gradino @ 4260,-117",
      "Corso Irlanda | gradino @ 4261,-356",
-     "Corso Irlanda | gradino @ 4313,-70",
-     "Corso Tredici Giugno | gradino @ -1038,-3838",
-     "Corso Tredici Giugno | gradino @ -1057,-3863",
-     "Corso Tredici Giugno | gradino @ -1063,-3878",
-     "Corso Tredici Giugno | gradino @ -839,-3421",
      "Corso Tredici Giugno | gradino @ -901,-3911",
-     "Corso Tredici Giugno | gradino @ -911,-3907",
-     "Corso Tredici Giugno | gradino @ 1135,-3302",
-     "Corso Tredici Giugno | gradino @ 1230,-3534",
-     "Corso Tredici Giugno | gradino @ 1351,-3267",
-     "Via del Commercio (5612, -2497) | gradino @ 5334,-2412",
-     "Via del Commercio (5781, -2567) | gradino @ 5944,-2683",
-     "Via del Commercio (5781, -2567) | gradino @ 6273,-2760",
-     "Via del Commercio (5870, -2581) | gradino @ 6217,-2658"
+     "Ponte dell'Unità d'Italia (1145, -1143) | gradino @ 1117,-1256",
+     "Via Alessandro Volta | gradino @ -1612,4120"
+    ]
+   },
+   {
+    "perche": "Uno dei due archi non è della struttura: sta a terra e segue il terreno, e il legame delle carreggiate che si sovrappongono (#150) vale solo tra archi delle strutture. Al piede il terzo arco a terra e l'arco della struttura, già qualche centimetro in quota, si sovrappongono per pochi metri.",
+    "casi": [
+     "Corso Tredici Giugno | gradino @ -911,-3907"
     ]
    }
   ]

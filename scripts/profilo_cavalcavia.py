@@ -106,6 +106,17 @@ ONDA_BINARIO = 2   # m tra i punti di un binario dove si chiede di riempire una 
 ONDA_RILIEVO = 0.3  # m sopra il terreno com'è: solo da qui (o vicino a un ponte) una conca si riempie
 ACCANTO = 8.0      # m oltre le due mezze carreggiate: fin qui due archi quasi paralleli sono la stessa piattaforma
 ACCANTO_TOLL = 0.03
+# carreggiate che si sovrappongono in pianta (#150): dove la carreggiata di un arco entra in quella di un altro (una rampa
+# che si stacca o si unisce, una strada che si innesta) le due stanno alla stessa quota assoluta, entro SOVRAPPOSTE_TOLL.
+# Il peso è una richiesta, non un obbligo: più dello scarto dal DTM (anche oltre la tolleranza) e delle onde, meno dei
+# piedi, di pendenze, raggi e franchi. Provato sul Mac con il registro (prova dei gradini sulla mappa di prova, 79 casi;
+# peso dei casi del controllo 801): con 50 restano 52 gradini e il controllo pesa 816; con 100, 51 e 828; con 200, 56 e
+# 843; con 1000, 57-63 e 881-920. Un legame forte vince sulla regola del rilievo: dove una rampa che sale si stacca a pochi
+# gradi da una strada che resta a raso (Mortise) sposta tutta la salita, e la campata del San Marco cambiava di 0,5 m per
+# 7 cm al bivio sulla rampa
+SOVRAPPOSTE = 1.5  # m oltre le due mezze carreggiate: City.quotaSotto passa a un arco fin qui dal suo asse
+SOVRAPPOSTE_TOLL = 0.02
+W_SOVRAPPOSTE = 50.0
 FITTO = 50         # cm tra i punti provati lungo un arco per la quota sopra il terreno (quote_archi)
 FEDELE = 2         # mm: i punti in più che stanno entro questa quota dalla retta tra i vicini non si scrivono
 BINARIO_PASSO = 1.0  # m tra i punti lungo un binario dove si vincola la sua pendenza (come i profili del controllo)
@@ -577,6 +588,7 @@ class Profili:
             lp.lo[i] = lp.hi[i] = nat[i]
         # punti messi a mano
         self.punti = []
+        a_terra = []  # i punti del registro sul terreno (sopra fino a IN_QUOTA)
         qui = {s['id'] for s in self.strutture}
         for st in self.registro.get('strutture', []):
             for p in st.get('punti', []) if st['id'] in qui else []:
@@ -587,8 +599,14 @@ class Profili:
                 toll = p.get('toll', 0.02)
                 lp.lo[i], lp.hi[i] = max(lp.lo[i], q - toll), min(lp.hi[i], q + toll)
                 self.punti.append(i)
+                if p.get('sopra', IN_QUOTA + 1) <= IN_QUOTA:
+                    a_terra.append(i)
         mano = set(self.punti)
-        # arrivo ai piedi: negli ultimi ARRIVO metri il profilo segue il terreno com'è
+        # arrivo ai piedi: negli ultimi ARRIVO metri il profilo segue il terreno com'è. Un punto del registro sul terreno
+        # vale come un piede (#150): è un incrocio a raso, e le strade che ci arrivano lo seguono. Senza, il legame delle
+        # carreggiate che si sovrappongono alzava di 8 cm, terreno compreso, l'incrocio a raso con il SIR2 ai piedi ovest
+        # del Chiesanuova, dove la rampa parte dallo stesso nodo di Via Pacinotti: Via Pacinotti arrivava a 5,1 cm, contava
+        # come in quota e l'incrocio perdeva la lanterna del tram
         import heapq
         dist, heap = {}, [(0.0, self.di_nodo[nd], nd, None, 0) for nd in self.piedi]
         vicino = {}
@@ -598,7 +616,7 @@ class Profili:
                 d = ss[n + 1] - ss[n]
                 vicino.setdefault(idx[n], []).append((idx[n + 1], d))
                 vicino.setdefault(idx[n + 1], []).append((idx[n], d))
-        heap = [(0.0, self.di_nodo[nd]) for nd in self.piedi]
+        heap = [(0.0, self.di_nodo[nd]) for nd in self.piedi] + [(0.0, i) for i in a_terra]
         heapq.heapify(heap)
         while heap:
             d, i = heapq.heappop(heap)
@@ -703,6 +721,60 @@ class Profili:
         g_s = Griglia([(R.nodi[R.archi[k][0]], R.nodi[R.archi[k][1]]) for k in sorted(self.S)], 30.0)
         ordine = sorted(self.S)
         fatti = set()
+        # carreggiate che si sovrappongono (#150): vicino a un innesto la carreggiata di un arco sta dentro quella di un
+        # altro per qualche metro (una rampa che si stacca a pochi gradi, una strada laterale per mezza carreggiata della
+        # strada in cui entra, lo spicchio all'interno di una svolta). Il bus di chi guida (City.quotaSotto) resta sul suo
+        # arco finché sta nella sua carreggiata, poi passa a un arco che tocca il suo a un nodo, e con un profilo per arco
+        # la quota saltava fino a 0,45 m (Via Vicenza sul Chiesanuova). La carreggiata sta in piano sulla larghezza
+        # (quotaStrada): ogni incognita ha la quota della sua sezione, e dove un punto della sezione (l'asse e i due bordi,
+        # da dove il bus esce dalla carreggiata) sta entro SOVRAPPOSTE dall'asse di un altro arco delle strutture con un
+        # nodo in comune, l'incognita chiede la quota di quell'arco nel punto del suo asse più vicino. Non tra due archi
+        # che si incrociano (uno passa sopra l'altro), e non tra archi senza nodi in comune, che in pianta si toccano ma
+        # possono stare a quote diverse (in Via Boves la rampa scende accanto al ponte che sale, a 4,6 m d'asse con 6,4 m
+        # di mezze carreggiate, tutti e due con layer 1): lì resta il legame delle carreggiate affiancate, qui sotto.
+        # Nemmeno con l'arco che prosegue questo oltre il nodo (deviazione fino a 60 gradi, come le coppie di fila della
+        # prova dei gradini): le due carreggiate si toccano solo all'interno della piega, il bordo interno cade sull'arco
+        # dopo per mezza carreggiata per il seno della deviazione, e il legame chiedeva pendenza zero a ogni piega delle
+        # rampe (Maroncelli, carreggiate da 18 m)
+        incrociati = {(k, j) for k, _t, _tipo, j, _p in self.incroci if j is not None}
+        incrociati |= {(j, k) for k, j in incrociati}
+        coseno = lambda a, b: a[0] * b[0] + a[1] * b[1]
+        self.v_sovrapposte = []
+        legati = set()
+        for k in ordine:
+            e = R.archi[k]
+            ux, uz = R.verso(k, e[0])
+            vicini = sorted({j for n in e[:2] for j in R.at[n] if j != k and j in self.S and (k, j) not in incrociati
+                             and coseno(R.verso(k, n), R.verso(j, n)) >= -0.5})
+            for i in self.nodi_arco[k] if vicini else ():
+                p = self.xz[i]
+                for lam in (0.0, -e[3] / 2, e[3] / 2):
+                    P = (p[0] - uz * lam, p[1] + ux * lam)
+                    for j in vicini:
+                        f = R.archi[j]
+                        A, B = R.nodi[f[0]], R.nodi[f[1]]
+                        ex, ez = B[0] - A[0], B[1] - A[1]
+                        lj = math.hypot(ex, ez)
+                        if lj < 0.05:
+                            continue
+                        t = ((P[0] - A[0]) * ex + (P[1] - A[1]) * ez) / (lj * lj)
+                        if not -0.5 / lj <= t <= 1 + 0.5 / lj:
+                            continue
+                        if abs((P[0] - A[0]) * ez - (P[1] - A[1]) * ex) / lj > f[3] / 2 + SOVRAPPOSTE:
+                            continue
+                        t = min(1.0, max(0.0, t))
+                        altro = self.a_frazione(j, t)
+                        if any(a == i and w > 0.999 for a, w in altro):
+                            continue  # il nodo in comune: è la stessa incognita
+                        ch = (i, j, round(t * lj))
+                        if ch in legati:
+                            continue
+                        legati.add(ch)
+                        fatti.add((i, j))
+                        sl = lp.var(W_SOVRAPPOSTE)
+                        lp.riga([(i, 1)] + [(a, -w) for a, w in altro] + [(sl, -1)], SOVRAPPOSTE_TOLL)
+                        lp.riga([(i, -1)] + [(a, w) for a, w in altro] + [(sl, -1)], SOVRAPPOSTE_TOLL)
+                        self.v_sovrapposte.append((sl, P, k, j))
         for k in ordine:
             e = R.archi[k]
             ux, uz = R.verso(k, e[0])
@@ -738,6 +810,8 @@ class Profili:
             'binari': sum(1 for sl in self.v_binari if x[sl] > 1e-4),
             'raccordi': sum(1 for sl, _i, _ks in self.v_racc if x[sl] > 1e-6),
             'franchi': [(round(p[0]), round(p[1]), tipo, round(float(x[sl]), 2)) for sl, _k, _t, tipo, p, _f in self.v_franco if x[sl] > 0.01],
+            # carreggiate sovrapposte a quote diverse oltre SOVRAPPOSTE_TOLL di più di 1 cm: (x, z, metri)
+            'sovrapposte': [(round(p[0]), round(p[1]), round(float(x[sl]), 2)) for sl, p, _k, _j in self.v_sovrapposte if x[sl] > 0.01],
         }
         return self.h
 

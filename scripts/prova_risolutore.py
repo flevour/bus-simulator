@@ -200,6 +200,9 @@ def main():
           f"franchi {len(v['franchi'])}")
     if v['pendenze'] or v['binari'] or v['raccordi'] or v['franchi']:
         errori.append('il programma viola pendenze, raggi o franchi')
+    sov = sorted(v['sovrapposte'], key=lambda c: -c[2])
+    print(f"carreggiate sovrapposte a quote diverse (#150): {len(sov)} punti"
+          + (', i più alti ' + ', '.join(f'{m:.2f} m in ({x}, {z})' for x, z, m in sov[:6]) if sov else ''))
     # (dopo i giri contro le onde restano le conche che il DTM vede: lì la strada lo segue, il rilievo prima delle onde)
     print(f'punti nelle conche del profilo calcolato, dopo i giri contro le onde: {len(P.onde())}')
     sotto = strade_sotto(D, ris, terreno)

@@ -901,6 +901,42 @@ sapere:
   Mac, con gli argomenti della pianta salvati, la pianta in sequenza e con quattro processi esce identica (397 contro
   317 s), il passo dei cavalcavia con uno e con quattro processi anche (244 contro 138 s).
 
+#150, carreggiate che si sovrappongono agli innesti (20 novembre). Regola e numeri in [`cavalcavia.md`](cavalcavia.md),
+sezione 6. Da sapere:
+
+- in `Profili.risolvi` di `scripts/profilo_cavalcavia.py`, prima delle carreggiate affiancate, un legame nuovo: dove un
+  punto della sezione di un'incognita (l'asse e i due bordi) cade entro mezza carreggiata più `SOVRAPPOSTE` (1,5 m, il
+  margine di `City.quotaSotto`) dall'asse di un altro arco delle strutture con un nodo in comune, l'incognita chiede la
+  quota di quell'arco nel punto più vicino (`SOVRAPPOSTE_TOLL` 2 cm, `W_SOVRAPPOSTE` 50 per metro). Non tra archi che
+  si incrociano, non tra archi senza nodi in comune, non con l'arco che prosegue lo stesso oltre il nodo (deviazione
+  fino a 60 gradi). `P.violazioni['sovrapposte']` dice dove resta aperto, e `scripts/prova_risolutore.py` lo stampa;
+- il peso è basso di proposito. Con 1000 il legame chiudeva quasi tutto ma spostava salite intere (al Mortise la rampa
+  che si stacca a 15 gradi dalla strada a raso, al San Marco la campata di 0,5 m per 7 cm al bivio sulla rampa), e il
+  peso dei casi del controllo saliva da 801 a 881-920 (sul Mac). Con 50 sale a 816 e i gradini restano solo dove
+  chiuderli costa una salita;
+- un punto del registro sul terreno (`sopra` fino a 5 cm: oggi i due incroci a raso con il SIR2, ai piedi ovest del
+  Chiesanuova e in Via Venezia) vale come un piede: le strade che ci arrivano seguono il terreno negli ultimi `ARRIVO`
+  metri, con un peso più alto del legame. Senza, il legame con la rampa del Chiesanuova alzava di 8 cm l'incrocio, terreno
+  compreso (il punto è relativo al terreno del giro prima, che si alza con il profilo): Via Pacinotti arrivava a 5,1 cm
+  e la posa toglieva la lanterna del SIR2. Lo dice `npm run posa` dopo la rigenerazione; sul Mac non si vedeva;
+- con la mappa rigenerata: gradini da 82 a 54 (spariscono Via Vicenza al Chiesanuova, 0,45 m, il Montà, 0,23, e altri
+  31; ne nascono 5 da 8 a 13 cm); casi del controllo delle strade da 361 a 377, peso da 792 a 816 (31 nuovi in un
+  gruppo con il perché: conche corte e scarti poco oltre la tolleranza dove la strada della struttura va incontro a
+  quella che entra); dei binari da 12 a 13 (la stessa conca a raso di Via Venezia, ora su tutti e due i versi). Le
+  quote delle strutture cambiano fino a 0,47 m (Corso Tredici Giugno), quasi sempre sotto 0,4; 47 archi passano da
+  terra a in quota (27 fino a 6 cm: le strade laterali che salgono incontro alla rampa) e 99 tornano a terra. Dove un
+  arco tocca appena 5 cm la pianta ritaglia l'asfalto a terra attorno al pezzo in quota (su Corso Boston ovest un
+  cordolo nuovo sul bordo, veduta `tangenziale-boston-ovest`);
+- per provare una modifica senza rigenerare: `python3 scripts/prova_risolutore.py --registro --mappa <file>` scrive la
+  mappa di prova (5 minuti sul Mac con tutto il registro), e la funzione `gradini` di `tests/profili.spec.js` gira anche
+  sulla città costruita in Node con `costruisci(poi, { mappa })` di `scripts/citta_node.mjs` (le aree in
+  `<file>-aree/`, un collegamento a `public/mappa/aree`): 10 s, senza browser. Sulla mappa di main dà esattamente i casi
+  di `data/eccezioni/gradini.json`; sulla mappa di prova del Mac 3 casi in più e 6 in meno, quindi si confrontano due
+  mappe di prova tra loro. Con le sole strutture che interessano (`--struttura`) il passo dura una decina di secondi;
+- `data/eccezioni/gradini.json` è diviso per meccanismo: le sette sovrapposizioni rimaste, una per gruppo con il suo
+  perché (innesti su una salita, rampe che si staccano a pochi gradi e salgono); il terreno sulla larghezza (30, assi
+  alla stessa quota entro 5 cm: #125); le pieghe tra archi di fila (16); un arco fuori dalla struttura.
+
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
 - il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e
