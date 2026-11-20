@@ -899,16 +899,27 @@ sapere:
   stessa soluzione, e le quote escono identiche. Il resto non si accorcia senza cambiare la mappa: la parte più grande,
   circa 57.000 incognite con le ausiliarie, si risolve 5 volte di fila, e un'altra strada per HiGHS (altro metodo,
   partenza dalla soluzione di prima) può dare un'altra delle soluzioni con lo stesso costo;
-- nella pianta (`scripts/street_surfaces.py`) `in_parallelo(fn, n)` divide un ciclo di lavori indipendenti tra processi
-  nati per fork, che trovano in memoria quello che serve; tornano solo i risultati, le geometrie per WKB con tutte le
-  cifre, nell'ordine. Lo usano i riquadri della partizione, i raccordi agli incroci (`fillets`, un nodo alla volta), i
-  tre buffer dell'asfalto in `dbgt_islands` e ogni livello di `unione` con almeno 8 unioni. Su macOS resta in sequenza
-  (fork lì non è sicuro con le librerie di sistema); `PIANTA_FORK=1` lo forza per le prove, `PIANTA_PROCESSI=1` lo
-  spegne. Un processo figlio non apre altri processi;
+- nella pianta (`scripts/street_surfaces.py`) due modi di dividere un ciclo di lavori indipendenti, tutti e due con
+  `PIANTA_PROCESSI` (di base fino a 4; 1 li spegne):
+  - `in_thread(fn, n)`: thread, per le operazioni di Shapely su geometrie grandi (buffer, unioni, differenze). Shapely 2
+    lascia il GIL mentre GEOS lavora, e i thread non copiano il processo né rimandano indietro i risultati. Lo usano i
+    livelli di `unione`, i buffer dell'asfalto di tutta la città che non dipendono l'uno dall'altro (in `dbgt_islands`
+    con l'unione delle corsie, quelli per le carreggiate del DBGT, quello per gli alberi con l'unione degli edifici) e
+    le differenze tra ogni edificio e le zone da tenere libere. Vale anche su macOS. Non per geometrie preparate in
+    comune: GEOS ne costruisce l'indice al primo uso, e da più thread insieme non è sicuro;
+  - `in_parallelo(fn, n)`: processi nati per fork, che trovano in memoria quello che serve; tornano solo i risultati,
+    le geometrie per WKB con tutte le cifre, nell'ordine. Per i cicli con tanto Python: i riquadri della partizione e i
+    raccordi agli incroci (`fillets`, un nodo alla volta). Su macOS resta in sequenza (fork lì non è sicuro con le
+    librerie di sistema); `PIANTA_FORK=1` lo forza per le prove. Un processo figlio non apre altri processi, e un thread
+    non fa fork;
+- nella pianta pesava anche, in sequenza, la domanda "questo edificio tocca le zone da tenere libere?" su tutta la
+  città non preparata: ogni `intersects` rifaceva l'indice della geometria, circa 40 s sul Mac. Ora la geometria si
+  prepara prima (stesso esito). Cercando altro tempo, la misura per riga di `surfaces` (traccia delle sole righe del
+  suo frame, `sys.settrace`) dice dove guardare meglio del profilo per funzione;
 - la regola, per chi aggiunge un ciclo a questi: ogni lavoro deve dare quello che darebbe nel processo della build, e
   il risultato torna al suo posto. Così l'uscita è la stessa byte per byte, ed è il job `rigenera` a controllarlo. Sul
-  Mac, con gli argomenti della pianta salvati, la pianta in sequenza e con quattro processi esce identica (397 contro
-  317 s), il passo dei cavalcavia con uno e con quattro processi anche (244 contro 138 s).
+  Mac, con gli argomenti della pianta salvati, la pianta esce identica in sequenza, con i soli thread e con thread e
+  processi; il passo dei cavalcavia con uno e con quattro processi, e con la memoria, anche.
 
 #150, carreggiate che si sovrappongono agli innesti (20 novembre). Regola e numeri in [`cavalcavia.md`](cavalcavia.md),
 sezione 6. Da sapere:

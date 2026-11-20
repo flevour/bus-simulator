@@ -13,8 +13,9 @@ import math
 import multiprocessing
 import os
 import sys
+import threading
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import shapely
 from shapely import STRtree
@@ -72,13 +73,10 @@ def unione(geoms):
 
 def _unisci(gruppi, tutti):
     """Un livello di unione: {chiave: unary_union dei pezzi}; un pezzo solo resta com'è, tranne al primo livello (tutti).
-    Le unioni di un livello sono indipendenti: da 8 in su si dividono tra i processi (#158, in_parallelo)."""
+    Le unioni di un livello sono indipendenti: si dividono tra i thread (#158, in_thread)."""
     chiavi = list(gruppi)
     da_fare = [k for k in chiavi if tutti or len(gruppi[k]) > 1]
-    if len(da_fare) >= 8:
-        fatti = dict(zip(da_fare, in_parallelo(lambda i: unary_union(gruppi[da_fare[i]]), len(da_fare))))
-    else:
-        fatti = {k: unary_union(gruppi[k]) for k in da_fare}
+    fatti = dict(zip(da_fare, in_thread(lambda i: unary_union(gruppi[da_fare[i]]), len(da_fare))))
     return {k: fatti[k] if k in fatti else gruppi[k][0] for k in chiavi}
 
 
@@ -559,10 +557,9 @@ def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram):
     for t in tram:
         if len(t) >= 4:
             lanes.append(LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE + 0.5))
-    busy = unary_union(lanes)
-    shapely.prepare(busy)
-    Ub, Un, Ut = in_parallelo(lambda i: allarga(U, (0.5, 8, 2)[i]), 3)  # tre buffer dell'asfalto di tutta la città, insieme (#158)
-    for g in (Ub, Un, Ut):
+    # le corsie e tre buffer dell'asfalto di tutta la città, insieme (#158)
+    busy, Ub, Un, Ut = in_thread(lambda i: unary_union(lanes) if i == 0 else allarga(U, (0.5, 8, 2)[i - 1]), 4)
+    for g in (busy, Ub, Un, Ut):
         shapely.prepare(g)
     near = lambda c: Ub.intersection(c).area >= 0.6 * c.area or (Ut.intersects(c) and Un.intersection(c).area >= 0.9 * c.area)
     return [c for c in cands if c.area >= 3 and not busy.intersects(c) and near(c)]
@@ -753,7 +750,8 @@ def in_parallelo(fn, n, fette=8):
     Su macOS (fork non è sicuro con le librerie di sistema) e con PROCESSI 1 in sequenza; PIANTA_FORK=1 forza il fork
     per le prove."""
     global _LAVORO
-    if PROCESSI <= 1 or n < 2 or not (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK')):
+    if (PROCESSI <= 1 or n < 2 or not (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK'))
+            or threading.current_thread() is not threading.main_thread()):  # niente fork da un thread di in_thread
         return [fn(i) for i in range(n)]
     k = min(n, PROCESSI * fette)
     quali = [list(range(j, n, k)) for j in range(k)]
@@ -768,6 +766,18 @@ def in_parallelo(fn, n, fette=8):
         for i, v in zip(q, r):
             out[i] = v
     return out
+
+
+def in_thread(fn, n):
+    """[fn(i) for i in range(n)] in PROCESSI thread (#158), nell'ordine. Per le operazioni di Shapely su geometrie
+    grandi (buffer, unioni, differenze): Shapely 2 lascia il GIL mentre GEOS lavora, e i thread non copiano il processo né
+    rimandano indietro i risultati. Ogni risultato è quello di fn(i) da sola: l'uscita è la stessa, byte per byte, anche
+    su macOS. Non per geometrie preparate in comune: GEOS ne costruisce l'indice al primo uso, e da più thread insieme
+    non è sicuro (lì in_parallelo, che lavora in processi separati). Da un thread, o con PROCESSI 1, in sequenza."""
+    if PROCESSI <= 1 or n < 2 or threading.current_thread() is not threading.main_thread():
+        return [fn(i) for i in range(n)]
+    with ThreadPoolExecutor(max_workers=min(PROCESSI, n)) as ex:
+        return list(ex.map(fn, range(n)))
 
 
 def _cella_riquadro(ixz, L, trees, R, tR, hfun):
@@ -961,7 +971,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             bl.append(q if q.is_valid else q.buffer(0))
         bld = unione(bl)
         upe = unione([pieces[k] for k in drive if k in in_quota])
-        Ut, U2 = allarga(U, 1.0), allarga(U, 2.0)
+        Ut, U2 = in_thread(lambda i: allarga(U, (1.0, 2.0)[i]), 2)
         shapely.prepare(Ut)
         sel = [c for c in dbgt_polys(streets.get('carreggiate', [])) if Ut.intersects(c) and (c.area <= 6000 or c.intersection(U2).area >= 0.3 * c.area)]
         # parcheggi e distributori (SV_STR) che toccano la carreggiata: asfalto anche loro (Largo Debussy è un
@@ -1072,14 +1082,21 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             clear.append(LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_CLEAR, quad_segs=2))
     clear = unione(clear)
     ctree = clear
+    # chi tocca ctree si chiede alla geometria preparata, con lo stesso esito: prima ogni intersects rifaceva l'indice di
+    # tutta la città, circa 40 s sul Mac (#158). Poi le differenze con tutta la città, una per edificio che tocca, divise
+    # tra i thread, con la geometria non più preparata
+    shapely.prepare(ctree)
+    tocca = [j for j, p in enumerate(bpolys) if ctree.intersects(p)]  # preparata ctree, il primo dei due
+    shapely.destroy_prepared(ctree)
+    resti = dict(zip(tocca, in_thread(lambda i: bpolys[tocca[i]].difference(ctree), len(tocca))))
     out_b, moved, dropped = [], 0, 0
-    for b, p in zip(buildings, bpolys):
-        if not p.intersects(ctree):
+    for j, (b, p) in enumerate(zip(buildings, bpolys)):
+        if j not in resti:
             out_b.append(b)
             continue
         # (in ordine fisso e dal vertice più piccolo, prima di semplificare: la differenza con l'unione di tutta la città
         # comincia gli anelli da un punto che dipende anche da quello che sta lontano, #139)
-        rest = canonico(p.difference(ctree))
+        rest = canonico(resti[j])
         parts = [g for g in ([rest] if isinstance(rest, Polygon) else list(getattr(rest, 'geoms', []))) if isinstance(g, Polygon) and g.area >= 15]
         if not parts:
             dropped += 1
@@ -1213,9 +1230,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     if green and green.get('alberi'):
         a = green['alberi']
         xs, zs = a[0::2], a[1::2]
-        Ub = allarga(U, 1.0)
+        Ub, bu = in_thread(lambda i: allarga(U, 1.0) if i == 0 else unary_union(bpolys), 2)
         shapely.prepare(Ub)
-        bu = unary_union(bpolys)
         shapely.prepare(bu)
         ok = ~shapely.contains_xy(Ub, xs, zs) & ~shapely.contains_xy(bu, xs, zs)
         alberi = [v for x, z, k in zip(xs, zs, ok) if k for v in (x, z)]
