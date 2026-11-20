@@ -883,13 +883,21 @@ sapere:
   Docker e in CI è bufferizzato, e un lavoro scaduto non diceva dove era arrivato. In CI, prima (7a37c1b): build da 984
   a oltre 1.150 s, quasi tutta cavalcavia (290-375 s) e pianta delle strade (585-697 s); la stessa build dura il 20% in
   più da una macchina all'altra. In locale, in Docker amd64 emulato sul Mac, 1.162 s;
-- la guardia: oltre `TETTO_CAVALCAVIA` (300 s) il passo dei cavalcavia ferma la build in CI (`CI` o `GITHUB_ACTIONS`
-  nell'ambiente), con il messaggio, invece di lasciar scadere il lavoro; in locale avvisa. Oltre `TETTO_BUILD` (900 s)
-  avvisa sempre. Chi allunga la build di proposito misura e sposta il tetto, scrivendo perché;
+- la guardia: oltre `TETTO_CAVALCAVIA` (300 s) per il passo dei cavalcavia, o `TETTO_BUILD` (900 s) per la build, la
+  build avvisa: in CI con un'annotazione `::warning::` nella serie, che resta anche se poi il lavoro scade. Non si ferma.
+  Nella prima versione (47aa696) fermava la build in CI, e su una macchina lenta rigenera è caduta a 311 s di cavalcavia.
+  Tra una macchina e l'altra della CI la stessa build dura fino a 1,6 volte (a5cefe8: 912 s su una, 1.439 s sull'altra,
+  con i passi in sequenza 1,7-1,9 volte più lenti), e un tetto fisso che ferma la build sulle lente la ferma anche dove
+  starebbe nel limite. La build stampa all'inizio la macchina (processori e modello). Chi allunga la build di proposito
+  misura e sposta i tetti, scrivendo perché;
 - il passo dei cavalcavia era al 93% programma lineare, le 21 parti risolte una dopo l'altra per 6 volte (due giri del
   terreno, ognuno con due giri contro le onde). Ora `LP.risolvi` le divide tra `PROCESSI` processi
-  (`CAVALCAVIA_PROCESSI`, di base fino a 4): fork su Linux, spawn su macOS. Più giù non va: la parte più grande, circa
-  57.000 incognite con le ausiliarie, si risolve 6 volte di fila;
+  (`CAVALCAVIA_PROCESSI`, di base fino a 4): fork su Linux, spawn su macOS. E ricorda le soluzioni per impronta del
+  programma (`_SOLUZIONI`, sha256 di incognite, matrice, termini noti e limiti): 54 soluzioni su 126 rifacevano un
+  programma identico tra un giro e l'altro, tra cui la parte più grande nell'ultimo giro. Lo stesso programma ha la
+  stessa soluzione, e le quote escono identiche. Il resto non si accorcia senza cambiare la mappa: la parte più grande,
+  circa 57.000 incognite con le ausiliarie, si risolve 5 volte di fila, e un'altra strada per HiGHS (altro metodo,
+  partenza dalla soluzione di prima) può dare un'altra delle soluzioni con lo stesso costo;
 - nella pianta (`scripts/street_surfaces.py`) `in_parallelo(fn, n)` divide un ciclo di lavori indipendenti tra processi
   nati per fork, che trovano in memoria quello che serve; tornano solo i risultati, le geometrie per WKB con tutte le
   cifre, nell'ordine. Lo usano i riquadri della partizione, i raccordi agli incroci (`fillets`, un nodo alla volta), i

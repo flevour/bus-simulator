@@ -36,13 +36,22 @@ ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
 
 
-# tetti dei tempi in CI (#158): i lavori rigenera e localita di .github/workflows/verifiche.yml hanno 20 e 25 minuti, e
-# la build ne è quasi tutto. Da 491b179 (#142, ventinove strutture) il passo dei cavalcavia durava 290-375 s e la build
-# 16-19 minuti, e rigenera scadeva; con le parti del programma lineare in parallelo il passo sta sui 150-200 s. Oltre
-# TETTO_CAVALCAVIA la build in CI si ferma subito (meglio di un lavoro che scade senza dire dove), in locale avvisa:
-# in Docker sul Mac l'emulazione amd64 è più lenta. TETTO_BUILD avvisa e basta
+# tetti dei tempi (#158): i lavori rigenera e localita di .github/workflows/verifiche.yml hanno 20 e 25 minuti, e la
+# build ne è quasi tutto. Da 491b179 (#142, ventinove strutture) il passo dei cavalcavia durava 267-453 s in CI, la build
+# 912-1.439 s, e rigenera scadeva. Oltre un tetto la build avvisa: in CI con un'annotazione ::warning:: nella serie, che
+# si vede anche se poi il lavoro scade. Non si ferma: tra una macchina e l'altra della CI la stessa build dura fino a 1,6
+# volte di più (a5cefe8: 912 s su una, 1.439 s sull'altra), e un tetto che ferma la build sulla macchina lenta la ferma
+# anche dove starebbe nel limite. Chi allunga la build di proposito misura e sposta i tetti, scrivendo perché
 TETTO_CAVALCAVIA = 300  # s
 TETTO_BUILD = 900       # s
+
+
+def avvisa(testo):
+    """Avviso della build: in CI un'annotazione della serie (GitHub Actions legge ::warning:: dall'uscita del passo)."""
+    if os.environ.get('GITHUB_ACTIONS'):
+        print(f'::warning title=Tempi della build della mappa (#158)::{testo}', flush=True)
+    else:
+        print('ATTENZIONE: ' + testo, flush=True)
 
 
 class Cronometro:
@@ -52,6 +61,14 @@ class Cronometro:
     def __init__(self):
         self.t0 = self.t = time.perf_counter()
         self.passi = []
+        # la macchina: in CI la stessa build dura fino a 1,6 volte di più da una all'altra, e qui si vede quale era
+        cpu = ''
+        try:
+            cpu = next((r.split(':', 1)[1].strip() for r in open('/proc/cpuinfo') if r.startswith('model name')), '')
+        except OSError:
+            pass
+        usabili = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
+        print(f'macchina: {os.cpu_count()} processori ({usabili} usabili){", " + cpu if cpu else ""}', flush=True)
 
     def passo(self, nome):
         t = time.perf_counter()
@@ -64,8 +81,7 @@ class Cronometro:
         tutto = time.perf_counter() - self.t0
         print('tempi della build: ' + ', '.join(f'{n} {s:.0f} s' for n, s in self.passi) + f'; in tutto {tutto:.0f} s', flush=True)
         if tutto > TETTO_BUILD:
-            print(f'ATTENZIONE: la build è durata {tutto:.0f} s, oltre {TETTO_BUILD} s (#158): in CI i lavori della mappa '
-                  'hanno 20 e 25 minuti', flush=True)
+            avvisa(f'la build è durata {tutto:.0f} s, oltre {TETTO_BUILD} s: i lavori della mappa in CI hanno 20 e 25 minuti')
 
 
 DRIVE = {
@@ -1760,11 +1776,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     else:
         heights = street_surfaces.overpass_heights(nodes, edges, rails)
     if crono.passo('cavalcavia') > TETTO_CAVALCAVIA:
-        oltre = (f'il passo dei cavalcavia è durato {crono.passi[-1][1]:.0f} s, oltre il tetto di {TETTO_CAVALCAVIA} s '
-                 '(#158, scripts/build_map.py): i lavori della mappa in CI rischiano di scadere')
-        if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
-            sys.exit(oltre)
-        print('ATTENZIONE: ' + oltre, flush=True)
+        avvisa(f'il passo dei cavalcavia è durato {crono.passi[-1][1]:.0f} s, oltre il tetto di {TETTO_CAVALCAVIA} s '
+               '(scripts/build_map.py): i lavori della mappa in CI rischiano di scadere')
     green = json.load(open(green_path, encoding='utf-8')) if green_path else None
     streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
     platforms = json.load(open(osm_stops_path, encoding='utf-8')).get('banchine') if osm_stops_path else None

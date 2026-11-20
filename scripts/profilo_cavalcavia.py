@@ -32,6 +32,7 @@ strutture della rete non sono quelle del registro; con CAVALCAVIA=registro lo ri
 Servono numpy e scipy (programmazione lineare, HiGHS).
 """
 import base64
+import hashlib
 import json
 import math
 import multiprocessing
@@ -392,6 +393,23 @@ def _parte(costo, A, b, limiti):
     return res.status, res.message, res.x
 
 
+# soluzioni delle parti già risolte in questo processo, per impronta del programma (#158): tra un giro e l'altro (terreno,
+# onde) molte parti non cambiano, e con le 29 strutture 54 soluzioni su 126 rifacevano un programma identico, tra cui
+# la parte più grande nell'ultimo giro. Lo stesso programma ha la stessa soluzione: chi la ritrova qui non la rifà
+_SOLUZIONI = {}
+
+
+def _impronta(costo, A, b, limiti):
+    """Impronta di tutti i dati di una parte: incognite, matrice (CSR, con la forma), termini noti e limiti."""
+    h = hashlib.sha256()
+    lim = np.array([[np.nan if v is None else v for v in l] for l in limiti], dtype=float)
+    for a in (np.asarray(costo, dtype=float), A.data, A.indices, A.indptr, np.asarray(A.shape), np.asarray(b, dtype=float), lim):
+        a = np.ascontiguousarray(a)
+        h.update(f'{a.dtype.str}{a.shape}|'.encode())
+        h.update(a.tobytes())
+    return h.digest()
+
+
 class LP:
     def __init__(self, n):
         self.n = n          # incognite
@@ -441,20 +459,24 @@ class LP:
                 x[inc] = [lo if lo is not None else 0.0 for lo in (limiti[i][0] for i in inc)]
                 continue
             lavori.append((inc, (costo[inc], A[righe][:, inc], b[righe], [limiti[i] for i in inc])))
-        if PROCESSI > 1 and len(lavori) > 1:
+        impronte = [_impronta(*args) for _inc, args in lavori]
+        da_fare = [j for j, h in enumerate(impronte) if h not in _SOLUZIONI]
+        if PROCESSI > 1 and len(da_fare) > 1:
             # le parti più grandi prima, così la più lunga non resta per ultima; ogni soluzione torna al suo posto. Su
             # Linux i processi nascono per fork (la build è già in memoria), su macOS per spawn (fork lì non è sicuro)
             ctx = multiprocessing.get_context('fork' if sys.platform.startswith('linux') else 'spawn')
-            ordine = sorted(range(len(lavori)), key=lambda j: -len(lavori[j][0]))
+            ordine = sorted(da_fare, key=lambda j: -len(lavori[j][0]))
             with ProcessPoolExecutor(max_workers=PROCESSI, mp_context=ctx) as pool:
                 futuri = {j: pool.submit(_parte, *lavori[j][1]) for j in ordine}
-                esiti = [futuri[j].result() for j in range(len(lavori))]
+                esiti = {j: futuri[j].result() for j in da_fare}
         else:
-            esiti = [_parte(*args) for _inc, args in lavori]
-        for (inc, _args), (stato, messaggio, sol) in zip(lavori, esiti):
+            esiti = {j: _parte(*lavori[j][1]) for j in da_fare}
+        for j, (stato, messaggio, sol) in esiti.items():
             if stato != 0:
                 raise RuntimeError('profilo dei cavalcavia: il programma lineare non ha soluzione: ' + messaggio)
-            x[inc] = sol
+            _SOLUZIONI[impronte[j]] = sol
+        for (inc, _args), h in zip(lavori, impronte):
+            x[inc] = _SOLUZIONI[h]
         return x
 
 
