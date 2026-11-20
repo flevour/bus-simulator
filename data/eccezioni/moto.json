@@ -33,13 +33,6 @@
      "bus imbardata (curva) @ 12,-371",
      "bus imbardata (inversione) @ -22,-386"
     ]
-   },
-   {
-    "perche": "#135 per le auto: al Ponte Omizzolo verso Via Gozzi (archi di 3 e 19 m a due corsie) i raccordi di due svolte vicine stanno su corsie diverse e il secondo comincia prima che finisca il primo. Un'auto con un viaggio sceglie la svolta dopo senza guardare la corsia (versoArrivo, #116) e lì fa una curva del gioco. I raccordi sono quelli di prima: il caso compare e sparisce con il traffico (c'era con #143, tolto con #134; torna con #148, che cambia le code di Via Gozzi e con loro i ritardi misurati con cui le auto scelgono la strada).",
-    "casi": [
-     "auto imbardata (raccordi sovrapposti) @ 385,-442",
-     "auto imbardata (raccordi sovrapposti) @ 389,-440"
-    ]
    }
   ],
   "inversioni": []

@@ -102,7 +102,7 @@ divise per area.
 | `scripts/percorsi.py`, `data/eccezioni/percorsi.json`, `data/osm-correzioni.json`; in `scripts/build_map.py` `ripara`, `giro`, `via_bus` | `area:linee` (#114), e chi rigenera la mappa | percorsi delle linee guidabili ([`percorsi.md`](percorsi.md)): la build li controlla alla fine e si ferma su un caso nuovo; chi cambia rete, svolte, corsie, pianta o raccordi guarda i casi con `python3 scripts/percorsi.py --elenco` e, se restano, li mette nell'elenco con il perché (`--aggiorna`). Un tag OSM sbagliato si corregge con una riga di `data/osm-correzioni.json`, non nel codice |
 | `src/world/inseguitore.js`, `tests/moto.js`, `tests/moto.spec.js`, `data/eccezioni/moto.json` | `area:traffico` (#113, #115), poi chi tocca corsie, raccordi o percorsi dei bus (#114, #134, #111) | inseguitore di percorso di auto e bus automatici ([`raccordi.md`](raccordi.md), sezione 7), con chi segue chi e l'incrocio da liberare (`idm`, `incrocioDavanti`, sezione 8), e prova del moto: chi cambia `laneLayout`, i raccordi o il modo in cui i mezzi scelgono la strada rilancia `tests/moto.spec.js`; i casi sui ripieghi spariscono quando le svolte hanno il loro raccordo, e vanno tolti dall'elenco nello stesso commit |
 | `tests/code.js`, `tests/code.spec.js`, `data/eccezioni/code.json` | `area:traffico` (#115), poi chi cambia chi segue chi, sblocchi, precedenze o il numero di auto (#49, #50, #116, #117) | prova delle code: corridoio di Via Querini (flusso contro densità, scarico al semaforo), incrocio da liberare, dieci minuti senza sblocchi a tempo, incroci bloccati e fermi oltre 120 s. Chi cambia il traffico la rilancia; un caso sparito si toglie dall'elenco nello stesso commit |
-| `scripts/domanda.py`, `src/data/padova-domanda.json`, `src/world/domanda.js`, `tests/domanda.js`, `tests/domanda.spec.js`, `scripts/gtfs_tempi.py` | `area:traffico` (#116), poi #117 e chi cambia rete, raccordi, edifici o sosta | domanda di traffico ([`domanda.md`](domanda.md)): la build scrive zone, porte, tempi, destinazioni, curva oraria e l'assegnazione per fascia; il file dipende da rete, raccordi ed edifici delle aree, e chi rigenera la mappa lo rifà nello stesso commit (`python3 scripts/domanda.py`, in fondo a `rigenera_mappa.sh`; `verifica_mappa.py` controlla che sia quello che esce). Non è locale: l'assegnazione sposta i flussi anche lontano |
+| `scripts/domanda.py`, `scripts/pendolari.py`, `src/data/padova-domanda.json`, `src/world/domanda.js`, `tests/domanda.js`, `tests/domanda.spec.js`, `scripts/gtfs_tempi.py`, `data/eccezioni/punte.json`, `data/istat-pendolari.json`, `data/osm-comuni.json`, `data/osm-strade-fuori.json` | `area:traffico` (#116, #147), poi #117, #159 e chi cambia rete, raccordi, edifici o sosta | domanda di traffico ([`domanda.md`](domanda.md)): la build scrive zone, porte, tempi, destinazioni, curva oraria e l'assegnazione per fascia; il file dipende da rete, raccordi ed edifici delle aree, e chi rigenera la mappa lo rifà nello stesso commit (`python3 scripts/domanda.py`, in fondo a `rigenera_mappa.sh`; `verifica_mappa.py` controlla che sia quello che esce). Non è locale: l'assegnazione sposta i flussi anche lontano |
 | `scripts/localita.py`, `data/localita.json`, `data/eccezioni/localita.json`; in `scripts/street_surfaces.py` `unione`, `partizione`, `canonico`, `anelli_canonici` | `area:mappa` (#139), e chi scrive un passo della build | località della mappa: rapporto a fine rigenerazione e prova (job `localita`, nota #139 della Mappa). Un passo che lavora su tutta la città usa `unione` e semplifica per riquadro; un caso nuovo della prova si capisce prima di metterlo nell'elenco |
 | `tests/impronta.json`, `tests/impronta.js`, `tests/impronta.spec.js` | chi cambia traffico, bus o tram automatici, mappa o linee (#145) | impronta del traffico di una corsa, ai bit, uguale su Mac e in CI (nota #145 delle Verifiche): chi la cambia di proposito la riscrive nello stesso commit con `IMPRONTA=aggiorna npx playwright test tests/impronta.spec.js`; se in CI è diversa da quella del Mac, l'esito dipende dalla macchina e la causa va trovata |
 | `data/conto-aree.json` | i ticket che rigenerano la mappa | conto degli oggetti per area, scritto da `aree_mappa.py` con le aree: in un rebase si prende quello di `main` con la sua mappa e si rigenera, come per le aree |
@@ -1742,6 +1742,33 @@ decide. Regola in [`raccordi.md`](raccordi.md), sezione 8. Da sapere prima di to
   12,6 m/s e decide con la fila davanti a 11 m/s, che poi si ferma 11 m più indietro del previsto perché un'auto
   lascia libero l'incrocio dopo: quello che la previsione non vede. Casi così compaiono e spariscono a ogni
   cambiamento del traffico.
+
+Porte pesate con i pendolari ISTAT (#147, 20 novembre). Fonti, conto e numeri in [`domanda.md`](domanda.md), sezioni
+3, 4 e 8. Da sapere prima di toccare la domanda:
+
+- `scripts/pendolari.py` (chiamato da `calcola` di `scripts/domanda.py`) dà le righe di `pendolari_in` e
+  `pendolari_out`: dai comuni di fuori (centro abitato fuori dalle aree della mappa) a quelli dentro, pendolari in auto
+  come conducenti della matrice ISTAT 2011, ogni coppia comune e zona con la porta col tempo minore (strade OSM fuori
+  dalla mappa fino alla porta, poi la matrice `tempi`). `PESO_PORTA` e `PENDOLARI` non ci sono più; il peso delle porte
+  nel file sono i pendolari che ci passano (il gioco non lo usa), e chi attraversa entra ed esce in proporzione a loro.
+  La curva di `pendolari_in` prende le fasce di uscita della matrice (`ore_istat`);
+- i tratti della mappa si riconoscono nelle vie di fuori per coordinate dei nodi (0,5 m) e per arco: chi cambia la
+  proiezione (`xz`) o il modo in cui la build taglia le vie al bordo guarda `python3 scripts/domanda.py --conti`, dove
+  la riga "porte senza una via di fuori" deve restare corta (oggi una carreggiata di Corso Argentina). Comuni e strade
+  si riscaricano con le query in `scripts/overpass-comuni.ql` e `scripts/overpass-strade-fuori.ql` (comandi nel README);
+- guardia `python3 scripts/gtfs_tempi.py --porte`, anche in `scripts/verifica_mappa.py` (lavoro mappa della CI): su ogni
+  porta, i tratti delle linee sul percorso verso il centro dove il GTFS ha alle 7-9 almeno il 20% in più e la domanda
+  alle 8 meno del 10% sono casi di `data/eccezioni/punte.json`. Chi cambia la domanda o la rete la rilancia; i 15 casi di
+  oggi (Via Sorio con la U12, la E080 verso Chiesanuova, la U10 da Ponte di Brenta e altri) sono di #159;
+- l'orario di Busitalia allunga blocchi interi di fermate dello stesso fattore (la U12 +42-44% da Tencarola a Via
+  Cavalletto): un tratto del GTFS dice quanto è più lento il viaggio, non dove si forma la coda;
+- con 48.400 pendolari invece di 60.000 la build ha meno code: stati sopra 1,1 alle 8 da 1.103 a 879, auto presenti da
+  8.700 a 7.200. Prova delle punte in due lanci: medie 1,38 e 1,32 alle 8, 1,18 e 1,27 alle 18 (soglia 1,08); Via
+  Facciolati 1,93 e 1,83 la mattina, la sera da 1,55 a 1,02 e 1,17 (dalla porta di Corso Esperanto escono 1.500
+  pendolari al giorno invece di 3.200); Via Sorio 1,03 e 1,08 alle 8;
+- prove del traffico: nei dieci minuti delle code nessun caso nuovo di auto ferma in un incrocio o oltre 120 s; due giri
+  di attese auto-tram nuovi in Via Morgagni e tra Via Tommaseo e Via Gozzi (#144), sparito quello tra bus e SIR2 in
+  Corso Garibaldi; nel moto spariscono le due auto del Ponte Omizzolo (#135 per le auto). Impronta riscritta.
 
 ### Veicoli e guida (corsia `guida`, chiusa l'11 novembre)
 

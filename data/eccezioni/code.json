@@ -4,9 +4,10 @@
   "sblocchi": [],
   "giri_di_attese": [
    {
-    "perche": "Corso Garibaldi (63, -389): un bus fermo davanti al tram SIR2 aspetta proprio quel tram, e il tram aspetta il bus; è un giro di attese che Traffic.untangle scioglie (nessuno resta fermo oltre 120 s). Lo stesso intreccio, con il SIR1, era già stato in questo elenco (#139, #116): compare e sparisce con i piccoli cambiamenti del traffico. Questa volta con le tangenziali sul profilo (#142), che rigenerando la mappa cambiano 106 raccordi attorno alle strutture e la domanda (src/data/padova-domanda.json), quindi i viaggi dei dieci minuti della prova.",
+    "perche": "Auto sulle corsie sopra il binario del SIR3 in controsenso (#144): in Via Morgagni (389, -376), sull'arco 4857 dell'issue, e all'incrocio di Via Tommaseo con Via Gozzi (576, -837) un'auto e il tram si fermano muso contro muso e ognuno aspetta l'altro; Traffic.untangle scioglie il giro (nessuno resta fermo oltre 120 s). Con i pendolari ISTAT per porta (#147) il traffico dei dieci minuti è un altro: compaiono questi due e sparisce il giro tra bus e SIR2 in Corso Garibaldi (63, -389). Compaiono e spariscono a ogni cambiamento del traffico finché #144 non toglie le corsie dal binario in controsenso.",
     "casi": [
-     "tram e bus che si aspettano @ 63,-389"
+     "auto e tram che si aspettano @ 389,-376",
+     "auto e tram che si aspettano @ 576,-837"
     ]
    }
   ],

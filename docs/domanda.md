@@ -280,18 +280,19 @@ tempo a formarsi e la punta delle 8 scendeva a 1,13.
 Da un lancio all'altro, con piccoli cambiamenti del traffico, il rapporto di un corridoio si sposta anche di 0,2 (Via
 Gattamelata alle 8 è stata 1,19, 1,02 e 1,27); la media dei tre molto meno.
 
-Con i pendolari ISTAT per porta (#147), sul Mac il 20 novembre (verso il centro, poi verso fuori):
+Con i pendolari ISTAT per porta (#147), sul Mac il 20 novembre, sulla mappa di #142 (verso il centro, poi verso fuori):
 
 | Corridoio | 8 | 11 | 18 | 22 | punta delle 8 | delle 18 |
 |---|---|---|---|---|---|---|
-| Via Sorio | 71 e 100 s | 69 e 108 | 72 e 109 | 69 e 99 | 1,03 | 1,04 |
-| Via Facciolati | 180 e 90 | 94 e 100 | 96 e 93 | 91 e 95 | 1,93 | 1,02 |
-| Via Ariosto e Via Gattamelata | 257 e 148 | 218 e 146 | 324 e 147 | 127 e 156 | 1,18 | 1,49 |
-| media | | | | | 1,38 | 1,18 |
+| Via Sorio | 75 e 114 s | 70 e 109 | 68 e 114 | 69 e 100 | 1,08 | 1,05 |
+| Via Facciolati | 177 e 95 | 97 e 103 | 113 e 91 | 95 e 91 | 1,83 | 1,17 |
+| Via Ariosto e Via Gattamelata | 257 e 148 | 243 e 147 | 387 e 147 | 125 e 160 | 1,06 | 1,59 |
+| media | | | | | 1,32 | 1,27 |
 
-La mattina più pendolari tra le 7 e le 9 (sezione 4) e la stessa punta; la sera Via Facciolati verso fuori non la sente
-più: dalla porta di Corso Esperanto escono 1.500 pendolari al giorno, con il peso di una trunk ne uscivano 3.200. Via
-Sorio resta senza punta anche con 1.330 pendolari al giorno dalla sua porta invece di 970 (#159).
+Un lancio prima, sulla mappa di #148, la media era 1,38 e 1,18 (Via Sorio 1,03 alle 8, Via Facciolati 1,93 e 1,02,
+Via Gattamelata 1,18 e 1,49). La sera Via Facciolati verso fuori sente meno la punta: dalla porta di Corso Esperanto
+escono 1.500 pendolari al giorno, con il peso di una trunk ne uscivano 3.200. Via Sorio resta sotto 1,1 anche con 1.330
+pendolari al giorno dalla sua porta invece di 970 (#159).
 
 Fino al 19 novembre Via Facciolati aveva la punta la mattina verso il centro e la sera verso fuori, Via Gattamelata la
 sera verso il centro e la mattina meno, Via Sorio no: nella build il tratto tra Via Col Berretta e Piazzale San Giovanni
