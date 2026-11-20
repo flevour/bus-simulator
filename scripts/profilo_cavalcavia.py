@@ -525,7 +525,8 @@ class Profili:
         self.campate = {k: [(0.0, R.lung[k], None)] for k in deck}
         self.rilevato = set()  # incognite dei ponti OSM dove il DTM vede un rilevato (piani_campate)
         self.h = None
-        self.lungo_binari = self.punti_binari()
+        self.lungo_binari, self.xz_binari = self.punti_binari()
+        self.adattato = False  # nat è il terreno adattato al profilo (dal secondo giro): quota_binario
         self.registro = registro
         self.strutture = strutture
         self.violazioni = {}
@@ -536,19 +537,37 @@ class Profili:
         tra gli archi delle strutture): il binario prende la quota del profilo in quel punto dell'asse."""
         R = self.R
         vista = type('Vista', (), {'strade': R.griglia, 'misurati': self.S, 'archi': R.archi, 'nodi': R.nodi})
-        out = []
+        out, xz = [], []
         for P in R.binari:
             cum = [0.0]
             for a, b in zip(P, P[1:]):
                 cum.append(cum[-1] + math.dist(a, b))
-            riga = []
+            riga, punti = [], []
             for n in range(int(cum[-1] // BINARIO_PASSO) + 1):
                 x, z, dx, dz = punto(P, cum, n * BINARIO_PASSO)
                 k, t, _d = arco_accanto(vista, (x, z), (dx, dz))
                 riga.append((k, t) if k is not None else None)
+                punti.append((x, z))
             if any(riga):
                 out.append(riga)
-        return out
+                xz.append(punti)
+        return out, xz
+
+    def quota_binario(self, termini, p):
+        """Quota assoluta del binario nel punto p, dove affianca la strada delle strutture `termini` ([(incognita,
+        peso)] del punto del suo asse più vicino), come la scrive scripts/quote_rete.py (profilo, tramH) e la misura il
+        controllo (#151): quella della strada dove sta più di IN_QUOTA sopra il terreno sotto il binario, se no il
+        terreno, che il binario a raso segue. Con la sola strada il programma vedeva la conca del SIR2 in Via Venezia di
+        5-7 cm, sotto la soglia del giro, e il controllo di 13-16: il fondo e il massimo a valle sono a raso, dove il
+        binario della mappa segue le celle del terreno (a gradini di 5,6 cm) a 2 m dall'asse della strada. Il terreno è
+        quello adattato al profilo, dal secondo giro (adattato): al primo P.nat ha ancora il rilevato del DTM, che sulle
+        spalle sta sopra il profilo, e il binario ci finiva sopra (sulla campata del San Marco una conca finta di 0,9 m,
+        riempita alzando la campata di 0,8 m). La prova è conche_binari di scripts/prova_risolutore.py."""
+        strada = sum(float(self.h[i]) * w for i, w in termini)
+        if not self.adattato:
+            return strada
+        t = self.nat.at(*p)
+        return strada if strada - t > IN_QUOTA else t
 
     def p_max(self, k):
         p = PENDENZA[self.R.tipo(k)]
@@ -904,7 +923,7 @@ class Profili:
                 while n < len(riga) and riga[n] is not None:
                     n += 1
                 termini = [self.a_frazione(*riga[m]) for m in range(a, n)]
-                q = [round(sum(float(h[i]) * w for i, w in t), 4) for t in termini]
+                q = [round(self.quota_binario(t, self.xz_binari[r][a + m]), 4) for m, t in enumerate(termini)]
                 ss = [m * BINARIO_PASSO for m in range(len(q))]
                 for sx, dx, livello in conche(q, ss):
                     for m in range(sx + 1, dx, ONDA_BINARIO):
@@ -1617,6 +1636,7 @@ def calcola(nodes, edges, names, rails, tram, terreno, dtm, registro=None, acqua
     # (Profili.onde) e si risolve di nuovo; le richieste restano per i giri dopo
     onde = {}
     for giro in range(2):
+        P.adattato = giro > 0
         P.risolvi(piano_di, onde)
         trovate = len(P.onde())
         for _g in range(GIRI_ONDE):

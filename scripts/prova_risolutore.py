@@ -7,8 +7,12 @@ terreno, `cavalcavia`, `nodeH`, `edgeH` e `tramH` in una copia della mappa in me
 (scripts/cavalcavia.py). Con una struttura piccola gira in mezzo minuto: serve a provare una modifica al risolutore o al
 registro prima dei sette minuti di scripts/rigenera_mappa.sh.
 
-Dice anche le regole di #125 sulle strutture accese, e con --controlla esce con errore se una non vale:
+Dice anche le regole di #125 e #151 sulle strutture accese, e con --controlla esce con errore se una non vale:
   * il programma non viola pendenze, raggi e franchi;
+  * il programma vede le conche dei binari come il controllo, entro CONCA_TOLL: Profili.quota_binario (la quota del
+    binario del giro contro le onde) negli stessi punti del binario della mappa scritta. Con la sola strada sull'asse il
+    programma non vedeva le conche a raso del SIR2 in Via Venezia e ai piedi del San Marco (13-17 cm per il controllo,
+    5-7 per il programma): a raso il binario della mappa segue il terreno sotto di sé;
   * la strada che passa sotto una campata, fuori dalla struttura, tiene la sua quota: nella mappa scritta (terreno
     "via" più `edgeH`) ha, entro SOTTO_TOLL, la quota della rete delle strade sotto le campate (profilo_cavalcavia.
     StradeSotto: fuori dall'ombra il terreno com'è, dentro la media dei vicini, su una strada sola la retta tra i due
@@ -21,7 +25,7 @@ Cosa non dice: le quote al centimetro della mappa vera. I nodi della mappa sono 
 spente cambiano il terreno attorno, e dove il profilo resta libero due soluzioni dello stesso costo possono scambiarsi
 da una macchina all'altra (nota #124 in docs/LAVORO.md). Le quote vere vengono solo dalla rigenerazione.
 
-    python3 scripts/prova_risolutore.py                          # Via Salboro e il Grassi, le regole di #125
+    python3 scripts/prova_risolutore.py                          # Via Salboro, il Grassi e il San Marco, le regole di #125 e #151
     python3 scripts/prova_risolutore.py --struttura "Cavalcavia Camerini" --struttura "Via Salboro"
     python3 scripts/prova_risolutore.py --registro                # il registro com'è (tutte le strutture accese lì)
     python3 scripts/prova_risolutore.py --controlla              # in CI: esce con errore se una regola non vale
@@ -45,9 +49,11 @@ import street_surfaces  # noqa: E402
 from binari_tram import xz_da  # noqa: E402
 
 RADICE = cavalcavia.RADICE
-STRUTTURE = ['Via Salboro', 'Cavalcavia Antonio Grassi']  # con strade sotto le campate: Corso Primo Maggio, Via Friburgo
+STRUTTURE = ['Via Salboro', 'Cavalcavia Antonio Grassi', 'Cavalcavia San Marco']  # con strade sotto le campate
+# (Corso Primo Maggio, Via Friburgo, Via Sergio Fraccalanza) e, il San Marco, con le conche a raso del SIR2 ai piedi (#151)
 SOTTO_METRI = 200.0  # m per parte dall'incrocio, lungo la strada di sotto: fin qui si cerca dove esce dall'ombra
 SOTTO_TOLL = 0.15    # m dalla quota della rete: due gradini del terreno e l'interpolazione delle celle
+CONCA_TOLL = 0.01    # m: la profondità di una conca dei binari per il programma e per il controllo (#151)
 
 
 def carica():
@@ -165,6 +171,55 @@ def strade_sotto(D, ris, terreno):
     return out
 
 
+def conche_binari(D, ris):
+    """Le conche dei binari sulle strutture accese come le vede il controllo (scripts/cavalcavia.py, onde sul binario
+    della mappa scritta: terreno sotto il binario più tramH) e come le vede il programma negli stessi punti
+    (Profili.quota_binario, la quota del binario del giro contro le onde), #151. Solo dove il binario affianca una strada
+    delle strutture accese: altrove il programma non ha quote. ([(struttura, binario, (x, z), profondità per il
+    controllo, per il programma)] con None dove uno dei due non vede la conca, scarto più grande tra le due quote)"""
+    R, P = ris['rete'], ris['profili']
+    vista = type('Vista', (), {'strade': R.griglia, 'misurati': P.S, 'archi': R.archi, 'nodi': R.nodi})
+    accese = {s['id'] for s in ris['strutture']}
+    out, peggio = [], 0.0
+    for cid, TT in sorted(cavalcavia.profili_binari(D, cavalcavia.cavalcavia(D)).items()):
+        if cid not in accese:
+            continue
+        for T in TT:
+            pts, prog = T['pts'], []
+            for i, p in enumerate(pts):
+                a, b = pts[max(0, i - 1)], pts[min(len(pts) - 1, i + 1)]
+                k, t, _d = cavalcavia.arco_accanto(vista, (p['x'], p['z']), (b['x'] - a['x'], b['z'] - a['z']))
+                prog.append(None if k is None else P.quota_binario(P.a_frazione(k, t), (p['x'], p['z'])))
+            n = 0
+            while n < len(pts):
+                if prog[n] is None:
+                    n += 1
+                    continue
+                a = n
+                while n < len(pts) and prog[n] is not None:
+                    n += 1
+                if n - a < 5:
+                    continue
+                A = pts[a:n]
+                B = [dict(p, q=q) for p, q in zip(A, prog[a:n])]
+                peggio = max(peggio, max(abs(x['q'] - y['q']) for x, y in zip(A, B)))
+                ca, cb = cavalcavia.onde(A, 0, len(A) - 1), cavalcavia.onde(B, 0, len(B) - 1)
+                presi = set()
+                for c in ca:
+                    vicine = [(abs(d['i'] - c['i']), j) for j, d in enumerate(cb) if j not in presi
+                              and abs(d['i'] - c['i']) * cavalcavia.PASSO <= cavalcavia.TOLL]
+                    j = min(vicine)[1] if vicine else None
+                    if j is not None:
+                        presi.add(j)
+                    p = A[c['i']]
+                    out.append((cid, T['binario'], (round(p['x']), round(p['z'])), c['profondita'], cb[j]['profondita'] if j is not None else None))
+                for j, d in enumerate(cb):
+                    if j not in presi:
+                        p = B[d['i']]
+                        out.append((cid, T['binario'], (round(p['x']), round(p['z'])), None, d['profondita']))
+    return out, peggio
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--struttura', action='append', default=[], help=f"strutture da accendere da sole (di base {', '.join(STRUTTURE)})")
@@ -215,6 +270,16 @@ def main():
         print(f'  {scarto:5.2f} m ({corda:4.2f})  {via} sotto {sid} ({p[0]:.0f}, {p[1]:.0f})' + ('  OLTRE' if scarto > SOTTO_TOLL else ''))
         if scarto > SOTTO_TOLL:
             errori.append(f'{via} sotto {sid} ({p[0]:.0f}, {p[1]:.0f}) si stacca dalla sua quota di {scarto:.2f} m')
+    conche, scarto = conche_binari(D, ris)
+    diverse = [c for c in conche if c[3] is None or c[4] is None or abs(c[3] - c[4]) > CONCA_TOLL + 1e-9]
+    print(f'conche dei binari (#151): {len(conche)}, {len(diverse)} viste diverse dal programma e dal controllo '
+          f'(oltre {CONCA_TOLL * 100:.0f} cm); quota del binario fino a {scarto:.3f} m diversa tra i due')
+    for cid, bin_, p, qc, qp in conche:
+        segno = '  DIVERSA' if (cid, bin_, p, qc, qp) in diverse else ''
+        print(f"  {bin_} ({p[0]}, {p[1]}) su {cid}: controllo {'-' if qc is None else f'{qc:.2f} m'}, "
+              f"programma {'-' if qp is None else f'{qp:.2f} m'}{segno}")
+    if diverse:
+        errori.append(f'{len(diverse)} conche dei binari viste diverse dal programma e dal controllo')
     conta = Counter()
     for cid in accese:
         for c in misure.get(cid, {}).get('casi', []):

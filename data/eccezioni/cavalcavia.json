@@ -439,7 +439,7 @@
   ],
   "binari dati": [
    {
-    "perche": "Binari sulle strutture con il profilo del risolutore (#123): quota della strada punto per punto, nessun binario fuori quota e nessuna pendenza oltre il 6%. Restano conche lunghe e basse con il fondo a raso, dove strada e binari stanno sul terreno com'è: il piazzale della stazione (SIR1, SIR2 e SIR3, da 0,1 a 0,21 m in 90-320 m), la strada di servizio che attraversa il SIR2 in Via Venezia (0,11 m in tutti e due i versi, da #150; era 0,28 m su uno), i piedi del San Marco verso Via Sergio Fraccalanza (0,14-0,18 m). Il giro contro le onde (#125) riempie solo sul rilevato: a raso il binario riempito starebbe qualche centimetro sopra le strade che attraversa, in quota, e gli incroci perderebbero le lanterne del tram. In Via Venezia verso il viadotto (0,13-0,16 m in 323-377 m) la conca nel programma, dove il binario ha la quota media delle strade da cui la prende, è di 5 cm, sotto la soglia del giro (8 cm).",
+    "perche": "Binari sulle strutture con il profilo del risolutore (#123): quota della strada punto per punto, nessun binario fuori quota e nessuna pendenza oltre il 6%. Restano conche lunghe e basse con il fondo a raso, dove strada e binari stanno sul terreno com'è: il piazzale della stazione (SIR1, SIR2 e SIR3, da 0,1 a 0,21 m in 90-320 m), la strada di servizio che attraversa il SIR2 in Via Venezia (0,11 m in tutti e due i versi, da #150; era 0,28 m su uno), i piedi del San Marco verso Via Sergio Fraccalanza (0,14-0,18 m). Il giro contro le onde (#125) riempie solo sul rilevato: a raso il binario riempito starebbe qualche centimetro sopra le strade che attraversa, in quota, e gli incroci perderebbero le lanterne del tram. Anche la conca di Via Venezia ai piedi del viadotto (0,13-0,16 m in 380 m, fondo in (3210, -831)) ha il fondo e il massimo a valle a raso: scende dal viadotto, tocca -0,65 m e risale a -0,52 m dove strada e binari stanno sul terreno (quota della rete 0,00). Lì il binario della mappa segue il terreno sotto di sé, a gradini di 5,6 cm e a 2 m dall'asse della strada: fino a #151 il programma prendeva la quota della strada sull'asse e vedeva la conca di 5-7 cm, sotto la soglia del giro; da #151 la vede come il controllo (Profili.quota_binario, prova conche_binari di scripts/prova_risolutore.py) e non la riempie perché è a raso.",
     "casi": [
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 180,-1066",
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 196,-1028",
@@ -459,7 +459,7 @@
   ],
   "binari gioco": [
    {
-    "perche": "Binari nel gioco sulle strutture con il profilo del risolutore (#123), misurati ogni metro: gli stessi casi dei binari nei dati. Nessun binario fuori quota (erano 25) e nessuna pendenza oltre il 6% (erano 32); restano le conche lunghe e basse con il fondo a raso, sul piazzale della stazione, in Via Venezia e ai piedi del San Marco, e quella di Via Venezia verso il viadotto (#125, perché nei binari dei dati).",
+    "perche": "Binari nel gioco sulle strutture con il profilo del risolutore (#123), misurati ogni metro: gli stessi casi dei binari nei dati. Nessun binario fuori quota (erano 25) e nessuna pendenza oltre il 6% (erano 32); restano le conche lunghe e basse con il fondo a raso, sul piazzale della stazione, in Via Venezia e ai piedi del San Marco, e anche quella di Via Venezia ai piedi del viadotto (#151, perché nei binari dei dati).",
     "casi": [
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 180,-1066",
      "Cavalcavia Borgomagno | onde | SIR1 verso +1 @ 196,-1028",

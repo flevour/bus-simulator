@@ -689,9 +689,10 @@ Da sapere prima di scrivere un passo della build che lavora su tutta la città:
   basta come riferimento: sotto l'impalcato interpola dalle spalle (Corso Australia sotto il Chiesanuova: 4 m di dosso).
   La fa `scripts/prova_risolutore.py` sulle strutture accese (sotto);
 - `scripts/prova_risolutore.py`: il passo dei cavalcavia della build sulla rete della mappa, senza rigenerarla, con le
-  strutture scelte accese da sole (di base Via Salboro e il Grassi) o con il registro (`--registro`); dice violazioni,
-  casi del controllo e quanto la strada di sotto si stacca dalla quota della rete, e con `--controlla` esce con errore
-  (lavoro `mappa` di `verifiche.yml`). 17 s sul Mac. Le quote al centimetro vengono solo dalla rigenerazione;
+  strutture scelte accese da sole (di base Via Salboro e il Grassi, dal 20 novembre anche il San Marco: #151) o con il
+  registro (`--registro`); dice violazioni, casi del controllo e quanto la strada di sotto si stacca dalla quota della
+  rete, e con `--controlla` esce con errore (lavoro `mappa` di `verifiche.yml`). 17 s sul Mac. Le quote al centimetro
+  vengono solo dalla rigenerazione;
 - passo 1 pubblicato il 18 novembre: casi delle strade da 819 a 789, dei binari da 16 a 12; Via Salboro accesa;
   cambiano le quote di 24 strutture (`data/profili-cavalcavia.json`: tutte quelle con una strada o la ferrovia sotto
   una campata, perché il franco sopra una strada si misura dalla strada); 14 aree della mappa, tutte entro 200 m dai
@@ -944,6 +945,29 @@ sezione 6. Da sapere:
 - `data/eccezioni/gradini.json` è diviso per meccanismo: le sette sovrapposizioni rimaste, una per gruppo con il suo
   perché (innesti su una salita, rampe che si staccano a pochi gradi e salgono); il terreno sulla larghezza (30, assi
   alla stessa quota entro 5 cm: #125); le pieghe tra archi di fila (16); un arco fuori dalla struttura.
+
+#151, conche dei binari viste dal programma come dal controllo (20 novembre). Regola in [`cavalcavia.md`](cavalcavia.md),
+sezione 6 (punto 5). Da sapere:
+
+- la quota di un binario nel programma la dà `Profili.quota_binario`: la strada accanto (i `termini` di `lungo_binari`)
+  dove sta più di `IN_QUOTA` sopra il terreno sotto il binario, se no quel terreno, come `profilo` di
+  `scripts/quote_rete.py` scrive `tramH`. La usano il giro contro le onde e la prova. Il terreno è `P.nat`, quello
+  adattato al profilo: la regola vale dal secondo giro del terreno (`P.adattato`), perché al primo il rilevato del DTM
+  sulle spalle sta sopra il profilo e il binario ci finiva sopra (sulla campata del San Marco una conca finta di 0,9 m,
+  e il giro alzava la campata di 0,8 m);
+- da dove venivano gli 8-10 cm di Via Venezia: la conca del SIR2 ai piedi del viadotto (fondo in (3210, -831)) ha il
+  fondo e il massimo a valle a raso, quota della rete 0,00. Lì `tramH` è zero e il binario segue le celle del terreno,
+  in byte (gradini di 5,6 cm) e a 2 m dall'asse della strada: -0,65 m sul fondo e -0,52 sul massimo, contro -0,62 e
+  -0,55 della strada sull'asse. Il programma vedeva 5-7 cm, sotto la soglia del giro (8 cm), il controllo 13-16. Del
+  rilevato e del viadotto la conca ha solo il massimo a monte;
+- la prova: `conche_binari` di `scripts/prova_risolutore.py`, nei punti dei binari del controllo, sulle strutture
+  accese. Con la sola quota della strada esce con errore (sul San Marco 2 conche che il programma non vede, binario
+  diverso fino a 0,48 m), con la regola passa. Tra le strutture di base della prova (lavoro `mappa` della CI) c'è ora il
+  San Marco: Via Venezia e il Borgomagno hanno strade sotto le campate oltre 15 cm (#157) e farebbero fallire la prova;
+- le quote non cambiano: le conche dei binari rimaste hanno il fondo a raso e il giro riempie solo sul rilevato. Con il
+  registro sul Mac `edgeH`, terreno, `tramH` e `nodeH` escono identici a prima, e la mappa resta quella di #150. Il
+  binario è ancora calcolato in due posti (il programma e `quote_rete.profilo`), con la stessa regola: la prova
+  controlla che restino d'accordo.
 
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 

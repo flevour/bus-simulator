@@ -325,8 +325,17 @@ intorno), fino a 1,2 km in più. `layer` dice solo chi sta sopra.
    terreno, e riempita lasciava la strada qualche centimetro in quota sopra le celle delle strade accanto, che non
    salgono (nel piazzale della stazione cambiavano lanterne del tram e paline). Le conche lunghe dei binari che restano
    hanno il fondo a raso: il piazzale della stazione ai piedi del Borgomagno, i piedi del San Marco verso Via Sergio
-   Fraccalanza, la strada di servizio che attraversa il SIR2 in Via Venezia. Al più due giri dopo la prima soluzione, in
-   ognuno dei due giri del terreno; le richieste restano per i giri dopo.
+   Fraccalanza, la strada di servizio che attraversa il SIR2 in Via Venezia, i piedi del viadotto di Via Venezia. Al più
+   due giri dopo la prima soluzione, in ognuno dei due giri del terreno; le richieste restano per i giri dopo. Lungo un
+   binario la quota è quella che la mappa gli darà (`Profili.quota_binario`, #151): la strada accanto dove sta più di 5 cm
+   sopra il terreno sotto il binario, se no quel terreno, come `profilo` di `scripts/quote_rete.py` (`tramH`). A raso il
+   binario segue le celle del terreno, a gradini di 5,6 cm e a qualche metro dall'asse della strada, e con la sola quota
+   della strada il programma vedeva le conche a raso del SIR2 di 5-7 cm dove il controllo ne misurava 13-17 (Via Venezia
+   ai piedi del viadotto, i piedi del San Marco). Il terreno è quello adattato al profilo, quindi la regola vale dal
+   secondo giro del terreno: al primo il rilevato del DTM sta ancora sopra il profilo sulle spalle, e sulla campata del
+   San Marco il binario finiva sul rilevato (una conca finta di 0,9 m, riempita alzando la campata di 0,8 m). Le conche
+   non cambiano le quote, perché hanno il fondo a raso e non si riempiono; `scripts/prova_risolutore.py` controlla che
+   programma e controllo le vedano uguali entro 1 cm.
 
 Sotto un ponte OSM il DTM dice se c'è una campata o un rilevato: dove sta più di 1,5 m sopra il piano intorno la strada
 sta sul rilevato come fuori dai ponti (Via Boves ha 280 m di "ponte" su un terrapieno di 8 m). Il 13 novembre il
@@ -507,12 +516,14 @@ l'altra, con tutte e due i casi non migliorano.
 
 Per provare una modifica al risolutore non serve rigenerare la mappa (#125): `scripts/prova_risolutore.py` rifà il
 passo dei cavalcavia di `build_map.py` sulla rete di `src/data/padova-map.json`, con le strutture scelte accese da sole
-(`--struttura`, di base Via Salboro e il Grassi, che hanno strade sotto le campate) o con il registro com'è
+(`--struttura`, di base Via Salboro, il Grassi e il San Marco, che hanno strade sotto le campate, e il San Marco le conche
+a raso del SIR2) o con il registro com'è
 (`--registro`), scrive terreno ed `edgeH` in una copia della mappa in memoria e la misura con il controllo. Dice le
 violazioni del programma, i casi del controllo sulle strutture accese e, per ogni strada che passa sotto una campata,
-quanto la mappa scritta si stacca dalla quota della rete delle strade sotto le campate; con `--controlla` (in CI, nel
-lavoro `mappa` di `verifiche.yml`) esce con errore oltre 15 cm o con una violazione. Sul Mac 17 s con le due strutture,
-40 s con il registro. Non dice le quote al centimetro: i nodi della mappa sono arrotondati al decimetro, le strutture
+quanto la mappa scritta si stacca dalla quota della rete delle strade sotto le campate, e le conche dei binari come le
+vedono il programma e il controllo (#151); con `--controlla` (in CI, nel lavoro `mappa` di `verifiche.yml`) esce con
+errore oltre 15 cm, con una violazione o con una conca dei binari vista diversa di più di 1 cm. Sul Mac 21 s con le tre
+strutture, da 2,5 a 5 minuti con il registro. Non dice le quote al centimetro: i nodi della mappa sono arrotondati al decimetro, le strutture
 spente cambiano il terreno attorno, e dove il profilo resta libero due soluzioni dello stesso costo si scambiano da una
 macchina all'altra.
 
