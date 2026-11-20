@@ -27,7 +27,10 @@ Controlla quello che il JSON dice già, senza aprire il gioco (sezione 6.1 di do
   * percorsi delle linee (scripts/percorsi.py, docs/percorsi.md): per ogni variante salti, archi contromano, inversioni,
     svolte vietate ai bus e svolte senza un raccordo per il mezzo della linea (data/eccezioni/percorsi.json).
   * domanda di traffico (scripts/domanda.py, docs/domanda.md): src/data/padova-domanda.json è quello che esce dalla
-    mappa e dai dati di oggi.
+    mappa e dai dati di oggi;
+  * punte del GTFS sui corridoi delle porte (scripts/gtfs_tempi.py --porte, docs/domanda.md sezione 8, #147): dove una
+    linea ha le corse più lente nell'ora di punta sul percorso tra una porta e il centro, i tempi della fascia della
+    domanda sullo stesso tratto devono esserlo anche loro (data/eccezioni/punte.json).
 Pali dei semafori, lampioni, alberi, pensiline e paline al posto finale li mette il gioco al caricamento: li controlla
 la prova tests/mappa.spec.js nel browser.
 
@@ -59,6 +62,7 @@ import aree_mappa  # noqa: E402
 import binari_tram  # noqa: E402
 import cavalcavia  # noqa: E402
 import domanda  # noqa: E402
+import gtfs_tempi  # noqa: E402
 import osm_rete  # noqa: E402
 import raccordi  # noqa: E402
 import sosta  # noqa: E402
@@ -409,6 +413,9 @@ def main():
     # la domanda di traffico (scripts/domanda.py, docs/domanda.md) è quella che esce dalla mappa di oggi
     if os.path.abspath(args.mappa) == os.path.abspath(domanda.MAPPA):
         errori += domanda.controlla()
+        # e i tempi della sua fascia hanno la punta dove la hanno le corse del GTFS (#147)
+        _v, _c, errori_g = gtfs_tempi.rapporto(mappa.M, None, args.elenco, aggiorna=args.aggiorna)
+        errori += errori_g
     if errori:
         print('\n'.join(errori))
         print('Con --elenco i casi di oggi, con le coordinate del gioco.')

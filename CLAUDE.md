@@ -65,8 +65,11 @@ Interfaccia del gioco, messaggi, commenti nel codice, README e messaggi di commi
   (`scripts/domanda.py`, solo libreria standard) scrive in `src/data/padova-domanda.json` zone, porte, tempi,
   destinazioni per scopo, curva oraria feriale e festiva e l'assegnazione con la capacità per tre fasce; il gioco
   (`src/world/domanda.js`) sceglie i viaggi che passano nel disco attorno a chi guida, col raggio che tiene 72 auto.
-  Verifica sul GTFS dei tempi tra punta e morbida in `scripts/gtfs_tempi.py`. Chi rigenera la mappa rifà il file
-  (`python3 scripts/domanda.py`, in fondo a `rigenera_mappa.sh`; `verifica_mappa.py` controlla che sia quello che esce).
+  Chi entra dalle porte sono i pendolari in auto della matrice ISTAT 2011, con la porta più veloce sulle strade OSM
+  fuori dalla mappa (`scripts/pendolari.py`, #147). Verifica sul GTFS dei tempi tra punta e morbida in
+  `scripts/gtfs_tempi.py`; con `--porte` la punta del mattino su ogni porta, contro `data/eccezioni/punte.json`. Chi
+  rigenera la mappa rifà il file (`python3 scripts/domanda.py`, in fondo a `rigenera_mappa.sh`; `verifica_mappa.py`
+  controlla che sia quello che esce).
 * `docs/ESTENSIONE_LINEE.md`: linee complete fino ai capolinea veri e caricamento per aree di strade ed edifici.
 * `docs/PIANO_MODELLO_CITTA.md`: piano per un modello della città coerente con la realtà (fonti, misure, pipeline,
   verifiche, tappe). Le misure di riferimento della sezione 3 valgono dove mancano i dati.
@@ -170,8 +173,8 @@ filtrato con `scripts/filter_osm_nodes.py`; `data/osm-padova-tram.json` (binari 
   (`scripts/cavalcavia.py`, anche da `tests/cavalcavia.spec.js`), `mappa-gioco.json` (`tests/mappa.spec.js`),
   `traffico.json` (`tests/traffico.spec.js`), `raccordi.json` (`scripts/raccordi.py`), `sosta.json`
   (`scripts/sosta.py`), `sosta-gioco.json` (`tests/sosta.spec.js`), `percorsi.json` (`scripts/percorsi.py`,
-  anche alla fine della build), `moto.json` (`tests/moto.spec.js`) e `localita.json` (job `localita`,
-  `scripts/rigenera_mappa.py --localita`). Un caso fuori dall'elenco fa fallire il controllo anche se il totale non
+  anche alla fine della build), `punte.json` (`scripts/gtfs_tempi.py --porte`, anche da `scripts/verifica_mappa.py`),
+  `moto.json` (`tests/moto.spec.js`) e `localita.json` (job `localita`, `scripts/rigenera_mappa.py --localita`). Un caso fuori dall'elenco fa fallire il controllo anche se il totale non
   sale; un caso sparito va tolto dall'elenco nello stesso commit. Dopo una correzione l'elenco si riscrive con
   `--aggiorna` (script) o `ECCEZIONI=aggiorna npx playwright test tests/<prova>.spec.js`: i casi nuovi finiscono in un
   gruppo con il perché vuoto, che va scritto. Un controllo nuovo nasce così, non con un conteggio.

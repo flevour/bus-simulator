@@ -235,6 +235,10 @@ uniscono non si incrociano.
   barriere, lampioni e alberi. Le svolte si agganciano agli archi della rete per id della via (`scripts/osm_rete.py`) e
   entrano nella mappa con i tag delle vie letti per arco: sosta per lato, rilevati, pendenze dichiarate, superficie e
   illuminazione. Formati, copertura e controlli in [`docs/osm-dati.md`](docs/osm-dati.md).
+* **Pendolari da fuori e porte** (`data/istat-pendolari.json`, `data/osm-comuni.json`, `data/osm-strade-fuori.json`):
+  chi entra dai bordi della mappa viene dai comuni attorno, con i pendolari in auto della matrice del pendolarismo ISTAT
+  2011 e la porta più veloce sulle strade OSM fuori dalla mappa (`scripts/pendolari.py`, nella domanda di traffico).
+  Fonti e conti in [`docs/domanda.md`](docs/domanda.md), sezione 3.
 * **Sosta lungo le strade** (`scripts/sosta.py`, nella build): file di stalli in linea, a spina e a pettine per arco e
   per lato, dai tag OSM delle vie, dalle aree `parking=street_side` di OSM, dai parcheggi del DBGT e dalla larghezza
   misurata della carreggiata, contro il cordolo vero e fuori da incroci, strisce, fermate e passi carrai. Il gioco ci
@@ -266,6 +270,13 @@ python3 scripts/filter_osm_tram.py /tmp/osm-tram.json data/osm-padova-tram.json
 for q in relazioni luoghi arredo; do curl -X POST -A "overpass-client" --data-urlencode data@scripts/overpass-$q.ql -o /tmp/osm-$q.json https://overpass-api.de/api/interpreter; done
 python3 scripts/filter_osm_relazioni.py /tmp/osm-relazioni.json data/osm-padova-relazioni.json
 python3 scripts/filter_osm_luoghi.py /tmp/osm-luoghi.json /tmp/osm-arredo.json data/osm-luoghi.json data/osm-arredo.json
+# comuni e strade principali attorno a Padova (domanda di traffico, porte: #147)
+for q in comuni strade-fuori; do curl -X POST -A "padova-bus-simulator" --data-urlencode data@scripts/overpass-$q.ql -o /tmp/osm-$q.json https://overpass-api.de/api/interpreter; done
+python3 scripts/filter_osm_fuori.py /tmp/osm-comuni.json /tmp/osm-strade-fuori.json data/osm-comuni.json data/osm-strade-fuori.json
+# pendolari in auto tra i comuni dalla matrice ISTAT 2011 (zip da 36 MB)
+curl -L -o /tmp/pendolarismo-2011.zip https://www.istat.it/storage/cartografia/matrici_pendolarismo/matrici_pendolarismo_2011.zip
+python3 scripts/istat_pendolari.py /tmp/pendolarismo-2011.zip data/istat-pendolari.json
+python3 scripts/domanda.py   # la domanda di traffico con i dati nuovi
 python3 scripts/osm_rete.py --scrivi   # riscrive nella mappa che c'è svolte, sosta, rilevati, pendenze e fondo, e stampa rapporto e controlli
 # orari GTFS e mappa del gioco, dentro Docker: Linux, Python 3.12 e le librerie fissate in
 # scripts/requirements-mappa.txt, dal feed GTFS del 9 novembre 2026 in data/gtfs-biv.zip; la mappa esce uguale su ogni
@@ -297,7 +308,8 @@ sui binari OSM, quante fermate del tram hanno la banchina centrale e i numeri de
 gioco deduce semafori e cartelli dal tipo di strada, senza quello dei binari la sede segue lo shape GTFS.
 
 Dati © OpenStreetMap contributors, licenza ODbL (https://www.openstreetmap.org/copyright). Contiene dati della
-Regione del Veneto (DBGT del Comune di Padova, DTM a 5 m), licenza IODL 2.0.
+Regione del Veneto (DBGT del Comune di Padova, DTM a 5 m), licenza IODL 2.0. Pendolari: elaborazione su dati ISTAT,
+matrice del pendolarismo 2011, licenza CC BY 4.0.
 
 ## Crediti
 
@@ -307,7 +319,7 @@ Ideato e sviluppato da **Francesco Levorato** ([@flevour su Instagram](https://w
 
 Il codice è rilasciato con la [PolyForm Noncommercial License 1.0.0](LICENSE): si può usare, studiare, modificare e
 ridistribuire solo per scopi non commerciali, citando gli autori. I dati di terzi (OpenStreetMap, Regione del Veneto,
-Overture, Busitalia) restano sotto le loro licenze originali: i dettagli sono in [`LICENSE`](LICENSE).
+Overture, Busitalia, ISTAT) restano sotto le loro licenze originali: i dettagli sono in [`LICENSE`](LICENSE).
 
 ## Modalità
 

@@ -11,7 +11,8 @@ Numeri del 17 novembre 2026, sulla mappa di `main`. Si ristampano con `python3 s
 ## 1. Il file della domanda
 
 `python3 scripts/domanda.py` lo riscrive dalla rete della mappa (`src/data/padova-map.json`), dagli edifici delle aree
-(`public/mappa/aree/`) e dai luoghi di OSM (`data/osm-luoghi.json`, #108). Solo libreria standard e solo somme,
+(`public/mappa/aree/`), dai luoghi di OSM (`data/osm-luoghi.json`, #108) e, per chi entra dalle porte, dai pendolari
+ISTAT, dai comuni e dalle strade fuori dalla mappa (sezione 3, #147). Solo libreria standard e solo somme,
 prodotti, divisioni e radici: niente seni o esponenziali della libreria del sistema, quindi il file è lo stesso sul Mac
 e in Docker. `--controlla` lo rifà e dice se è quello del repository (lo lancia anche `scripts/verifica_mappa.py`, cioè
 la CI); chi cambia la rete o gli edifici lo riscrive nello stesso commit della mappa, e `scripts/rigenera_mappa.sh` lo
@@ -22,7 +23,7 @@ rifà alla fine.
 | `cella` | lato delle zone (1.000 m) |
 | `costo` | modello di costo dei tempi, lo stesso nel gioco: velocità libera (14 m/s sulle strade principali fuori dal centro, 9 m/s altrove, come le auto del gioco), attesa media a un semaforo (10 s), svolta a sinistra (5 s) e a destra (2 s) |
 | `zone` | `[x, z, abitanti, addetti, scuole, negozi, sosta, centro, accessi]`; `accessi` è una lista piatta di `stato, peso, tipo` |
-| `porte` | `[nome, x, z, peso, stati d'ingresso, stati d'uscita]` |
+| `porte` | `[nome, x, z, peso, stati d'ingresso, stati d'uscita]`; il peso sono i pendolari che ci passano in un giorno feriale, entrando e uscendo (il gioco non lo usa) |
 | `tempi` | matrice dei tempi a rete libera (s) tra i luoghi, righe per origine: prima le zone, poi le porte; 65535 dove non si arriva |
 | `scopi` | `casa_lavoro`, `lavoro_casa`, `casa_scuola`, `scuola_casa`, `altro`, `pendolari_in`, `pendolari_out`, `attraverso` |
 | `od` | per scopo, righe `[origine, peso dell'origine, [destinazione, millesimi, ...]]` |
@@ -57,10 +58,53 @@ baricentro degli edifici: da lì si misurano i tempi tra zone.
 ## 3. Porte
 
 Le porte sono i nodi della rete con un arco solo (senza le vie pedonali) su strade da tertiary in su: dove la mappa
-taglia una strada che continua fuori. Le carreggiate della stessa via entro 150 m sono una porta sola. Peso per classe:
-trunk 1, primary 0,6, secondary 0,35, tertiary 0,15. Sono 61 (53 d'ingresso, 51 d'uscita). Comprese le carreggiate a
-senso unico che finiscono al bordo (Corso Australia, Corso Boston, Corso Esperanto, Via Boves): da #90 erano pozzi
-dove le auto non entravano più, ora sono le uscite di chi va fuori città.
+taglia una strada che continua fuori. Le carreggiate della stessa via entro 150 m sono una porta sola. Sono 61 (53
+d'ingresso, 51 d'uscita). Comprese le carreggiate a senso unico che finiscono al bordo (Corso Australia, Corso Boston,
+Corso Esperanto, Via Boves): da #90 erano pozzi dove le auto non entravano più, ora sono le uscite di chi va fuori città.
+
+Chi entra da una porta viene da un comune di fuori (`scripts/pendolari.py`, #147). Fino al 19 novembre le porte avevano
+un peso per classe della strada (trunk 1, primary 0,6, secondary 0,35, tertiary 0,15) e i pendolari erano 60.000
+stimati: ora numeri e porte vengono da tre fonti.
+
+| Dato | Fonte | File |
+|---|---|---|
+| pendolari in auto come conducenti, per lavoro e per studio, da comune a comune, per orario di uscita da casa | ISTAT, matrice del pendolarismo 2011 (15° Censimento generale della popolazione, 9 ottobre 2011), licenza CC BY 4.0 | `data/istat-pendolari.json` (`scripts/istat_pendolari.py` dallo zip ISTAT) |
+| comuni attorno a Padova: codice ISTAT e centro abitato (nodo `admin_centre` del confine) | OpenStreetMap (ODbL) | `data/osm-comuni.json` (`scripts/overpass-comuni.ql`, `scripts/filter_osm_fuori.py`) |
+| strade da tertiary in su entro 20 km da Padova, con le rampe e i sensi unici | OpenStreetMap (ODbL) | `data/osm-strade-fuori.json` (`scripts/overpass-strade-fuori.ql`, `scripts/filter_osm_fuori.py`) |
+
+La matrice del 2011 è la più recente con il mezzo di trasporto e l'orario: quella del 2021 (censimento permanente, per
+lavoro e per studio) viene da fonti amministrative e dà solo quante persone vanno da un comune all'altro. Si scarica
+da https://www.istat.it/storage/cartografia/matrici_pendolarismo/matrici_pendolarismo_2011.zip (36 MB), comandi nel
+README.
+
+Il conto:
+
+- dentro la mappa stanno i comuni col centro abitato in un'area della mappa: oggi Padova, Albignasego, Cadoneghe,
+  Ponte San Nicolò e Rubano. I loro abitanti sono già nelle zone (sezione 2), e tra loro i 11.400 pendolari dell'ISTAT
+  sono viaggi tra zone;
+- dai comuni di fuori verso questi vanno in auto 48.400 conducenti al giorno (Padova da sola ne riceve 50.100 da tutta
+  Italia, 99.000 pendolari con tutti i mezzi dalle cinque province attorno). Sono `pendolari_in`, e la sera
+  `pendolari_out`;
+- la rete di fuori sono le vie di OSM senza i tratti che la mappa ha già (tra due nodi della mappa con un arco tra loro),
+  a velocità libera per classe: 110 km/h le autostrade, 80 le superstrade, 60 le primary, 50 le secondary, 45 le
+  tertiary, le rampe al 70%. Una porta è un nodo della mappa, e la via di fuori che la continua passa dallo stesso nodo:
+  tutte le porte tranne una carreggiata di Corso Argentina hanno la loro via di fuori;
+- dal centro abitato di un comune al nodo della rete più vicino: la linea d'aria per 1,3, a 8 m/s per i primi 1.500 m
+  e a 20 m/s oltre (i comuni oltre i 20 km delle strade);
+- per ogni comune di fuori e zona, la porta col tempo minore: la rete di fuori fino alla porta, poi la matrice dei tempi
+  della mappa (sezione 1). Le zone di destinazione pesano gli addetti per la deterrenza del viaggio intero (`T0` dei
+  pendolari, sezione 4); la sera si esce dalla porta col tempo minore verso il comune. Da casa alla porta ci vogliono in
+  media 15 minuti.
+
+Pendolari al giorno per comune e porta: `python3 scripts/domanda.py --conti`. Qualche esempio: Selvazzano Dentro 2.680
+(Via Sorio 40%, Via Don Bosco 27%, Corso Boston 14%), Vigonza 2.720 (Via del Commercio 89%), Abano Terme 1.520 (Corso
+Boston 35%, Via Don Bosco 26%, Corso Australia 23%), Noventa Padovana 1.670 (Via Valmarana 73%). Le porte più usate:
+Corso Argentina 10.500 al giorno tra entrate e uscite, Piazzale Castagnara 10.300, Via Valmarana 9.100, Via Vigonovese
+8.100, Tangenziale Limena 6.500, Via Roma (Albignasego) 5.200; Via Sorio 2.700 (con i pesi per classe ne entravano 970,
+ora 1.330). Ventiquattro porte non le prende nessun pendolare: per tutti i comuni di fuori una porta vicina è più veloce.
+
+Chi attraversa la città da porta a porta (25.000 al giorno, una stima: la matrice conta solo chi va al lavoro o a
+scuola) entra ed esce dalle porte in proporzione ai pendolari che ci passano, con la stessa deterrenza di prima.
 
 ## 4. Viaggi al giorno e curva oraria
 
@@ -69,22 +113,28 @@ dove le auto non entravano più, ora sono le uscite di chi va fuori città.
 | casa_lavoro, lavoro_casa | abitanti verso addetti e ritorno, 17% dei viaggi dei residenti ciascuno | 62.500 + 62.500 | 12.500 + 12.500 |
 | casa_scuola, scuola_casa | abitanti verso scuole e ritorno, 6% ciascuno | 22.000 + 22.000 | 0 |
 | altro | tra zone (spesa, servizi, visite), 54% | 199.000 | 258.000 |
-| pendolari_in, pendolari_out | dalle porte agli addetti la mattina, ritorno la sera | 60.000 + 60.000 | 9.000 + 9.000 |
+| pendolari_in, pendolari_out | dai comuni di fuori, per una porta, agli addetti la mattina, ritorno la sera (ISTAT 2011, sezione 3) | 48.400 + 48.400 | 7.300 + 7.300 |
 | attraverso | da porta a porta, tra porte ad almeno 3 km | 25.000 | 15.000 |
-| in tutto | | 513.000 | 316.000 |
+| in tutto | | 490.000 | 313.000 |
 
 I viaggi dei residenti sono 1,1 per abitante al giorno: 2,3 spostamenti, il 60% in auto, 1,25 persone per auto (ISFORT,
-Audimob, valori di un capoluogo del nord). Padova attira circa 90.000 pendolari al giorno (ISTAT); 60.000 in auto sono
-una stima. Non risultano conteggi di traffico aperti per Padova: i totali sono stime, la forma della curva è quella
-tipica delle città italiane, e le punte sono quelle che il GTFS conferma (sezione 7).
+Audimob, valori di un capoluogo del nord). I pendolari da fuori sono quelli della matrice ISTAT (sezione 3). Non
+risultano conteggi di traffico aperti per Padova: gli altri totali sono stime, la forma della curva è quella tipica delle
+città italiane, e le punte sono quelle che il GTFS conferma (sezione 7).
+
+Per `pendolari_in` la curva prende dalla matrice anche l'orario: il 34% esce di casa prima delle 7:15, il 45% dalle 7:15
+alle 8:14, il 12% dalle 8:15 alle 9:14 e l'8% dopo. Le fasce si spostano dei 15 minuti medi da casa alla porta, e dentro
+ogni fascia resta la forma della curva tipica (`ore_istat` in `scripts/domanda.py`): tra le 7 e le 8 entra il 41% dei
+pendolari (prima il 30%), tra le 8 e le 9 il 28% (22%), alle 11 l'1% (3%).
 
 La destinazione segue un modello gravitazionale: la probabilità di andare da `o` a `d` è proporzionale
 all'attrattività di `d` (addetti, scuole, abitanti, o per gli altri viaggi negozi, addetti e sosta) per
 `1 / (1 + t / T0)³`, con `t` il tempo a rete libera e `T0` 600 s per il lavoro, 300 per la scuola, 420 per gli altri,
 900 per i pendolari, 1.200 per chi attraversa. Si tengono le destinazioni più probabili fino al 98%.
 
-Viaggi che partono in un'ora, feriale (tutti gli scopi): 52.000 tra le 7 e le 8 e tra le 8 e le 9, 25.000 alle 11,
-31.000 alle 12 e alle 13, 50.000 alle 17 e alle 18, 5.700 alle 22. Festivo: punte di 27.000 alle 11 e 28.000 alle 17-18.
+Viaggi che partono in un'ora, feriale (tutti gli scopi): 54.000 tra le 7 e le 8, 52.000 tra le 8 e le 9, 22.000 alle
+11, 30.000 alle 12 e alle 13, 47.000 alle 17 e 46.000 alle 18, 5.600 alle 22. Festivo: punte di 26.000 alle 11 e
+28.000 alle 17-18.
 
 ## 5. Assegnazione con la capacità delle strade
 
@@ -101,9 +151,11 @@ fattori al più a 8.
 
 Nel file, per ogni fascia (`fasce`): `fattori`, `[stato, f8, f11, f17]` in centesimi, solo dove uno supera 1,1; e
 `presenze`, `[i, j, p8, p11, p17]`: le auto presenti (flusso per tempo, in centesimi d'auto) nella cella da 100 m
-`i, j`. Alle 8 gli stati sopra 1,1 sono 1.164 (172 oltre il doppio): Via Chiesanuova, Via Facciolati e Via Piovese
+`i, j`. Alle 8 gli stati sopra 1,1 sono 879 (82 oltre il doppio): Via Chiesanuova, Via Facciolati e Via Piovese
 verso il centro, Ponte Voltabarozzo, Piazzale San Giovanni, Via Fabrici d'Acquapendente, Ponte Scaricatore; alle 11
-182; alle 17 1.059. Auto presenti in tutta la mappa: 8.700 alle 8, 3.100 alle 11, 7.500 alle 17. L'assegnazione costa
+135; alle 17 767. Auto presenti in tutta la mappa: 7.200 alle 8, 2.700 alle 11, 6.000 alle 17. Con i pesi delle porte
+per classe e 60.000 pendolari stimati (fino al 19 novembre) erano 1.103 (166), 181 e 1.043 stati, e 8.700, 3.100 e
+7.600 auto. L'assegnazione costa
 circa un minuto (63 s sul Mac), quasi tutto il calcolo del file.
 
 ## 6. Nel gioco
@@ -179,6 +231,11 @@ Sono tempi d'orario, non misurati: dicono dove l'azienda mette più tempo nelle 
 c'è da anni, e la forma della curva (punta del mattino più forte di quella della sera, sera più veloce del giorno). Non
 danno flussi: per le quantità restano le stime della sezione 4.
 
+E non dicono il punto preciso (#147): l'orario allunga blocchi interi di fermate dello stesso fattore. La U12 ha alle
+7-9 il 42-44% in più su ogni tratto tra due fermate da Tencarola a Via Cavalletto, la E080 il 60% su tutto il tratto in
+città, la E005Z il 92% e la E003B il 48% su quello urbano e niente fuori; la U06, sullo stesso tratto di Via Sorio della
+U12, ha lo stesso tempo a tutte le ore. Il +43% di Via Sorio è quello di tutto il viaggio della U12 verso il centro.
+
 ## 8. La prova
 
 `tests/domanda.spec.js` (regole in `tests/domanda.js`). Tutte e due sono misure aggregate con un margine, non elenchi
@@ -189,6 +246,18 @@ di casi: gli intrecci esatti di qualche minuto di traffico cambiano tra il Mac e
   migliore di un'auto le fa prendere un'altra strada; con i tempi della punta del mattino il percorso da Voltabarozzo a
   Pontecorvo costa più del 10% che con quelli delle 11 (264,7 s contro 222,6); portando l'orologio alle 22:30, senza
   ripartire, il disco si allarga di più di una volta e mezza (da 306 a 1.028 m: #60).
+- Punta del mattino su tutte le porte (`python3 scripts/gtfs_tempi.py --porte`, anche in `scripts/verifica_mappa.py`,
+  cioè nel lavoro mappa della CI; #147): per ogni porta d'ingresso il percorso più veloce a rete libera fino al centro,
+  e su questo ogni linea del GTFS che ci passa, dalla prima fermata entro 3 km dalla porta all'ultima di fila sul
+  percorso entro 4 km (almeno 600 m, almeno 90 s alle 10-12, almeno tre corse alle 7-9 e alle 10-12). Il rapporto del
+  GTFS è tra le mediane delle corse alle 7-9 e alle 10-12; quello del gioco tra i tempi della fascia della domanda alle 8
+  e alle 11 sullo stesso tratto (tempo a rete libera per il fattore, più svolte e semafori). Dove il GTFS ha almeno il
+  20% in più e la domanda meno del 10% è un caso, contro l'elenco `data/eccezioni/punte.json`. Il 20 novembre: 55 tratti
+  per 36 porte su 53; 15 casi (con i pesi per classe erano 11): la U12 in Via Sorio, la E080 verso Chiesanuova, la E073
+  dalla zona industriale, la E013V, la U10 da Ponte di Brenta, la U03 in Via Bembo, la U06 in Via delle Cave (#159). È
+  una prova sulla build e non nel gioco: sonde nel gioco su 55 tratti costerebbero ore. Nel gioco la domanda della
+  fascia guida la scelta della strada e quante auto stanno attorno a chi guida, e dove la build è lontana dalla
+  capacità nemmeno il gioco fa code (Via Sorio).
 - Punte: sui tre corridoi della tabella sopra, alle 8, alle 11, alle 18 e alle 22 di un feriale (corsa della 10,
   poi l'orologio all'ora), chi guida a 900 m e il disco fermo a metà del corridoio, 60 s di riscaldamento e tre
   auto sonda per verso, una ogni 15 s, con un viaggio fino all'altro capo (almeno due arrivate per verso). Per ogni corridoio e ora di punta il
@@ -211,12 +280,24 @@ tempo a formarsi e la punta delle 8 scendeva a 1,13.
 Da un lancio all'altro, con piccoli cambiamenti del traffico, il rapporto di un corridoio si sposta anche di 0,2 (Via
 Gattamelata alle 8 è stata 1,19, 1,02 e 1,27); la media dei tre molto meno.
 
-Via Facciolati ha la punta dove la ha il GTFS: la mattina verso il centro, la sera verso fuori; Via Gattamelata la sera
-verso il centro, come la E073, e la mattina meno (da 1,02 a 1,27 secondo il lancio). Via Sorio no: nella build il tratto
-tra Via Col Berretta e Piazzale San Giovanni porta 90-290 auto l'ora per verso alle 8, lontano dalla capacità. Sta a 170
-m dal bordo della mappa, e chi arriva da Tencarola, Selvazzano e Rubano entra dalla porta di Via Sorio, pesata come una
-secondaria (0,35 contro 1 di una trunk), o da Corso Australia e Via Chiesanuova (che alle 8 sono le più cariche della
-mappa). Il GTFS dice +43% alle 8 sulla U12: è il primo posto da guardare per tarare le porte (#147).
+Con i pendolari ISTAT per porta (#147), sul Mac il 20 novembre (verso il centro, poi verso fuori):
+
+| Corridoio | 8 | 11 | 18 | 22 | punta delle 8 | delle 18 |
+|---|---|---|---|---|---|---|
+| Via Sorio | 71 e 100 s | 69 e 108 | 72 e 109 | 69 e 99 | 1,03 | 1,04 |
+| Via Facciolati | 180 e 90 | 94 e 100 | 96 e 93 | 91 e 95 | 1,93 | 1,02 |
+| Via Ariosto e Via Gattamelata | 257 e 148 | 218 e 146 | 324 e 147 | 127 e 156 | 1,18 | 1,49 |
+| media | | | | | 1,38 | 1,18 |
+
+La mattina più pendolari tra le 7 e le 9 (sezione 4) e la stessa punta; la sera Via Facciolati verso fuori non la sente
+più: dalla porta di Corso Esperanto escono 1.500 pendolari al giorno, con il peso di una trunk ne uscivano 3.200. Via
+Sorio resta senza punta anche con 1.330 pendolari al giorno dalla sua porta invece di 970 (#159).
+
+Fino al 19 novembre Via Facciolati aveva la punta la mattina verso il centro e la sera verso fuori, Via Gattamelata la
+sera verso il centro e la mattina meno, Via Sorio no: nella build il tratto tra Via Col Berretta e Piazzale San Giovanni
+portava 90-290 auto l'ora per verso alle 8, con la porta di Via Sorio pesata come una secondaria (0,35 contro 1 di una
+trunk). Con i pendolari ISTAT (#147) ne porta 450 contro 720 al semaforo, e il +43% della U12 è quello di tutto il suo
+viaggio verso il centro (sezione 7).
 
 ## 9. Costo per passo
 
@@ -247,8 +328,11 @@ teletrasporto, come su `main`. Il bundle cresce di 534 KB (il file della domanda
   90 s prima di chi guida), non c'è già; i bus automatici non prendono ritardo dai tempi della fascia.
 - Le auto non parcheggiano: arrivate, lontano da chi guida escono di scena; le auto in sosta di #111 seguono la loro
   quota per ora, non i viaggi.
-- I numeri di partenza sono stime (sezione 4) e le porte hanno pesi per classe: niente conteggi aperti per Padova. Il
-  GTFS dice dove la punta c'è (sezione 7); Via Sorio è il primo caso dove il modello non la dà.
+- I numeri di partenza dei residenti sono stime (sezione 4): niente conteggi aperti per Padova. Da fuori ci sono solo i
+  pendolari della matrice ISTAT del 2011, per lavoro e per studio: mancano i viaggi da fuori per altri motivi (servizi,
+  ospedali, università, acquisti) e quello che è cambiato dal 2011, e chi parte da Padova per lavorare fuori. Il GTFS
+  dice dove il viaggio è più lento (sezione 7): i 15 tratti dove la domanda non ha la punta sono in
+  `data/eccezioni/punte.json`, con Via Sorio (#159).
 - La domanda non è locale come la pianta (#139): l'assegnazione è un equilibrio, e un arco cambiato può spostare i flussi
   della fascia anche lontano. Per questo il file non è nella prova di località; si rifà con la mappa
   (`rigenera_mappa.sh`), e la CI controlla che sia quello che esce dalla mappa di oggi.

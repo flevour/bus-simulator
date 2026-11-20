@@ -27,6 +27,9 @@ import os
 import sys
 from collections import defaultdict
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pendolari  # noqa: E402  (pendolari da fuori e porte, #147)
+
 RADICE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 MAPPA = os.path.join(RADICE, 'src', 'data', 'padova-map.json')
 AREE = os.path.join(RADICE, 'public', 'mappa', 'aree')
@@ -392,8 +395,6 @@ ACCESSI = 16  # archi per zona da cui si parte e dove si arriva
 # classi delle vie da cui si parte e dove si arriva: da secondary a living_street (le strade principali no, le strade
 # di servizio no: lì il gioco non fa nascere le auto)
 CLASSI_ACCESSO = (2, 3, 4, 5, 6)
-# peso delle porte per classe della strada (trunk, primary, secondary, tertiary): quanta parte di chi entra o esce
-PESO_PORTA = {0: 1.0, 1: 0.6, 2: 0.35, 3: 0.15}
 
 
 def stalli_per_arco(R):
@@ -436,7 +437,8 @@ def zone_e_accessi(R, Z):
 
 def porte(R):
     """le porte della mappa: nodi con un arco solo (senza le vie pedonali), su strade da tertiary in su, raggruppati per
-    nome entro 150 m (le due carreggiate). Stati d'ingresso (dal nodo verso la mappa) e d'uscita (verso il nodo)"""
+    nome entro 150 m (le due carreggiate). Stati d'ingresso (dal nodo verso la mappa) e d'uscita (verso il nodo), e i
+    nodi. Il peso (i pendolari che ci passano) lo mette scripts/pendolari.py"""
     grado = defaultdict(list)
     for e in range(R.na):
         if R.cls[e] == 8:
@@ -463,10 +465,10 @@ def porte(R):
             if g['nome'] == nome and (g['x'] - x) * (g['x'] - x) + (g['z'] - z) * (g['z'] - z) < 150.0 * 150.0:
                 g['in'] += ing
                 g['out'] += usc
-                g['peso'] = max(g['peso'], PESO_PORTA[R.cls[e]])
+                g['nodi'].append(n)
                 break
         else:
-            gruppi.append({'nome': nome, 'x': x, 'z': z, 'in': ing, 'out': usc, 'peso': PESO_PORTA[R.cls[e]]})
+            gruppi.append({'nome': nome, 'x': x, 'z': z, 'in': ing, 'out': usc, 'nodi': [n], 'peso': 0})
     return gruppi
 
 
@@ -532,14 +534,14 @@ def assegna(R, partenze, arrivi, domanda, giri=4):
 # ------------------------------------------------------------------
 # Scopi, curva oraria e matrice origine-destinazione
 # ------------------------------------------------------------------
-# Viaggi in auto al giorno nell'area della mappa, per scopo (docs/domanda.md, sezione 3). Abitanti e addetti vengono
+# Viaggi in auto al giorno nell'area della mappa, per scopo (docs/domanda.md, sezione 4). Abitanti e addetti vengono
 # dagli edifici; i tassi sono quelli di un capoluogo del nord: 2,3 spostamenti per abitante al giorno, il 60% in auto,
-# 1,25 persone per auto (ISFORT, Audimob), cioè 1,1 viaggi in auto per abitante; i pendolari da fuori in auto
-# all'ingresso del mattino sono 60.000 (Padova attrae circa 90.000 pendolari al giorno, ISTAT 2011)
+# 1,25 persone per auto (ISFORT, Audimob), cioè 1,1 viaggi in auto per abitante. I pendolari da fuori sono quelli della
+# matrice ISTAT 2011 che vanno in auto, come conducenti, dai comuni di fuori a quelli dentro la mappa
+# (scripts/pendolari.py, #147); chi attraversa la città è una stima (25.000)
 SCOPI = ['casa_lavoro', 'lavoro_casa', 'casa_scuola', 'scuola_casa', 'altro', 'pendolari_in', 'pendolari_out', 'attraverso']
 VIAGGI_ABITANTE = 1.1
 QUOTA = {'casa_lavoro': 0.17, 'lavoro_casa': 0.17, 'casa_scuola': 0.06, 'scuola_casa': 0.06, 'altro': 0.54}
-PENDOLARI = 60000
 ATTRAVERSO = 25000
 # festivo: niente scuola, un quinto del lavoro, un terzo in più degli altri viaggi; meno pendolari e passaggi
 FESTIVO = {'casa_lavoro': 0.2, 'lavoro_casa': 0.2, 'casa_scuola': 0.0, 'scuola_casa': 0.0, 'altro': 1.3,
@@ -566,6 +568,21 @@ ORE_FESTIVO = {
 # deterrenza del tempo di viaggio: 1 / (1 + t / T0)^3, con T0 per scopo (s). Con 600 s la metà dei viaggi casa-lavoro
 # sta sotto i 12 minuti di rete libera; la scuola è più vicina, gli altri viaggi di più
 T0 = {'lavoro': 600.0, 'scuola': 300.0, 'altro': 420.0, 'pendolari': 900.0, 'attraverso': 1200.0}
+
+
+# orari di uscita da casa dei pendolari nella matrice ISTAT 2011 (data/istat-pendolari.json): prima delle 7:15, dalle
+# 7:15 alle 8:14, dalle 8:15 alle 9:14, dopo (ore). Il viaggio comincia alla porta, il tempo medio fuori dalla mappa dopo
+FASCE_ISTAT = [7.25, 8.25, 9.25]
+
+
+def ore_istat(prof, fasce, ritardo):
+    """il profilo orario prof (24 ore, uniforme dentro ogni ora) con il peso di ogni fascia di uscita della matrice ISTAT
+    (fasce: pendolari per fascia), spostate di ritardo ore: la forma dentro una fascia resta quella di prof"""
+    bordi = [0.0] + [b + ritardo for b in FASCE_ISTAT] + [24.0]
+    dentro = lambda h, k: max(0.0, min(h + 1.0, bordi[k + 1]) - max(float(h), bordi[k]))
+    massa = [sum(prof[h] * dentro(h, k) for h in range(24)) for k in range(4)]
+    tot = sum(fasce)
+    return [sum(prof[h] * dentro(h, k) * fasce[k] / tot / massa[k] for k in range(4) if massa[k] > 0) * 100.0 for h in range(24)]
 
 
 def deterrenza(t, t0):
@@ -635,7 +652,11 @@ def calcola(conti=False):
     ne = [z[1]['negozi'] for z in zone]
     so = [z[1]['sosta'] for z in zone]
     tot_ab = sum(ab)
-    pp = [g['peso'] for g in P]
+    # pendolari da fuori (#147): da quale porta entra ed esce chi viene da ogni comune di fuori, verso quale zona
+    pend = pendolari.pendolari(R, zone, P, T, (M['aree']['lato'], set(M['aree']['chiavi'])), xz, deterrenza,
+                               T0['pendolari'], INF)
+    for k, g in enumerate(P):
+        g['peso'] = round(pend['entrano'].get(k, 0.0) + pend['escono'].get(k, 0.0))
     porta_in = [nz + i for i, g in enumerate(P) if g['in']]
     porta_out = [nz + i for i, g in enumerate(P) if g['out']]
     # attrattività per gli altri viaggi: negozi, addetti e sosta (dove si può lasciare l'auto)
@@ -662,36 +683,48 @@ def calcola(conti=False):
     scopi['scuola_casa'] = gravita(zi, zi, genZ(sc), attZ(ab), T0['scuola'], 'scuola_casa')
     gen_alt = {i: ab[i] + alt[i] * 0.5 for i in zi}
     scopi['altro'] = gravita(zi, zi, gen_alt, attZ(alt), T0['altro'], 'altro')
-    # pendolari: dalle porte ai posti di lavoro la mattina, ritorno la sera
-    gp = {d: pp[d - nz] for d in porta_in}
-    scopi['pendolari_in'] = gravita(porta_in, zi, gp, attZ(ad), T0['pendolari'], 'pendolari_in')
-    ap = {d: pp[d - nz] for d in porta_out}
-    att_out = dict(ap)
-    scopi['pendolari_out'] = gravita(zi, porta_out, genZ(ad), att_out, T0['pendolari'], 'pendolari_out')
+    # pendolari: dalle porte ai posti di lavoro la mattina, ritorno la sera (scripts/pendolari.py): per porta le zone, e
+    # per zona le porte, con i pendolari al giorno
+    def righe_di(flussi):
+        righe = []
+        for o in sorted(flussi):
+            pm = per_mille(sorted((d, f) for d, f in flussi[o].items() if f > 0))
+            if pm:
+                righe.append([o, round(sum(flussi[o].values()), 1), [x for dq in pm for x in dq]])
+        return {'righe': righe, 'totale': sum(r[1] for r in righe)}
+    scopi['pendolari_in'] = righe_di({nz + k: v for k, v in pend['pin'].items()})
+    scopi['pendolari_out'] = righe_di({d: {nz + k: f for k, f in v.items()} for d, v in pend['pout'].items()})
     # attraversamenti: da porta a porta, tra porte ad almeno 3 km in linea d'aria (chi entra ed esce dalla stessa
-    # parte non attraversa la città: ci passa accanto, fuori dalla mappa)
+    # parte non attraversa la città: ci passa accanto, fuori dalla mappa). Chi entra ed esce da una porta è in proporzione
+    # ai pendolari che ci passano: la fonte dice quanto è usata ogni porta, non da dove a dove va chi attraversa
+    gp = {d: pend['entrano'].get(d - nz, 0.0) for d in porta_in}
+    ap = {d: pend['escono'].get(d - nz, 0.0) for d in porta_out}
     lontane = {}
     for o in porta_in:
         go = P[o - nz]
         lontane[o] = [d for d in porta_out if (P[d - nz]['x'] - go['x']) ** 2 + (P[d - nz]['z'] - go['z']) ** 2 > 3000.0 ** 2]
     righe = []
     for o in porta_in:
-        pesi = [(d, ap[d] * deterrenza(T[o][d], T0['attraverso'])) for d in lontane[o] if T[o][d] < INF]
+        pesi = [(d, ap[d] * deterrenza(T[o][d], T0['attraverso'])) for d in lontane[o] if T[o][d] < INF and ap[d] > 0]
         pm = per_mille(pesi)
-        if pm:
-            righe.append([o, gp[o], [x for dq in pm for x in dq]])
+        if pm and gp[o] > 0:
+            righe.append([o, round(gp[o], 1), [x for dq in pm for x in dq]])
     scopi['attraverso'] = {'righe': righe, 'totale': sum(r[1] for r in righe)}
 
     # viaggi al giorno per scopo
     giorno = {s: VIAGGI_ABITANTE * QUOTA[s] * tot_ab for s in QUOTA}
-    giorno['pendolari_in'] = PENDOLARI
-    giorno['pendolari_out'] = PENDOLARI
+    giorno['pendolari_in'] = pend['assegnati']
+    giorno['pendolari_out'] = pend['assegnati']
     giorno['attraverso'] = ATTRAVERSO
+
+    # chi entra dalle porte la mattina esce di casa quando dice la matrice ISTAT, e arriva alla porta dopo il tempo medio
+    # fuori dalla mappa (scripts/pendolari.py)
+    ore_pendolari = ore_istat(ORE['pendolari_in'], pend['fasce'], pend['fuori_medio'] / 3600.0)
 
     def curva(ore, fattori):
         out = {}
         for s in SCOPI:
-            prof = ore.get(s, ORE[s])
+            prof = ore.get(s, ore_pendolari if s == 'pendolari_in' else ORE[s])
             tot = sum(prof)
             out[s] = [round(giorno[s] * fattori.get(s, 1.0) * p / tot) for p in prof]
         return out
@@ -701,7 +734,7 @@ def calcola(conti=False):
     fasce = carico(R, zone, P, od, curve['feriale'])
 
     dati = {
-        'fonte': 'scripts/domanda.py (#116): edifici della mappa, OSM (uso del suolo, luoghi, parcheggi), sosta di #111; docs/domanda.md',
+        'fonte': 'scripts/domanda.py (#116): edifici della mappa, OSM (uso del suolo, luoghi, parcheggi, comuni e strade fuori dalla mappa), sosta di #111; pendolari da ISTAT, matrice del pendolarismo 2011 (CC BY 4.0, #147); docs/domanda.md',
         'cella': CELLA,
         'costo': {'vPrincipale': V_PRINCIPALE, 'vLocale': V_LOCALE, 'semaforo': ATTESA_SEMAFORO, 'sinistra': SVOLTA_SINISTRA, 'destra': SVOLTA_DESTRA},
         'zone': [[round(cx), round(cz), round(p['abitanti']), round(p['addetti']), round(p['scuole'], 1), round(p['negozi']), round(p['sosta']), centro,
@@ -714,7 +747,7 @@ def calcola(conti=False):
         'fasce': fasce,
     }
     if conti:
-        stampa_conti(dati, R, zone, P, giorno)
+        stampa_conti(dati, R, zone, P, giorno, pend)
     return dati
 
 
@@ -758,7 +791,7 @@ def carico(R, zone, P, od, curva):
     }
 
 
-def stampa_conti(dati, R, zone, P, giorno):
+def stampa_conti(dati, R, zone, P, giorno, pend):
     print(f"stati nella componente principale: {len(R.principale)} su {2 * R.na}")
     print(f"zone: {len(zone)}; porte: {len(P)} ({sum(1 for g in P if g['in'])} d'ingresso, {sum(1 for g in P if g['out'])} d'uscita)")
     tot = lambda k: sum(z[1][k] for z in zone)
@@ -768,8 +801,19 @@ def stampa_conti(dati, R, zone, P, giorno):
     for g in ('feriale', 'festivo'):
         ore = [sum(dati['curva'][g][s][h] for s in SCOPI) for h in range(24)]
         print(g, 'per ora:', ore, 'totale', sum(ore))
-    for g in P:
-        print('  porta', g['nome'] or '(senza nome)', round(g['x']), round(g['z']), g['peso'], len(g['in']), len(g['out']))
+    print(f"pendolari in auto (ISTAT 2011) verso i comuni dentro la mappa ({', '.join(pend['dentro'])}): "
+          f"{pend['totale']:.0f} dai comuni di fuori, {pend['assegnati']:.0f} con una porta; {pend['fra_dentro']:.0f} tra "
+          f"comuni dentro (sono nelle zone). Per orario di uscita: "
+          + ', '.join(f'{v:.0f}' for v in pend['fasce']) + ' (prima delle 7:15, 7:15-8:14, 8:15-9:14, dopo); '
+          f"tempo medio da casa alla porta {pend['fuori_medio'] / 60:.1f} minuti")
+    print('pendolari_in per ora (feriale): ' + ', '.join(f'{h}: {v}' for h, v in enumerate(dati['curva']['feriale']['pendolari_in']) if v))
+    print(f"porte senza una via di fuori: {', '.join(n or '(senza nome)' for n in pend['senza_rete']) or 'nessuna'}")
+    for o, (nome, f, porte_c) in sorted(pend['per_comune'].items(), key=lambda kv: -kv[1][1]):
+        if f >= 300:
+            print(f'  {nome}: {f:.0f}, ' + ', '.join(f"{P[k]['nome'] or '(senza nome)'} {v / f * 100:.0f}%" for k, v in porte_c[:4]))
+    for k, g in enumerate(P):
+        print('  porta', g['nome'] or '(senza nome)', round(g['x']), round(g['z']), g['peso'], len(g['in']), len(g['out']),
+              f"entrano {pend['entrano'].get(k, 0):.0f}, escono {pend['escono'].get(k, 0):.0f}")
 
 
 def scrivi(dati, path=USCITA):

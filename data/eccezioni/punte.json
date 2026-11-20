@@ -1,0 +1,37 @@
+{
+ "cosa": "Casi noti del confronto tra la punta del mattino del GTFS e quella della domanda di traffico sui corridoi delle porte (scripts/gtfs_tempi.py --porte, docs/domanda.md sezione 8, #147), che scripts/verifica_mappa.py lancia sulla mappa del repository. Un caso è il tratto di una linea tra due fermate sul percorso più veloce da una porta al centro dove le corse del GTFS impiegano almeno il 20% in più alle 7-9 che alle 10-12, e i tempi della fascia della domanda sullo stesso tratto meno del 10% in più alle 8 che alle 11: linea e fermate @ x,z della prima fermata. Chi corregge un caso toglie la sua riga: python3 scripts/gtfs_tempi.py --porte --aggiorna.",
+ "controlli": {
+  "punta_mattino_mancante": [
+   {
+    "perche": "La U12 allunga del 42-44% ogni tratto da Tencarola a Via Cavalletto alle 7-9, non solo Via Sorio (la U06 sullo stesso tratto ha lo stesso tempo a tutte le ore). Con i pendolari ISTAT la porta di Via Sorio ne porta 1.330 al giorno, e alle 8 il tratto ha 450 auto l'ora contro 720 al semaforo: nel gioco 77 s alle 8 e 75 alle 11. Mancano i viaggi da fuori che non sono pendolarismo (#159).",
+    "casi": [
+     "U12 Sorio fr. 96  (Aereoporto) → Rotonda San Giovanni @ -1970,778"
+    ]
+   },
+   {
+    "perche": "Extraurbane con un fattore unico su tutto il tratto in città (E080 +60%, E073 +40-58%, E013V +39%): il tratto vicino alla porta ha nella domanda il 1-10% in più alle 8, sotto la capacità, con i soli pendolari ISTAT (#159). E080 da Rubano e Mestrino entra dalle porte di Via Marco Polo, Via Europa e Via Roma; E073 dalla zona industriale; E013V dalla porta senza nome di Via Romana Aponense.",
+    "casi": [
+     "E013V PORTEGHETTO R → BASSANELLO ESSO R @ -2735,4663",
+     "E073 PADOVA Z.I. PERONI R → Z.I. PEUGEOT R @ 4239,-380",
+     "E073 VIA SAN MARCO - SAN LAZZARO → PADOVA BUSONERA R @ 3311,-890",
+     "E080 ISTITUTO S.DOMENICO R → PADOVA CHIESANUOVA R @ -6273,-1845",
+     "E080 MESTRINO ARREDAMENTI R → SARMEOLA CAPOL. APS R @ -8614,-3305",
+     "E080 PADOVA BRENTELLE R → PADOVA CHIESANUOVA R @ -3810,-1035",
+     "E080 RUBANO MUNICIPIO R → PADOVA BRENTELLE R @ -7034,-2111",
+     "E080 SARMEOLA OPERA S. ANTONIO R → PADOVA CHIESANUOVA R @ -4489,-1345"
+    ]
+   },
+   {
+    "perche": "Urbane della cintura col tempo in più a blocchi (U10 +20% da Ponte di Brenta, U03 +34-39% in Via Bembo, U06 +21% in Via delle Cave): nella domanda il tratto ha alle 8 l'1-4% in più. La U03 viene da Albignasego e Ponte San Nicolò, comuni dentro la mappa i cui abitanti sono nelle zone; Via San Marco ha pochi pendolari perché la Riviera del Brenta entra dalle porte di Via Valmarana e Via Vigonovese (#159).",
+    "casi": [
+     "U03 Bembo ang. Pozzoveggiani → Bembo 11 (fr. via Cusano) @ 1558,6188",
+     "U03 San Giacomo Chiesa → Bembo 95 @ 1944,7380",
+     "U06 Cave fr. 178  (Ist. Natta) → Cave 61 @ -3083,954",
+     "U10 Capolinea Ponte Brenta → Venezia 61 @ 5609,-2043",
+     "U10 San Marco (fr. Casello Autostrada) → Venezia 61 @ 4453,-1431",
+     "U10 San Marco 63 → Venezia 61 @ 4717,-1598"
+    ]
+   }
+  ]
+ }
+}

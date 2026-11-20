@@ -14,7 +14,9 @@ I dati di terzi NON sono coperti da questa licenza e restano sotto le loro licen
   (https://www.openstreetmap.org/copyright);
 * Regione del Veneto (DBGT del Comune di Padova, DTM): Italian Open Data License (IODL) 2.0;
 * Overture Maps Foundation: licenze dei rispettivi temi (https://docs.overturemaps.org/attribution/);
-* GTFS Busitalia Veneto (feed BusOne): condizioni del fornitore.
+* GTFS Busitalia Veneto (feed BusOne): condizioni del fornitore;
+* ISTAT, matrice del pendolarismo 2011 (data/istat-pendolari.json e src/data/padova-domanda.json, elaborazioni):
+  Creative Commons Attribuzione 4.0 (https://www.istat.it/note-legali/).
 
 Le dipendenze in node_modules hanno le loro licenze. Colori e stile dei mezzi richiamano quelli reali; loghi e marchi
 aziendali non sono riprodotti e restano dei rispettivi titolari.
