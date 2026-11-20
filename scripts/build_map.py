@@ -20,6 +20,7 @@ import math
 import os
 import re
 import sys
+import time
 from collections import Counter, defaultdict
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
@@ -33,6 +34,27 @@ import raccordi  # noqa: E402  (raccordi di corsia agli incroci)
 
 ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
+
+
+class Cronometro:
+    """Tempi per passo della build (#158): ogni passo si stampa subito (il log della build in Docker e in CI è
+    bufferizzato, e un lavoro che scade non diceva dove era arrivato), con il riepilogo alla fine."""
+
+    def __init__(self):
+        self.t0 = self.t = time.perf_counter()
+        self.passi = []
+
+    def passo(self, nome):
+        t = time.perf_counter()
+        dt, self.t = t - self.t, t
+        self.passi.append((nome, dt))
+        print(f'tempo: {nome} {dt:.1f} s ({t - self.t0:.0f} s dall\'inizio)', flush=True)
+        return dt
+
+    def riepilogo(self):
+        print('tempi della build: ' + ', '.join(f'{n} {s:.0f} s' for n, s in self.passi)
+              + f'; in tutto {time.perf_counter() - self.t0:.0f} s', flush=True)
+
 
 DRIVE = {
     'trunk': (0, 13), 'trunk_link': (0, 7), 'primary': (1, 12), 'primary_link': (1, 7),
@@ -577,6 +599,7 @@ def measured_piece(meas, s):
 
 
 def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None, dtm_path=None, green_path=None, streets_path=None, osm_stops_path=None, corridor_path=None):
+    crono = Cronometro()
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     if corridor_path:
         els += [e for e in json.load(open(corridor_path, encoding='utf-8'))['elements'] if e['type'] == 'way']
@@ -588,6 +611,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     FOCUS_CELLE.update(tram_corridors())
     FOCUS_CELLE.update(bus_corridors(gt))
     print(f'corridoi fino ai capolinea: {len(FOCUS_CELLE)} celle da {CELLA:.0f} m ({len(FOCUS_CELLE) * CELLA * CELLA / 1e6:.1f} km²)')
+    crono.passo('dati e corridoi')
     # solo gli elementi che toccano l'area di gioco (con un piccolo margine)
     ways =[e for e in els if e['type'] == 'way' and 'geometry' in e and any(in_focus(g['lat'], g['lon'], 0.0015) for g in e['geometry'])]
 
@@ -904,6 +928,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         cache[src] = (limit, dist, prev)
         return dist, prev
 
+    crono.passo('strade')
     # ---------------- GTFS ----------------
     def extend_to_stop(seq, stop, at_start):
         sx, sz = stop[0], stop[1]
@@ -1469,6 +1494,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             lines_out.append({'id': line['id'], 'color': line['color'], 'variants': variants})
         print('linea', line['id'], len(variants), 'varianti agganciate', flush=True)
 
+    crono.passo('linee')
     # ---------------- edifici ----------------
     buildings = []
     if overture_path:
@@ -1504,6 +1530,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             flat += [round(x, 1), round(z, 1)]
         buildings.append([round(h, 1), kind if kind in ('church', 'cathedral', 'chapel', 'train_station', 'hospital', 'university', 'school', 'industrial', 'warehouse', 'garage', 'garages', 'roof', 'house', 'apartments', 'commercial', 'retail') else '', nm, flat])
 
+    crono.passo('edifici')
     # ---------------- ferrovia e acqua ----------------
     rails, water = [], []
     for w in ways:
@@ -1652,6 +1679,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             st.append(c)
     print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops), 'con banchina centrale', sum(st[3] for st in tram_stops if len(st) > 3))
 
+    crono.passo('ferrovia, acqua e tram')
     # pianta delle strade: quote dei cavalcavia, carreggiate, marciapiedi, isole; edifici ritagliati fuori
     terrain = hfun = None
     profili, dichiarati, cavalcavia_out, edge_h = {}, set(), [], []
@@ -1719,6 +1747,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         hfun = profilo_cavalcavia.griglia_via(terrain)
     else:
         heights = street_surfaces.overpass_heights(nodes, edges, rails)
+    crono.passo('cavalcavia')
     green = json.load(open(green_path, encoding='utf-8')) if green_path else None
     streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
     platforms = json.load(open(osm_stops_path, encoding='utf-8')).get('banchine') if osm_stops_path else None
@@ -1770,6 +1799,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
                                                    sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm())
     print('pianta delle strade:', st)
+    crono.passo('pianta delle strade')
     # la pianta a terra è una partizione (#126): due classi sovrapposte sono un errore della build, non un caso da elencare
     sovr = street_surfaces.sovrapposte(surf['cells'])
     if sovr:
@@ -1816,6 +1846,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     if terrain:
         data['tramH'], tratti = quote_rete.calcola(data, json.load(open(nt_path, encoding='utf-8')) if nt_path and os.path.exists(nt_path) else {'linee': []})
         print('binari in quota:', ', '.join(f"{lid} {'+1' if d > 0 else '-1'} {sum(b - a for a, b, _k in app):.0f} m" for (lid, d), app in sorted(tratti.items())))
+    crono.passo('rete e quote')
     # sosta lungo le strade: file di stalli per arco e per lato [arco, lato, tipo, fonte, d0, d1, s0, quanti] e, dove
     # stringono la carreggiata, i bordi tra cui stanno le corsie [arco, sinistra, destra] (scripts/sosta.py),
     # sull'asfalto della pianta appena calcolata
@@ -1824,6 +1855,7 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     data['stalliTipi'] = sosta.tipi()
     print(f"sosta: {len(data['stalli'])} file, {sum(v[7] for v in data['stalli'])} stalli")
     print('\n'.join(sosta.riassunto(data['stalli'])))
+    crono.passo('sosta')
     # raccordi di corsia agli incroci (#112): dalla mappa com'è scritta (nodi arrotondati, corsie, svolte, pianta delle
     # strade), così python3 scripts/raccordi.py --scrivi sulla mappa che c'è dà lo stesso campo
     assert raccordi.SNODATI == SNODATI
@@ -1833,8 +1865,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
           + f'; tolte le auto da {_gen.trappole} raccordi che portano in una corsia di rotonda senza uscita'
           + f'; {_gen.legami} raccordi dei bus per {len(_gen.slegate)} svolte vicine dei percorsi che non si legavano, ne restano {len(_gen.restano)}'
           + f'; {len(_gen.stretti)} raccordi dei bus a meno di {raccordi.R_BUS} m nelle svolte strette dei percorsi')
+    crono.passo('raccordi')
     # la rete in out (nel bundle del gioco), edifici, pianta delle strade e alberi per aree (public/mappa/aree)
     print('aree della mappa:', aree_mappa.write(data, out))
+    crono.passo('aree')
     print(f'inversioni a U sostituite da un giro: {uturns_fixed}')
     print(f'passaggi che un bus non può fare tolti dai percorsi: {n_riparati}')
     print(f'nodi {len(nodes)} archi {len(edges)} edifici {len(buildings)} binari {len(rails)} acque {len(water)} linee {len(lines_out)} varianti non agganciate {failed}')
@@ -1842,6 +1876,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     # data/eccezioni/percorsi.json. Un caso nuovo ferma la build; la mappa è già scritta, per guardarlo
     import percorsi
     _vp, _cp, errori_p = percorsi.rapporto(data)
+    crono.passo('percorsi')
+    crono.riepilogo()
     if errori_p:
         sys.exit('\n'.join(errori_p + ['La mappa è scritta: python3 scripts/percorsi.py --elenco dà i casi uno per uno '
                                        '(docs/percorsi.md); poi npm run posa.']))
