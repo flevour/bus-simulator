@@ -876,6 +876,31 @@ sapere:
   (San Marco) e in Esplorazione su Corso Australia, Via del Commercio e Corso Boston ovest legge la quota del file entro
   8 mm, senza salti oltre quelli degli innesti sovrapposti (#150).
 
+#158, rigenerazione più corta (20 novembre). Con le ventinove strutture di #142 i lavori `rigenera` (20 minuti) e
+`localita` (25) di `verifiche.yml` scadevano; per scelta dell'utente i limiti restano e si accorcia il lavoro. Da sapere:
+
+- `build_map.py` stampa subito, con `flush`, quanto dura ogni passo (`Cronometro`), e alla fine il riepilogo: il log in
+  Docker e in CI è bufferizzato, e un lavoro scaduto non diceva dove era arrivato. In CI, prima (7a37c1b): build da 984
+  a oltre 1.150 s, quasi tutta cavalcavia (290-375 s) e pianta delle strade (585-697 s); la stessa build dura il 20% in
+  più da una macchina all'altra. In locale, in Docker amd64 emulato sul Mac, 1.162 s;
+- la guardia: oltre `TETTO_CAVALCAVIA` (300 s) il passo dei cavalcavia ferma la build in CI (`CI` o `GITHUB_ACTIONS`
+  nell'ambiente), con il messaggio, invece di lasciar scadere il lavoro; in locale avvisa. Oltre `TETTO_BUILD` (900 s)
+  avvisa sempre. Chi allunga la build di proposito misura e sposta il tetto, scrivendo perché;
+- il passo dei cavalcavia era al 93% programma lineare, le 21 parti risolte una dopo l'altra per 6 volte (due giri del
+  terreno, ognuno con due giri contro le onde). Ora `LP.risolvi` le divide tra `PROCESSI` processi
+  (`CAVALCAVIA_PROCESSI`, di base fino a 4): fork su Linux, spawn su macOS. Più giù non va: la parte più grande, circa
+  57.000 incognite con le ausiliarie, si risolve 6 volte di fila;
+- nella pianta (`scripts/street_surfaces.py`) `in_parallelo(fn, n)` divide un ciclo di lavori indipendenti tra processi
+  nati per fork, che trovano in memoria quello che serve; tornano solo i risultati, le geometrie per WKB con tutte le
+  cifre, nell'ordine. Lo usano i riquadri della partizione, i raccordi agli incroci (`fillets`, un nodo alla volta), i
+  tre buffer dell'asfalto in `dbgt_islands` e ogni livello di `unione` con almeno 8 unioni. Su macOS resta in sequenza
+  (fork lì non è sicuro con le librerie di sistema); `PIANTA_FORK=1` lo forza per le prove, `PIANTA_PROCESSI=1` lo
+  spegne. Un processo figlio non apre altri processi;
+- la regola, per chi aggiunge un ciclo a questi: ogni lavoro deve dare quello che darebbe nel processo della build, e
+  il risultato torna al suo posto. Così l'uscita è la stessa byte per byte, ed è il job `rigenera` a controllarlo. Sul
+  Mac, con gli argomenti della pianta salvati, la pianta in sequenza e con quattro processi esce identica (397 contro
+  317 s), il passo dei cavalcavia con uno e con quattro processi anche (244 contro 138 s).
+
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
 - il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e

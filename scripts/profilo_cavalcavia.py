@@ -34,9 +34,11 @@ Servono numpy e scipy (programmazione lineare, HiGHS).
 import base64
 import json
 import math
+import multiprocessing
 import os
 import sys
 from collections import Counter, defaultdict
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 from scipy.optimize import linprog
@@ -367,6 +369,18 @@ def nomina(R, gruppi, deck):
 
 
 # ---------- il programma lineare ----------
+# processi per le parti del programma lineare (#158): ogni parte è un programma a sé, e HiGHS dà la stessa soluzione in
+# qualunque processo la si risolva. Con le 29 strutture (#142) le soluzioni delle parti erano il 93% del passo dei
+# cavalcavia, una dopo l'altra; 1 le risolve nel processo della build, come prima. CAVALCAVIA_PROCESSI lo cambia
+PROCESSI = int(os.environ.get('CAVALCAVIA_PROCESSI') or min(4, os.cpu_count() or 1))
+
+
+def _parte(costo, A, b, limiti):
+    """Una parte del programma lineare, anche in un altro processo: (stato, messaggio, soluzione)."""
+    res = linprog(costo, A_ub=A, b_ub=b, bounds=limiti, method='highs')
+    return res.status, res.message, res.x
+
+
 class LP:
     def __init__(self, n):
         self.n = n          # incognite
@@ -408,16 +422,28 @@ class LP:
         x = np.zeros(self.n)
         righe_di = np.argsort(parte[primo], kind='stable')
         inizio = np.searchsorted(parte[primo][righe_di], np.arange(n_parti + 1))
+        lavori = []  # (incognite della parte, argomenti di _parte)
         for p in range(n_parti):
             inc = np.flatnonzero(parte == p)
             righe = righe_di[inizio[p]:inizio[p + 1]]
             if not len(righe):
                 x[inc] = [lo if lo is not None else 0.0 for lo in (limiti[i][0] for i in inc)]
                 continue
-            res = linprog(costo[inc], A_ub=A[righe][:, inc], b_ub=b[righe], bounds=[limiti[i] for i in inc], method='highs')
-            if res.status != 0:
-                raise RuntimeError('profilo dei cavalcavia: il programma lineare non ha soluzione: ' + res.message)
-            x[inc] = res.x
+            lavori.append((inc, (costo[inc], A[righe][:, inc], b[righe], [limiti[i] for i in inc])))
+        if PROCESSI > 1 and len(lavori) > 1:
+            # le parti più grandi prima, così la più lunga non resta per ultima; ogni soluzione torna al suo posto. Su
+            # Linux i processi nascono per fork (la build è già in memoria), su macOS per spawn (fork lì non è sicuro)
+            ctx = multiprocessing.get_context('fork' if sys.platform.startswith('linux') else 'spawn')
+            ordine = sorted(range(len(lavori)), key=lambda j: -len(lavori[j][0]))
+            with ProcessPoolExecutor(max_workers=PROCESSI, mp_context=ctx) as pool:
+                futuri = {j: pool.submit(_parte, *lavori[j][1]) for j in ordine}
+                esiti = [futuri[j].result() for j in range(len(lavori))]
+        else:
+            esiti = [_parte(*args) for _inc, args in lavori]
+        for (inc, _args), (stato, messaggio, sol) in zip(lavori, esiti):
+            if stato != 0:
+                raise RuntimeError('profilo dei cavalcavia: il programma lineare non ha soluzione: ' + messaggio)
+            x[inc] = sol
         return x
 
 

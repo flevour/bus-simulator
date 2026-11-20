@@ -36,6 +36,15 @@ ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
 
 
+# tetti dei tempi in CI (#158): i lavori rigenera e localita di .github/workflows/verifiche.yml hanno 20 e 25 minuti, e
+# la build ne è quasi tutto. Da 491b179 (#142, ventinove strutture) il passo dei cavalcavia durava 290-375 s e la build
+# 16-19 minuti, e rigenera scadeva; con le parti del programma lineare in parallelo il passo sta sui 150-200 s. Oltre
+# TETTO_CAVALCAVIA la build in CI si ferma subito (meglio di un lavoro che scade senza dire dove), in locale avvisa:
+# in Docker sul Mac l'emulazione amd64 è più lenta. TETTO_BUILD avvisa e basta
+TETTO_CAVALCAVIA = 300  # s
+TETTO_BUILD = 900       # s
+
+
 class Cronometro:
     """Tempi per passo della build (#158): ogni passo si stampa subito (il log della build in Docker e in CI è
     bufferizzato, e un lavoro che scade non diceva dove era arrivato), con il riepilogo alla fine."""
@@ -52,8 +61,11 @@ class Cronometro:
         return dt
 
     def riepilogo(self):
-        print('tempi della build: ' + ', '.join(f'{n} {s:.0f} s' for n, s in self.passi)
-              + f'; in tutto {time.perf_counter() - self.t0:.0f} s', flush=True)
+        tutto = time.perf_counter() - self.t0
+        print('tempi della build: ' + ', '.join(f'{n} {s:.0f} s' for n, s in self.passi) + f'; in tutto {tutto:.0f} s', flush=True)
+        if tutto > TETTO_BUILD:
+            print(f'ATTENZIONE: la build è durata {tutto:.0f} s, oltre {TETTO_BUILD} s (#158): in CI i lavori della mappa '
+                  'hanno 20 e 25 minuti', flush=True)
 
 
 DRIVE = {
@@ -1747,7 +1759,12 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
         hfun = profilo_cavalcavia.griglia_via(terrain)
     else:
         heights = street_surfaces.overpass_heights(nodes, edges, rails)
-    crono.passo('cavalcavia')
+    if crono.passo('cavalcavia') > TETTO_CAVALCAVIA:
+        oltre = (f'il passo dei cavalcavia è durato {crono.passi[-1][1]:.0f} s, oltre il tetto di {TETTO_CAVALCAVIA} s '
+                 '(#158, scripts/build_map.py): i lavori della mappa in CI rischiano di scadere')
+        if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+            sys.exit(oltre)
+        print('ATTENZIONE: ' + oltre, flush=True)
     green = json.load(open(green_path, encoding='utf-8')) if green_path else None
     streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
     platforms = json.load(open(osm_stops_path, encoding='utf-8')).get('banchine') if osm_stops_path else None

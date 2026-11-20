@@ -10,7 +10,11 @@ parte del piano stradale a terra.
 """
 import heapq
 import math
+import multiprocessing
+import os
+import sys
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
 
 import shapely
 from shapely import STRtree
@@ -57,13 +61,25 @@ def unione(geoms):
         gruppi[(math.floor((x0 + x1) / 2 / TILE) + (1 << 20), math.floor((z0 + z1) / 2 / TILE) + (1 << 20))].append(g)
     if not gruppi:
         return Polygon()
-    livello = {k: unary_union(v) for k, v in gruppi.items()}
+    livello = _unisci(gruppi, True)
     while len(livello) > 1:
         su = defaultdict(list)
         for i, j in sorted(livello):
             su[(i >> 1, j >> 1)].append(livello[(i, j)])
-        livello = {k: unary_union(v) if len(v) > 1 else v[0] for k, v in su.items()}
+        livello = _unisci(su, False)
     return next(iter(livello.values()))
+
+
+def _unisci(gruppi, tutti):
+    """Un livello di unione: {chiave: unary_union dei pezzi}; un pezzo solo resta com'è, tranne al primo livello (tutti).
+    Le unioni di un livello sono indipendenti: da 8 in su si dividono tra i processi (#158, in_parallelo)."""
+    chiavi = list(gruppi)
+    da_fare = [k for k in chiavi if tutti or len(gruppi[k]) > 1]
+    if len(da_fare) >= 8:
+        fatti = dict(zip(da_fare, in_parallelo(lambda i: unary_union(gruppi[da_fare[i]]), len(da_fare))))
+    else:
+        fatti = {k: unary_union(gruppi[k]) for k in da_fare}
+    return {k: fatti[k] if k in fatti else gruppi[k][0] for k in chiavi}
 
 
 def _cross_t(p, q, r, s):
@@ -545,7 +561,7 @@ def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram):
             lanes.append(LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE + 0.5))
     busy = unary_union(lanes)
     shapely.prepare(busy)
-    Ub, Un, Ut = allarga(U, 0.5), allarga(U, 8), allarga(U, 2)
+    Ub, Un, Ut = in_parallelo(lambda i: allarga(U, (0.5, 8, 2)[i]), 3)  # tre buffer dell'asfalto di tutta la città, insieme (#158)
     for g in (Ub, Un, Ut):
         shapely.prepare(g)
     near = lambda c: Ub.intersection(c).area >= 0.6 * c.area or (Ut.intersects(c) and Un.intersection(c).area >= 0.9 * c.area)
@@ -710,24 +726,65 @@ def riquadri(classi, hfun=None, rampa=None):
     trees = [STRtree(x) for x in L]
     R = _polys(rampa) if rampa is not None else []
     tR = STRtree(R) if R else None
-    cells = []
     x0, z0, x1, z1 = shapely.total_bounds([p for x in L[:4] for p in x])  # il verde da solo non fa riquadri
-    for ix in range(int(x0 // TILE), int(x1 // TILE) + 1):
-        for iz in range(int(z0 // TILE), int(z1 // TILE) + 1):
-            b = (ix * TILE, iz * TILE, (ix + 1) * TILE, (iz + 1) * TILE)
-            bx = box(*b)
-            pezzi = [[q for i in tr.query(bx) for q in _polys(x[i].intersection(bx))] for x, tr in zip(L, trees)]
-            if not any(pezzi):
-                continue
-            parts = [None] * (len(CLASSI) + 1)
-            ram = [q for i in tR.query(bx) for q in _polys(R[i].intersection(bx))] if tR is not None else []
-            classi_r, rampa_r = partizione(pezzi, b, hfun, ram)
-            for (_n, _t, _f, posto), ps in zip(CLASSI, classi_r):
-                parts[posto - 2] = anelli_canonici([r for q in ps for r in _rings(q)])
-            parts[-1] = anelli_canonici([r for q in rampa_r for r in _rings(q)])
-            if any(parts):
-                cells.append([ix, iz, *parts])
-    return cells
+    tutti = [(ix, iz) for ix in range(int(x0 // TILE), int(x1 // TILE) + 1) for iz in range(int(z0 // TILE), int(z1 // TILE) + 1)]
+    # i riquadri sono indipendenti (#139: il bordo del riquadro resta fermo): in_parallelo li divide tra i processi
+    # (#158), le celle tornano nell'ordine dei riquadri
+    celle = in_parallelo(lambda i: _cella_riquadro(tutti[i], L, trees, R, tR, hfun), len(tutti))
+    return [c for c in celle if c is not None]
+
+
+# processi per i passi della pianta che si dividono (#158): su Linux nascono per fork e trovano in memoria quello che
+# serve; su macOS (spawn) tutto resta in sequenza. 1 fa tutto nel processo della build, come prima
+PROCESSI = int(os.environ.get('PIANTA_PROCESSI') or min(4, os.cpu_count() or 1))
+_LAVORO = None  # la funzione di in_parallelo, per i processi nati per fork
+
+
+def _fetta(quali):
+    global PROCESSI
+    PROCESSI = 1  # in un processo figlio niente altri processi: un in_parallelo dentro un lavoro diviso va in sequenza
+    return [_LAVORO(i) for i in quali]
+
+
+def in_parallelo(fn, n, fette=8):
+    """[fn(i) for i in range(n)], diviso tra PROCESSI processi nati per fork (#158). fn può essere una chiusura: i
+    processi la trovano in memoria, e solo i risultati tornano indietro (le geometrie per WKB, con tutte le cifre). Ogni
+    risultato è quello che fn dà nel processo della build, e torna al suo posto: l'uscita è la stessa, byte per byte.
+    Su macOS (fork non è sicuro con le librerie di sistema) e con PROCESSI 1 in sequenza; PIANTA_FORK=1 forza il fork
+    per le prove."""
+    global _LAVORO
+    if PROCESSI <= 1 or n < 2 or not (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK')):
+        return [fn(i) for i in range(n)]
+    k = min(n, PROCESSI * fette)
+    quali = [list(range(j, n, k)) for j in range(k)]
+    _LAVORO = fn
+    try:
+        with ProcessPoolExecutor(max_workers=PROCESSI, mp_context=multiprocessing.get_context('fork')) as pool:
+            parti = list(pool.map(_fetta, quali))
+    finally:
+        _LAVORO = None
+    out = [None] * n
+    for q, r in zip(quali, parti):
+        for i, v in zip(q, r):
+            out[i] = v
+    return out
+
+
+def _cella_riquadro(ixz, L, trees, R, tR, hfun):
+    """La cella del riquadro (ix, iz) [ix, iz, asfalto, marciapiede, isole, verde, sede, rampa], o None se è vuota."""
+    ix, iz = ixz
+    b = (ix * TILE, iz * TILE, (ix + 1) * TILE, (iz + 1) * TILE)
+    bx = box(*b)
+    pezzi = [[q for i in tr.query(bx) for q in _polys(x[i].intersection(bx))] for x, tr in zip(L, trees)]
+    if not any(pezzi):
+        return None
+    parts = [None] * (len(CLASSI) + 1)
+    ram = [q for i in tR.query(bx) for q in _polys(R[i].intersection(bx))] if tR is not None else []
+    classi_r, rampa_r = partizione(pezzi, b, hfun, ram)
+    for (_n, _t, _f, posto), ps in zip(CLASSI, classi_r):
+        parts[posto - 2] = anelli_canonici([r for q in ps for r in _rings(q)])
+    parts[-1] = anelli_canonici([r for q in rampa_r for r in _rings(q)])
+    return [ix, iz, *parts] if any(parts) else None
 
 
 NOMI_CLASSI = {2: 'asfalto', 3: 'marciapiede', 4: 'isole', 5: 'verde', 6: 'sede', 7: 'rampa'}
@@ -863,17 +920,18 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         for n in edges[k][:2]:
             if heights.get(n, 0) < 0.3:
                 deg[n].append(k)
-    fillets = []
-    for n, ks in deg.items():
-        if len(ks) < 3:
-            continue
+    incroci = [(n, ks) for n, ks in deg.items() if len(ks) >= 3]
+
+    def fillet(j):
+        n, ks = incroci[j]
         bus = any((min(edges[k][0], edges[k][1]), max(edges[k][0], edges[k][1])) in bus_edges for k in ks)
         rf = FILLET_BUS if bus else FILLET
         rad = max(edges[k][3] for k in ks) / 2 + rf * 2.2
         disc = Point(nodes[n]).buffer(rad, quad_segs=8)
         local = unary_union([pieces[tree_keys[i]] for i in sorted(tree.query(disc))]).intersection(disc)
         closed = allarga(allarga(local, rf, quad_segs=4), -rf, quad_segs=4)
-        fillets.append(closed.intersection(Point(nodes[n]).buffer(rad - rf * 0.6, quad_segs=8)))
+        return closed.intersection(Point(nodes[n]).buffer(rad - rf * 0.6, quad_segs=8))
+    fillets = in_parallelo(fillet, len(incroci))  # un incrocio alla volta, indipendenti (#158)
     # isole: buchi piccoli della carreggiata senza edifici dentro (spartitraffico, isole delle rotatorie)
     bpolys = []
     flat2 = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]

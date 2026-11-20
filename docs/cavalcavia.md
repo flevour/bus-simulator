@@ -334,7 +334,8 @@ raggi o franchi.
 
 Il programma si risolve per parti (#124): le incognite che nessun vincolo lega tra loro stanno in programmi separati,
 ognuno con le sue righe nell'ordine di prima. Una parte è una struttura, o più strutture legate da un franco, da due
-carreggiate affiancate o da un binario. Un programma solo per tutte ha molte soluzioni con lo stesso costo, e quella che
+carreggiate affiancate o da un binario; dal 20 novembre (#158) le parti si risolvono in parallelo, fino a quattro processi,
+con la stessa soluzione. Un programma solo per tutte ha molte soluzioni con lo stesso costo, e quella che
 HiGHS sceglie dipende da tutto il resto: nella prova sul Mac attivare il Cavalcavia Mortise spostava fino a 20 cm il
 profilo di Via Venezia e 16 cm quello del Camerini, a chilometri di distanza. Per parti, attivare una struttura cambia
 solo la sua parte, e `scripts/profili_strutture.py` nomina solo lei e quelle che le stanno accanto. Il passaggio ha
