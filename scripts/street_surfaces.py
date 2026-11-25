@@ -557,20 +557,39 @@ def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram, busy=None):
     mai sotto le ruote. busy: corsie_occupate, se già calcolata (surfaces la fa in sfondo)."""
     if busy is None:
         busy = corsie_occupate(nodes, edges, ground, bus_edges, tram)
-    # tre buffer dell'asfalto di tutta la città, insieme (#158), dalla stessa forma canonica (allarga la rifaceva ogni
-    # volta, #161)
-    C = canonico(U)
-    Ub, Un, Ut = in_thread(lambda i: C.buffer((0.5, 8, 2)[i]), 3)
-    for g in (busy, Ut):
-        shapely.prepare(g)
-    # le intersezioni con l'asfalto allargato (geometrie non preparate) si dividono tra i thread (#161); le domande alle
-    # geometrie preparate restano qui. Stesso esito di "c.area >= 3 and not busy.intersects(c) and (Ub ∩ c >= 60% or
-    # (Ut.intersects(c) and Un ∩ c >= 90%))", candidato per candidato
+    shapely.prepare(busy)
     cand = [c for c in cands if c.area >= 3 and not busy.intersects(c)]
-    dentro = in_thread(lambda i: Ub.intersection(cand[i]).area >= 0.6 * cand[i].area, len(cand))
-    altri = [i for i, ok in enumerate(dentro) if not ok and Ut.intersects(cand[i])]
-    accanto = dict(zip(altri, in_thread(lambda j: Un.intersection(cand[altri[j]]).area >= 0.9 * cand[altri[j]].area, len(altri))))
-    return [c for i, c in enumerate(cand) if dentro[i] or accanto.get(i, False)]
+
+    # l'asfalto allargato di 0,5, 2 e 8 m serve solo per decidere quali isole prendere: per_finestre (#161)
+    def isola(Uf):
+        C = canonico(Uf)
+        Ub, Un, Ut = C.buffer(0.5), C.buffer(8), C.buffer(2)
+        return lambda c: Ub.intersection(c).area >= 0.6 * c.area or (Ut.intersects(c) and Un.intersection(c).area >= 0.9 * c.area)
+    return [c for c, ok in zip(cand, per_finestre(U, cand, 8, isola)) if ok]
+
+
+def per_finestre(G, cands, d, prova):
+    """[prova(G tagliata attorno a c)(c) per ogni candidato c] (#161), per le domande del tipo "il candidato tocca G
+    allargata di d?" o "quanta parte del candidato sta in G allargata di d?". Allargare G (asfalto, carreggiate) quando è
+    grande come la città costava decine di secondi a buffer, sul percorso più lungo della pianta; qui si taglia G sul
+    rettangolo dei candidati dello stesso riquadro da TILE (quello del centro del loro rettangolo) allargato di d + 2 m,
+    e prova riceve quel pezzo (Uf). Dentro il rettangolo dei candidati G allargata e il pezzo allargato sono lo stesso
+    insieme: ogni punto a meno di d da un candidato ha il suo punto di G entro d + 2 m dal rettangolo, e i lati del
+    taglio sono più lontani di d. Cambiano solo le ultime cifre delle intersezioni, non le decisioni (provate candidato
+    per candidato contro quelle con G intera sulla mappa del 25 novembre 2026: uguali)."""
+    gruppi = defaultdict(list)
+    for i, c in enumerate(cands):
+        x0, z0, x1, z1 = c.bounds
+        gruppi[(math.floor((x0 + x1) / 2 / TILE), math.floor((z0 + z1) / 2 / TILE))].append(i)
+    out = [False] * len(cands)
+    m = d + 2.0
+    for k in sorted(gruppi):
+        idx = gruppi[k]
+        x0, z0, x1, z1 = shapely.total_bounds([cands[i] for i in idx])
+        f = prova(G.intersection(box(x0 - m, z0 - m, x1 + m, z1 + m)))
+        for i in idx:
+            out[i] = bool(f(cands[i]))
+    return out
 
 
 def corsie_occupate(nodes, edges, ground, bus_edges, tram):
@@ -1126,21 +1145,28 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     if platforms:
         pp = [Polygon([(f[i], f[i + 1]) for i in range(0, len(f), 2)]) for f in platforms if len(f) >= 6]
         P = unione([g if g.is_valid else g.buffer(0) for g in pp]).buffer(0)
-    ped = lato.risultato()['ped']
+    # aree pedonali (le vie pedonali allargate): poche, si fanno qui
+    ped = unione([seg(e).buffer(e[3] / 2, quad_segs=4) for e in edges if e[2] == 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3])
     dbgt_c, sosta_a, marciapiedi = Polygon(), Polygon(), None
     if streets:
         bld = anticipo.risultato()['bld']  # i contorni degli edifici uniti (senza_quote)
-        Ut, U2 = in_thread(lambda i: allarga(U, (1.0, 2.0)[i]), 2)
-        shapely.prepare(Ut)
-        sel = [c for c in dbgt_polys(streets.get('carreggiate', [])) if Ut.intersects(c) and (c.area <= 6000 or c.intersection(U2).area >= 0.3 * c.area)]
+        # (l'asfalto allargato di 1 e 2 m, e quello con le carreggiate del DBGT di 1 m, servono solo per decidere quali
+        # poligoni prendere: per_finestre li fa attorno ai candidati, #161)
+        def carreggiata(Uf):
+            C = canonico(Uf)
+            Ut, U2 = C.buffer(1.0), C.buffer(2.0)
+            return lambda c: Ut.intersects(c) and (c.area <= 6000 or c.intersection(U2).area >= 0.3 * c.area)
+        cs = dbgt_polys(streets.get('carreggiate', []))
+        sel = [c for c, ok in zip(cs, per_finestre(U, cs, 2.0, carreggiata)) if ok]
         # parcheggi e distributori (SV_STR) che toccano la carreggiata: asfalto anche loro (Largo Debussy è un
         # parcheggio con l'aiuola in mezzo, non un prato dentro l'anello)
-        Us = allarga(unione([U, *sel]), 1.0)
-        shapely.prepare(Us)
-        park = [c for c in dbgt_polys(streets.get('parcheggi', [])) if Us.intersects(c) and c.area <= 8000]
+        Us = unione([U, *sel])
+        tocca_us = lambda Uf: canonico(Uf).buffer(1.0).intersects
+        ps = dbgt_polys(streets.get('parcheggi', []))
+        park = [c for c, ok in zip(ps, per_finestre(Us, ps, 1.0, tocca_us)) if ok and c.area <= 8000]
         # golfi di sosta di OSM (parking=street_side): il DBGT del 2007 non li ha tutti, e senza asfalto gli stalli
         # (scripts/sosta.py) non avrebbero dove stare
-        park += [c for c in golfi if Us.intersects(c) and c.area <= 8000]
+        park += [c for c, ok in zip(golfi, per_finestre(Us, golfi, 1.0, tocca_us)) if ok and c.area <= 8000]
         sel += park
         sosta_a = unione(park) if park else Polygon()
         dbgt_c = unione(sel).difference(bld).difference(allarga(up, 1.0)).buffer(0) if sel else Polygon()
@@ -1148,11 +1174,13 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         def dbgt_marciapiedi():
             # marciapiedi misurati del DBGT che toccano l'asfalto di qui (con le carreggiate del DBGT), fuori dagli
             # edifici e dalle carreggiate in quota: dipende da U di adesso, e va in sfondo mentre U cresce (#161)
-            Uc = allarga(unione([U, dbgt_c]), 1.5)
-            shapely.prepare(Uc)
-            msel = [c for c in dbgt_polys(streets.get('marciapiedi', [])) if Uc.intersects(c)]
+            Uc = unione([U, dbgt_c])
+            tocca_uc = lambda Uf: canonico(Uf).buffer(1.5).intersects
+            ms = dbgt_polys(streets.get('marciapiedi', []))
+            msel = [c for c, ok in zip(ms, per_finestre(Uc, ms, 1.5, tocca_uc)) if ok]
             # aree pedonali e piazze (A_PED, AC_PED): lastricate, se toccano una strada o un marciapiede di oggi
-            psel = [c for c in dbgt_polys(streets.get('pedonali', [])) if Uc.intersects(c)]
+            pss = dbgt_polys(streets.get('pedonali', []))
+            psel = [c for c, ok in zip(pss, per_finestre(Uc, pss, 1.5, tocca_uc)) if ok]
             dbgt_m = unione(msel + psel).difference(bld).difference(up).buffer(0) if msel or psel else Polygon()
             # e il marciapiede intero, da tagliare dopo (marciapiede)
             return dbgt_m, unione([*bands, ped, dbgt_m, P])
@@ -1314,13 +1342,11 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
 def _quote_e_rete(nodes, edges, heights, tram, bus_edges, green, profili, dichiarati, drive, ground, kq, pieces):
     """Le parti della pianta che dipendono solo dalla rete e dalle quote, non dall'asfalto U (#161): impalcati, asfalto
     e sede in quota, rampe a raso, sede del tram, la carreggiata intera allargata e le sedi del tram per il ritaglio
-    degli edifici, aree pedonali, ponti, corsie occupate per le isole del DBGT. surfaces le fa in sfondo mentre la catena
+    degli edifici, ponti, corsie occupate per le isole del DBGT. surfaces le fa in sfondo mentre la catena
     di U va avanti; i calcoli sono quelli che stavano lì."""
-    seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
     out = {}
     out['clear0'] = allarga(unione([pieces[k] for k in drive]), 0.8, quad_segs=2)
     out['clear_tram'] = [LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_CLEAR, quad_segs=2) for t in tram if len(t) >= 4]
-    out['ped'] = unione([seg(e).buffer(e[3] / 2, quad_segs=4) for e in edges if e[2] == 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3])
     out['bridges'] = unione([pieces[k].buffer(BRIDGE_WALK) for k in ground if edges[k][5] & 4])
     out['D'] = D = decks(nodes, edges, heights, drive, tram, profili, dichiarati)
     # asfalto in quota per quota (#126): i tratti degli archi in quota sotto Q_TERRA (i piedi delle rampe, un quarto
@@ -1424,12 +1450,14 @@ def _ritaglia(clear, buildings, bpolys):
 
 
 def _alberi(U, bu, a):
-    """Gli alberi del DBGT [x, z, ...] fuori dall'asfalto U (almeno 1 m) e dagli edifici bu. In sfondo (#161)."""
+    """Gli alberi del DBGT [x, z, ...] fuori dall'asfalto U (almeno 1 m) e dagli edifici bu. In sfondo (#161), con U
+    allargata riquadro per riquadro attorno agli alberi (per_finestre: per ogni punto la stessa risposta)."""
+    import numpy as np
     xs, zs = a[0::2], a[1::2]
-    Ub = allarga(U, 1.0)
-    shapely.prepare(Ub)
+    punti = shapely.points(np.column_stack([xs, zs])) if xs else []
+    fuori_asfalto = per_finestre(U, list(punti), 1.0, lambda Uf: (lambda B: lambda p: not B.contains(p))(canonico(Uf).buffer(1.0)))
     shapely.prepare(bu)
-    ok = ~shapely.contains_xy(Ub, xs, zs) & ~shapely.contains_xy(bu, xs, zs)
+    ok = np.array(fuori_asfalto, dtype=bool) & ~shapely.contains_xy(bu, xs, zs)
     return [v for x, z, k in zip(xs, zs, ok) if k for v in (x, z)]
 
 
