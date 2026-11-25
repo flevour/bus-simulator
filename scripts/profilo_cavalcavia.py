@@ -48,7 +48,24 @@ from scipy.sparse.csgraph import connected_components
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from binari_tram import Griglia  # noqa: E402
-from cavalcavia import AFFIANCA, DTM_TOLL, ONDA, PARALLELO, PENDENZA, PONTE_VICINO, R_CONCA, R_DOSSO, TRATTO, Griglia10, Via, arco_accanto, estremi, punto, tipo_di  # noqa: E402
+from cavalcavia import AFFIANCA, DTM_TOLL, ONDA, PARALLELO, PENDENZA, PONTE_VICINO, R_CONCA, R_DOSSO, TRATTO, Griglia10, arco_accanto, estremi, punto, tipo_di  # noqa: E402
+from cavalcavia import Via as _ViaDelControllo  # noqa: E402
+
+
+class Via(_ViaDelControllo):
+    """La variante "via" del terreno di scripts/cavalcavia.py, con la chiusura morfologica fatta una volta su tutta la
+    griglia con numpy (street_surfaces.closing) invece che cella per cella in Python: massimi e minimi di interi su
+    finestre tagliate ai bordi, gli stessi byte (#161: il passo dei cavalcavia ne chiedeva due milioni, sul percorso che
+    aspetta). Ponti e celle fissate come nel controllo."""
+
+    def chiusa(self, i, j):
+        g = getattr(self, '_tutta', None)
+        if g is None:
+            from street_surfaces import closing
+            b = np.frombuffer(self.b, dtype=np.uint8).reshape(self.nz, self.nx).astype(np.int32)
+            g = self._tutta = closing(b, self.r) if self.r else b
+        return int(g[j, i])
+
 
 RADICE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRO = os.path.join(RADICE, 'data/cavalcavia.json')

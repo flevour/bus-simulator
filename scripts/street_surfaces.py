@@ -44,6 +44,7 @@ MARGINE_QUOTA = 1.5  # m: il gioco dà a un punto la quota più alta tra gli arc
 DECK_EDGE = 1.0  # m: l'impalcato sporge oltre la carreggiata (cordolo e parapetto)
 DECK_JOIN = 4.5  # m: impalcati più vicini del doppio di così diventano un corpo unico (Cavalcavia Borgomagno)
 TRAM_HALF = 1.7 + 0.5  # m: metà della corsia di un binario più il cordolo
+TRAM_CELLA = 50.0  # m: celle della griglia degli archi in quota in _tram_heights
 
 
 def unione(geoms):
@@ -291,6 +292,17 @@ def _tram_heights(pts, nodes, edges, heights, profili=None, dichiarati=()):
     """Quota di ogni punto di un binario, per gli impalcati della pianta delle strade: quella della strada in quota più
     vicina e quasi parallela. La quota che il gioco legge la scrive scripts/quote_rete.py (`tramH`)."""
     up = [(k, e) for k, e in enumerate(edges) if max(h for _t, h in quote_arco(k, e, heights, profili, dichiarati)) > 0.05]
+    # (#161) per ogni punto contano solo gli archi a meno di mezza carreggiata più 9 m: una griglia da TRAM_CELLA metri
+    # con ogni arco nelle celle del suo rettangolo allargato di un metro in più, e per il punto gli archi della sua cella
+    # nell'ordine di `up`. Gli archi lasciati fuori non potevano passare la prova sulla distanza: stesso esito, punto per
+    # punto, senza ripercorrere tutti gli archi in quota per ognuno dei punti dei binari
+    celle = defaultdict(list)
+    for j, (k, e) in enumerate(up):
+        (ax, az), (bx, bz) = nodes[e[0]], nodes[e[1]]
+        r = e[3] / 2 + 10
+        for cx in range(math.floor((min(ax, bx) - r) / TRAM_CELLA), math.floor((max(ax, bx) + r) / TRAM_CELLA) + 1):
+            for cz in range(math.floor((min(az, bz) - r) / TRAM_CELLA), math.floor((max(az, bz) + r) / TRAM_CELLA) + 1):
+                celle[(cx, cz)].append(j)
     out = []
     for i, p in enumerate(pts):
         q = pts[min(len(pts) - 1, i + 1)] if i < len(pts) - 1 else pts[i]
@@ -299,7 +311,7 @@ def _tram_heights(pts, nodes, edges, heights, profili=None, dichiarati=()):
         L = math.hypot(dx, dz) or 1
         dx, dz = dx / L, dz / L
         best, h = 1e9, 0.0
-        for k, e in up:
+        for k, e in (up[j] for j in celle.get((math.floor(p[0] / TRAM_CELLA), math.floor(p[1] / TRAM_CELLA)), ())):
             (ax, az), (bx, bz) = nodes[e[0]], nodes[e[1]]
             ux, uz = bx - ax, bz - az
             l = math.hypot(ux, uz) or 1e-9
@@ -463,10 +475,23 @@ def _chiave(p):
 def _anello(c, antiorario):
     """Vertici di un anello (senza il punto che lo chiude) nel verso dato, dal vertice più piccolo al millimetro."""
     c = list(c)
-    a2 = sum(c[i - 1][0] * c[i][1] - c[i][0] * c[i - 1][1] for i in range(len(c)))
+    if len(c) < 32:
+        a2 = sum(c[i - 1][0] * c[i][1] - c[i][0] * c[i - 1][1] for i in range(len(c)))
+        if (a2 > 0) != antiorario:
+            c.reverse()
+        i = min(range(len(c)), key=lambda i: _chiave(c[i]))
+        return c[i:] + c[:i]
+    # (#161) gli anelli lunghi con numpy, con lo stesso esito: i termini dell'area sono gli stessi prodotti e differenze
+    # in virgola mobile, sommati dallo stesso sum di Python nello stesso ordine; il vertice più piccolo si cerca solo tra
+    # quelli con la x entro 2 mm dalla minima (gli altri hanno la x al millimetro più grande), dal primo
+    import numpy as np
+    a = np.array(c, dtype=float)
+    x, z = a[:, 0], a[:, 1]
+    a2 = sum((np.roll(x, 1) * z - x * np.roll(z, 1)).tolist())
     if (a2 > 0) != antiorario:
         c.reverse()
-    i = min(range(len(c)), key=lambda i: _chiave(c[i]))
+        x = x[::-1]
+    i = min(np.flatnonzero(x <= x.min() + 0.002).tolist(), key=lambda i: _chiave(c[i]))
     return c[i:] + c[:i]
 
 
@@ -807,15 +832,16 @@ class Sfondo:
     build (le geometrie tornano per WKB, con tutte le cifre), o rilancia il suo errore: l'uscita è la stessa, byte per
     byte, come con in_parallelo (#158). Il figlio nasce solo se in questo processo non c'è nessun altro thread (un fork
     con un thread a metà di un lock non è sicuro); altrimenti, su macOS (PIANTA_FORK=1 lo forza), con PROCESSI 1 e in un
-    figlio, fn() gira subito qui."""
+    figlio, fn() gira subito qui. nice: priorità più bassa del figlio (os.nice), per un lavoro il cui risultato serve
+    molto dopo; fili: quanti thread può usare in_thread nel figlio (di base PROCESSI). Non cambiano l'esito."""
 
-    def __init__(self, nome, fn):
+    def __init__(self, nome, fn, nice=0, fili=None):
         self.nome, self._p, self._fatto = nome, None, False
         if (PROCESSI > 1 and not _FIGLIO and (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK'))
                 and threading.current_thread() is threading.main_thread() and threading.active_count() == 1):
             ctx = multiprocessing.get_context('fork')
             self._r, scrivi = ctx.Pipe(duplex=False)
-            self._p = ctx.Process(target=_sfondo_figlio, args=(fn, scrivi), daemon=True)
+            self._p = ctx.Process(target=_sfondo_figlio, args=(fn, scrivi, nice, fili), daemon=True)
             self._p.start()
             scrivi.close()
             SFONDI.append(nome)
@@ -836,9 +862,13 @@ class Sfondo:
         return self._valore
 
 
-def _sfondo_figlio(fn, scrivi):
-    global _FIGLIO
+def _sfondo_figlio(fn, scrivi, nice=0, fili=None):
+    global _FIGLIO, PROCESSI
     _FIGLIO = True
+    if fili:
+        PROCESSI = fili
+    if nice:
+        os.nice(nice)
     try:
         out = ('ok', fn())
         scrivi.send(out)
@@ -1072,6 +1102,31 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     # carreggiate misurate del DBGT (2007) che toccano una via OSM di oggi: piazze, golfi di fermata, anelli dei
     # capolinea, angoli veri degli incroci. Un poligono grande entra solo se almeno il 30% sta già sulle strade di oggi
     # (una via cambiata o sparita non torna); mai dentro gli edifici di oggi né sotto le rampe dei cavalcavia
+    # marciapiede solo dove la via ce l'ha (flag 64 sinistra, 128 destra): su entrambi i lati una fascia intorno al
+    # tratto, su un lato solo una fascia da quel lato
+    # larghezza: quella misurata (CTRN o DBGT) da quel lato, altrimenti SIDEWALK
+    bands = []
+    for k in ground:
+        a, b, _c, wd, _n, flags = edges[k][:6]
+        sides = (flags >> 6) & 3
+        wl, wr = walk_w[k] if walk_w else (0, 0)
+        dl, dr = wd / 2 + (wl or SIDEWALK), wd / 2 + (wr or SIDEWALK)
+        if sides == 3 and abs(dl - dr) < 0.3:
+            bands.append(seg(edges[k]).buffer((dl + dr) / 2, quad_segs=4))
+            continue
+        # z verso sud: per Shapely il piano è speculare, la sua sinistra è la nostra destra
+        if sides & 1:
+            bands.append(seg(edges[k]).buffer(-dl, single_sided=True))
+        if sides & 2:
+            bands.append(seg(edges[k]).buffer(dr, single_sided=True))
+        if sides == 3:
+            bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
+    # banchine dei bus di OSM (le corsie della stazione), unite: servono qui sotto e al marciapiede
+    P = Polygon()
+    if platforms:
+        pp = [Polygon([(f[i], f[i + 1]) for i in range(0, len(f), 2)]) for f in platforms if len(f) >= 6]
+        P = unione([g if g.is_valid else g.buffer(0) for g in pp]).buffer(0)
+    ped = lato.risultato()['ped']
     dbgt_c, sosta_a, marciapiedi = Polygon(), Polygon(), None
     if streets:
         bld = anticipo.risultato()['bld']  # i contorni degli edifici uniti (senza_quote)
@@ -1098,7 +1153,9 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             msel = [c for c in dbgt_polys(streets.get('marciapiedi', [])) if Uc.intersects(c)]
             # aree pedonali e piazze (A_PED, AC_PED): lastricate, se toccano una strada o un marciapiede di oggi
             psel = [c for c in dbgt_polys(streets.get('pedonali', [])) if Uc.intersects(c)]
-            return unione(msel + psel).difference(bld).difference(up).buffer(0) if msel or psel else Polygon()
+            dbgt_m = unione(msel + psel).difference(bld).difference(up).buffer(0) if msel or psel else Polygon()
+            # e il marciapiede intero, da tagliare dopo (marciapiede)
+            return dbgt_m, unione([*bands, ped, dbgt_m, P])
         marciapiedi = Sfondo('marciapiedi del DBGT', dbgt_marciapiedi)
     U = unione([U, *fillets, dbgt_c])
     # tra un parcheggio e la carreggiata il DBGT lascia fessure di pochi centimetri (i due poligoni non hanno lo stesso
@@ -1120,8 +1177,8 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     # gli spartitraffico con gli spigoli arrotondati; l'asfalto riempie quello che l'isola perde
     shaped = []
     for g in _polys(islands):
-        P = g.length or 1
-        if 4 * math.pi * g.area / (P * P) > 0.72 and g.area > 30:
+        per = g.length or 1
+        if 4 * math.pi * g.area / (per * per) > 0.72 and g.area > 30:
             pts = list(g.exterior.coords)[:-1]
             for _ in range(3):
                 pts = [q for a, b in zip(pts, pts[1:] + pts[:1]) for q in ((0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]), (0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]))]
@@ -1147,10 +1204,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
             n_isl = len(extra)
     # banchine dei bus di OSM (le corsie della stazione): lastricate e rialzate, fuori dall'asfalto; le isole che le
     # toccano (DBGT del 2007, prima del piazzale di oggi) tornano asfalto
-    P = Polygon()
     if platforms:
-        pp = [Polygon([(f[i], f[i + 1]) for i in range(0, len(f), 2)]) for f in platforms if len(f) >= 6]
-        P = unione([g if g.is_valid else g.buffer(0) for g in pp]).buffer(0)
         Pb = allarga(P, 0.5)
         gone = [g for g in _polys(islands) if g.intersects(Pb)]
         if gone:
@@ -1193,7 +1247,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     ritaglio = Sfondo('edifici ritagliati', lambda: _ritaglia(clear, buildings, bpolys))
     # marciapiede: fascia attorno alla carreggiata e aree pedonali; via isole, acqua (tranne sui ponti) e l'impronta
     # delle rampe in quota. Gli edifici non si tolgono: lo coprono già, e il ritaglio triplicherebbe i vertici
-    ped, bridges, W = L['ped'], L['bridges'], anticipo.risultato()['W']
+    bridges, W = L['bridges'], anticipo.risultato()['W']
     islands = islands.difference(W)  # tra due ponti affiancati c'è l'acqua, non un'isola
     # sotto rampe e impalcati niente isole né marciapiedi (la rampa del cavalcavia attraversava un'isola di prato)
     D = L['D']
@@ -1201,34 +1255,21 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     up_terra, up_alto, up_raso, sede_su, up_a, up_s, rampa, S = (L[q] for q in ('up_terra', 'up_alto', 'up_raso', 'sede_su', 'up_a', 'up_s', 'rampa', 'S'))
     if L['lanes']:
         islands = islands.difference(S)
-    # marciapiede solo dove la via ce l'ha (flag 64 sinistra, 128 destra): su entrambi i lati una fascia intorno al
-    # tratto, su un lato solo una fascia da quel lato
-    # larghezza: quella misurata (CTRN o DBGT) da quel lato, altrimenti SIDEWALK
-    bands = []
-    for k in ground:
-        a, b, _c, wd, _n, flags = edges[k][:6]
-        sides = (flags >> 6) & 3
-        wl, wr = walk_w[k] if walk_w else (0, 0)
-        dl, dr = wd / 2 + (wl or SIDEWALK), wd / 2 + (wr or SIDEWALK)
-        if sides == 3 and abs(dl - dr) < 0.3:
-            bands.append(seg(edges[k]).buffer((dl + dr) / 2, quad_segs=4))
-            continue
-        # z verso sud: per Shapely il piano è speculare, la sua sinistra è la nostra destra
-        if sides & 1:
-            bands.append(seg(edges[k]).buffer(-dl, single_sided=True))
-        if sides & 2:
-            bands.append(seg(edges[k]).buffer(dr, single_sided=True))
-        if sides == 3:
-            bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
-    dbgt_m = marciapiedi.risultato() if marciapiedi is not None else Polygon()
-    walk = unione([*bands, ped, dbgt_m, P]).difference(U).difference(islands)
+    # il marciapiede: le fasce, le aree pedonali, i marciapiedi del DBGT e le banchine unite (dal figlio dei marciapiedi
+    # del DBGT, o qui), poi via asfalto, isole, acqua (tranne sui ponti), carreggiate in quota, impalcati e sede. In
+    # sfondo mentre l'asfalto prende sede e rampe (#161): usa l'asfalto di adesso, come prima
+    dbgt_m, tutto_walk = marciapiedi.risultato() if marciapiedi is not None else (Polygon(), unione([*bands, ped, Polygon(), P]))
     acqua = W.difference(bridges)
-    walk = walk.difference(acqua).difference(up).difference(D)
-    # sotto la sede del tram asfalto, anche dove OSM la mette sul marciapiede o in una zona pedonale (il marciapiede
-    # rialzato copriva la corsia rossa)
+
+    def marciapiede():
+        walk = tutto_walk.difference(U).difference(islands)
+        walk = walk.difference(acqua).difference(up).difference(D)
+        # sotto la sede del tram asfalto, anche dove OSM la mette sul marciapiede o in una zona pedonale (il marciapiede
+        # rialzato copriva la corsia rossa)
+        return walk.difference(S) if not S.is_empty else walk
+    marciapiede = Sfondo('marciapiede', marciapiede)
     sede = S.difference(acqua) if not S.is_empty else Polygon()
     if not S.is_empty:
-        walk = walk.difference(S)
         U = unione([U, sede]).buffer(0)
     # verde del DBGT: da senza_quote
     verde = anticipo.risultato()['verde']
@@ -1243,6 +1284,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     if green and green.get('alberi'):
         bu = anticipo.risultato()['bu']
         piante = Sfondo('alberi', lambda: _alberi(U, bu, green['alberi']))
+    walk = marciapiede.risultato()
     cells = riquadri([sede, islands, U, walk, verde], hfun, rampa)
     alberi = piante.risultato() if piante is not None else []
     sostituiti, moved, dropped = ritaglio.risultato()

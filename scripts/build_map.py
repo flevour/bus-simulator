@@ -628,6 +628,8 @@ def measured_piece(meas, s):
 
 def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path=None, measures_path=None, volumes_path=None, dtm_path=None, green_path=None, streets_path=None, osm_stops_path=None, corridor_path=None):
     crono = Cronometro()
+    # il SIR1 (GTFS e regola dei binari) non dipende dalla rete: lavora in sfondo mentre si fanno strade e linee (#161)
+    tram_in_sfondo = street_surfaces.Sfondo('tram del SIR1', lambda: tram_sir1(gtfs_dir, tram_path))
     els = json.load(open(osm_path, encoding='utf-8'))['elements']
     if corridor_path:
         els += [e for e in json.load(open(corridor_path, encoding='utf-8'))['elements'] if e['type'] == 'way']
@@ -1641,71 +1643,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             narrowed += 1
     print('strade ristrette tra le facciate:', narrowed)
 
-    # tram SIR1 (dal GTFS): tracciato principale e fermate, per la sede tranviaria
-    import csv
-    rd = lambda f: csv.DictReader(open(f'{gtfs_dir}/{f}', encoding='utf-8-sig'))
-    troutes = {r['route_id'] for r in rd('routes.txt') if r['agency_id'] != '10'}
-    tshapes, ttrips = defaultdict(int), {}
-    for t in rd('trips.txt'):
-        if t['route_id'] in troutes:
-            tshapes[t['shape_id']] += 1
-            ttrips.setdefault(t['shape_id'], t['trip_id'])
-    tram = []
-    tram_lanes = False
-    staz = None
-    tram_stop_ids = set()
-    if tshapes:
-        main_shape = max(tshapes, key=tshapes.get)
-        # secondo tracciato: il più completo del verso opposto (dove i due versi si separano, es. l'anello della
-        # stazione percorso solo verso nord, la sede di ogni verso segue il suo)
-        tdir = {}
-        for t in rd('trips.txt'):
-            if t['route_id'] in troutes:
-                tdir.setdefault(t['shape_id'], t.get('direction_id') or '0')
-        npts = defaultdict(int)
-        for r in rd('shapes.txt'):
-            if r['shape_id'] in tshapes:
-                npts[r['shape_id']] += 1
-        opp = [k for k in tshapes if tdir.get(k) != tdir.get(main_shape)]
-        opp_shape = max(opp, key=lambda k: (npts[k] > 0.8 * npts[main_shape], tshapes[k] * npts[k])) if opp else None
-        pts = []
-        for r in rd('shapes.txt'):
-            if r['shape_id'] == main_shape:
-                pts.append((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])))
-        pts.sort()
-        flat = []
-        for _, la, lo in pts:
-            x, z = xz(la, lo)
-            flat += [round(x, 1), round(z, 1)]
-        tram.append(flat)
-        if opp_shape:
-            op = sorted((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])) for r in rd('shapes.txt') if r['shape_id'] == opp_shape)
-            tram.append([round(v, 1) for _, la, lo in op for v in xz(la, lo)])
-        trip = ttrips[main_shape]
-        for r in rd('stop_times.txt'):
-            if r['trip_id'] == trip:
-                tram_stop_ids.add((int(r['stop_sequence']), r['stop_id']))
-    stops_by_id = {s['stop_id']: s for s in rd('stops.txt')}
-    # binari veri: un binario per verso sui binari OSM, dalla fine del tronco a un capolinea (dove lo shape GTFS fa
-    # l'inversione) a quella dell'altro, con le fermate GTFS come punti di passaggio; in stazione l'anello esterno
-    # (scripts/tram_stazione.py); poi la regola dei binari (scripts/binari_regola.py)
-    cantiere = os.path.join(os.path.dirname(tram_path), 'osm-padova-tram-cantiere.json') if tram_path else None
-    if tshapes and cantiere and os.path.exists(cantiere) and opp_shape:
-        inv = [inversione(t) for t in tram]
-        # verso +1 (lo shape principale): dal fondo del tronco dove l'altro shape fa l'inversione al suo
-        versi = [(tram[0], inv[1], inv[0]), (tram[1], inv[0], inv[1])]
-        staz = tram_stazione.Stazione.from_osm(tram_path)
-        tram = sir1_binari(cantiere, versi, staz, nt_path=os.path.join(os.path.dirname(tram_path), 'tram-linee-nuove.json'))
-        tram_lanes = True
-    tram_stops = []
-    for _, sid in sorted(tram_stop_ids):
-        s = stops_by_id[sid]
-        x, z = xz(float(s['stop_lat']), float(s['stop_lon']))
-        tram_stops.append([round(x, 1), round(z, 1), build_gtfs.clean_name(s['stop_desc'] or s['stop_name'])])
-    if tram_path and tram_lanes:
-        for st, c in zip(tram_stops, central_platforms(tram_path, tram_stops, tram)):
-            st.append(c)
-    print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops), 'con banchina centrale', sum(st[3] for st in tram_stops if len(st) > 3))
+    # tram SIR1 (dal GTFS): partito in sfondo all'inizio della build (tram_sir1, #161)
+    tram, tram_lanes, staz, tram_stops = tram_in_sfondo.risultato()
 
     crono.passo('ferrovia, acqua e tram')
     # pianta delle strade: quote dei cavalcavia, carreggiate, marciapiedi, isole; edifici ritagliati fuori
@@ -1726,7 +1665,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     # la parte della pianta che non dipende da quote e rete (unioni di edifici, acqua e verde) in un processo a parte
     # (#161): il passo dei cavalcavia per quasi tutto il tempo aspetta HiGHS, e intanto i processori sono liberi. Edifici,
     # acqua, verde e carreggiate del DBGT da qui alla pianta non cambiano
-    anticipo = street_surfaces.Sfondo('senza quote', lambda: street_surfaces.senza_quote(buildings, water, green, streets))
+    # (con priorità bassa e un thread solo: in CI i processori sono 4, cioè 2 core, e la soluzione più lunga di HiGHS è il
+    # percorso che conta)
+    anticipo = street_surfaces.Sfondo('senza quote', lambda: street_surfaces.senza_quote(buildings, water, green, streets), nice=10, fili=1)
     if dtm_path:
         # cavalcavia: le strutture della rete devono essere quelle del registro (data/cavalcavia.json); quelle attive lì
         # prendono il profilo di scripts/profilo_cavalcavia.py, le altre le quote di overpass_heights con il terreno
@@ -1920,6 +1861,78 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
 
 BUS_MIN_2, BUS_MIN_1, BUS_MIN_RING = 7.5, 5.5, 7.0  # m: carreggiata minima sui percorsi dei bus (doppio senso, senso unico, rotatoria)
 PASSO_SIR1 = 120  # m tra i punti di passaggio del SIR1 sui binari OSM, presi dallo shape GTFS
+
+
+def tram_sir1(gtfs_dir, tram_path):
+    """Il SIR1 dal GTFS e dai binari OSM: (tram, tram_lanes, staz, tram_stops). Legge solo file (GTFS, binari OSM,
+    linee nuove): la build lo fa partire in sfondo all'inizio (street_surfaces.Sfondo, #161), mentre fa strade e
+    linee, e lo prende nel passo della ferrovia."""
+    # tram SIR1 (dal GTFS): tracciato principale e fermate, per la sede tranviaria
+    import csv
+    rd = lambda f: csv.DictReader(open(f'{gtfs_dir}/{f}', encoding='utf-8-sig'))
+    troutes = {r['route_id'] for r in rd('routes.txt') if r['agency_id'] != '10'}
+    tshapes, ttrips = defaultdict(int), {}
+    for t in rd('trips.txt'):
+        if t['route_id'] in troutes:
+            tshapes[t['shape_id']] += 1
+            ttrips.setdefault(t['shape_id'], t['trip_id'])
+    tram = []
+    tram_lanes = False
+    staz = None
+    tram_stop_ids = set()
+    if tshapes:
+        main_shape = max(tshapes, key=tshapes.get)
+        # secondo tracciato: il più completo del verso opposto (dove i due versi si separano, es. l'anello della
+        # stazione percorso solo verso nord, la sede di ogni verso segue il suo)
+        tdir = {}
+        for t in rd('trips.txt'):
+            if t['route_id'] in troutes:
+                tdir.setdefault(t['shape_id'], t.get('direction_id') or '0')
+        npts = defaultdict(int)
+        for r in rd('shapes.txt'):
+            if r['shape_id'] in tshapes:
+                npts[r['shape_id']] += 1
+        opp = [k for k in tshapes if tdir.get(k) != tdir.get(main_shape)]
+        opp_shape = max(opp, key=lambda k: (npts[k] > 0.8 * npts[main_shape], tshapes[k] * npts[k])) if opp else None
+        pts = []
+        for r in rd('shapes.txt'):
+            if r['shape_id'] == main_shape:
+                pts.append((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])))
+        pts.sort()
+        flat = []
+        for _, la, lo in pts:
+            x, z = xz(la, lo)
+            flat += [round(x, 1), round(z, 1)]
+        tram.append(flat)
+        if opp_shape:
+            op = sorted((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])) for r in rd('shapes.txt') if r['shape_id'] == opp_shape)
+            tram.append([round(v, 1) for _, la, lo in op for v in xz(la, lo)])
+        trip = ttrips[main_shape]
+        for r in rd('stop_times.txt'):
+            if r['trip_id'] == trip:
+                tram_stop_ids.add((int(r['stop_sequence']), r['stop_id']))
+    stops_by_id = {s['stop_id']: s for s in rd('stops.txt')}
+    # binari veri: un binario per verso sui binari OSM, dalla fine del tronco a un capolinea (dove lo shape GTFS fa
+    # l'inversione) a quella dell'altro, con le fermate GTFS come punti di passaggio; in stazione l'anello esterno
+    # (scripts/tram_stazione.py); poi la regola dei binari (scripts/binari_regola.py)
+    cantiere = os.path.join(os.path.dirname(tram_path), 'osm-padova-tram-cantiere.json') if tram_path else None
+    if tshapes and cantiere and os.path.exists(cantiere) and opp_shape:
+        inv = [inversione(t) for t in tram]
+        # verso +1 (lo shape principale): dal fondo del tronco dove l'altro shape fa l'inversione al suo
+        versi = [(tram[0], inv[1], inv[0]), (tram[1], inv[0], inv[1])]
+        staz = tram_stazione.Stazione.from_osm(tram_path)
+        tram = sir1_binari(cantiere, versi, staz, nt_path=os.path.join(os.path.dirname(tram_path), 'tram-linee-nuove.json'))
+        tram_lanes = True
+    tram_stops = []
+    for _, sid in sorted(tram_stop_ids):
+        s = stops_by_id[sid]
+        x, z = xz(float(s['stop_lat']), float(s['stop_lon']))
+        tram_stops.append([round(x, 1), round(z, 1), build_gtfs.clean_name(s['stop_desc'] or s['stop_name'])])
+    if tram_path and tram_lanes:
+        for st, c in zip(tram_stops, central_platforms(tram_path, tram_stops, tram)):
+            st.append(c)
+    print('tram: punti', sum(len(t) // 2 for t in tram), 'fermate', len(tram_stops), 'con banchina centrale', sum(st[3] for st in tram_stops if len(st) > 3))
+    return tram, tram_lanes, staz, tram_stops
 
 
 def central_platforms(path, stops, lanes):

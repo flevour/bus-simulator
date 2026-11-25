@@ -155,16 +155,20 @@ class Via(Griglia10):
             memo[k] = v
         return v
 
+    def chiusa(self, i, j):
+        """Il byte della cella dopo la chiusura morfologica, senza ponti né celle fissate (un intero)."""
+        b, nx = self.b, self.nx
+        m = lambda a, c: self._finestra(max, self._m, lambda p, q: b[q * nx + p], a, c, True)
+        d = lambda a, c: self._finestra(max, self._d, m, a, c, False)
+        e = lambda a, c: self._finestra(min, self._e, d, a, c, True)
+        return self._finestra(min, {}, e, i, j, False) if self.r else b[j * nx + i]
+
     def cella(self, i, j):
         k = (i, j)
         v = self._c.get(k)
         if v is not None:
             return v
-        b, nx = self.b, self.nx
-        m = lambda a, c: self._finestra(max, self._m, lambda p, q: b[q * nx + p], a, c, True)
-        d = lambda a, c: self._finestra(max, self._d, m, a, c, False)
-        e = lambda a, c: self._finestra(min, self._e, d, a, c, True)
-        v = self._finestra(min, {}, e, i, j, False) if self.r else b[j * nx + i]
+        v = self.chiusa(i, j)
         for w, ax, az, ah, bx, bz, bh in self.ponti.get(k, ()):
             x, z = self.x0 + i * self.step, self.z0 + j * self.step
             ex, ez = bx - ax, bz - az
