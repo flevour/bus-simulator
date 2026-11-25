@@ -524,12 +524,32 @@ def infittisci(coords, hfun, maxlen=12.0, tol=0.12):
     return out
 
 
-def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram):
+def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram, busy=None):
     """Isole del DBGT (SPART) da aggiungere: dentro l'asfalto di oggi (almeno il 60%) oppure accanto alle carreggiate
     (spartitraffico tra due carreggiate separate, dove il gioco metteva il marciapiede), e fuori da dove passano i
     veicoli: le corsie delle auto (a un quarto della larghezza dall'asse, sull'asse nei sensi unici, 1 m per lato),
     tutta la carreggiata delle vie dei bus, gli incroci dei bus (le svolte) e la sede del tram. Così l'isola non finisce
-    mai sotto le ruote."""
+    mai sotto le ruote. busy: corsie_occupate, se già calcolata (surfaces la fa in sfondo)."""
+    if busy is None:
+        busy = corsie_occupate(nodes, edges, ground, bus_edges, tram)
+    # tre buffer dell'asfalto di tutta la città, insieme (#158), dalla stessa forma canonica (allarga la rifaceva ogni
+    # volta, #161)
+    C = canonico(U)
+    Ub, Un, Ut = in_thread(lambda i: C.buffer((0.5, 8, 2)[i]), 3)
+    for g in (busy, Ut):
+        shapely.prepare(g)
+    # le intersezioni con l'asfalto allargato (geometrie non preparate) si dividono tra i thread (#161); le domande alle
+    # geometrie preparate restano qui. Stesso esito di "c.area >= 3 and not busy.intersects(c) and (Ub ∩ c >= 60% or
+    # (Ut.intersects(c) and Un ∩ c >= 90%))", candidato per candidato
+    cand = [c for c in cands if c.area >= 3 and not busy.intersects(c)]
+    dentro = in_thread(lambda i: Ub.intersection(cand[i]).area >= 0.6 * cand[i].area, len(cand))
+    altri = [i for i, ok in enumerate(dentro) if not ok and Ut.intersects(cand[i])]
+    accanto = dict(zip(altri, in_thread(lambda j: Un.intersection(cand[altri[j]]).area >= 0.9 * cand[altri[j]].area, len(altri))))
+    return [c for i, c in enumerate(cand) if dentro[i] or accanto.get(i, False)]
+
+
+def corsie_occupate(nodes, edges, ground, bus_edges, tram):
+    """Dove passano i veicoli, per dbgt_islands: corsie delle auto, carreggiate e incroci dei bus, sede del tram."""
     lanes = []
     deg = defaultdict(int)
     for k in ground:
@@ -557,12 +577,7 @@ def dbgt_islands(cands, U, nodes, edges, ground, bus_edges, tram):
     for t in tram:
         if len(t) >= 4:
             lanes.append(LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE + 0.5))
-    # le corsie e tre buffer dell'asfalto di tutta la città, insieme (#158)
-    busy, Ub, Un, Ut = in_thread(lambda i: unary_union(lanes) if i == 0 else allarga(U, (0.5, 8, 2)[i - 1]), 4)
-    for g in (busy, Ub, Un, Ut):
-        shapely.prepare(g)
-    near = lambda c: Ub.intersection(c).area >= 0.6 * c.area or (Ut.intersects(c) and Un.intersection(c).area >= 0.9 * c.area)
-    return [c for c in cands if c.area >= 3 and not busy.intersects(c) and near(c)]
+    return unary_union(lanes)
 
 
 def dbgt_polys(lst):
@@ -750,7 +765,7 @@ def in_parallelo(fn, n, fette=8):
     Su macOS (fork non è sicuro con le librerie di sistema) e con PROCESSI 1 in sequenza; PIANTA_FORK=1 forza il fork
     per le prove."""
     global _LAVORO
-    if (PROCESSI <= 1 or n < 2 or not (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK'))
+    if (PROCESSI <= 1 or n < 2 or _FIGLIO or not (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK'))
             or threading.current_thread() is not threading.main_thread()):  # niente fork da un thread di in_thread
         return [fn(i) for i in range(n)]
     k = min(n, PROCESSI * fette)
@@ -778,6 +793,59 @@ def in_thread(fn, n):
         return [fn(i) for i in range(n)]
     with ThreadPoolExecutor(max_workers=min(PROCESSI, n)) as ex:
         return list(ex.map(fn, range(n)))
+
+
+_FIGLIO = False  # vero nel processo di un lavoro in sfondo (Sfondo): lì niente altri processi, in_parallelo in sequenza
+SFONDI = []  # i lavori in sfondo partiti in un processo figlio, per il riepilogo della build
+
+
+class Sfondo:
+    """Un lavoro che gira in un processo figlio, nato per fork, mentre la build va avanti (#161): le operazioni su
+    geometrie grandi come la città che non dipendono l'una dall'altra lavorano insieme, anche mentre il programma lineare
+    dei cavalcavia aspetta HiGHS. fn() deve dipendere solo da quello che c'è già in memoria e non cambiare niente che la
+    build usa dopo (nel figlio i cambiamenti si perdono). risultato() aspetta e dà quello che fn() dà nel processo della
+    build (le geometrie tornano per WKB, con tutte le cifre), o rilancia il suo errore: l'uscita è la stessa, byte per
+    byte, come con in_parallelo (#158). Il figlio nasce solo se in questo processo non c'è nessun altro thread (un fork
+    con un thread a metà di un lock non è sicuro); altrimenti, su macOS (PIANTA_FORK=1 lo forza), con PROCESSI 1 e in un
+    figlio, fn() gira subito qui."""
+
+    def __init__(self, nome, fn):
+        self.nome, self._p, self._fatto = nome, None, False
+        if (PROCESSI > 1 and not _FIGLIO and (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK'))
+                and threading.current_thread() is threading.main_thread() and threading.active_count() == 1):
+            ctx = multiprocessing.get_context('fork')
+            self._r, scrivi = ctx.Pipe(duplex=False)
+            self._p = ctx.Process(target=_sfondo_figlio, args=(fn, scrivi), daemon=True)
+            self._p.start()
+            scrivi.close()
+            SFONDI.append(nome)
+        else:
+            self._valore, self._fatto = fn(), True
+
+    def risultato(self):
+        if not self._fatto:
+            try:
+                esito, valore = self._r.recv()
+            except EOFError:
+                esito, valore = 'errore', f'il processo è finito senza risultato (uscita {self._p.exitcode})'
+            self._r.close()
+            self._p.join()
+            if esito != 'ok':
+                raise RuntimeError(f'pianta delle strade, lavoro in sfondo "{self.nome}":\n{valore}')
+            self._valore, self._fatto = valore, True
+        return self._valore
+
+
+def _sfondo_figlio(fn, scrivi):
+    global _FIGLIO
+    _FIGLIO = True
+    try:
+        out = ('ok', fn())
+        scrivi.send(out)
+    except BaseException:
+        import traceback
+        scrivi.send(('errore', traceback.format_exc()))
+    scrivi.close()
 
 
 def _cella_riquadro(ixz, L, trees, R, tR, hfun):
@@ -823,13 +891,57 @@ def sovrapposte(cells, minimo=0.01):
     return out
 
 
+def _edifici(buildings):
+    """Gli edifici come poligoni, con i cortili."""
+    flat2 = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
+    out = []
+    for b in buildings:
+        p = Polygon(flat2(b[3]), [flat2(h) for h in (b[4] if len(b) > 4 and b[4] else []) if len(h) >= 6]) if len(b[3]) >= 6 else Polygon()
+        out.append(p if p.is_valid else p.buffer(0))
+    return out
+
+
+def senza_quote(buildings, water, green, streets):
+    """La parte della pianta che non dipende dalle quote né dalla rete (#161): l'area del DBGT, i contorni degli edifici
+    uniti (per le carreggiate del DBGT), l'acqua, il verde e gli edifici uniti con i cortili (per gli alberi). La build
+    la fa partire in sfondo (Sfondo) prima del passo dei cavalcavia, che per quasi tutto il tempo aspetta HiGHS, e la
+    passa a surfaces (anticipo); senza, la fa partire surfaces."""
+    flat2 = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
+    out = {'comune': unione([Polygon(*_ring_pts(r)).buffer(0) for r in green['comune']]) if green and green.get('comune') else Polygon()}
+    if streets:
+        bl = []
+        for b in buildings:
+            q = Polygon(flat2(b[3])) if len(b[3]) >= 6 else Polygon()
+            bl.append(q if q.is_valid else q.buffer(0))
+        out['bld'] = unione(bl)
+    out['W'] = unione([LineString([(f[i], f[i + 1]) for i in range(0, len(f), 2)]).buffer(wd / 2 + 2) for _n, wd, f in water if len(f) >= 4])
+    # verde del DBGT (prati, aree alberate, aiuole): l'ultima classe della pianta, quella che resta fuori da carreggiate,
+    # sede, isole e marciapiedi (partizione, #126), e mai sull'acqua
+    out['verde'] = Polygon()
+    if green and green.get('verde'):
+        vp = []
+        for r in green['verde']:
+            g = Polygon([(r[1][i], r[1][i + 1]) for i in range(0, len(r[1]), 2)], [[(h[i], h[i + 1]) for i in range(0, len(h), 2)] for h in r[2:] if len(h) >= 6])
+            vp.append(g if g.is_valid else g.buffer(0))
+        out['verde'] = unione(vp).difference(out['W']).buffer(0)
+    if green and green.get('alberi'):
+        out['bu'] = unary_union(_edifici(buildings))
+    return out
+
+
 def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=None, hfun=None, green=None, streets=None, platforms=None,
-             bus_left=(), stalli=(), profili=None, dichiarati=(), golfi=()):
+             bus_left=(), stalli=(), profili=None, dichiarati=(), golfi=(), anticipo=None):
     """bus_left: (nodo della svolta, nodo dopo) delle svolte strette a sinistra dei bus; stalli: (nodo d'inizio, nodo
     dopo, metri) dei capolinea dove il bus fermo alla prima fermata sporge dietro l'inizio del percorso (build_map).
     Valgono solo fuori dal DBGT, dove carreggiate e piazzali sono stimati: dentro ci sono quelli misurati.
     golfi: poligoni delle aree di sosta lungo la strada di OSM (parking=street_side, scripts/sosta.py): asfalto dove
-    toccano la carreggiata, come i parcheggi del DBGT."""
+    toccano la carreggiata, come i parcheggi del DBGT. anticipo: Sfondo di senza_quote con gli stessi edifici, acqua,
+    verde e carreggiate del DBGT (build_map la fa partire prima dei cavalcavia).
+    Le operazioni su geometrie grandi come la città che non dipendono dall'asfalto U (impalcati, rampe, sede, corsie,
+    edifici ritagliati, alberi) girano in sfondo mentre la catena di U va avanti qui (Sfondo, #161): stessi calcoli sugli
+    stessi dati, la pianta esce la stessa."""
+    if anticipo is None:
+        anticipo = Sfondo('senza quote', lambda: senza_quote(buildings, water, green, streets))
     # archi in quota: con il profilo della loro struttura, o con un nodo in quota (overpass_heights)
     in_quota = {k for k, e in enumerate(edges) if max(h for _t, h in quote_arco(k, e, heights, profili, dichiarati)) > 0.05}
     seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
@@ -837,10 +949,12 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     ground = [k for k in drive if k not in in_quota]
     # carreggiata: ogni tratto allargato (estremi tondi: i giunti delle curve restano pieni)
     pieces = {k: seg(edges[k]).buffer(edges[k][3] / 2, quad_segs=4) for k in drive}
+    kq = [k for k in drive if k in in_quota]
+    up = unione([pieces[k] for k in kq])  # le carreggiate in quota
+    lato = Sfondo('quote e rete', lambda: _quote_e_rete(nodes, edges, heights, tram, bus_edges, green, profili, dichiarati, drive, ground, kq, pieces))
     U = unione([pieces[k] for k in ground])
     width = {(min(e[0], e[1]), max(e[0], e[1])): e[3] for e in edges}
-    comune = unione([Polygon(*_ring_pts(r)).buffer(0) for r in green['comune']]) if green and green.get('comune') else Polygon()
-    stimato = lambda n: not comune.contains(Point(nodes[n]))
+    stimato = lambda n: not anticipo.risultato()['comune'].contains(Point(nodes[n]))
     # isole delle rotatorie: anelli chiusi di archi junction=roundabout, la mezzeria rientrata di metà carreggiata
     ring_at = defaultdict(list)
     for k in ground:
@@ -943,11 +1057,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         return closed.intersection(Point(nodes[n]).buffer(rad - rf * 0.6, quad_segs=8))
     fillets = in_parallelo(fillet, len(incroci))  # un incrocio alla volta, indipendenti (#158)
     # isole: buchi piccoli della carreggiata senza edifici dentro (spartitraffico, isole delle rotatorie)
-    bpolys = []
-    flat2 = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
-    for b in buildings:
-        p = Polygon(flat2(b[3]), [flat2(h) for h in (b[4] if len(b) > 4 and b[4] else []) if len(h) >= 6]) if len(b[3]) >= 6 else Polygon()
-        bpolys.append(p if p.is_valid else p.buffer(0))
+    bpolys = _edifici(buildings)
     btree = STRtree(bpolys)
     free = lambda h: h.area < ISLAND_MAX and not any(bpolys[i].intersects(h) for i in btree.query(h))
     # si salvano solo le isole all'ingresso delle rotatorie (toccano l'anello) che i raccordi cancellerebbero quasi del
@@ -962,15 +1072,9 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     # carreggiate misurate del DBGT (2007) che toccano una via OSM di oggi: piazze, golfi di fermata, anelli dei
     # capolinea, angoli veri degli incroci. Un poligono grande entra solo se almeno il 30% sta già sulle strade di oggi
     # (una via cambiata o sparita non torna); mai dentro gli edifici di oggi né sotto le rampe dei cavalcavia
-    dbgt_c, dbgt_m, sosta_a = Polygon(), Polygon(), Polygon()
+    dbgt_c, sosta_a, marciapiedi = Polygon(), Polygon(), None
     if streets:
-        flat2b = lambda f: [(f[i], f[i + 1]) for i in range(0, len(f), 2)]
-        bl = []
-        for b in buildings:
-            q = Polygon(flat2b(b[3])) if len(b[3]) >= 6 else Polygon()
-            bl.append(q if q.is_valid else q.buffer(0))
-        bld = unione(bl)
-        upe = unione([pieces[k] for k in drive if k in in_quota])
+        bld = anticipo.risultato()['bld']  # i contorni degli edifici uniti (senza_quote)
         Ut, U2 = in_thread(lambda i: allarga(U, (1.0, 2.0)[i]), 2)
         shapely.prepare(Ut)
         sel = [c for c in dbgt_polys(streets.get('carreggiate', [])) if Ut.intersects(c) and (c.area <= 6000 or c.intersection(U2).area >= 0.3 * c.area)]
@@ -984,13 +1088,18 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         park += [c for c in golfi if Us.intersects(c) and c.area <= 8000]
         sel += park
         sosta_a = unione(park) if park else Polygon()
-        dbgt_c = unione(sel).difference(bld).difference(allarga(upe, 1.0)).buffer(0) if sel else Polygon()
-        Uc = allarga(unione([U, dbgt_c]), 1.5)
-        shapely.prepare(Uc)
-        msel = [c for c in dbgt_polys(streets.get('marciapiedi', [])) if Uc.intersects(c)]
-        # aree pedonali e piazze (A_PED, AC_PED): lastricate, se toccano una strada o un marciapiede di oggi
-        psel = [c for c in dbgt_polys(streets.get('pedonali', [])) if Uc.intersects(c)]
-        dbgt_m = unione(msel + psel).difference(bld).difference(upe).buffer(0) if msel or psel else Polygon()
+        dbgt_c = unione(sel).difference(bld).difference(allarga(up, 1.0)).buffer(0) if sel else Polygon()
+
+        def dbgt_marciapiedi():
+            # marciapiedi misurati del DBGT che toccano l'asfalto di qui (con le carreggiate del DBGT), fuori dagli
+            # edifici e dalle carreggiate in quota: dipende da U di adesso, e va in sfondo mentre U cresce (#161)
+            Uc = allarga(unione([U, dbgt_c]), 1.5)
+            shapely.prepare(Uc)
+            msel = [c for c in dbgt_polys(streets.get('marciapiedi', [])) if Uc.intersects(c)]
+            # aree pedonali e piazze (A_PED, AC_PED): lastricate, se toccano una strada o un marciapiede di oggi
+            psel = [c for c in dbgt_polys(streets.get('pedonali', [])) if Uc.intersects(c)]
+            return unione(msel + psel).difference(bld).difference(up).buffer(0) if msel or psel else Polygon()
+        marciapiedi = Sfondo('marciapiedi del DBGT', dbgt_marciapiedi)
     U = unione([U, *fillets, dbgt_c])
     # tra un parcheggio e la carreggiata il DBGT lascia fessure di pochi centimetri (i due poligoni non hanno lo stesso
     # bordo): si chiudono, solo lì, o una fila di stalli a pettine sta a cavallo di una riga di marciapiede
@@ -1030,7 +1139,7 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
         mk = lambda r: Polygon([(r[0][i], r[0][i + 1]) for i in range(0, len(r[0]), 2)], [[(h[i], h[i + 1]) for i in range(0, len(h), 2)] for h in r[1:] if len(h) >= 6])
         cands = [mk(ri) for ri in green['isole'] if len(ri[0]) >= 6]
         cands = [g if g.is_valid else g.buffer(0) for g in cands]
-        extra = dbgt_islands([c for c in cands if isinstance(c, Polygon)], U, nodes, edges, ground, bus_edges, tram)
+        extra = dbgt_islands([c for c in cands if isinstance(c, Polygon)], U, nodes, edges, ground, bus_edges, tram, lato.risultato()['busy'])
         if extra:
             E = unione(extra).buffer(0)
             U = U.difference(E)
@@ -1063,8 +1172,10 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     if stub:
         U = unione([U, *stub])
         islands = islands.difference(unione(stub))
-    # edifici fuori da carreggiate (anche quelle in quota), marciapiede minimo e sede del tram
-    clear = [allarga(unione([pieces[k] for k in drive]), 0.8, quad_segs=2)]
+    # edifici fuori da carreggiate (anche quelle in quota), marciapiede minimo e sede del tram: la carreggiata intera
+    # allargata e le sedi del tram vengono da _quote_e_rete, nello stesso ordine di prima
+    L = lato.risultato()
+    clear = [L['clear0']]
     clear += [pieces[k].buffer(BUS_KERB, quad_segs=2) for k in drive if (min(edges[k][0], edges[k][1]), max(edges[k][0], edges[k][1])) in bus_edges]
     clear += [g.buffer(0.8, quad_segs=2) for g in stub]
     # svolte strette a sinistra: a destra della via d'uscita, dalla parte delle case (z verso sud: per Shapely la sua
@@ -1072,62 +1183,115 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     # 1,6 m oltre il bordo; la via vera è larga 9 m con la sosta, quella stimata 7,5
     for b, c in bus_left:
         (bx, bz), (cx, cz) = nodes[b], nodes[c]
-        L = math.hypot(cx - bx, cz - bz)
-        if L < 0.3 or not stimato(b):
+        L_ = math.hypot(cx - bx, cz - bz)
+        if L_ < 0.3 or not stimato(b):
             continue
-        t = min(1.0, BUS_TURN_LEN / L)
+        t = min(1.0, BUS_TURN_LEN / L_)
         clear.append(LineString([(bx, bz), (bx + (cx - bx) * t, bz + (cz - bz) * t)]).buffer(width[(min(b, c), max(b, c))] / 2 + BUS_TURN_KERB, single_sided=True))
-    for t in tram:
-        if len(t) >= 4:
-            clear.append(LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_CLEAR, quad_segs=2))
-    clear = unione(clear)
-    ctree = clear
-    # chi tocca ctree si chiede alla geometria preparata, con lo stesso esito: prima ogni intersects rifaceva l'indice di
-    # tutta la città, circa 40 s sul Mac (#158). Poi le differenze con tutta la città, una per edificio che tocca, divise
-    # tra i thread, con la geometria non più preparata
-    shapely.prepare(ctree)
-    tocca = [j for j, p in enumerate(bpolys) if ctree.intersects(p)]  # preparata ctree, il primo dei due
-    shapely.destroy_prepared(ctree)
-    resti = dict(zip(tocca, in_thread(lambda i: bpolys[tocca[i]].difference(ctree), len(tocca))))
-    out_b, moved, dropped = [], 0, 0
-    for j, (b, p) in enumerate(zip(buildings, bpolys)):
-        if j not in resti:
-            out_b.append(b)
-            continue
-        # (in ordine fisso e dal vertice più piccolo, prima di semplificare: la differenza con l'unione di tutta la città
-        # comincia gli anelli da un punto che dipende anche da quello che sta lontano, #139)
-        rest = canonico(resti[j])
-        parts = [g for g in ([rest] if isinstance(rest, Polygon) else list(getattr(rest, 'geoms', []))) if isinstance(g, Polygon) and g.area >= 15]
-        if not parts:
-            dropped += 1
-            continue
-        moved += 1
-        for g in parts:
-            g = g.simplify(0.05)
-            flat = [round(v, 1) for xy in list(g.exterior.coords)[:-1] for v in xy]
-            holes = [[round(v, 1) for xy in list(r.coords)[:-1] for v in xy] for r in g.interiors]
-            out_b.append([b[0], b[1], b[2], flat, holes or None, *b[5:]])
+    clear += L['clear_tram']
+    # il ritaglio degli edifici (_ritaglia) va in sfondo: il resto della pianta non lo usa (#161)
+    ritaglio = Sfondo('edifici ritagliati', lambda: _ritaglia(clear, buildings, bpolys))
     # marciapiede: fascia attorno alla carreggiata e aree pedonali; via isole, acqua (tranne sui ponti) e l'impronta
     # delle rampe in quota. Gli edifici non si tolgono: lo coprono già, e il ritaglio triplicherebbe i vertici
-    ped = unione([seg(e).buffer(e[3] / 2, quad_segs=4) for e in edges if e[2] == 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3])
-    W = unione([LineString([(f[i], f[i + 1]) for i in range(0, len(f), 2)]).buffer(wd / 2 + 2) for _n, wd, f in water if len(f) >= 4])
-    bridges = unione([pieces[k].buffer(BRIDGE_WALK) for k in ground if edges[k][5] & 4])
+    ped, bridges, W = L['ped'], L['bridges'], anticipo.risultato()['W']
     islands = islands.difference(W)  # tra due ponti affiancati c'è l'acqua, non un'isola
     # sotto rampe e impalcati niente isole né marciapiedi (la rampa del cavalcavia attraversava un'isola di prato)
-    D = decks(nodes, edges, heights, drive, tram, profili, dichiarati)
-    up = unione([pieces[k] for k in drive if k in in_quota])
+    D = L['D']
     islands = islands.difference(up).difference(D)
+    up_terra, up_alto, up_raso, sede_su, up_a, up_s, rampa, S = (L[q] for q in ('up_terra', 'up_alto', 'up_raso', 'sede_su', 'up_a', 'up_s', 'rampa', 'S'))
+    if L['lanes']:
+        islands = islands.difference(S)
+    # marciapiede solo dove la via ce l'ha (flag 64 sinistra, 128 destra): su entrambi i lati una fascia intorno al
+    # tratto, su un lato solo una fascia da quel lato
+    # larghezza: quella misurata (CTRN o DBGT) da quel lato, altrimenti SIDEWALK
+    bands = []
+    for k in ground:
+        a, b, _c, wd, _n, flags = edges[k][:6]
+        sides = (flags >> 6) & 3
+        wl, wr = walk_w[k] if walk_w else (0, 0)
+        dl, dr = wd / 2 + (wl or SIDEWALK), wd / 2 + (wr or SIDEWALK)
+        if sides == 3 and abs(dl - dr) < 0.3:
+            bands.append(seg(edges[k]).buffer((dl + dr) / 2, quad_segs=4))
+            continue
+        # z verso sud: per Shapely il piano è speculare, la sua sinistra è la nostra destra
+        if sides & 1:
+            bands.append(seg(edges[k]).buffer(-dl, single_sided=True))
+        if sides & 2:
+            bands.append(seg(edges[k]).buffer(dr, single_sided=True))
+        if sides == 3:
+            bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
+    dbgt_m = marciapiedi.risultato() if marciapiedi is not None else Polygon()
+    walk = unione([*bands, ped, dbgt_m, P]).difference(U).difference(islands)
+    acqua = W.difference(bridges)
+    walk = walk.difference(acqua).difference(up).difference(D)
+    # sotto la sede del tram asfalto, anche dove OSM la mette sul marciapiede o in una zona pedonale (il marciapiede
+    # rialzato copriva la corsia rossa)
+    sede = S.difference(acqua) if not S.is_empty else Polygon()
+    if not S.is_empty:
+        walk = walk.difference(S)
+        U = unione([U, sede]).buffer(0)
+    # verde del DBGT: da senza_quote
+    verde = anticipo.risultato()['verde']
+    # riquadri: le classi a terra tagliate sul riquadro e messe insieme come partizione (un solo proprietario per ogni
+    # metro quadro, #126), semplificata lì con il bordo del riquadro fermo (i riquadri accanto combaciano, e un cambiamento
+    # in un posto non sposta i contorni lontani, #139). L'asfalto U contiene anche la sede: nel riquadro la sede viene
+    # prima, quindi l'asfalto è quello che resta. Con il terreno i lati lunghi infittiti dove non è piano (argini, ponti)
+    # i piedi delle rampe a terra, e niente classi a terra sotto le rampe a raso
+    U = unione([U, up_terra, up_raso])
+    # alberi del DBGT: fuori dall'asfalto (almeno 1 m) e dagli edifici. In sfondo, mentre qui si fanno i riquadri (#161)
+    piante = None
+    if green and green.get('alberi'):
+        bu = anticipo.risultato()['bu']
+        piante = Sfondo('alberi', lambda: _alberi(U, bu, green['alberi']))
+    cells = riquadri([sede, islands, U, walk, verde], hfun, rampa)
+    alberi = piante.risultato() if piante is not None else []
+    sostituiti, moved, dropped = ritaglio.risultato()
+    out_b = []
+    for j, b in enumerate(buildings):
+        if j in sostituiti:
+            out_b += sostituiti[j]
+        else:
+            out_b.append(b)
+    stats = {'carreggiata_m2': round(U.area), 'marciapiede_m2': round(walk.area), 'isole': len(getattr(islands, 'geoms', [islands])),
+             'isole_dbgt': n_isl, 'verde_m2': round(verde.area), 'alberi': len(alberi) // 2,
+             'carreggiata_dbgt_m2': round(dbgt_c.area), 'marciapiede_dbgt_m2': round(dbgt_m.area),
+             'impalcati_m2': round(D.area), 'sede_m2': round(sede.area), 'in_quota_m2': round(up_alto.area), 'in_quota_a_terra_m2': round(up_terra.area),
+             'in_quota_a_raso_m2': round(rampa.area), 'sede_in_quota_m2': round(sede_su.area), 'stalli': len(stub), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
+    # carreggiate in quota (cavalcavia e rampe): un'area sola anche loro, la quota la mette il gioco vertice per vertice.
+    # Prima di semplificare, anelli dal vertice più piccolo e poligoni in ordine fisso (canonico): l'unione che li dà li
+    # comincia da un punto che dipende da tutti i pezzi entrati (#139)
+    out = {'tile': TILE, 'cells': cells, 'decks': anelli_canonici([r for p in _polys(canonico(D).simplify(0.1)) for r in _rings(p)]),
+           'up': anelli_canonici([r for p in _polys(up_a) for r in _rings(p)]), 'upSede': anelli_canonici([r for p in _polys(up_s) for r in _rings(p)])}
+    if alberi:
+        out['trees'] = alberi
+    if green and green.get('comune'):
+        out['dbgt'] = green['comune']  # area coperta dal DBGT: lì gli alberi sono quelli veri
+    return out, out_b, stats
+
+
+def _quote_e_rete(nodes, edges, heights, tram, bus_edges, green, profili, dichiarati, drive, ground, kq, pieces):
+    """Le parti della pianta che dipendono solo dalla rete e dalle quote, non dall'asfalto U (#161): impalcati, asfalto
+    e sede in quota, rampe a raso, sede del tram, la carreggiata intera allargata e le sedi del tram per il ritaglio
+    degli edifici, aree pedonali, ponti, corsie occupate per le isole del DBGT. surfaces le fa in sfondo mentre la catena
+    di U va avanti; i calcoli sono quelli che stavano lì."""
+    seg = lambda e: LineString([nodes[e[0]], nodes[e[1]]])
+    out = {}
+    out['clear0'] = allarga(unione([pieces[k] for k in drive]), 0.8, quad_segs=2)
+    out['clear_tram'] = [LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_CLEAR, quad_segs=2) for t in tram if len(t) >= 4]
+    out['ped'] = unione([seg(e).buffer(e[3] / 2, quad_segs=4) for e in edges if e[2] == 8 and math.dist(nodes[e[0]], nodes[e[1]]) > 0.3])
+    out['bridges'] = unione([pieces[k].buffer(BRIDGE_WALK) for k in ground if edges[k][5] & 4])
+    out['D'] = D = decks(nodes, edges, heights, drive, tram, profili, dichiarati)
     # asfalto in quota per quota (#126): i tratti degli archi in quota sotto Q_TERRA (i piedi delle rampe, un quarto
     # dell'asfalto in quota) sono asfalto a terra; quelli sotto H_RASO (a raso) stanno sullo stesso piano delle classi a
     # terra, che lì lasciano il posto alla rampa. Il resto passa sopra le strade a terra e non le tocca
-    kq = [k for k in drive if k in in_quota]
-    up_terra = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, -math.inf, Q_TERRA))
-    up_alto = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, Q_TERRA))
-    up_raso = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, Q_TERRA, H_RASO))
+    out['up_terra'] = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, -math.inf, Q_TERRA))
+    out['up_alto'] = up_alto = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, Q_TERRA))
+    out['up_raso'] = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, Q_TERRA, H_RASO))
     up_sopra = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, H_RASO))
     # la sede del tram nello spartitraffico (Via Aspetti, Via Guizza) e nelle rotonde che il tram attraversa resta
     # libera: l'isola è solo il verde ai lati (prima l'isola rialzata copriva binari e sede rossa)
     lanes = [LineString([(t[i], t[i + 1]) for i in range(0, len(t), 2)]).buffer(TRAM_LANE, quad_segs=2) for t in tram if len(t) >= 4]
+    out['lanes'] = bool(lanes)
     # (i varchi più stretti di 3 m tra le sedi dei due binari si chiudono: restava una striscia d'erba tra i binari)
     S_tutta = allarga(allarga(unione(lanes), 1.5, quad_segs=2), -1.5, quad_segs=2) if lanes else Polygon()
     # sede in quota: la sede sotto una carreggiata in quota che corre accanto al binario (quasi parallela, come in
@@ -1180,76 +1344,51 @@ def surfaces(nodes, edges, heights, buildings, water, tram, bus_edges, walk_w=No
     alto_visto = unione(pezzi_quota(nodes, edges, kq, heights, profili, dichiarati, H_RASO, margine=MARGINE_QUOTA))
     rampa = shapely.difference(unione(_polys(up_a) + _polys(up_s)), alto_visto)
     S = S_tutta.difference(D).difference(up_sopra)
-    if lanes:
-        islands = islands.difference(S)
-    # marciapiede solo dove la via ce l'ha (flag 64 sinistra, 128 destra): su entrambi i lati una fascia intorno al
-    # tratto, su un lato solo una fascia da quel lato
-    # larghezza: quella misurata (CTRN o DBGT) da quel lato, altrimenti SIDEWALK
-    bands = []
-    for k in ground:
-        a, b, _c, wd, _n, flags = edges[k][:6]
-        sides = (flags >> 6) & 3
-        wl, wr = walk_w[k] if walk_w else (0, 0)
-        dl, dr = wd / 2 + (wl or SIDEWALK), wd / 2 + (wr or SIDEWALK)
-        if sides == 3 and abs(dl - dr) < 0.3:
-            bands.append(seg(edges[k]).buffer((dl + dr) / 2, quad_segs=4))
+    out.update(sede_su=sede_su, up_a=up_a, up_s=up_s, rampa=rampa, S=S)
+    out['busy'] = corsie_occupate(nodes, edges, ground, bus_edges, tram) if green and green.get('isole') else None
+    return out
+
+
+def _ritaglia(clear, buildings, bpolys):
+    """Edifici fuori da clear (carreggiate allargate, marciapiede minimo, sede del tram): {indice dell'edificio: le voci
+    che lo sostituiscono, nessuna se non resta niente}, ritagliati e tolti. In sfondo, per surfaces (#161)."""
+    clear = unione(clear)
+    ctree = clear
+    # chi tocca ctree si chiede alla geometria preparata, con lo stesso esito: prima ogni intersects rifaceva l'indice di
+    # tutta la città, circa 40 s sul Mac (#158). Poi le differenze con tutta la città, una per edificio che tocca, divise
+    # tra i thread, con la geometria non più preparata
+    shapely.prepare(ctree)
+    tocca = [j for j, p in enumerate(bpolys) if ctree.intersects(p)]  # preparata ctree, il primo dei due
+    shapely.destroy_prepared(ctree)
+    resti = dict(zip(tocca, in_thread(lambda i: bpolys[tocca[i]].difference(ctree), len(tocca))))
+    sostituiti, moved, dropped = {}, 0, 0
+    for j in tocca:
+        b = buildings[j]
+        # (in ordine fisso e dal vertice più piccolo, prima di semplificare: la differenza con l'unione di tutta la città
+        # comincia gli anelli da un punto che dipende anche da quello che sta lontano, #139)
+        rest = canonico(resti[j])
+        parts = [g for g in ([rest] if isinstance(rest, Polygon) else list(getattr(rest, 'geoms', []))) if isinstance(g, Polygon) and g.area >= 15]
+        sostituiti[j] = []
+        if not parts:
+            dropped += 1
             continue
-        # z verso sud: per Shapely il piano è speculare, la sua sinistra è la nostra destra
-        if sides & 1:
-            bands.append(seg(edges[k]).buffer(-dl, single_sided=True))
-        if sides & 2:
-            bands.append(seg(edges[k]).buffer(dr, single_sided=True))
-        if sides == 3:
-            bands.append(seg(edges[k]).buffer(min(dl, dr), quad_segs=4))  # giunti tondi tra un arco e l'altro
-    walk = unione([*bands, ped, dbgt_m, P]).difference(U).difference(islands)
-    walk = walk.difference(W.difference(bridges)).difference(up).difference(D)
-    # sotto la sede del tram asfalto, anche dove OSM la mette sul marciapiede o in una zona pedonale (il marciapiede
-    # rialzato copriva la corsia rossa)
-    sede = S.difference(W.difference(bridges)) if not S.is_empty else Polygon()
-    if not S.is_empty:
-        walk = walk.difference(S)
-        U = unione([U, sede]).buffer(0)
-    # verde del DBGT (prati, aree alberate, aiuole): l'ultima classe della pianta, quella che resta fuori da carreggiate,
-    # sede, isole e marciapiedi (partizione, #126), e mai sull'acqua
-    verde = Polygon()
-    if green and green.get('verde'):
-        vp = []
-        for r in green['verde']:
-            g = Polygon([(r[1][i], r[1][i + 1]) for i in range(0, len(r[1]), 2)], [[(h[i], h[i + 1]) for i in range(0, len(h), 2)] for h in r[2:] if len(h) >= 6])
-            vp.append(g if g.is_valid else g.buffer(0))
-        verde = unione(vp).difference(W).buffer(0)
-    # riquadri: le classi a terra tagliate sul riquadro e messe insieme come partizione (un solo proprietario per ogni
-    # metro quadro, #126), semplificata lì con il bordo del riquadro fermo (i riquadri accanto combaciano, e un cambiamento
-    # in un posto non sposta i contorni lontani, #139). L'asfalto U contiene anche la sede: nel riquadro la sede viene
-    # prima, quindi l'asfalto è quello che resta. Con il terreno i lati lunghi infittiti dove non è piano (argini, ponti)
-    # i piedi delle rampe a terra, e niente classi a terra sotto le rampe a raso
-    U = unione([U, up_terra, up_raso])
-    cells = riquadri([sede, islands, U, walk, verde], hfun, rampa)
-    # alberi del DBGT: fuori dall'asfalto (almeno 1 m) e dagli edifici
-    alberi = []
-    if green and green.get('alberi'):
-        a = green['alberi']
-        xs, zs = a[0::2], a[1::2]
-        Ub, bu = in_thread(lambda i: allarga(U, 1.0) if i == 0 else unary_union(bpolys), 2)
-        shapely.prepare(Ub)
-        shapely.prepare(bu)
-        ok = ~shapely.contains_xy(Ub, xs, zs) & ~shapely.contains_xy(bu, xs, zs)
-        alberi = [v for x, z, k in zip(xs, zs, ok) if k for v in (x, z)]
-    stats = {'carreggiata_m2': round(U.area), 'marciapiede_m2': round(walk.area), 'isole': len(getattr(islands, 'geoms', [islands])),
-             'isole_dbgt': n_isl, 'verde_m2': round(verde.area), 'alberi': len(alberi) // 2,
-             'carreggiata_dbgt_m2': round(dbgt_c.area), 'marciapiede_dbgt_m2': round(dbgt_m.area),
-             'impalcati_m2': round(D.area), 'sede_m2': round(sede.area), 'in_quota_m2': round(up_alto.area), 'in_quota_a_terra_m2': round(up_terra.area),
-             'in_quota_a_raso_m2': round(rampa.area), 'sede_in_quota_m2': round(sede_su.area), 'stalli': len(stub), 'edifici_ritagliati': moved, 'edifici_tolti': dropped, 'riquadri': len(cells)}
-    # carreggiate in quota (cavalcavia e rampe): un'area sola anche loro, la quota la mette il gioco vertice per vertice.
-    # Prima di semplificare, anelli dal vertice più piccolo e poligoni in ordine fisso (canonico): l'unione che li dà li
-    # comincia da un punto che dipende da tutti i pezzi entrati (#139)
-    out = {'tile': TILE, 'cells': cells, 'decks': anelli_canonici([r for p in _polys(canonico(D).simplify(0.1)) for r in _rings(p)]),
-           'up': anelli_canonici([r for p in _polys(up_a) for r in _rings(p)]), 'upSede': anelli_canonici([r for p in _polys(up_s) for r in _rings(p)])}
-    if alberi:
-        out['trees'] = alberi
-    if green and green.get('comune'):
-        out['dbgt'] = green['comune']  # area coperta dal DBGT: lì gli alberi sono quelli veri
-    return out, out_b, stats
+        moved += 1
+        for g in parts:
+            g = g.simplify(0.05)
+            flat = [round(v, 1) for xy in list(g.exterior.coords)[:-1] for v in xy]
+            holes = [[round(v, 1) for xy in list(r.coords)[:-1] for v in xy] for r in g.interiors]
+            sostituiti[j].append([b[0], b[1], b[2], flat, holes or None, *b[5:]])
+    return sostituiti, moved, dropped
+
+
+def _alberi(U, bu, a):
+    """Gli alberi del DBGT [x, z, ...] fuori dall'asfalto U (almeno 1 m) e dagli edifici bu. In sfondo (#161)."""
+    xs, zs = a[0::2], a[1::2]
+    Ub = allarga(U, 1.0)
+    shapely.prepare(Ub)
+    shapely.prepare(bu)
+    ok = ~shapely.contains_xy(Ub, xs, zs) & ~shapely.contains_xy(bu, xs, zs)
+    return [v for x, z, k in zip(xs, zs, ok) if k for v in (x, z)]
 
 
 TERRAIN_CLOSE = 4  # celle (10 m): mezza larghezza della finestra quadrata della chiusura (riempie fino a ~80 m)

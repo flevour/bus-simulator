@@ -1721,6 +1721,12 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
             for v in L['versi']:
                 new_tram.append([round(c, 1) for la, lo in v['percorso'] for c in xz(la, lo)])
         print('binari delle linee nuove nella pianta delle strade:', len(new_tram))
+    green = json.load(open(green_path, encoding='utf-8')) if green_path else None
+    streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
+    # la parte della pianta che non dipende da quote e rete (unioni di edifici, acqua e verde) in un processo a parte
+    # (#161): il passo dei cavalcavia per quasi tutto il tempo aspetta HiGHS, e intanto i processori sono liberi. Edifici,
+    # acqua, verde e carreggiate del DBGT da qui alla pianta non cambiano
+    anticipo = street_surfaces.Sfondo('senza quote', lambda: street_surfaces.senza_quote(buildings, water, green, streets))
     if dtm_path:
         # cavalcavia: le strutture della rete devono essere quelle del registro (data/cavalcavia.json); quelle attive lì
         # prendono il profilo di scripts/profilo_cavalcavia.py, le altre le quote di overpass_heights con il terreno
@@ -1778,8 +1784,6 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     if crono.passo('cavalcavia') > TETTO_CAVALCAVIA:
         avvisa(f'il passo dei cavalcavia è durato {crono.passi[-1][1]:.0f} s, oltre il tetto di {TETTO_CAVALCAVIA} s '
                '(scripts/build_map.py): i lavori della mappa in CI rischiano di scadere')
-    green = json.load(open(green_path, encoding='utf-8')) if green_path else None
-    streets = json.load(open(streets_path, encoding='utf-8')) if streets_path else None
     platforms = json.load(open(osm_stops_path, encoding='utf-8')).get('banchine') if osm_stops_path else None
     if platforms:
         # corsie a senso unico tra le banchine (stazione): larghe quanto lo spazio libero, una corsia sola (in OSM la
@@ -1827,8 +1831,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     for riga in prova_localita(PROVA_LOCALITA, nodes, edges, heights):
         print(riga)
     surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
-                                                   sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm())
+                                                   sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm(), anticipo)
     print('pianta delle strade:', st)
+    print('lavori in sfondo (#161):', ', '.join(street_surfaces.SFONDI) or 'nessuno, tutto in sequenza', flush=True)
     crono.passo('pianta delle strade')
     # la pianta a terra è una partizione (#126): due classi sovrapposte sono un errore della build, non un caso da elencare
     sovr = street_surfaces.sovrapposte(surf['cells'])

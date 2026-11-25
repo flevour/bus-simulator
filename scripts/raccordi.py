@@ -683,15 +683,17 @@ class Raccordi:
                  'esito': esito, 'gradi': math.degrees(g['th']), 'd_in': g['d_in'], 'd_out': g['d_out']} for verts, r, chi in curve]
 
     def calcola(self, nodi=None):
-        """I raccordi dei nodi (tutti, se non detto): quelli di ogni movimento (movimento)."""
-        out = []
-        for n in (sorted(self.mov) if nodi is None else nodi):
-            if n not in self.mov:
-                continue
-            self.prepara(n)
-            for g in self.mov[n]:
-                out += self.movimento(g)
-        return out
+        """I raccordi dei nodi (tutti, se non detto): quelli di ogni movimento (movimento). I nodi sono indipendenti
+        (prepara rifà lo stato del nodo, e chi chiama movimento dopo prepara di nuovo): nella build si dividono tra i
+        processi con in_parallelo di street_surfaces (#161, era il 70% del passo), e i raccordi tornano nell'ordine dei
+        nodi, uguali a quelli calcolati uno dopo l'altro."""
+        from street_surfaces import in_parallelo
+        ns = [n for n in (sorted(self.mov) if nodi is None else nodi) if n in self.mov]
+
+        def del_nodo(i):
+            self.prepara(ns[i])
+            return [v for g in self.mov[ns[i]] for v in self.movimento(g)]
+        return [v for vs in in_parallelo(del_nodo, len(ns)) for v in vs]
 
     def movimento(self, g):
         """I raccordi di un movimento (il suo nodo già preparato). Dove manca il posto per il raggio minimo perché un arco

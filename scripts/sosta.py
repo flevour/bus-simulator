@@ -452,6 +452,11 @@ class Sosta:
                 self.corr_k.append(-1)
         self.corr_tree = STRtree(self.corr)
         tram = [LineString([(t[i], t[i + 1]) for i in range(0, len(t) - 1, 2)]).buffer(TRAM, quad_segs=2) for t in self._binari() if len(t) >= 4]
+        # la sede di una linea intera ha migliaia di vertici: preparata, e chiesta come primo argomento (è lei che ha
+        # l'indice), "lo stallo tocca la sede?" ha lo stesso esito senza ripercorrerla tutta ogni volta (#161: era metà
+        # del passo della sosta)
+        for g in tram:
+            shapely.prepare(g)
         self.tram = tram
         self.tram_tree = STRtree(tram) if tram else None
         self.luoghi, self.dbgt = luoghi, dbgt
@@ -522,7 +527,7 @@ class Sosta:
             if any(self.corr_k[int(i)] != k and g.intersection(self.corr[int(i)]).area > 0.2 for i in self.corr_tree.query(g)):
                 self.scarti[(fonte, 'sulle corsie di un altro arco o in un incrocio')] += 1
                 continue
-            if self.tram_tree is not None and any(g.intersects(self.tram[int(i)]) for i in self.tram_tree.query(g)):
+            if self.tram_tree is not None and any(self.tram[int(i)].intersects(g) for i in self.tram_tree.query(g)):
                 self.scarti[(fonte, 'sulla sede del tram')] += 1
                 continue
             out.append((s0, d1))
@@ -813,7 +818,7 @@ class Sosta:
             g = self.rett(k, lato, s0, tipo, d0 + 0.05, d1 - 0.05)
         if any(self.corr_k[int(j)] != k and g.intersection(self.corr[int(j)]).area > 0.2 for j in self.corr_tree.query(g)):
             return 'sulle corsie di un altro arco o in un incrocio'
-        if self.tram_tree is not None and any(g.intersects(self.tram[int(j)]) for j in self.tram_tree.query(g)):
+        if self.tram_tree is not None and any(self.tram[int(j)].intersects(g) for j in self.tram_tree.query(g)):
             return 'sulla sede del tram'
         if R.fermate_tree is not None and any(g.intersection(R.fermate[int(j)]).area > 0.2 for j in R.fermate_tree.query(g)):
             return 'nella zona di una fermata'
