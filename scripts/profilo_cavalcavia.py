@@ -443,11 +443,10 @@ class LP:
         return self.n - 1
 
     def riga(self, termini, b):
-        """somma(coefficiente * incognita) <= b"""
-        for i, a in termini:
-            self.r.append(self.m)
-            self.c.append(i)
-            self.v.append(a)
+        """somma(coefficiente * incognita) <= b; termini è una lista [(incognita, coefficiente)]"""
+        self.r.extend([self.m] * len(termini))
+        self.c.extend([i for i, _a in termini])
+        self.v.extend([a for _i, a in termini])
         self.b.append(b)
         self.m += 1
 

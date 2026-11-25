@@ -14,6 +14,7 @@ import multiprocessing
 import os
 import sys
 import threading
+import time
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
@@ -840,7 +841,7 @@ def in_thread(fn, n):
 
 
 _FIGLIO = False  # vero nel processo di un lavoro in sfondo (Sfondo): lì niente altri processi, in_parallelo in sequenza
-SFONDI = []  # i lavori in sfondo partiti in un processo figlio, per il riepilogo della build
+SFONDI = []  # i lavori in sfondo partiti in un processo figlio (Sfondo), per il riepilogo della build
 
 
 class Sfondo:
@@ -852,10 +853,11 @@ class Sfondo:
     byte, come con in_parallelo (#158). Il figlio nasce solo se in questo processo non c'è nessun altro thread (un fork
     con un thread a metà di un lock non è sicuro); altrimenti, su macOS (PIANTA_FORK=1 lo forza), con PROCESSI 1 e in un
     figlio, fn() gira subito qui. nice: priorità più bassa del figlio (os.nice), per un lavoro il cui risultato serve
-    molto dopo; fili: quanti thread può usare in_thread nel figlio (di base PROCESSI). Non cambiano l'esito."""
+    molto dopo; fili: quanti thread può usare in_thread nel figlio (di base PROCESSI). Non cambiano l'esito. durata e
+    attesa (s): quanto ha lavorato il figlio e quanto la build l'ha aspettato in risultato(), per il riepilogo."""
 
     def __init__(self, nome, fn, nice=0, fili=None):
-        self.nome, self._p, self._fatto = nome, None, False
+        self.nome, self._p, self._fatto, self.durata, self.attesa = nome, None, False, None, 0.0
         if (PROCESSI > 1 and not _FIGLIO and (sys.platform.startswith('linux') or os.environ.get('PIANTA_FORK'))
                 and threading.current_thread() is threading.main_thread() and threading.active_count() == 1):
             ctx = multiprocessing.get_context('fork')
@@ -863,18 +865,20 @@ class Sfondo:
             self._p = ctx.Process(target=_sfondo_figlio, args=(fn, scrivi, nice, fili), daemon=True)
             self._p.start()
             scrivi.close()
-            SFONDI.append(nome)
+            SFONDI.append(self)
         else:
             self._valore, self._fatto = fn(), True
 
     def risultato(self):
         if not self._fatto:
+            t = time.perf_counter()
             try:
-                esito, valore = self._r.recv()
+                esito, valore, self.durata = self._r.recv()
             except EOFError:
                 esito, valore = 'errore', f'il processo è finito senza risultato (uscita {self._p.exitcode})'
             self._r.close()
             self._p.join()
+            self.attesa = time.perf_counter() - t
             if esito != 'ok':
                 raise RuntimeError(f'pianta delle strade, lavoro in sfondo "{self.nome}":\n{valore}')
             self._valore, self._fatto = valore, True
@@ -888,12 +892,13 @@ def _sfondo_figlio(fn, scrivi, nice=0, fili=None):
         PROCESSI = fili
     if nice:
         os.nice(nice)
+    t = time.perf_counter()
     try:
-        out = ('ok', fn())
+        out = ('ok', fn(), time.perf_counter() - t)
         scrivi.send(out)
     except BaseException:
         import traceback
-        scrivi.send(('errore', traceback.format_exc()))
+        scrivi.send(('errore', traceback.format_exc(), time.perf_counter() - t))
     scrivi.close()
 
 

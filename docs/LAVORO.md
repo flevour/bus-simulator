@@ -980,6 +980,52 @@ sezione 6 (punto 5). Da sapere:
   binario è ancora calcolato in due posti (il programma e `quote_rete.profilo`), con la stessa regola: la prova
   controlla che restino d'accordo.
 
+#161, build della mappa più corta, seconda volta (25 novembre). Dopo #158 `rigenera` stava a 18 minuti su 20 sulla
+macchina lenta della CI (AMD EPYC 7763) e la guardia dei 900 s avvisava già. Numeri per passo e per macchina in #161. Da
+sapere:
+
+- in CI le macchine hanno 4 processori, cioè 2 core: dividere un lavoro rende solo dove ci sono processori fermi (nel
+  passo dei cavalcavia, che quasi tutto il tempo aspetta la soluzione più lunga di HiGHS, e accanto alla catena
+  dell'asfalto `U` della pianta, che sta in un core). Conta il lavoro totale: con la prima parte il Mac (14 core) andava
+  più veloce, ma in CI il passo dei cavalcavia era salito da 290 a 301 s perché il lavoro anticipato toglieva il core a
+  HiGHS. Chi divide un lavoro misura sulla CI, non sul Mac;
+- `Sfondo(nome, fn, nice=0, fili=None)` di `scripts/street_surfaces.py`: `fn` in un processo figlio nato per fork,
+  mentre la build va avanti; il risultato torna per pipe (le geometrie in WKB, con tutte le cifre). Il figlio nasce
+  solo se nel processo non c'è nessun altro thread; su macOS (senza `PIANTA_FORK=1`), con `PIANTA_PROCESSI=1` e dentro
+  un figlio `fn` gira subito lì, con lo stesso esito. `fn` dipende solo da quello che c'è in memoria al fork e non
+  cambia niente che la build usa dopo (nel figlio i cambiamenti si perdono). Nel figlio `in_parallelo` va in sequenza e
+  `in_thread` usa `fili` thread; `nice` abbassa la priorità per un lavoro che serve molto dopo. Alla fine la build
+  stampa, per ogni lavoro partito in sfondo, quanto è durato e quanto è stato aspettato (riga "lavori in sfondo"): un
+  lavoro aspettato è sul percorso più lungo. Oggi: il SIR1 (`tram_sir1` di `scripts/build_map.py`, legge solo file)
+  dall'inizio della build; `senza_quote` (unioni di edifici, acqua, verde, area del DBGT) prima dei cavalcavia, con
+  `nice=10` e un thread; nella pianta `_quote_e_rete` (impalcati, asfalto e sede in quota, rampe a raso, carreggiate
+  allargate, ponti, corsie occupate), i marciapiedi del DBGT con l'unione del marciapiede, il ritaglio degli edifici
+  (`_ritaglia`), il marciapiede, gli alberi (`_alberi`) mentre si fanno i riquadri; dopo la pianta il controllo della
+  partizione (`sovrapposte`), guardato prima di scrivere la mappa;
+- `per_finestre(G, candidati, d, prova)`, per le domande "il candidato tocca `G` allargata di d?" e "quanta parte del
+  candidato sta in `G` allargata?": `G` tagliata sul rettangolo dei candidati di ogni riquadro da 200 m, allargato di
+  d + 2 m, e allargata solo lì. Dentro il rettangolo l'insieme è lo stesso; cambiano le ultime cifre delle
+  intersezioni, non le decisioni (provate sulla mappa del 25 novembre: le stesse 267 isole su 623 candidati, mappa
+  identica). Si usa solo dove il risultato è un sì o un no su un candidato che entra com'è (isole, carreggiate,
+  parcheggi e marciapiedi del DBGT, golfi, alberi), mai dove la geometria allargata entra nella mappa (crepe, chiusure,
+  ritagli, unioni);
+- calcoli più leggeri con lo stesso esito: la sosta chiede alla sede del tram preparata, come primo argomento di
+  `intersects`; i raccordi dividono i nodi con `in_parallelo` (`Raccordi.calcola`); `_tram_heights` guarda solo gli
+  archi in quota della cella da 50 m del punto; `_anello` fa con numpy gli anelli lunghi (stessi termini dell'area,
+  stesso `sum` di Python, vertice più piccolo tra quelli con la x entro 2 mm dalla minima); `Via` del risolutore dei
+  cavalcavia fa la chiusura del terreno su tutta la griglia con `street_surfaces.closing` (massimi e minimi di interi),
+  il controllo `scripts/cavalcavia.py` resta cella per cella (`Via.chiusa`); `LP.riga` aggiunge i termini con `extend`;
+- quello che non si accorcia senza cambiare la mappa: le cinque soluzioni di fila della parte più grande del programma
+  lineare dei cavalcavia (circa 250 s sulla macchina lenta: un altro metodo o un'altra partenza per HiGHS danno un'altra
+  soluzione con lo stesso costo, nota #158); le operazioni di GEOS su `U` intera nella catena della pianta, che entrano
+  nella mappa (divise per zone cambierebbero le ultime cifre); il passo delle linee (la cache di `dijkstra` in
+  `build_map.main` dà risultati calcolati con un limite più largo, quindi l'esito dipende dall'ordine delle varianti);
+- come si è misurato e provato: gli argomenti dei passi salvati con cloudpickle da una build nativa sul Mac (venv con
+  il lock), la traccia per riga di `surfaces` (`sys.settrace` sul solo frame) e il profilo per funzione; poi ogni passo
+  rifatto dagli argomenti salvati e confrontato con l'uscita di prima, e la build intera sul Mac con il codice di prima
+  e con quello nuovo, in sequenza e con `PIANTA_FORK=1`, confrontata con `cmp` e `diff -r` (rete, aree, conto). La
+  mappa del Mac non è quella della CI, ma prima e dopo sul Mac devono essere uguali; in CI lo dice il lavoro `rigenera`.
+
 #73, paline e strisce pedonali (12 novembre). Da sapere prima di toccare `allStopPlacements` (`src/game/routes.js`):
 
 - il bus fermo alla palina (`stopPose`: da 0,3 m prima della palina a 12,7 m dietro, lo snodato 18,5, `BUS_BACK` e

@@ -1774,12 +1774,10 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     surf, buildings, st = street_surfaces.surfaces(nodes, edges, heights, buildings, water, (tram if tram_lanes else []) + new_tram, bus_edges, edge_walk, hfun, green, streets, platforms,
                                                    sorted(bus_left), stalli, profili, dichiarati, sosta.golfi_osm(), anticipo)
     print('pianta delle strade:', st)
-    print('lavori in sfondo (#161):', ', '.join(street_surfaces.SFONDI) or 'nessuno, tutto in sequenza', flush=True)
     crono.passo('pianta delle strade')
-    # la pianta a terra è una partizione (#126): due classi sovrapposte sono un errore della build, non un caso da elencare
-    sovr = street_surfaces.sovrapposte(surf['cells'])
-    if sovr:
-        sys.exit('pianta delle strade: classi sovrapposte in %d posti (cella, classi, m²): %s' % (len(sovr), sovr[:20]))
+    # la pianta a terra è una partizione (#126): due classi sovrapposte sono un errore della build, non un caso da elencare.
+    # Il controllo va in sfondo mentre si fanno rete, sosta e raccordi, e si guarda prima di scrivere la mappa (#161)
+    partizione = street_surfaces.Sfondo('controllo della partizione', lambda: street_surfaces.sovrapposte(surf['cells']))
 
     # le fermate del tram valgono solo dove c'è la rete stradale (l'export OSM finisce prima di Guizza)
     nxs, nzs = nodes_flat[0::2], nodes_flat[1::2]
@@ -1842,6 +1840,9 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
           + f'; {_gen.legami} raccordi dei bus per {len(_gen.slegate)} svolte vicine dei percorsi che non si legavano, ne restano {len(_gen.restano)}'
           + f'; {len(_gen.stretti)} raccordi dei bus a meno di {raccordi.R_BUS} m nelle svolte strette dei percorsi')
     crono.passo('raccordi')
+    sovr = partizione.risultato()
+    if sovr:
+        sys.exit('pianta delle strade: classi sovrapposte in %d posti (cella, classi, m²): %s' % (len(sovr), sovr[:20]))
     # la rete in out (nel bundle del gioco), edifici, pianta delle strade e alberi per aree (public/mappa/aree)
     print('aree della mappa:', aree_mappa.write(data, out))
     crono.passo('aree')
@@ -1853,6 +1854,8 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     import percorsi
     _vp, _cp, errori_p = percorsi.rapporto(data)
     crono.passo('percorsi')
+    print('lavori in sfondo (#161):', ', '.join(f'{l.nome} {l.durata or 0:.0f} s (aspettato {l.attesa:.0f} s)' for l in street_surfaces.SFONDI)
+          or 'nessuno, tutto in sequenza', flush=True)
     crono.riepilogo()
     if errori_p:
         sys.exit('\n'.join(errori_p + ['La mappa è scritta: python3 scripts/percorsi.py --elenco dà i casi uno per uno '
