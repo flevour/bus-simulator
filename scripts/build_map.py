@@ -36,12 +36,17 @@ ORIGIN_LAT, ORIGIN_LON = build_gtfs.ORIGIN_LAT, build_gtfs.ORIGIN_LON
 M_LAT, M_LON = build_gtfs.M_LAT, build_gtfs.M_LON
 
 
-# tetti dei tempi (#158): i lavori rigenera e localita di .github/workflows/verifiche.yml hanno 20 e 25 minuti, e la
-# build ne è quasi tutto. Da 491b179 (#142, ventinove strutture) il passo dei cavalcavia durava 267-453 s in CI, la build
-# 912-1.439 s, e rigenera scadeva. Oltre un tetto la build avvisa: in CI con un'annotazione ::warning:: nella serie, che
-# si vede anche se poi il lavoro scade. Non si ferma: tra una macchina e l'altra della CI la stessa build dura fino a 1,6
-# volte di più (a5cefe8: 912 s su una, 1.439 s sull'altra), e un tetto che ferma la build sulla macchina lenta la ferma
-# anche dove starebbe nel limite. Chi allunga la build di proposito misura e sposta i tetti, scrivendo perché
+# tetti dei tempi (#158, #161): i lavori rigenera e localita di .github/workflows/verifiche.yml hanno 20 e 25 minuti, e
+# la build ne è quasi tutto. Da 491b179 (#142, ventinove strutture) il passo dei cavalcavia durava 267-453 s in CI, la
+# build 912-1.439 s, e rigenera scadeva. TETTO_BUILD è il 75% dei 20 minuti di rigenera. Fino a #161 la build era sopra
+# il tetto sulla macchina lenta (AMD EPYC 7763: 1.089 s su 1636280), e un tetto che ferma la build lì la fermava anche
+# dove sarebbe stata nel limite: oltre i tetti la build avvisava e basta. Da #161 la build sulla macchina lenta dura
+# 714-740 s (df9a35b, 649b149), almeno il 22% sotto TETTO_BUILD, con 1-5% di differenza tra due lavori sullo stesso tipo
+# di macchina: oltre TETTO_BUILD, in CI, la build ora si ferma con un errore (::error:: nella serie), perché vuol dire
+# che è cresciuta davvero e il prossimo passo fa scadere rigenera. Fuori dalla CI (Docker emulato sul Mac) avvisa
+# soltanto. TETTO_CAVALCAVIA resta un avviso: il passo dei cavalcavia, quasi tutto HiGHS in un processo, dura 283-293 s
+# sulla macchina lenta e non ha margine. Chi allunga la build di proposito misura sulla macchina lenta e sposta i tetti,
+# scrivendo perché
 TETTO_CAVALCAVIA = 300  # s
 TETTO_BUILD = 900       # s
 
@@ -78,10 +83,19 @@ class Cronometro:
         return dt
 
     def riepilogo(self):
+        """Stampa i tempi; oltre TETTO_BUILD, in CI, dà il testo dell'errore con cui la build si ferma (#161)."""
         tutto = time.perf_counter() - self.t0
         print('tempi della build: ' + ', '.join(f'{n} {s:.0f} s' for n, s in self.passi) + f'; in tutto {tutto:.0f} s', flush=True)
-        if tutto > TETTO_BUILD:
-            avvisa(f'la build è durata {tutto:.0f} s, oltre {TETTO_BUILD} s: i lavori della mappa in CI hanno 20 e 25 minuti')
+        if tutto <= TETTO_BUILD:
+            return None
+        testo = (f'la build è durata {tutto:.0f} s, oltre {TETTO_BUILD} s (TETTO_BUILD di scripts/build_map.py): i lavori della '
+                 'mappa in CI hanno 20 e 25 minuti. Si accorcia il lavoro, o si misura sulla macchina lenta e si sposta il '
+                 'tetto scrivendo perché (#161, nota in docs/LAVORO.md)')
+        if not os.environ.get('GITHUB_ACTIONS'):
+            avvisa(testo)
+            return None
+        print(f'::error title=Tempi della build della mappa (#161)::{testo}', flush=True)
+        return testo
 
 
 DRIVE = {
@@ -1856,10 +1870,12 @@ def main(osm_path, gtfs_dir, out, overture_path=None, nodes_path=None, tram_path
     crono.passo('percorsi')
     print('lavori in sfondo (#161):', ', '.join(f'{l.nome} {l.durata or 0:.0f} s (aspettato {l.attesa:.0f} s)' for l in street_surfaces.SFONDI)
           or 'nessuno, tutto in sequenza', flush=True)
-    crono.riepilogo()
+    troppo = crono.riepilogo()
     if errori_p:
         sys.exit('\n'.join(errori_p + ['La mappa è scritta: python3 scripts/percorsi.py --elenco dà i casi uno per uno '
                                        '(docs/percorsi.md); poi npm run posa.']))
+    if troppo:
+        sys.exit(troppo)
 
 
 BUS_MIN_2, BUS_MIN_1, BUS_MIN_RING = 7.5, 5.5, 7.0  # m: carreggiata minima sui percorsi dei bus (doppio senso, senso unico, rotatoria)

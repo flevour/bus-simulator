@@ -885,7 +885,8 @@ sapere:
   a oltre 1.150 s, quasi tutta cavalcavia (290-375 s) e pianta delle strade (585-697 s); la stessa build dura il 20% in
   più da una macchina all'altra. In locale, in Docker amd64 emulato sul Mac, 1.162 s;
 - la guardia: oltre `TETTO_CAVALCAVIA` (300 s) per il passo dei cavalcavia, o `TETTO_BUILD` (900 s) per la build, la
-  build avvisa: in CI con un'annotazione `::warning::` nella serie, che resta anche se poi il lavoro scade. Non si ferma.
+  build avvisa: in CI con un'annotazione `::warning::` nella serie, che resta anche se poi il lavoro scade. Non si ferma
+  (da #161, oltre `TETTO_BUILD` in CI si ferma: nota #161 qui sotto).
   Nella prima versione (47aa696) fermava la build in CI, e su una macchina lenta rigenera è caduta a 311 s di cavalcavia.
   Tra una macchina e l'altra della CI la stessa build dura fino a 1,6 volte (a5cefe8: 912 s su una, 1.439 s sull'altra,
   con i passi in sequenza 1,7-1,9 volte più lenti), e un tetto fisso che ferma la build sulle lente la ferma anche dove
@@ -981,8 +982,16 @@ sezione 6 (punto 5). Da sapere:
   controlla che restino d'accordo.
 
 #161, build della mappa più corta, seconda volta (25 novembre). Dopo #158 `rigenera` stava a 18 minuti su 20 sulla
-macchina lenta della CI (AMD EPYC 7763) e la guardia dei 900 s avvisava già. Numeri per passo e per macchina in #161. Da
-sapere:
+macchina lenta della CI (AMD EPYC 7763) e la guardia dei 900 s avvisava già. Ora sulla stessa macchina la build dura
+714-740 s invece di 1.089 (pianta 325-333 invece di 610, raccordi 38 invece di 68, sosta 20 invece di 34), il lavoro
+`rigenera` 12,8 minuti, e la mappa è la stessa byte per byte. Numeri per passo e per macchina in #161. Da sapere:
+
+- la guardia: oltre `TETTO_BUILD` (900 s, il 75% dei 20 minuti di `rigenera`), in CI la build si ferma con un errore
+  (`::error::` nella serie, `sys.exit` dopo i tempi e i percorsi); fuori dalla CI avvisa soltanto (in Docker emulato sul
+  Mac la build dura di più e non conta). Sulla macchina lenta resta il 22-26% di margine, e tra due lavori sullo stesso
+  tipo di macchina la build cambia dell'1-5%: oltre il tetto vuol dire che è cresciuta davvero. `TETTO_CAVALCAVIA` resta
+  un avviso (il passo dura 283-293 s sulla macchina lenta, senza margine). Chi allunga la build guarda i tempi per passo
+  e la riga `macchina:` nel log di `rigenera` e di `localita`, accorcia o sposta il tetto scrivendo perché;
 
 - in CI le macchine hanno 4 processori, cioè 2 core: dividere un lavoro rende solo dove ci sono processori fermi (nel
   passo dei cavalcavia, che quasi tutto il tempo aspetta la soluzione più lunga di HiGHS, e accanto alla catena
